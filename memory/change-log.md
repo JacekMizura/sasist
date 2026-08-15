@@ -1,4 +1,30 @@
-﻿## 2026-08-15 — Fix P0/P1 rezerwacje WMS + detach started MO
+﻿## 2026-08-15 — Ujednolić dostępność materiałów i retry produkcji
+
+- `production_allocatable_qty` SSOT z allocate (DOCK out przy putaway)
+- source `reserved` dopiero po sukcesie PRODUCTION_ORDER reservation
+- AUTO_RESUMED wymaga `materials_reserved=true`
+- Testy DOCK→putaway / foreign hold / idempotencja
+
+## 2026-08-15 — UAT A Phase 8 retest (958fdb19) STOP
+
+- #1253/1267: BRAKI + source#20 reattach/AUTO_RESUMED OK; FAIL `materials_reserved=false` (brak PRODUCTION_ORDER ST-003×2)
+- Bez PRINT / PLANNING / BAT
+
+## 2026-08-15 — Fix Phase 8 vs gate: BRAKI wins + reattach shortage source
+
+- Gate: po ALL_SHORTAGE nie nadpisuje `status_awaiting` (BRAKI wygrywa)
+- `_attach_or_reactivate_source`: reattach shortage z cancelled MO → jeden demand
+- Phase 8: leftover shortage → cancelled gdy już active; AUTO_RESUMED message
+- Testy: `test_picking_entry_gate_phase8_component_collision.py` (UAT #1266)
+
+## 2026-08-15 — UAT A–F: legacy #1251 / overbook cleanup / fresh started-MO
+
+- #1251 = legacy (nie regresja detacha); allocator SAFE (`shortage` poza fulfillable)
+- SO overbook cleanup: release #65 (B3-C-2), #54 (B3-B-3) via reservation service → true overbook=0
+- Fresh #1252 + MO/6 po fa704be5: detach SOURCE_DETACHED_STARTED_MO; finish MO → free FG; no double fulfill
+- Fazy 1–3 readiness/production fallback = PASS E2E (bez nowego kodu / commit)
+
+## 2026-08-15 — Fix P0/P1 rezerwacje WMS + detach started MO
 
 - P0.1: `exclude_production_order_id` w ATP/consume/pick-plan/collection UI
 - P0.2: free capacity (all holds) dla nowej SALES_ORDER; ATP order nadal z exclude

@@ -144,6 +144,39 @@ def warehouse_net_available(
     return max(0.0, on_hand - reserved)
 
 
+def production_allocatable_qty(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    product_id: int,
+    exclude_batch_id: int | None = None,
+    exclude_order_id: int | None = None,
+    allow_sales_locations: bool = False,
+    strategy: str = "FEFO",
+) -> float:
+    """
+    Net qty the production allocator can actually reserve.
+
+    SSOT with ``allocate_product_quantity`` / ``iter_allocatable_inventory_rows``:
+    pick-eligible + production-reservation-eligible locations only (DOCK excluded
+    when warehouse ``requires_putaway``).
+    """
+    total = 0.0
+    for _inv, net in iter_allocatable_inventory_rows(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        product_id=int(product_id),
+        strategy=strategy,
+        exclude_batch_id=exclude_batch_id,
+        exclude_order_id=exclude_order_id,
+        allow_sales_locations=bool(allow_sales_locations),
+    ):
+        total += float(net or 0)
+    return max(0.0, round(total, 4))
+
+
 def iter_allocatable_inventory_rows(
     db: Session,
     *,

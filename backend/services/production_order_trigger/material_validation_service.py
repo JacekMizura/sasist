@@ -217,6 +217,65 @@ def refresh_orders_mo_material_reservations(
     }
 
 
+def _demote_sources_to_shortage(
+    db: Session,
+    *,
+    demoted: list[ProductionOrderSourceItem],
+    orders_by_id: dict[int, Order],
+    picking_config: PickingConfig | None,
+    mo: ProductionOrder,
+    operator_user_id: Optional[int],
+    max_producible: float,
+    shortage_meta: list[dict[str, Any]],
+) -> None:
+    """Mark sources shortage + move orders to component-shortage status + activity."""
+    now = datetime.utcnow()
+    shortage_status_id = (
+        getattr(picking_config, "status_on_component_shortage_id", None) if picking_config else None
+    )
+    shortage_status_name = _status_name(db, status_id=shortage_status_id)
+    for src in demoted:
+        src.status = PRODUCTION_ORDER_SOURCE_ITEM_SHORTAGE
+        src.updated_at = now
+        db.add(src)
+        order = orders_by_id.get(int(src.order_id))
+        if order is None:
+            continue
+        moved_to = _move_order_to_shortage_status(db, order=order, pc=picking_config)
+        detail_parts: list[str] = []
+        for c in shortage_meta[:5]:
+            label = str(c.get("product_name") or c.get("product_sku") or f"#{c.get('component_product_id')}")
+            req = c.get("required_qty", c.get("required", c.get("qty_required")))
+            avail = c.get("available_qty", c.get("available", c.get("qty_available")))
+            line = label
+            if req is not None:
+                line += f" — wymagane {req}"
+            if avail is not None:
+                line += f", dostępne {avail}"
+            detail_parts.append(line)
+        detail_txt = ("; ".join(detail_parts) + ".") if detail_parts else ""
+        _log_order(
+            db,
+            order=order,
+            event_type="PRODUCTION_COMPONENT_SHORTAGE",
+            message=(
+                f"Nie można rozpocząć produkcji — brak komponentów. "
+                f"Zamówienie przeniesiono do statusu „{shortage_status_name}”."
+                + (f" {detail_txt}" if detail_txt else "")
+            ),
+            operator_user_id=operator_user_id,
+            metadata={
+                "reason": "COMPONENT_SHORTAGE",
+                "production_order_id": int(mo.id),
+                "production_order_number": str(mo.number),
+                "requested_quantity": float(src.requested_quantity or 0),
+                "max_producible_quantity": max_producible,
+                "shortage_status_id": moved_to,
+                "missing_components": shortage_meta,
+            },
+        )
+
+
 def apply_material_validation_to_orders_mo(
     db: Session,
     *,
@@ -225,10 +284,11 @@ def apply_material_validation_to_orders_mo(
     operator_user_id: Optional[int] = None,
 ) -> dict[str, Any]:
     """
-    Rebalance ORDERS MO sources by net material availability and sync reservations.
+    Rebalance ORDERS MO sources by production-allocatable materials and sync reservations.
 
-    Whole source items only (no mid-line split): priority / oldest keep coverage;
-    the rest become ``shortage`` and move to ``status_on_component_shortage_id``.
+    ``reserved`` source status is set only after PRODUCTION_ORDER reservations succeed.
+    Analysis and allocator share the same production-allocatable ATP (DOCK excluded when
+    putaway is required).
     """
     if str(getattr(mo, "source_type", "") or "") != PRODUCTION_ORDER_SOURCE_ORDERS:
         return {"result": "SKIPPED", "reason": "not_orders_mo"}
@@ -295,6 +355,17 @@ def apply_material_validation_to_orders_mo(
         for o in db.query(Order).filter(Order.id.in_(order_ids)).all()
     } if order_ids else {}
 
+    allow_sales = False
+    try:
+        from ..reservations.reservation_service import _load_production_reservation_config
+
+        cfg = _load_production_reservation_config(
+            db, tenant_id=int(mo.tenant_id), warehouse_id=int(mo.warehouse_id)
+        )
+        allow_sales = bool(getattr(cfg, "allow_sales_locations", False))
+    except Exception:
+        allow_sales = False
+
     requested_total = sum(float(s.requested_quantity or 0) for s in candidates)
     analysis = analyze_composition_quantity(
         db,
@@ -303,6 +374,7 @@ def apply_material_validation_to_orders_mo(
         composition=composition,
         planned_quantity=float(requested_total),
         exclude_order_id=int(mo.id),
+        allow_sales_locations=allow_sales,
     )
     max_producible = float(analysis.get("producible_now_qty") or 0)
     shortage_meta = _shortage_component_labels(analysis)
@@ -322,74 +394,29 @@ def apply_material_validation_to_orders_mo(
         else:
             demoted.append(src)
 
+    # Analysis-only demotion first (do not mark kept as reserved yet).
+    if demoted:
+        _demote_sources_to_shortage(
+            db,
+            demoted=demoted,
+            orders_by_id=orders_by_id,
+            picking_config=picking_config,
+            mo=mo,
+            operator_user_id=operator_user_id,
+            max_producible=max_producible,
+            shortage_meta=shortage_meta,
+        )
+
     planned = sum(float(s.requested_quantity or 0) for s in kept)
     mo.planned_quantity = float(planned)
     mo.updated_at = datetime.utcnow()
     _rescale_snapshots(mo, float(planned))
     db.add(mo)
-
-    now = datetime.utcnow()
-    for src in kept:
-        src.status = PRODUCTION_ORDER_SOURCE_ITEM_RESERVED
-        src.updated_at = now
-        db.add(src)
-
-    shortage_status_id = getattr(picking_config, "status_on_component_shortage_id", None) if picking_config else None
-    shortage_status_name = _status_name(db, status_id=shortage_status_id)
-
-    for src in demoted:
-        src.status = PRODUCTION_ORDER_SOURCE_ITEM_SHORTAGE
-        src.updated_at = now
-        db.add(src)
-        order = orders_by_id.get(int(src.order_id))
-        if order is None:
-            continue
-        moved_to = _move_order_to_shortage_status(db, order=order, pc=picking_config)
-        missing_names = [
-            str(c.get("product_name") or c.get("product_sku") or f"#{c.get('component_product_id')}")
-            for c in shortage_meta[:5]
-        ]
-        detail_parts: list[str] = []
-        for c in shortage_meta[:5]:
-            label = str(c.get("product_name") or c.get("product_sku") or f"#{c.get('component_product_id')}")
-            req = c.get("required_qty", c.get("required", c.get("qty_required")))
-            avail = c.get("available_qty", c.get("available", c.get("qty_available")))
-            line = label
-            if req is not None:
-                line += f" — wymagane {req}"
-            if avail is not None:
-                line += f", dostępne {avail}"
-            detail_parts.append(line)
-        detail_txt = ("; ".join(detail_parts) + ".") if detail_parts else (
-            (f" Brakuje: {', '.join(missing_names)}.") if missing_names else ""
-        )
-        _log_order(
-            db,
-            order=order,
-            event_type="PRODUCTION_COMPONENT_SHORTAGE",
-            message=(
-                f"Nie można rozpocząć produkcji — brak komponentów. "
-                f"Zamówienie przeniesiono do statusu „{shortage_status_name}”."
-                + (f" {detail_txt}" if detail_txt else "")
-            ),
-            operator_user_id=operator_user_id,
-            metadata={
-                "reason": "COMPONENT_SHORTAGE",
-                "production_order_id": int(mo.id),
-                "production_order_number": str(mo.number),
-                "requested_quantity": float(src.requested_quantity or 0),
-                "max_producible_quantity": max_producible,
-                "shortage_status_id": moved_to,
-                "missing_components": shortage_meta,
-            },
-        )
-
     db.flush()
 
     if planned <= 1e-9:
         refresh_orders_mo_material_reservations(db, mo=mo, created_by_user_id=operator_user_id)
         try:
-            # Collapse empty MO only — no availability event (would re-enter the same shortages).
             cancel_production_order(
                 db,
                 tenant_id=int(mo.tenant_id),
@@ -413,19 +440,87 @@ def apply_material_validation_to_orders_mo(
             },
         }
 
+    # Reserve materials BEFORE marking sources reserved.
     reservation = refresh_orders_mo_material_reservations(
         db, mo=mo, created_by_user_id=operator_user_id
     )
     db.flush()
+    db.refresh(mo)
+
+    reserve_ok = (
+        str(reservation.get("result") or "") == "REFRESHED"
+        and bool(getattr(mo, "materials_reserved", False))
+    )
+
+    now = datetime.utcnow()
+    if reserve_ok:
+        for src in kept:
+            src.status = PRODUCTION_ORDER_SOURCE_ITEM_RESERVED
+            src.updated_at = now
+            db.add(src)
+        db.flush()
+        return {
+            "result": "OK" if not demoted else "PARTIAL",
+            "production_order_id": int(mo.id),
+            "max_producible_quantity": max_producible,
+            "planned_quantity": float(planned),
+            "requested_total": float(requested_total),
+            "reserved_source_ids": [int(s.id) for s in kept],
+            "shortage_source_ids": [int(s.id) for s in demoted],
+            "reservation": reservation,
+            "analysis": {
+                "material_status": analysis.get("material_status"),
+                "producible_now_qty": max_producible,
+                "limiting_component": analysis.get("limiting_component"),
+            },
+        }
+
+    # Reservation failed — do not pretend sources are material-ready.
+    mo.planned_quantity = 0.0
+    mo.materials_reserved = False
+    mo.updated_at = now
+    _rescale_snapshots(mo, 0.0)
+    db.add(mo)
+    fail_meta = shortage_meta or [
+        {
+            "component_product_id": 0,
+            "product_name": "materiały",
+            "required_qty": planned,
+            "available_qty": 0,
+            "missing_qty": planned,
+        }
+    ]
+    _demote_sources_to_shortage(
+        db,
+        demoted=list(kept),
+        orders_by_id=orders_by_id,
+        picking_config=picking_config,
+        mo=mo,
+        operator_user_id=operator_user_id,
+        max_producible=0.0,
+        shortage_meta=fail_meta,
+    )
+    refresh_orders_mo_material_reservations(db, mo=mo, created_by_user_id=operator_user_id)
+    try:
+        cancel_production_order(
+            db,
+            tenant_id=int(mo.tenant_id),
+            order_id=int(mo.id),
+            emit_availability=False,
+        )
+    except Exception:
+        mo.status = "cancelled"
+        db.add(mo)
+        db.flush()
 
     return {
-        "result": "OK" if not demoted else "PARTIAL",
+        "result": "RESERVE_FAILED",
         "production_order_id": int(mo.id),
         "max_producible_quantity": max_producible,
-        "planned_quantity": float(planned),
+        "planned_quantity": 0.0,
         "requested_total": float(requested_total),
-        "reserved_source_ids": [int(s.id) for s in kept],
-        "shortage_source_ids": [int(s.id) for s in demoted],
+        "reserved_source_ids": [],
+        "shortage_source_ids": [int(s.id) for s in kept] + [int(s.id) for s in demoted],
         "reservation": reservation,
         "analysis": {
             "material_status": analysis.get("material_status"),
@@ -638,21 +733,13 @@ def retry_order_driven_production_shortages(
             .filter(
                 ProductionOrderSourceItem.tenant_id == int(tenant_id),
                 ProductionOrderSourceItem.order_item_id == int(src.order_item_id),
-                ProductionOrderSourceItem.status.in_(
-                    tuple(PRODUCTION_ORDER_SOURCE_ITEM_ACTIVE_STATUSES)
-                ),
+                ProductionOrderSourceItem.status == PRODUCTION_ORDER_SOURCE_ITEM_RESERVED,
             )
             .first()
         )
-        restored = active is not None
-        if restored:
-            # If trigger created a different row (legacy path), close the shortage we retried.
-            if refreshed is not None and int(refreshed.id) != int(active.id):
-                if str(refreshed.status or "") == PRODUCTION_ORDER_SOURCE_ITEM_SHORTAGE:
-                    refreshed.status = PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED
-                    refreshed.updated_at = datetime.utcnow()
-                    db.add(refreshed)
-            mo_label = ""
+        restored = False
+        active_mo = None
+        if active is not None:
             active_mo = active.production_order
             if active_mo is None:
                 active_mo = (
@@ -660,6 +747,21 @@ def retry_order_driven_production_shortages(
                     .filter(ProductionOrder.id == int(active.production_order_id))
                     .first()
                 )
+            # AUTO_RESUMED only when materials are actually reserved for the MO.
+            if active_mo is not None and bool(getattr(active_mo, "materials_reserved", False)):
+                restored = True
+            else:
+                active = None
+                active_mo = None
+
+        if restored and active is not None:
+            # If trigger created a different row (legacy path), close the shortage we retried.
+            if refreshed is not None and int(refreshed.id) != int(active.id):
+                if str(refreshed.status or "") == PRODUCTION_ORDER_SOURCE_ITEM_SHORTAGE:
+                    refreshed.status = PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED
+                    refreshed.updated_at = datetime.utcnow()
+                    db.add(refreshed)
+            mo_label = ""
             if active_mo is not None:
                 mo_label = str(getattr(active_mo, "number", None) or "")
             resume_msg = "Komponenty są dostępne — produkcja została automatycznie wznowiona."
@@ -681,6 +783,7 @@ def retry_order_driven_production_shortages(
                     "picking_config_id": getattr(mo, "picking_config_id", None),
                     "production_source_status_id": getattr(mo, "production_source_status_id", None),
                     "reattached": int(active.id) == int(src.id),
+                    "materials_reserved": True,
                 },
             )
         results.append(
@@ -696,6 +799,9 @@ def retry_order_driven_production_shortages(
                 "legacy_status": (str(refreshed.status) if refreshed else None),
                 "target_status_id": int(target_status),
                 "reattached": bool(restored and active is not None and int(active.id) == int(src.id)),
+                "materials_reserved": bool(
+                    restored and active_mo is not None and getattr(active_mo, "materials_reserved", False)
+                ),
             }
         )
 

@@ -9,7 +9,11 @@ from sqlalchemy.orm import Session
 
 from ...models.location import Location
 from ..inventory_lot_keys import NO_EXPIRY_SENTINEL
-from ..reservations.availability_service import iter_allocatable_inventory_rows, warehouse_net_available, warehouse_on_hand, warehouse_reserved_qty
+from ..reservations.availability_service import (
+    iter_allocatable_inventory_rows,
+    production_allocatable_qty,
+    warehouse_on_hand,
+)
 
 
 def _format_expiry(ed) -> str | None:
@@ -30,6 +34,7 @@ def inventory_lot_hints(
     exclude_order_id: int | None = None,
     limit: int = 12,
     strategy: str = "FEFO",
+    allow_sales_locations: bool = False,
 ) -> list[dict[str, Any]]:
     """Per lot/location rows with on-hand, reserved, net available."""
     loc_cache: dict[int, str] = {}
@@ -42,6 +47,7 @@ def inventory_lot_hints(
         strategy=strategy,
         exclude_batch_id=exclude_batch_id,
         exclude_order_id=exclude_order_id,
+        allow_sales_locations=bool(allow_sales_locations),
     ):
         lid = int(inv.location_id)
         if lid not in loc_cache:
@@ -76,26 +82,29 @@ def component_stock_breakdown(
     product_id: int,
     exclude_batch_id: int | None = None,
     exclude_order_id: int | None = None,
+    allow_sales_locations: bool = False,
 ) -> dict[str, float]:
+    """
+    Production material stock view.
+
+    ``available_qty`` is production-allocatable net (same SSOT as
+    ``allocate_product_quantity``) — DOCK is excluded when putaway is required.
+    ``on_hand_qty`` remains physical warehouse on-hand for context.
+    """
     on_hand = warehouse_on_hand(db, tenant_id=tenant_id, warehouse_id=warehouse_id, product_id=product_id)
-    reserved = warehouse_reserved_qty(
+    available = production_allocatable_qty(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         product_id=product_id,
         exclude_batch_id=exclude_batch_id,
         exclude_order_id=exclude_order_id,
+        allow_sales_locations=bool(allow_sales_locations),
     )
-    net = warehouse_net_available(
-        db,
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        product_id=product_id,
-        exclude_batch_id=exclude_batch_id,
-        exclude_order_id=exclude_order_id,
-    )
+    # Foreign holds / ineligible stock that sit on physical on-hand but are not allocatable.
+    reserved = max(0.0, round(float(on_hand) - float(available), 4))
     return {
         "on_hand_qty": round(on_hand, 4),
-        "reserved_qty": round(reserved, 4),
-        "available_qty": round(net, 4),
+        "reserved_qty": reserved,
+        "available_qty": round(available, 4),
     }

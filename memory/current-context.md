@@ -1,13 +1,57 @@
-﻿## Active
+﻿**Fix materials ATP + Phase 8 reserved semantics (2026-08-15):**
+- SSOT: `production_allocatable_qty` (= allocate eligibility; DOCK wykluczony przy putaway)
+- `component_stock_breakdown.available_qty` z allocatable, nie warehouse_on_hand
+- material validation: reserved dopiero po `REFRESHED`+`materials_reserved`; fail → shortage/BRAKI
+- AUTO_RESUMED tylko przy source `reserved` AND `materials_reserved=true`
+- Testy: `test_production_material_allocatable_phase8.py`
 
-**Fix P0/P1 UAT Fazy 3 (2026-08-15) — wdrożone, czeka deploy:**
-1. `exclude_production_order_id` — własna PRODUCTION_ORDER nie blokuje collecting/consume/pick-plan
-2. `pickable_free_capacity_*` — nowe SALES_ORDER nie overbookują lokalizacji (own holds odejmowane)
+**Diagnoza materials po Phase 8 (2026-08-15) — bez fixa:**
+- Root: asymetria ATP — `analyze_composition_quantity`/`warehouse_on_hand` liczy DOCK; `allocate_product_quantity` wyklucza DOCK (`requires_putaway`)
+- `apply_material_validation`: source→`reserved` **przed** `refresh`; przy `ValueError` w allocate → `RESERVE_FAILED` / `materials_reserved=false`, source zostaje `reserved`
+- Phase 8 `AUTO_RESUMED` tylko gdy ACTIVE source — **nie** sprawdza `materials_reserved`
+- Case #1253: planned=2 → need ST-003×4; dock w analizie; pickable zablokowane → brak PRODUCTION_ORDER
+
+**UAT A Phase 8 retest po 958fdb19 — STOP (2026-08-15):**
+- Order **#1253 / id=1267** / item 2122 / ST-001×1; SourceItem **#20**
+- KROK1: BRAKI#4 PASS; brak nadpisania awaiting; MO/8 agregacja; source#20 shortage
+- KROK2/3: PZ#88 receive/putaway ST-003 → AUTO_RESUMED; **same #20** reserved; reattached; Produkcja#12
+- **FAIL:** `materials_reserved=false`; brak PRODUCTION_ORDER reservation ST-003×2 (tylko obce SALES_ORDER #72/#73)
+- Idempotencja częściowa: 2. notify (putaway) bez 2. AUTO_RESUMED
+- STOP — bez PRINT/PLANNING/BAT
+
+**Fix Phase 8 vs gate (958fdb19) — 2026-08-15:**
+- BRAKI wygrywa nad awaiting po ALL_SHORTAGE
+- Reattach shortage SourceItem z cancelled MO (jeden demand)
+- Testy collision UAT #1266 PASS; 89 related tests PASS
+- Po deploy: ponów tylko UAT A Phase 8 (bez PRINT)
+
+**UAT v1 domknięcie STOP na Phase 8 (2026-08-15):**
+- Case #1266 / item 2121 / ST-001 BOM ST-003×2
+- PRE: source#18 shortage, MO/7 cancelled ALL_SHORTAGE; gate nadpisał BRAKI→awaiting#13 (activity 476 mówi BRAKI)
+- P8 notify ST-003+2: RESTORED → source#19 reserved na MO/8, UI Produkcja#12, res#69×2, activity AUTO_RESUMED
+- **FAIL:** leftover SourceItem#18 nadal `shortage` (duplikat obok #19 reserved)
+- STOP — bez UAT B/C/D
+
+**Audyt Produkcja v1 (2026-08-15, read-only):**
+- Werdykt: gotowa do normalnego użycia ścieżki ORDERS+WMS (Fazy 1–3 PASS E2E) + BAT lifecycle; bez hard blockerów kodu
+- Warunek ops: `FEATURE_PICKING_ENTRY_READINESS_MODE=active` + poprawny Konfigurator (awaiting, buffer, after)
+- Follow-up: BAT/MO UX, ERP/PAPER clutter, logi pełne na karcie, UAT PLANNING/PRINT, Analiza KPI
+- Nie ruszać: gate/ATP/SALES_ORDER/Phase3 detach/allocator/buffer ORDERS
+
+## Active
+
+**UAT started-MO fresh case PASS (2026-08-15) — po fa704be5:**
+- Legacy #1251 = stary stan sprzed fixa (nie regresja detacha); allocator SAFE (source#15 `shortage` poza fulfillable)
+- Historical SO overbook: B3-C-2 (#65), B3-B-3 (#54) released via reservation service; po cleanup true SO overbook=0
+- Fresh #1252 / MO/6: collecting → external +1 B3-A-4 → SOURCE_DETACHED_STARTED_MO; UI→Wózki#6; SALES#68; planned=1; finish MO → free FG @ DOCK-IN; brak FE_PICK/pick alloc
+- **Fazy 1–3 readiness/production fallback = PASS E2E**
+
+**Fix P0/P1 (fa704be5) — wdrożone na prod:**
+1. `exclude_production_order_id` — własna PRODUCTION_ORDER nie blokuje collecting
+2. `pickable_free_capacity_*` — nowe SALES_ORDER bez overbook
 3. Started MO + full external FG → SourceItem `cancelled` (detach) bez shrink planned/RW/mats
-4. `allocate_produced_delta` — remaining order demand (SALES hold / pick / after_status) → free FG
-5. MO finish collecting używa committed slices (bez double-consume), jak BAT
-
-**UAT resume po deploy:** started MO → external FG → finish collecting → production → finish → brak double fulfillment (nie pełny UAT od zera).
+4. `allocate_produced_delta` — remaining demand → free FG
+5. MO finish collecting: committed slices (bez double-consume)
 
 **UAT started MO — PARTIAL (przed fixem):**
 - Finish MO BLOCKED: własna res MO traktowana jak obca (P0.1)

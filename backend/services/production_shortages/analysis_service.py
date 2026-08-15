@@ -112,6 +112,7 @@ def analyze_component_requirements(
     component_totals: dict[int, float],
     exclude_batch_id: int | None = None,
     exclude_order_id: int | None = None,
+    allow_sales_locations: bool = False,
 ) -> list[dict[str, Any]]:
     if not component_totals:
         return []
@@ -128,6 +129,7 @@ def analyze_component_requirements(
             product_id=pid,
             exclude_batch_id=exclude_batch_id,
             exclude_order_id=exclude_order_id,
+            allow_sales_locations=bool(allow_sales_locations),
         )
         avail = float(stock["available_qty"])
         missing = max(0.0, req - avail)
@@ -140,6 +142,7 @@ def analyze_component_requirements(
             product_id=pid,
             exclude_batch_id=exclude_batch_id,
             exclude_order_id=exclude_order_id,
+            allow_sales_locations=bool(allow_sales_locations),
         )
         rows.append(
             {
@@ -258,6 +261,7 @@ def analyze_composition_quantity(
     exclude_order_id: int | None = None,
     include_bom_explosion: bool = False,
     include_ai_context: bool = False,
+    allow_sales_locations: bool = False,
 ) -> dict[str, Any]:
     yld = float(composition.yield_quantity or 1) or 1.0
     totals: dict[int, float] = {}
@@ -277,6 +281,7 @@ def analyze_composition_quantity(
         component_totals=totals,
         exclude_batch_id=exclude_batch_id,
         exclude_order_id=exclude_order_id,
+        allow_sales_locations=bool(allow_sales_locations),
     )
     partial = compute_partial_production(
         planned_quantity=float(planned_quantity),
@@ -323,6 +328,7 @@ def analyze_composition_quantity(
             component_totals=flat,
             exclude_batch_id=exclude_batch_id,
             exclude_order_id=exclude_order_id,
+            allow_sales_locations=bool(allow_sales_locations),
         )
         analysis_map = {int(c["component_product_id"]): c for c in exploded_components}
         attach_shortage_impact_to_tree(tree, component_analysis=analysis_map)
