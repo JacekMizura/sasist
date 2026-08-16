@@ -1,24 +1,43 @@
 import type { StockDocumentRead } from "../../../api/stockDocumentsApi";
 
-/** Terminal warehouse statuses — OMS read-only for PZ (no accept / line PATCH). */
-export function isTerminalWarehouseDocStatus(status: string | null | undefined): boolean {
+const TERMINAL_STATUS_TOKENS = new Set([
+  "zakonczone",
+  "posted",
+  "completed",
+  "closed",
+  "cancelled",
+  "canceled",
+  "anulowane",
+  "anulowany",
+]);
+
+/** Central SSOT: terminal warehouse document status → OMS read-only. */
+export function isTerminalStockDocumentStatus(status: string | null | undefined): boolean {
   const st = String(status || "")
     .trim()
     .toLowerCase();
-  return st === "zakonczone" || st === "posted" || st === "completed" || st === "closed";
+  return TERMINAL_STATUS_TOKENS.has(st);
+}
+
+/** @deprecated Prefer isTerminalStockDocumentStatus */
+export function isTerminalWarehouseDocStatus(status: string | null | undefined): boolean {
+  return isTerminalStockDocumentStatus(status);
 }
 
 /** WMS completed without OMS office post (`posted`). */
 export function isWmsCompletedPzStatus(status: string | null | undefined): boolean {
-  return String(status || "")
-    .trim()
-    .toLowerCase() === "zakonczone";
+  return (
+    String(status || "")
+      .trim()
+      .toLowerCase() === "zakonczone"
+  );
 }
 
 export function canShowPzMutationActions(opts: {
   status: string | null | undefined;
   isPzDetail: boolean;
 }): boolean {
+  if (isTerminalStockDocumentStatus(opts.status)) return false;
   const st = String(opts.status || "")
     .trim()
     .toLowerCase();
@@ -29,6 +48,7 @@ export function canPostAcceptPz(opts: {
   status: string | null | undefined;
   warehouseId: number | null | undefined;
 }): boolean {
+  if (isTerminalStockDocumentStatus(opts.status)) return false;
   const st = String(opts.status || "")
     .trim()
     .toLowerCase();
@@ -42,12 +62,11 @@ export function shouldPatchLinesBeforeAccept(editMode: string | null | undefined
 
 /**
  * Pre-request gate for OMS accept.
- * - zakonczone/posted: blocked (WMS already completed stock)
- * - draft + full: PATCH then accept
- * - draft + metadata: accept without PATCH (WMS in-progress / OMS metadata-only)
- * - otherwise: blocked
+ * Terminal statuses never PATCH / accept / post.
  */
-export function resolveAcceptActionGate(detail: Pick<StockDocumentRead, "status" | "edit_mode" | "warehouse_id">): {
+export function resolveAcceptActionGate(
+  detail: Pick<StockDocumentRead, "status" | "edit_mode" | "warehouse_id">,
+): {
   ok: boolean;
   patchLines: boolean;
   message?: string;
@@ -57,14 +76,21 @@ export function resolveAcceptActionGate(detail: Pick<StockDocumentRead, "status"
     .toLowerCase();
   const editMode = detail.edit_mode ?? "none";
 
-  if (isWmsCompletedPzStatus(st)) {
-    return {
-      ok: false,
-      patchLines: false,
-      message: "Dokument został zakończony w WMS — nie wymaga ponownego księgowania w OMS.",
-    };
-  }
-  if (st === "posted" || st === "completed" || st === "closed") {
+  if (isTerminalStockDocumentStatus(st)) {
+    if (st === "zakonczone") {
+      return {
+        ok: false,
+        patchLines: false,
+        message: "Dokument został zakończony w WMS — nie wymaga ponownego księgowania w OMS.",
+      };
+    }
+    if (st === "anulowane" || st === "anulowany" || st === "cancelled" || st === "canceled") {
+      return {
+        ok: false,
+        patchLines: false,
+        message: "Dokument jest anulowany — tylko do odczytu.",
+      };
+    }
     return {
       ok: false,
       patchLines: false,
@@ -100,15 +126,18 @@ export function resolveAcceptActionGate(detail: Pick<StockDocumentRead, "status"
 }
 
 export function canDeleteWarehouseDocument(status: string | null | undefined): boolean {
-  return String(status || "")
-    .trim()
-    .toLowerCase() === "draft";
+  if (isTerminalStockDocumentStatus(status)) return false;
+  return (
+    String(status || "")
+      .trim()
+      .toLowerCase() === "draft"
+  );
 }
 
 export function canScrollEditPencil(opts: {
   status: string | null | undefined;
   lineEditEnabled: boolean;
 }): boolean {
-  if (isTerminalWarehouseDocStatus(opts.status)) return false;
+  if (isTerminalStockDocumentStatus(opts.status)) return false;
   return opts.lineEditEnabled;
 }
