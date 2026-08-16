@@ -121,14 +121,18 @@ def classify_order_item_readiness(
     order_id: int,
     order_item: OrderItem,
 ) -> OrderItemReadinessResult:
+    from .stock_disposition import resolve_order_item_required_disposition
+
     pid = int(order_item.product_id)
     required = float(order_item.quantity or 0)
+    sd = resolve_order_item_required_disposition(order_item)
     available = pickable_available_qty(
         db,
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
         product_id=pid,
         exclude_order_id=int(order_id),
+        stock_disposition=sd,
     )
     active_bom = get_active_manufacturing_composition(
         db, tenant_id=int(tenant_id), product_id=pid

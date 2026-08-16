@@ -13,7 +13,12 @@ from ..product_disposition_snapshot_service import (
     _reserved_by_product_and_disposition,
     get_product_disposition_stock,
 )
-from ..stock_disposition import DEFAULT_STOCK_DISPOSITION, normalize_stock_disposition
+from ..stock_disposition import (
+    DEFAULT_STOCK_DISPOSITION,
+    STOCK_DISPOSITION_OUTLET_B,
+    STOCK_DISPOSITION_SERVICE_C,
+    normalize_stock_disposition,
+)
 from .constants import disposition_on_hand_key
 from .errors import OfferStockUnavailableError
 
@@ -63,6 +68,12 @@ def offer_available_qty(
                 product_id=pid,
             )
         )
+
+    # Explicit non-saleable pools: prefer disposition-aware available from snapshot.
+    if sd == STOCK_DISPOSITION_OUTLET_B:
+        return float(snap.get("outlet_available_qty") or 0.0)
+    if sd == STOCK_DISPOSITION_SERVICE_C:
+        return float(snap.get("service_available_qty") or 0.0)
 
     key = disposition_on_hand_key(sd)
     on_hand = float(snap.get(key) or 0.0)

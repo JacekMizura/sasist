@@ -65,6 +65,8 @@ def empty_disposition_stock_dict() -> Dict[str, float]:
         "other_qty": 0.0,
         "physical_qty": 0.0,
         "saleable_available_qty": 0.0,
+        "outlet_available_qty": 0.0,
+        "service_available_qty": 0.0,
         "dock_qty": 0.0,
     }
 
@@ -74,7 +76,8 @@ def _disposition_stock_from_buckets(
     *,
     pick_eligible_buckets: Dict[str, float] | None = None,
     dock_saleable: float = 0.0,
-    reserved: float = 0.0,
+    reserved_saleable: float = 0.0,
+    reserved_outlet: float = 0.0,
 ) -> Dict[str, float]:
     out = empty_disposition_stock_dict()
     physical = 0.0
@@ -96,7 +99,12 @@ def _disposition_stock_from_buckets(
     pick_saleable = _nz(float(pe.get(STOCK_DISPOSITION_SALEABLE, 0.0)))
     if STOCK_DISPOSITION_SALEABLE not in pe and DEFAULT_STOCK_DISPOSITION in pe:
         pick_saleable = _nz(float(pe.get(DEFAULT_STOCK_DISPOSITION, 0.0)))
-    out["saleable_available_qty"] = _nz(max(0.0, pick_saleable - float(reserved or 0)))
+    pick_outlet = _nz(float(pe.get(STOCK_DISPOSITION_OUTLET_B, 0.0)))
+    pick_service = _nz(float(pe.get(STOCK_DISPOSITION_SERVICE_C, 0.0)))
+    out["saleable_available_qty"] = _nz(max(0.0, pick_saleable - float(reserved_saleable or 0)))
+    out["outlet_available_qty"] = _nz(max(0.0, pick_outlet - float(reserved_outlet or 0)))
+    # SERVICE_C is never reservable — available == pick-eligible on-hand.
+    out["service_available_qty"] = _nz(pick_service)
     return out
 
 
@@ -209,7 +217,8 @@ def disposition_snapshots_for_products(
         return {}
 
     _CHUNK = 400
-    reserved_map: Dict[int, float] = {}
+    reserved_saleable_map: Dict[int, float] = {}
+    reserved_outlet_map: Dict[int, float] = {}
     disposition_map: Dict[int, Dict[str, float]] = {}
     pick_eligible_map: Dict[int, Dict[str, float]] = {}
     dock_map: Dict[int, float] = {}
@@ -219,26 +228,38 @@ def disposition_snapshots_for_products(
         disposition_map.update(part_all)
         pick_eligible_map.update(part_pick)
         dock_map.update(part_dock)
-        part_res = _reserved_by_product_and_disposition(
-            db,
-            tenant_id,
-            warehouse_id,
-            chunk,
-            STOCK_DISPOSITION_SALEABLE,
+        reserved_saleable_map.update(
+            _reserved_by_product_and_disposition(
+                db,
+                tenant_id,
+                warehouse_id,
+                chunk,
+                STOCK_DISPOSITION_SALEABLE,
+            )
         )
-        reserved_map.update(part_res)
+        reserved_outlet_map.update(
+            _reserved_by_product_and_disposition(
+                db,
+                tenant_id,
+                warehouse_id,
+                chunk,
+                STOCK_DISPOSITION_OUTLET_B,
+            )
+        )
 
     out: Dict[int, Dict[str, float]] = {}
     for pid in pids:
         buckets = disposition_map.get(int(pid), {})
         pick_buckets = pick_eligible_map.get(int(pid), {})
-        reserved = float(reserved_map.get(int(pid), 0.0))
+        reserved_a = float(reserved_saleable_map.get(int(pid), 0.0))
+        reserved_b = float(reserved_outlet_map.get(int(pid), 0.0))
         dock_qty = float(dock_map.get(int(pid), 0.0))
         out[int(pid)] = _disposition_stock_from_buckets(
             buckets,
             pick_eligible_buckets=pick_buckets,
             dock_saleable=dock_qty,
-            reserved=reserved,
+            reserved_saleable=reserved_a,
+            reserved_outlet=reserved_b,
         )
     return out
 

@@ -101,5 +101,16 @@ class TestValidateMergedStockDisposition:
 
 def test_saleable_available_uses_saleable_reserved_only() -> None:
     buckets = {STOCK_DISPOSITION_SALEABLE: 50.0, STOCK_DISPOSITION_OUTLET_B: 20.0}
-    out = _disposition_stock_from_buckets(buckets, reserved=8.0)
+    out = _disposition_stock_from_buckets(
+        buckets, reserved_saleable=8.0, reserved_outlet=5.0
+    )
     assert out["saleable_available_qty"] == 42.0
+    assert out["outlet_available_qty"] == 15.0
+    assert out["service_available_qty"] == 0.0
+
+
+def test_service_c_never_reservable() -> None:
+    from backend.services.stock_disposition import STOCK_DISPOSITION_SERVICE_C
+
+    with pytest.raises(ValueError, match="not reservable"):
+        assert_reservable_disposition(STOCK_DISPOSITION_SERVICE_C)

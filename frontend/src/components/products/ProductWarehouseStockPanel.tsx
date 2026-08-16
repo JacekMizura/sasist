@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { MagazynInventoryLine, magazynInventoryRowReactKey, type MagazynInvRowDisplay } from "./MagazynInventoryLine";
 import { ProductDispositionStockSummary } from "./ProductDispositionStockSummary";
+import { ProductLocationDispositionMatrix } from "./ProductLocationDispositionMatrix";
 import { WarehouseFormCard } from "./WarehouseFormCard";
 import type { ProductDispositionStock } from "../../types/productDispositionStock";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
@@ -236,17 +237,20 @@ export function ProductWarehouseStockPanel({
         {inventoryRows.length === 0 ? (
           <p className="text-sm text-slate-600">{emptyLocationsMessage}</p>
         ) : (
-          <ul className="space-y-2">
-            {inventoryRows.map((row, idx) => (
-              <li key={magazynInventoryRowReactKey(row, idx)} className="min-w-0">
-                <MagazynInventoryLine
-                  row={row}
-                  onEditTraceability={onEditTraceability}
-                  editDisabled={traceabilityEditDisabled}
-                />
-              </li>
-            ))}
-          </ul>
+          <div className="space-y-4">
+            <ProductLocationDispositionMatrix rows={inventoryRows} />
+            <ul className="space-y-2">
+              {inventoryRows.map((row, idx) => (
+                <li key={magazynInventoryRowReactKey(row, idx)} className="min-w-0">
+                  <MagazynInventoryLine
+                    row={row}
+                    onEditTraceability={onEditTraceability}
+                    editDisabled={traceabilityEditDisabled}
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </WarehouseFormCard>
     </div>

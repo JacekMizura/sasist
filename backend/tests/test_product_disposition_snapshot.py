@@ -31,7 +31,7 @@ class TestDispositionStockFromBuckets:
             STOCK_DISPOSITION_SERVICE_C: 2.0,
             STOCK_DISPOSITION_QUARANTINE: 5.0,
         }
-        out = _disposition_stock_from_buckets(buckets, reserved=3.0)
+        out = _disposition_stock_from_buckets(buckets, reserved_saleable=3.0)
         assert out["saleable_qty"] == 100.0
         assert out["outlet_qty"] == 1.0
         assert out["service_qty"] == 2.0
@@ -40,6 +40,8 @@ class TestDispositionStockFromBuckets:
         assert out["rejected_qty"] == 0.0
         assert out["physical_qty"] == 108.0
         assert out["saleable_available_qty"] == 97.0
+        assert out["outlet_available_qty"] == 1.0
+        assert out["service_available_qty"] == 2.0
 
     def test_scrap_in_physical_not_saleable(self) -> None:
         buckets = {STOCK_DISPOSITION_SALEABLE: 10.0, STOCK_DISPOSITION_SCRAP: 4.0}

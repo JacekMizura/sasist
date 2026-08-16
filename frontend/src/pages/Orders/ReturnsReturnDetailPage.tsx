@@ -22,6 +22,7 @@ import { getReturnPanelSubgroups, getReturnUiStatusSummary } from "../../api/ret
 import { getOfficeReturnModuleConfig } from "../../api/returnModuleConfigApi";
 import type {
   CustomerInsightsRead,
+  ManufacturedComponentRecoveryMode,
   ReturnUiPanelSubgroupRead,
   ReturnUiStatusPanelSummary,
   ReturnStatusBrief,
@@ -55,7 +56,14 @@ import {
   isFinalizeLineComplete,
   isRmzLineFullyResolved,
   mergeLineReadFromDraft,
+  mergeRecoveryIntoFinalizeDraft,
 } from "../../utils/rmzFinalizePayload";
+import { BundleReturnLinePanel } from "../../components/returns/BundleReturnLinePanel";
+import {
+  draftFromLine,
+  ManufacturedRecoveryIntakePanel,
+  type ManufacturedRecoveryDraft,
+} from "../../components/returns/ManufacturedRecoveryIntakePanel";
 import { WMS_ROUTES } from "../wms/wmsRoutes";
 import {
   decodeRmzDamageTypePayload,
@@ -532,6 +540,8 @@ export default function ReturnsReturnDetailPage() {
   const [commEntries, setCommEntries] = useState<CommEntry[]>([]);
   const [moduleCfg, setModuleCfg] = useState<ReturnModuleConfigDto | null>(null);
   const [lineDrafts, setLineDrafts] = useState<Record<number, WmsReturnFinalizeLineIn>>({});
+  /** Same SSOT draft as WMS ManufacturedRecoveryIntakePanel — keyed by order_item_id. */
+  const [mfgRecoveryByOi, setMfgRecoveryByOi] = useState<Record<number, ManufacturedRecoveryDraft>>({});
   const [finalizeSaving, setFinalizeSaving] = useState(false);
   const [finalizeSuccessMsg, setFinalizeSuccessMsg] = useState<string | null>(null);
   const [finalizeReceiptLink, setFinalizeReceiptLink] = useState<{
@@ -585,12 +595,22 @@ export default function ReturnsReturnDetailPage() {
         setWmsSettings(settings);
         setShowWmsTerminal(invPolicy?.inventory_management_mode !== "DOCUMENTS_ONLY");
         const drafts: Record<number, WmsReturnFinalizeLineIn> = {};
+        const recoveryDrafts: Record<number, ManufacturedRecoveryDraft> = {};
+        const modeRaw = String(
+          r.manufactured_component_recovery_mode || settings?.manufactured_component_recovery_mode || "OFF",
+        ).toUpperCase();
+        const recoveryModeInit: ManufacturedComponentRecoveryMode =
+          modeRaw === "OPTIONAL" || modeRaw === "REQUIRED" ? modeRaw : "OFF";
         for (const ln of r.lines) {
           if (isRmzLineFullyResolved(ln)) {
             drafts[ln.order_item_id] = finalizeLineFromRead(ln);
           }
+          if (ln.manufactured_recovery_eligible && recoveryModeInit !== "OFF") {
+            recoveryDrafts[ln.order_item_id] = draftFromLine(ln, recoveryModeInit);
+          }
         }
         setLineDrafts(drafts);
+        setMfgRecoveryByOi(recoveryDrafts);
         try {
           const ord = await api.get<OrderDetailLite>(`/orders/${r.order_id}/`);
           if (!cancelled) setOrderLite(ord.data);
@@ -752,6 +772,15 @@ export default function ReturnsReturnDetailPage() {
     return { left, right: [...preferred, ...rest] };
   }, [moduleCfg?.detail_layout]);
 
+  const manufacturedRecoveryMode = useMemo((): ManufacturedComponentRecoveryMode => {
+    const raw = String(
+      data?.manufactured_component_recovery_mode ||
+        wmsSettings?.manufactured_component_recovery_mode ||
+        "OFF",
+    ).toUpperCase();
+    return raw === "OPTIONAL" || raw === "REQUIRED" ? raw : "OFF";
+  }, [data?.manufactured_component_recovery_mode, wmsSettings?.manufactured_component_recovery_mode]);
+
   const allLinesReady = useMemo(() => {
     if (!data) return false;
     return (
@@ -772,10 +801,36 @@ export default function ReturnsReturnDetailPage() {
     }) => {
       if (!data || finalizeSaving) return;
       const whId = data.warehouse_id;
+      try {
+        for (const ln of data.lines) {
+          if (!ln.manufactured_recovery_eligible || manufacturedRecoveryMode === "OFF") continue;
+          const recoveryDraft =
+            mfgRecoveryByOi[ln.order_item_id] ?? draftFromLine(ln, manufacturedRecoveryMode);
+          if (manufacturedRecoveryMode === "REQUIRED" && recoveryDraft.disassembly_qty < 1) {
+            setLineErr(`Wymagane rozmontowanie: ${ln.product_id}`);
+            return;
+          }
+          if (recoveryDraft.disassembly_qty > 0) {
+            const unbalanced = recoveryDraft.component_recoveries.some((r) => {
+              const expected = Number(r.expected_qty ?? 0);
+              return Math.abs(Number(r.accepted_qty) + Number(r.scrap_qty) - expected) > 1e-6;
+            });
+            if (unbalanced || recoveryDraft.component_recoveries.length < 1) {
+              setLineErr("Uzupełnij rozliczenie komponentów (przyjęcie + odrzut = do odzysku).");
+              return;
+            }
+          }
+        }
+      } catch {
+        /* continue to finalize — backend validates */
+      }
       const lines = data.lines.map((ln) => {
         const draft = lineDrafts[ln.order_item_id];
         if (!draft) throw new Error("Brak draftu linii");
-        return draft;
+        if (!ln.manufactured_recovery_eligible || manufacturedRecoveryMode === "OFF") return draft;
+        const recoveryDraft =
+          mfgRecoveryByOi[ln.order_item_id] ?? draftFromLine(ln, manufacturedRecoveryMode);
+        return mergeRecoveryIntoFinalizeDraft(draft, recoveryDraft);
       });
       const enableRefund = Boolean(wmsSettings?.enable_refund);
       const shipAmt = refundOpts?.refundShipping ? refundOpts.refundShippingAmount : 0;
@@ -827,7 +882,16 @@ export default function ReturnsReturnDetailPage() {
         setFinalizeSaving(false);
       }
     },
-    [data, finalizeSaving, lineDrafts, refundProposal.productsValue, rid, wmsSettings?.enable_refund],
+    [
+      data,
+      finalizeSaving,
+      lineDrafts,
+      manufacturedRecoveryMode,
+      mfgRecoveryByOi,
+      refundProposal.productsValue,
+      rid,
+      wmsSettings?.enable_refund,
+    ],
   );
 
   if (loading) {
@@ -901,6 +965,39 @@ export default function ReturnsReturnDetailPage() {
               saving={lineSavingOi === ln.order_item_id}
               wmsSettings={wmsSettings}
               warehouseId={data.warehouse_id}
+              returnId={data.id}
+              orderId={data.order_id}
+              recoveryMode={manufacturedRecoveryMode}
+              recoveryDraft={
+                mfgRecoveryByOi[ln.order_item_id] ??
+                (ln.manufactured_recovery_eligible && manufacturedRecoveryMode !== "OFF"
+                  ? draftFromLine(ln, manufacturedRecoveryMode)
+                  : null)
+              }
+              onRecoveryDraftChange={(next) => {
+                setMfgRecoveryByOi((prev) => ({ ...prev, [ln.order_item_id]: next }));
+                const base = lineDrafts[ln.order_item_id] ?? finalizeLineFromRead(ln);
+                applyLineDraft(mergeRecoveryIntoFinalizeDraft(base, next));
+              }}
+              onBundleSaved={() => {
+                void getWmsReturn(rid, DAMAGE_TENANT_ID).then((fresh) => {
+                  setData(fresh);
+                  const modeRaw = String(
+                    fresh.manufactured_component_recovery_mode ||
+                      wmsSettings?.manufactured_component_recovery_mode ||
+                      "OFF",
+                  ).toUpperCase();
+                  const mode: ManufacturedComponentRecoveryMode =
+                    modeRaw === "OPTIONAL" || modeRaw === "REQUIRED" ? modeRaw : "OFF";
+                  const recoveryDrafts: Record<number, ManufacturedRecoveryDraft> = {};
+                  for (const row of fresh.lines) {
+                    if (row.manufactured_recovery_eligible && mode !== "OFF") {
+                      recoveryDrafts[row.order_item_id] = draftFromLine(row, mode);
+                    }
+                  }
+                  setMfgRecoveryByOi(recoveryDrafts);
+                });
+              }}
               returnType={data.return_type ?? "RMA"}
               setLineErr={setLineErr}
               decisionExpanded={expandedDecisionOi === ln.order_item_id}
@@ -1269,6 +1366,12 @@ function LineOperationsCard({
   saving,
   wmsSettings,
   warehouseId,
+  returnId,
+  orderId,
+  recoveryMode,
+  recoveryDraft,
+  onRecoveryDraftChange,
+  onBundleSaved,
   returnType,
   setLineErr,
   decisionExpanded,
@@ -1287,6 +1390,12 @@ function LineOperationsCard({
   saving: boolean;
   wmsSettings: WmsSettingsRead | null;
   warehouseId: number;
+  returnId: number;
+  orderId: number;
+  recoveryMode: ManufacturedComponentRecoveryMode;
+  recoveryDraft: ManufacturedRecoveryDraft | null;
+  onRecoveryDraftChange: (next: ManufacturedRecoveryDraft) => void;
+  onBundleSaved: () => void;
   returnType: "RMA" | "UNCLAIMED";
   setLineErr: Dispatch<SetStateAction<string | null>>;
   decisionExpanded: boolean;
@@ -1737,6 +1846,32 @@ function LineOperationsCard({
             </div>
           ) : null}
         </div>
+
+        {line.is_bundle_parent && line.id != null && Number(line.id) > 0 ? (
+          <BundleReturnLinePanel
+            tenantId={DAMAGE_TENANT_ID}
+            warehouseId={warehouseId}
+            returnId={returnId}
+            rmzLineId={Number(line.id)}
+            orderId={orderId}
+            orderLineId={line.order_item_id}
+            bundleName={line.bundle_name}
+            initialComponents={line.bundle_components}
+            line={line}
+            disabled={disable}
+            onSaved={onBundleSaved}
+          />
+        ) : null}
+
+        {line.manufactured_recovery_eligible && recoveryMode !== "OFF" && recoveryDraft != null ? (
+          <ManufacturedRecoveryIntakePanel
+            line={line}
+            mode={recoveryMode}
+            value={recoveryDraft}
+            onChange={onRecoveryDraftChange}
+            disabled={disable}
+          />
+        ) : null}
 
         {!multiQty && sheet != null ? (
           <RmzInlineExpandShell open={sheetVisible}>

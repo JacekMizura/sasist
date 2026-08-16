@@ -77,16 +77,26 @@ export function ProductDispositionStockSummary({
   const pools = poolLines(d);
 
   if (variant === "list") {
+    const bcParts: string[] = [];
+    if (d.outlet_qty > 0) bcParts.push(`B: ${fmtDispositionQty(d.outlet_qty)}`);
+    if (d.service_qty > 0) bcParts.push(`C: ${fmtDispositionQty(d.service_qty)}`);
+    const title =
+      bcParts.length > 0
+        ? `${bcParts.join(" · ")} · Razem: ${fmtDispositionQty(physical)}`
+        : `Razem: ${fmtDispositionQty(physical)}`;
     return (
-      <div className={`text-right text-sm tabular-nums ${className}`}>
+      <div className={`text-right text-sm tabular-nums ${className}`} title={title}>
         <p className="text-slate-800">
-          <span className="text-slate-500">Dostępny:</span>{" "}
+          <span className="text-slate-500">A / dostępne:</span>{" "}
           <span className={available === 0 ? "font-semibold text-red-600" : "font-medium text-slate-900"}>
             {fmtDispositionQty(available)}
           </span>
         </p>
+        {bcParts.length > 0 ? (
+          <p className="text-xs text-slate-500">{bcParts.join(" · ")}</p>
+        ) : null}
         <p className="text-slate-600">
-          <span className="text-slate-500">Fizycznie:</span> {fmtDispositionQty(physical)}
+          <span className="text-slate-500">Razem:</span> {fmtDispositionQty(physical)}
         </p>
         {dock > 0 ? (
           <p className="text-xs text-amber-800">
@@ -94,7 +104,7 @@ export function ProductDispositionStockSummary({
           </p>
         ) : null}
         {reserved > 0 ? (
-          <p className="text-xs text-slate-500">Po rezerwacji: {fmtDispositionQty(available)}</p>
+          <p className="text-xs text-slate-500">Po rezerwacji A: {fmtDispositionQty(available)}</p>
         ) : null}
       </div>
     );
@@ -153,6 +163,17 @@ export function ProductDispositionStockSummary({
           <span className="font-semibold text-slate-900 tabular-nums">{fmtDispositionQty(p.qty)} szt.</span>
         </p>
       ))}
+      {(d.outlet_available_qty != null && d.outlet_qty > 0) || (d.service_available_qty != null && d.service_qty > 0) ? (
+        <p className="text-xs text-slate-500">
+          {d.outlet_qty > 0
+            ? `Outlet wolne: ${fmtDispositionQty(d.outlet_available_qty ?? 0)}`
+            : null}
+          {d.outlet_qty > 0 && d.service_qty > 0 ? " · " : null}
+          {d.service_qty > 0
+            ? `Serwis: ${fmtDispositionQty(d.service_available_qty ?? d.service_qty)}`
+            : null}
+        </p>
+      ) : null}
       <ReservedSecondary
         reserved={reserved}
         productionReserved={productionReserved}

@@ -18,7 +18,8 @@ STOCK_DISPOSITION_REFURBISHED = "REFURBISHED"
 
 DEFAULT_STOCK_DISPOSITION = STOCK_DISPOSITION_SALEABLE
 
-# Order lines may reserve/pick only from these pools (Etap 2).
+# Pools that *may* be reserved when the order/offer line explicitly requests them.
+# Ordinary shop orders default to SALEABLE only — do NOT treat this set as ATP for all orders.
 RESERVABLE_STOCK_DISPOSITIONS: frozenset[str] = frozenset(
     {
         STOCK_DISPOSITION_SALEABLE,
@@ -32,8 +33,12 @@ def normalize_stock_disposition(raw: Any | None) -> str:
     return s if s else DEFAULT_STOCK_DISPOSITION
 
 
+def is_reservable_disposition(code: str) -> bool:
+    return normalize_stock_disposition(code) in RESERVABLE_STOCK_DISPOSITIONS
+
+
 def assert_reservable_disposition(code: str) -> str:
-    """Validate disposition for order line / reservation creation."""
+    """Validate disposition for order line / reservation creation (A or explicit outlet B)."""
     c = normalize_stock_disposition(code)
     if c not in RESERVABLE_STOCK_DISPOSITIONS:
         allowed = ", ".join(sorted(RESERVABLE_STOCK_DISPOSITIONS))
@@ -42,12 +47,13 @@ def assert_reservable_disposition(code: str) -> str:
 
 
 def resolve_order_item_required_disposition(order_item: Any | None) -> str:
+    """Line ATP/reserve pool. Missing/blank → SALEABLE (never auto-picks B/C)."""
     raw = getattr(order_item, "required_stock_disposition", None) if order_item is not None else None
     return normalize_stock_disposition(raw)
 
 
 def disposition_for_new_order_line(raw: Any | None = None) -> str:
-    """API / import default — validates reservable pool."""
+    """API / import — default SALEABLE; OUTLET_B only when caller passes it explicitly."""
     return assert_reservable_disposition(normalize_stock_disposition(raw))
 
 

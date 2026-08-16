@@ -1,3 +1,27 @@
+**OMS panel RMZ disassembly reuse (2026-08-16) — NO commit/push.**
+- Reuse WMS SSOT: `ManufacturedRecoveryIntakePanel` + `BundleReturnLinePanel` on `ReturnsReturnDetailPage`
+- Finalize payload merges `stock_intake_mode` / `fg_intake_qty` / `disassembly_qty` / `component_recoveries`
+- „Rozdzielenie ilości” = commercial A/B/C/reject split (same as WMS) — not a second disassembly model
+- GAP: component recovery = accepted(SALEABLE)+scrap only; no per-component B/C disposition yet (same as WMS)
+- Partial MIXED (FG+disassemble) supported by existing WMS panel
+- Tests: BE manufactured/bundle 46 PASS; FE recovery payload 2 PASS
+
+**ETAP 2 A/B/C stock (2026-08-16) — implemented, NO commit/push.**
+- SSOT grain: `Inventory.stock_disposition` (SALEABLE/OUTLET_B/SERVICE_C); no quality_class column
+- P0: planning FG uses `saleable_qty`; gate/readiness pass `required_stock_disposition`; production reserved filtered by disposition
+- P1: disposition snapshot + `outlet_available_qty`/`service_available_qty`; list A/B/C; product card location matrix
+- Legacy `on_hand`/`available` unchanged (physical A+B+C) for compatibility
+- Tests: `test_etap2_abc_stock_model` + disposition/outlet/commercial PASS
+- ETAP 1 returns→Z-PZ→putaway untouched
+
+**Returns Z-PZ ETAP 1 (2026-08-16) — DONE on main (`455fa73a`).**
+- SAFE: no global collective→false; only tenant_id=1 Z_PZ per-RMZ; other tenants unchanged; collective opt-in
+- Live UAT tenant=1: RMZ-2026-28 → Z-PZ-2026-3 (#140) NEW (not append to Z-PZ-2026-2)
+- Mix: Przyjęto→SALEABLE, B→OUTLET_B, rejected→no line; putaway A1-A-2 keeps disposition; inv qty=1 each
+- Link RMZ header `Z-PZ-2026-3` → `/wms/putaway/140`; putaway UI shows PEŁNOWARTOŚCIOWY + USZKODZONY (B)
+- Tests: 17 PASS (`test_rmz_mix_z_pz_dispositions` + migration safety)
+- ETAP 2: RESERVABLE/ATP/legacy available — implemented in this session (see above)
+
 **Carrier template_type in Label System editor — FIXED (2026-08-16).**
 - ROOT: orphaned preset JSON + Variables UI group mis-label; production template likely still `location` in DB (FE correctly shows Lokalizacja — re-create/import as carrier or change TYP→Nośnik and save)
 - Wired `CARRIER_LABEL_HORIZONTAL` into presets/ready catalog; UI group „Nośnik”; CSV carrier group

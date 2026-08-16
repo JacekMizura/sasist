@@ -13,6 +13,7 @@ from ...schemas.production_planning import (
     ProductionDemandProductRowRead,
     ProductionPlanningDashboardRead,
 )
+from ..product_disposition_snapshot_service import disposition_snapshots_for_products
 from ..product_inventory_snapshot_service import inventory_snapshots_for_products
 from ..production_recipe_card_service import list_recipe_cards
 from .constants import (
@@ -130,6 +131,10 @@ def build_planning_snapshot(db: Session, ctx: PlanningContext) -> ProductionDema
     inv_map = inventory_snapshots_for_products(
         db, tenant_id=ctx.tenant_id, warehouse_id=ctx.warehouse_id, product_ids=product_ids
     )
+    # FG coverage for ordinary demand = SALEABLE (A) only — B/C must not shrink production need.
+    disp_map = disposition_snapshots_for_products(
+        db, tenant_id=ctx.tenant_id, warehouse_id=ctx.warehouse_id, product_ids=product_ids
+    )
     comp_ids = [composition_by_product[pid] for pid in product_ids if pid in composition_by_product]
     max_prod_map = max_producible_by_product(
         db, tenant_id=ctx.tenant_id, warehouse_id=ctx.warehouse_id, composition_ids=comp_ids
@@ -168,7 +173,11 @@ def build_planning_snapshot(db: Session, ctx: PlanningContext) -> ProductionDema
         order_demand = float(order_map.get(pid, 0.0))
         history = history_map.get(pid, [])
         daily_rate = strategy.daily_rate(history)
-        on_hand = float(inv_map.get(pid, {}).get("on_hand", 0.0) or 0.0)
+        # Prefer disposition SALEABLE on-hand; fall back to legacy on_hand only if snapshot missing.
+        disp = disp_map.get(pid) or {}
+        on_hand = float(disp.get("saleable_qty", 0.0) or 0.0)
+        if pid not in disp_map and inv_map.get(pid):
+            on_hand = float(inv_map.get(pid, {}).get("on_hand", 0.0) or 0.0)
         in_pipeline = float(pipeline_map.get(pid, 0.0))
         free_stock_pipeline = float(free_stock_pipeline_map.get(pid, 0.0))
         min_s = product_min_stock(p) if p else None

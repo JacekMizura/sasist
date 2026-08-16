@@ -81,6 +81,19 @@ def isolated_db(monkeypatch):
         lambda _db, _tenant_id, _warehouse_id, _product_ids, _stock_disposition: {},
     )
 
+    def _fake_commercial(_db, *, tenant_id, warehouse_id, product_id):
+        from backend.services.product_disposition_snapshot_service import get_product_disposition_stock
+
+        snap = get_product_disposition_stock(
+            _db, product_id=int(product_id), tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
+        )
+        return float(snap.get("saleable_available_qty") or 0.0)
+
+    monkeypatch.setattr(
+        "backend.services.commercial_availability_service.commercially_sellable_qty",
+        _fake_commercial,
+    )
+
     try:
         yield db, product
     finally:

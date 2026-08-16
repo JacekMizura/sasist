@@ -117,6 +117,15 @@ export function finalizeLineFromSplit(
 
 export function finalizeLineFromRead(ln: WmsReturnLineRead): WmsReturnFinalizeLineIn {
   const damaged = Math.max(0, Number(ln.damaged_b_qty) || 0) + Math.max(0, Number(ln.damaged_c_qty) || 0);
+  const recoveries = Array.isArray(ln.component_recoveries)
+    ? ln.component_recoveries.map((e) => ({
+        composition_line_id: e.composition_line_id,
+        component_product_id: e.component_product_id,
+        accepted_qty: Number(e.accepted_qty ?? 0),
+        scrap_qty: Number(e.scrap_qty ?? 0),
+        expected_qty: Number(e.expected_qty ?? 0),
+      }))
+    : undefined;
   return {
     order_item_id: ln.order_item_id,
     product_id: ln.product_id,
@@ -138,6 +147,29 @@ export function finalizeLineFromRead(ln: WmsReturnLineRead): WmsReturnFinalizeLi
           note: e.note ?? null,
         }))
       : undefined,
+    stock_intake_mode: ln.stock_intake_mode ?? null,
+    fg_intake_qty: ln.fg_intake_qty ?? null,
+    disassembly_qty: ln.disassembly_qty ?? null,
+    component_recoveries: recoveries,
+  };
+}
+
+export function mergeRecoveryIntoFinalizeDraft(
+  draft: WmsReturnFinalizeLineIn,
+  recovery: {
+    stock_intake_mode: WmsReturnFinalizeLineIn["stock_intake_mode"];
+    fg_intake_qty: number;
+    disassembly_qty: number;
+    component_recoveries: NonNullable<WmsReturnFinalizeLineIn["component_recoveries"]>;
+  } | null,
+): WmsReturnFinalizeLineIn {
+  if (!recovery) return draft;
+  return {
+    ...draft,
+    stock_intake_mode: recovery.stock_intake_mode,
+    fg_intake_qty: recovery.fg_intake_qty,
+    disassembly_qty: recovery.disassembly_qty,
+    component_recoveries: recovery.component_recoveries,
   };
 }
 
@@ -166,5 +198,19 @@ export function mergeLineReadFromDraft(ln: WmsReturnLineRead, draft: WmsReturnFi
     photo_urls: draft.photo_urls ?? ln.photo_urls,
     damage_entries: draft.damage_entries ?? ln.damage_entries,
     processed_at: decision != null ? new Date().toISOString() : ln.processed_at,
+    stock_intake_mode: draft.stock_intake_mode !== undefined ? draft.stock_intake_mode : ln.stock_intake_mode,
+    fg_intake_qty: draft.fg_intake_qty !== undefined ? draft.fg_intake_qty : ln.fg_intake_qty,
+    disassembly_qty: draft.disassembly_qty !== undefined ? draft.disassembly_qty : ln.disassembly_qty,
+    component_recoveries:
+      draft.component_recoveries != null
+        ? draft.component_recoveries.map((e) => ({
+            composition_id: 0,
+            composition_line_id: e.composition_line_id,
+            component_product_id: e.component_product_id ?? 0,
+            expected_qty: Number(e.expected_qty ?? 0),
+            accepted_qty: Number(e.accepted_qty ?? 0),
+            scrap_qty: Number(e.scrap_qty ?? 0),
+          }))
+        : ln.component_recoveries,
   };
 }

@@ -88,10 +88,18 @@ def reserved_qty_for_order_product(
     tenant_id: int,
     order_id: int,
     product_id: int,
+    stock_disposition: str | None = None,
 ) -> float:
     rows = active_sales_order_reservations(
         db, tenant_id=tenant_id, order_id=order_id, product_id=product_id
     )
+    if stock_disposition is not None:
+        sd = normalize_stock_disposition(stock_disposition)
+        rows = [
+            r
+            for r in rows
+            if normalize_stock_disposition(getattr(r, "stock_disposition", None)) == sd
+        ]
     return round(sum(float(r.quantity or 0) for r in rows), 6)
 
 

@@ -74,7 +74,10 @@ def warehouse_reserved_qty(
     product_id: int,
     exclude_batch_id: int | None = None,
     exclude_order_id: int | None = None,
+    stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
 ) -> float:
+    """Active reservations for one disposition pool (default SALEABLE — production ATP)."""
+    sd = normalize_stock_disposition(stock_disposition)
     row = (
         _reservation_query(
             db,
@@ -84,6 +87,7 @@ def warehouse_reserved_qty(
             exclude_batch_id=exclude_batch_id,
             exclude_order_id=exclude_order_id,
         )
+        .filter(StockReservation.stock_disposition == sd)
         .with_entities(func.coalesce(func.sum(StockReservation.quantity), 0.0))
         .scalar()
     )
@@ -130,9 +134,25 @@ def warehouse_net_available(
     product_id: int,
     exclude_batch_id: int | None = None,
     exclude_order_id: int | None = None,
+    stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
 ) -> float:
-    """Physical on-hand minus active reservations (excluding own production job)."""
-    on_hand = warehouse_on_hand(db, tenant_id=tenant_id, warehouse_id=warehouse_id, product_id=product_id)
+    """On-hand for disposition pool minus same-pool reservations (default SALEABLE / A)."""
+    sd = normalize_stock_disposition(stock_disposition)
+    if sd == DEFAULT_STOCK_DISPOSITION:
+        on_hand = warehouse_on_hand(db, tenant_id=tenant_id, warehouse_id=warehouse_id, product_id=product_id)
+    else:
+        row = (
+            db.query(func.coalesce(func.sum(Inventory.quantity), 0.0))
+            .filter(
+                Inventory.tenant_id == int(tenant_id),
+                Inventory.warehouse_id == int(warehouse_id),
+                Inventory.product_id == int(product_id),
+                Inventory.quantity > 0,
+                Inventory.stock_disposition == sd,
+            )
+            .scalar()
+        )
+        on_hand = float(row or 0)
     reserved = warehouse_reserved_qty(
         db,
         tenant_id=tenant_id,
@@ -140,6 +160,7 @@ def warehouse_net_available(
         product_id=product_id,
         exclude_batch_id=exclude_batch_id,
         exclude_order_id=exclude_order_id,
+        stock_disposition=sd,
     )
     return max(0.0, on_hand - reserved)
 

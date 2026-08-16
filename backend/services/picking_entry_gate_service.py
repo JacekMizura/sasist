@@ -242,18 +242,26 @@ def _compute_line_plan(
     oi: OrderItem,
     base: OrderItemReadinessResult,
 ) -> LineGatePlan:
+    from .stock_disposition import resolve_order_item_required_disposition
+
     tid = int(order.tenant_id)
     wid = int(order.warehouse_id)
     oid = int(order.id)
     pid = int(oi.product_id)
+    sd = resolve_order_item_required_disposition(oi)
     required = float(oi.quantity or 0)
     picked = _picked_qty(oi)
     need = max(0.0, required - picked)
     own_res = reserved_qty_for_order_product(
-        db, tenant_id=tid, order_id=oid, product_id=pid
+        db, tenant_id=tid, order_id=oid, product_id=pid, stock_disposition=sd
     )
     atp_incl_own = pickable_available_qty(
-        db, tenant_id=tid, warehouse_id=wid, product_id=pid, exclude_order_id=oid
+        db,
+        tenant_id=tid,
+        warehouse_id=wid,
+        product_id=pid,
+        exclude_order_id=oid,
+        stock_disposition=sd,
     )
     free_atp = max(0.0, atp_incl_own - own_res)
     target_from_stock = min(need, own_res + free_atp)
@@ -744,6 +752,9 @@ def run_picking_entry_gate(
         if plan.to_reserve <= 1e-9:
             continue
         try:
+            from .stock_disposition import resolve_order_item_required_disposition
+
+            sd = resolve_order_item_required_disposition(plan.order_item)
             reserve_sales_order_fg(
                 db,
                 tenant_id=tid,
@@ -751,6 +762,7 @@ def run_picking_entry_gate(
                 order_id=int(order.id),
                 product_id=int(plan.readiness.product_id),
                 quantity=plan.to_reserve,
+                stock_disposition=sd,
             )
             result.side_effects.append(
                 f"reserved:{plan.readiness.product_id}:{plan.to_reserve}"

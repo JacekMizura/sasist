@@ -1,4 +1,27 @@
-## 2026-08-16 — Fix carrier type in Label System editor
+## 2026-08-16 — OMS RMZ disassembly = WMS SSOT (no commit)
+
+- Panel `ReturnsReturnDetailPage` embeds ManufacturedRecoveryIntakePanel + BundleReturnLinePanel
+- Finalize merges recovery draft; no second disassembly engine
+- Component A/B/C per recovery row = GAP (WMS accepted/scrap only)
+
+
+- P0: planning A-only; picking gate/readiness disposition-aware; warehouse_reserved_qty scoped to pool
+- P1: outlet/service available in disposition snapshot; product list A/B/C; location matrix on card
+- Legacy on_hand/available kept as physical total; commercial/offers remain A or explicit pool
+- Tests: test_etap2_abc_stock_model + related PASS
+
+
+- Commit+push; Railway healthz/readyz 200; Vercel 200
+- Live UAT: RMZ-2026-28 → Z-PZ-2026-3 (#140) per-RMZ; SALEABLE+OUTLET_B; rejected skipped; putaway A1-A-2; no double inv
+- Series Zwroty tenant=1: `collective_return_receipt=false`; no global true→false migration
+- Tests: 17 PASS mix + migration safety
+
+
+- ROOT: collective Z-PZ default hid "new" putaway docs after finalize (append to OPEN)
+- FIX: collective=false default + migrate Z_PZ series; damage JSON fallback to qty cols; disposition preserved on direct putaway write
+- Tests: `test_rmz_mix_z_pz_dispositions` + existing Z-PZ suite PASS
+- A/B/C inventory architecture: audit only (no global available rebuild)
+
 
 - ROOT: preset JSON istniał, ale nie był w `labelPresets` / Ready Templates; UI grupowało `carrier` pod „Operator”; istniejące szablony w DB z `template_type=location` poprawnie pokazywały Lokalizacja (bez maskowania)
 - FIX: `CARRIER_LABEL_HORIZONTAL` z `template_type=carrier`; grupa UI „Nośnik”; CSV mapping carrier; etykiety zmiennych PL

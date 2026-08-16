@@ -1,6 +1,12 @@
 """
 Jedno źródło prawdy: stan operacyjny produktu (jak Asortyment / Stan magazynowy) + pipeline zakupowy.
 
+COMPATIBILITY (ETAP 2):
+- ``on_hand`` / ``available`` = suma fizyczna **wszystkich** disposition (A+B+C+…) − rezerwacje wszystkich pul.
+  Semantyka publiczna nie jest zmieniana bez migracji integracji.
+- ATP / sprzedaż / planowanie FG: używaj ``product_disposition_snapshot_service``
+  (``saleable_qty`` / ``saleable_available_qty``) albo ``commercially_sellable_qty``.
+
 - on_hand: suma fizyczna z ``inventory`` po lokalizacjach widocznych (bez śmieci legacy importu).
 - reserved: aktywne rezerwacje (status ``reserved``) w obrębie magazynu.
 - available: on_hand - reserved (nie ujemne).
