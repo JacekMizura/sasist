@@ -204,32 +204,55 @@ def consume_production_buffer_stock_on_packing_finish(
     return {"result": "OK", "consumed": float(consumed_total)}
 
 
+def _waybill_urls_from_step_message(message: Any) -> list[str]:
+    """Parse file_url / file_urls from a packing post-pack step message."""
+    msg = str(message or "")
+    if not msg:
+        return []
+    parts: dict[str, str] = {}
+    for part in msg.split(";"):
+        idx = part.index("=") if "=" in part else -1
+        if idx <= 0:
+            continue
+        parts[part[:idx].strip()] = part[idx + 1 :].strip()
+    out: list[str] = []
+    multi = (parts.get("file_urls") or "").strip()
+    if multi:
+        for u in multi.split("|"):
+            u = u.strip()
+            if u:
+                out.append(u)
+        return out
+    one = (parts.get("file_url") or "").strip()
+    if one:
+        out.append(one)
+    return out
+
+
+def _pipeline_step_is_waybill_print(step: Any) -> bool:
+    """
+    True when the step is the packing SSOT waybill client-print contract
+    (print_label or generate_shipment with a file) — same gate as packing UI FE.
+    """
+    name = str(getattr(step, "step", None) or "").strip().lower()
+    if name not in ("print_label", "generate_shipment"):
+        return False
+    if not getattr(step, "ok", False) or getattr(step, "skipped", False):
+        return False
+    return bool(_waybill_urls_from_step_message(getattr(step, "message", None)))
+
+
 def _count_waybill_urls_in_pipeline(pipeline: list[Any]) -> int:
-    """Ile unikalnych URL listów w krokach post-pack (jak FE collectWaybillUrls)."""
+    """Ile unikalnych URL listów w krokach print_label / generate_shipment (jak FE)."""
     urls: list[str] = []
     seen: set[str] = set()
     for step in pipeline or []:
-        msg = str(getattr(step, "message", None) or "")
-        if not msg or not getattr(step, "ok", False) or getattr(step, "skipped", False):
+        if not _pipeline_step_is_waybill_print(step):
             continue
-        parts: dict[str, str] = {}
-        for part in msg.split(";"):
-            idx = part.index("=") if "=" in part else -1
-            if idx <= 0:
-                continue
-            parts[part[:idx].strip()] = part[idx + 1 :].strip()
-        multi = (parts.get("file_urls") or "").strip()
-        if multi:
-            for u in multi.split("|"):
-                u = u.strip()
-                if u and u not in seen:
-                    seen.add(u)
-                    urls.append(u)
-            continue
-        one = (parts.get("file_url") or "").strip()
-        if one and one not in seen:
-            seen.add(one)
-            urls.append(one)
+        for u in _waybill_urls_from_step_message(getattr(step, "message", None)):
+            if u and u not in seen:
+                seen.add(u)
+                urls.append(u)
     return len(urls)
 
 
@@ -391,11 +414,16 @@ def try_auto_pack_newly_ready_orders(
                 system_auto=True,
             )
             pipeline = list(getattr(out, "post_pack_pipeline", None) or [])
-            for d in list_active_shipping_label_documents(db, order):
-                u = str(getattr(d, "file_url", None) or "").strip()
-                if u and u not in url_seen:
-                    url_seen.add(u)
-                    all_urls.append(u)
+            # Print URLs come only from settings-gated print_label / generate_shipment
+            # pipeline steps — not from mere label existence (bypass ≠ print).
+            print_n = _count_waybill_urls_in_pipeline(pipeline)
+            for step in pipeline:
+                if not _pipeline_step_is_waybill_print(step):
+                    continue
+                for u in _waybill_urls_from_step_message(getattr(step, "message", None)):
+                    if u and u not in url_seen:
+                        url_seen.add(u)
+                        all_urls.append(u)
             order_results.append(
                 {
                     "order_id": oid,
@@ -404,7 +432,7 @@ def try_auto_pack_newly_ready_orders(
                     "has_shipping_label": True,
                     "label_count": count_active_shipping_labels(db, order),
                     "post_pack_pipeline": pipeline,
-                    "waybill_print_count": _count_waybill_urls_in_pipeline(pipeline),
+                    "waybill_print_count": print_n,
                 }
             )
             append_order_activity_for_wms(
@@ -445,9 +473,9 @@ def try_auto_pack_newly_ready_orders(
             "orders": [],
         }
 
+    # should_print_shipping_label ≡ pipeline print steps (WMS packing settings SSOT).
+    # Do not inflate from label existence (has_shipping_label is bypass-only).
     waybill_n = sum(int(r.get("waybill_print_count") or 0) for r in order_results)
-    if waybill_n < 1:
-        waybill_n = len(all_urls)
     for r in order_results:
         if int(r.get("waybill_print_count") or 0) > 0:
             append_order_activity_for_wms(

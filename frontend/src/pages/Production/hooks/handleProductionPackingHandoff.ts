@@ -22,7 +22,7 @@ function waybillToastLabel(count: number): string {
 /**
  * Operator toast / optional navigate after ORDERS MO progress.
  * When backend auto-packs (all waybills present), skip packing UI and run the same
- * client print actions as packing finish.
+ * client print actions as packing finish — including the same print_label setting gate.
  */
 export async function handleProductionPackingHandoff(
   order: ProductionOrderRead,
@@ -36,18 +36,19 @@ export async function handleProductionPackingHandoff(
 
   const auto = handoff.auto_pack;
   if (auto?.succeeded) {
-    const n =
-      Number(auto.waybill_print_count) ||
-      (auto.waybill_file_urls?.length ?? 0) ||
-      0;
+    // should_print_shipping_label = packing settings + pipeline (not label existence).
+    const n = Number(auto.waybill_print_count) || 0;
     toast.success(waybillToastLabel(n));
     const ext = loadWmsPackingExtendedUi(opts.warehouseId);
     let printDocumentEnabled = false;
+    let printLabelEnabled = false;
     try {
       const apiSettings = await getWmsPackingSettings(opts.tenantId, opts.warehouseId);
       printDocumentEnabled = Boolean(apiSettings?.auto_actions?.print_document);
+      // Same contract as usePackingOrderController after packing_finish_order.
+      printLabelEnabled = Boolean(apiSettings?.auto_actions?.print_label);
     } catch {
-      /* soft-fail settings — still print waybills from pipeline */
+      /* soft-fail settings — pipeline steps still gate client actions */
     }
     for (const one of auto.orders ?? []) {
       try {
@@ -58,8 +59,7 @@ export async function handleProductionPackingHandoff(
           afterSalesDocumentAction: ext.afterSalesDocumentAction,
           afterWaybillAction: ext.afterWaybillAction,
           printDocumentEnabled,
-          // Auto-pack: always deliver existing waybills (injected on BE if needed).
-          printLabelEnabled: true,
+          printLabelEnabled,
           printCopyOfSalesDoc: Boolean(ext.printCopyOfSalesDoc),
           chooseWaybillPrintCount: false,
         });

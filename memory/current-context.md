@@ -1,3 +1,26 @@
+**Auto-pack print_label compliance fix (2026-08-16), bez commit/push.**
+- Root: BE `_ensure_system_auto_waybill_print_step` + handoff `waybill_n = len(all_urls)` + FE `printLabelEnabled: true`
+- Fix: reuse packing pipeline settings only; `waybill_print_count` from print_label/generate_shipment steps; FE = packing UI settings
+- Tests: pytest 13 PASS (OFF/ON regressions); vitest handoff 2 PASS; npm build PASS
+- Live UAT A **zablokowany** do deploy (prod nadal stary kod) — B–G nie startowane
+
+**UAT A auto-pack single label — PASS (2026-08-16), bez kodu/commit.**
+- Order #1257 (id=1271) 1× ST-001 → MO/2026/0025 (id=27)
+- Label PRE: OrderDocument id=1 LIST_PRZEWOZOWY file_url=/uploads/.../uat-a-waybill-1257.pdf
+- Po rejestracji produkcji (UI): toast auto-pack; URL pozostał `/wms/production/execute` (bez Pakowania)
+- Status: Produkcja(12) → Spakowane(9); sales_document_number=PA/2026/08/1; label_count=1
+- Activity (System, 1×): PACKING_FINISHED, PACKING_AUTOMATION_FINISHED, PACKING_AUTO_AFTER_PRODUCTION, PACKING_AUTO_WAYBILL_PRINT
+- Idempotencja: replay progress → 400 invalid_status; brak 2. finalize/doc/label/activity auto
+- Uwaga: settings print_label=OFF, ale FE auto-pack wymusza printLabelEnabled=true (toast „Wydrukowano 1 list”) — **naprawione lokalnie, czeka na deploy**
+- B–G NIE startowane — czekamy na decyzję
+
+**Deploy auto-pack 877188f3 — PASS; UAT STOP (brak czystego case) (2026-08-16).**
+- Commit/push 877188f3 → origin/main; Railway OpenAPI: auto_pack + ProductionPackingAutoPackResult (ok. 11:46)
+- healthz/readyz OK; Vercel FE bundle index-Bjl80Ebw.js zawiera auto_pack + toast
+- Packing settings (wh=1): create_document ON, change_status ON; generate/print label OFF (UI)
+- UAT A–G NIE startowane: kolejka WMS Produkcja pusta; MO/2026/0004 już completed przed deploy (handoff minął)
+- Next: świeży ORDERS MO 1 szt + list przed produkcją → UAT A
+
 **UAT auto-pack po produkcji — STOP (2026-08-16), bez kodu/commit.**
 - Railway healthz/readyz OK; origin/main = 56969e4 (terminal display)
 - Auto-pack **nie jest na deploy**: lokalne uncommitted (handoff service, packing finish system_auto, FE handleProductionPackingHandoff, order_shipping_label_service untracked)

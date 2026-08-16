@@ -380,6 +380,107 @@ def test_i_packing_validation_blocker_fallback(db, monkeypatch):
     assert getattr(o, "wms_packing_automation_finished_at", None) is None
 
 
+def test_print_label_off_no_client_print_no_waybill_print_event(db, monkeypatch):
+    """
+    Regression: has_shipping_label enables auto-pack bypass, but print_label OFF
+    (pipeline without print_label step) must not print or log PACKING_AUTO_WAYBILL_PRINT.
+    """
+    _order(db, oid=70, number="PRINT-OFF")
+    _waybill(db, order_id=70, url="/files/print-off.pdf")
+    db.commit()
+    events: list[str] = []
+
+    monkeypatch.setattr(
+        "backend.services.wms_packing_service.packing_pack_all_lines",
+        lambda *a, **k: SimpleNamespace(),
+    )
+
+    def _finish(*_a, **_k):
+        # Settings print_label=OFF → packing SSOT omits print_label step.
+        return SimpleNamespace(
+            post_pack_pipeline=[
+                SimpleNamespace(
+                    step="create_document",
+                    ok=True,
+                    skipped=False,
+                    message="id=1;number=PA/1",
+                ),
+                SimpleNamespace(
+                    step="change_order_status",
+                    ok=True,
+                    skipped=False,
+                    message="Spakowane",
+                ),
+            ]
+        )
+
+    def _activity(*_a, **kw):
+        events.append(str(kw.get("event_type") or ""))
+
+    monkeypatch.setattr("backend.services.wms_packing_service.packing_finish_order", _finish)
+    monkeypatch.setattr(
+        "backend.services.wms_audit_service.append_order_activity_for_wms",
+        _activity,
+    )
+    out = try_auto_pack_newly_ready_orders(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        newly_ready_orders=[{"order_id": 70, "order_number": "PRINT-OFF"}],
+    )
+    assert out["succeeded"] is True
+    assert out["orders"][0]["has_shipping_label"] is True
+    assert out["waybill_print_count"] == 0
+    assert out["waybill_file_urls"] == []
+    assert "PACKING_AUTO_AFTER_PRODUCTION" in events
+    assert "PACKING_AUTO_WAYBILL_PRINT" not in events
+
+
+def test_print_label_on_prints_once_and_logs_once(db, monkeypatch):
+    """Regression: print_label ON → waybill print count 1 + PACKING_AUTO_WAYBILL_PRINT once."""
+    _order(db, oid=71, number="PRINT-ON")
+    _waybill(db, order_id=71, url="/files/print-on.pdf")
+    db.commit()
+    events: list[str] = []
+
+    monkeypatch.setattr(
+        "backend.services.wms_packing_service.packing_pack_all_lines",
+        lambda *a, **k: SimpleNamespace(),
+    )
+
+    def _finish(*_a, **_k):
+        return SimpleNamespace(
+            post_pack_pipeline=[
+                SimpleNamespace(
+                    step="print_label",
+                    ok=True,
+                    skipped=False,
+                    message="client_print_waybill;file_url=/files/print-on.pdf;waybill_count=1",
+                ),
+            ]
+        )
+
+    def _activity(*_a, **kw):
+        events.append(str(kw.get("event_type") or ""))
+
+    monkeypatch.setattr("backend.services.wms_packing_service.packing_finish_order", _finish)
+    monkeypatch.setattr(
+        "backend.services.wms_audit_service.append_order_activity_for_wms",
+        _activity,
+    )
+    out = try_auto_pack_newly_ready_orders(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        newly_ready_orders=[{"order_id": 71, "order_number": "PRINT-ON"}],
+    )
+    assert out["succeeded"] is True
+    assert out["waybill_print_count"] == 1
+    assert out["waybill_file_urls"] == ["/files/print-on.pdf"]
+    assert events.count("PACKING_AUTO_WAYBILL_PRINT") == 1
+    assert events.count("PACKING_AUTO_AFTER_PRODUCTION") == 1
+
+
 def test_b_label_only_via_document_type_not_field_name(db):
     """
     B: custom field SHIPPING_LABEL syncs to OrderDocument LIST_PRZEWOZOWY —

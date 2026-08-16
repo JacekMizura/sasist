@@ -3015,10 +3015,8 @@ def packing_finish_order(
         warehouse_id=warehouse_id,
         operator_user_id=operator_user_id,
     )
-    if system_auto:
-        post_pack_pipeline = _ensure_system_auto_waybill_print_step(
-            db, order=order, pipeline=post_pack_pipeline
-        )
+    # system_auto must reuse the same settings-gated pipeline as UI finish —
+    # do not inject print_label when auto_actions.print_label is OFF.
     db.flush()
     finished_now = datetime.utcnow()
     order.wms_packing_automation_finished_at = finished_now
@@ -4350,41 +4348,6 @@ def _waybill_docs_client_message(
     else:
         msg += ";waybill_count=1"
     return _append_sales_companion_to_message(db, order=order, message=msg)
-
-
-def _pipeline_step_has_waybill_file(step: WmsPackingPostPackStepResult) -> bool:
-    if not getattr(step, "ok", False) or getattr(step, "skipped", False):
-        return False
-    msg = str(getattr(step, "message", None) or "")
-    return "file_url=" in msg
-
-
-def _ensure_system_auto_waybill_print_step(
-    db: Session,
-    *,
-    order: Order,
-    pipeline: List[WmsPackingPostPackStepResult],
-) -> List[WmsPackingPostPackStepResult]:
-    """
-    Auto-pack po produkcji: operator nie widzi ekranu — zawsze dołącz print listów
-    (istniejące LIST_PRZEWOZOWY), nawet gdy print_label wyłączone w ustawieniach.
-    Nie generuje nowych listów.
-    """
-    out = list(pipeline or [])
-    if any(_pipeline_step_has_waybill_file(s) for s in out):
-        return out
-    msg = _waybill_docs_client_message(db, order=order, kind="client_print_waybill")
-    if not msg:
-        return out
-    out.append(
-        WmsPackingPostPackStepResult(
-            step="print_label",
-            ok=True,
-            skipped=False,
-            message=msg,
-        )
-    )
-    return out
 
 
 def _latest_sale_document_for_order(db: Session, *, order: Order) -> SaleDocument | None:

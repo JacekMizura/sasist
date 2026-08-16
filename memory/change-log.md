@@ -1,3 +1,16 @@
+## 2026-08-16 — Auto-pack respektuje print_label (no commit)
+
+- Usunięto BE inject print_label przy system_auto; handoff nie zawyża waybill_print_count z samego istnienia labela
+- FE: printLabelEnabled = auto_actions.print_label (jak packing UI); toast tylko z waybill_print_count
+- Regresje OFF/ON: pytest 13 PASS; vitest 2 PASS; build PASS
+- Live UAT A + B–G: czekają na deploy
+
+## 2026-08-16 — UAT A auto-pack single label (PASS, no code)
+
+- Order #1257 (1271) / MO/2026/0025 / label doc#1; status Produkcja→Spakowane; PA/2026/08/1
+- Toast auto-pack; no packing UI; activity 1× each auto event; idempotent replay
+- B–G not started
+
 ## 2026-08-16 — Auto-pack po produkcji gdy listy przewozowe istnieją (no commit)
 
 - SSOT label: order_shipping_label_service.has_shipping_label (OrderDocument LIST_PRZEWOZOWY + file_url)
