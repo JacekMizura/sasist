@@ -2357,9 +2357,11 @@ def _finalize_after_packing_mutations(
     last_packed_order_item_id: Optional[int],
     operator_user_id: Optional[int] = None,
     packed_audits: Optional[List[Tuple[int, int, int, Optional[str]]]] = None,
+    commit: bool = True,
 ) -> WmsPackingScanOut:
     """
-    Zapis ilości spakowanych + commit. **Bez** potoku dokumentów / statusu — to wyłącznie ``packing_finish_order``.
+    Zapis ilości spakowanych. **Bez** potoku dokumentów / statusu — to wyłącznie ``packing_finish_order``.
+    ``commit=False`` — flush only (np. auto-pack produkcji w jednej transakcji).
     """
     packing_started_before = getattr(order, "packing_started_at", None)
     packed_before = getattr(order, "packed_at", None)
@@ -2415,7 +2417,10 @@ def _finalize_after_packing_mutations(
             cart_id=cart_id,
             exclude_order_id=int(order_id),
         )
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     return _packing_build_scan_out_after_commit(
         db,
         order_id=int(order_id),
@@ -2780,11 +2785,17 @@ def packing_finish_order(
     packaging_carton_ids: list[str] | None = None,
     current_user: Optional[AppUser] = None,
     order_type: str = "all",
+    commit: bool = True,
+    system_auto: bool = False,
 ) -> WmsPackingScanOut:
     """
     Wywołaj **po** pełnym spakowaniu (skan / line-pack / pack-all już zacommitowane).
     Potok finish: **status „spakowane” → dokument** (gdy włączone; brak serii = ``ValueError`` / HTTP 400),
-    potem opcjonalnie przesyłka / druki; commit na końcu tej funkcji.
+    potem opcjonalnie przesyłka / druki; commit na końcu tej funkcji (``commit=False`` → tylko flush).
+
+    ``system_auto=True`` — finalizacja bez UI (np. auto-pack po produkcji): pozwala
+    ``allow_without_carton`` bez uprawnienia operatora; actor w logach = System gdy
+    ``operator_user_id`` jest None.
 
     Kolejność (atomowość DB w jednej transakcji do commit):
       validate (scope + packable + carton + cart preflight)
@@ -2889,7 +2900,10 @@ def packing_finish_order(
             exclude_order_id=int(order_id),
             order_type=order_type,
         )
-        db.commit()
+        if commit:
+            db.commit()
+        else:
+            db.flush()
         _packing_finish_trace(
             stage="idempotent_ok",
             order=order,
@@ -2932,7 +2946,7 @@ def packing_finish_order(
 
     if not sel:
         if allow_without_carton:
-            if not _user_allow_finish_without_carton(db, current_user):
+            if not system_auto and not _user_allow_finish_without_carton(db, current_user):
                 _packing_finish_trace(
                     stage="carton_fail",
                     order=order,
@@ -3001,6 +3015,10 @@ def packing_finish_order(
         warehouse_id=warehouse_id,
         operator_user_id=operator_user_id,
     )
+    if system_auto:
+        post_pack_pipeline = _ensure_system_auto_waybill_print_step(
+            db, order=order, pipeline=post_pack_pipeline
+        )
     db.flush()
     finished_now = datetime.utcnow()
     order.wms_packing_automation_finished_at = finished_now
@@ -3064,9 +3082,13 @@ def packing_finish_order(
             "cart_released": cart_released,
             "pipeline_steps": len(step_rows),
             "finish_validation_result": "ok",
+            "system_auto": bool(system_auto),
         },
     )
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     return _packing_build_scan_out_after_commit(
         db,
         order_id=int(order_id),
@@ -3242,6 +3264,7 @@ def packing_pack_all_lines(
     cart_id: int | None,
     order_id: int,
     operator_user_id: Optional[int] = None,
+    commit: bool = True,
 ) -> WmsPackingScanOut:
     order = _load_order_for_packing_mutation(
         db,
@@ -3281,6 +3304,7 @@ def packing_pack_all_lines(
         last_packed_order_item_id=last_oid,
         operator_user_id=operator_user_id,
         packed_audits=audits if audits else None,
+        commit=commit,
     )
 
 
@@ -4326,6 +4350,41 @@ def _waybill_docs_client_message(
     else:
         msg += ";waybill_count=1"
     return _append_sales_companion_to_message(db, order=order, message=msg)
+
+
+def _pipeline_step_has_waybill_file(step: WmsPackingPostPackStepResult) -> bool:
+    if not getattr(step, "ok", False) or getattr(step, "skipped", False):
+        return False
+    msg = str(getattr(step, "message", None) or "")
+    return "file_url=" in msg
+
+
+def _ensure_system_auto_waybill_print_step(
+    db: Session,
+    *,
+    order: Order,
+    pipeline: List[WmsPackingPostPackStepResult],
+) -> List[WmsPackingPostPackStepResult]:
+    """
+    Auto-pack po produkcji: operator nie widzi ekranu — zawsze dołącz print listów
+    (istniejące LIST_PRZEWOZOWY), nawet gdy print_label wyłączone w ustawieniach.
+    Nie generuje nowych listów.
+    """
+    out = list(pipeline or [])
+    if any(_pipeline_step_has_waybill_file(s) for s in out):
+        return out
+    msg = _waybill_docs_client_message(db, order=order, kind="client_print_waybill")
+    if not msg:
+        return out
+    out.append(
+        WmsPackingPostPackStepResult(
+            step="print_label",
+            ok=True,
+            skipped=False,
+            message=msg,
+        )
+    )
+    return out
 
 
 def _latest_sale_document_for_order(db: Session, *, order: Order) -> SaleDocument | None:

@@ -211,9 +211,35 @@ export type ProductionPackingHandoffOrder = {
   order_number: string;
 };
 
+export type ProductionPackingAutoPackOrderResult = {
+  order_id: number;
+  order_number: string;
+  ok?: boolean;
+  has_shipping_label?: boolean;
+  label_count?: number;
+  waybill_print_count?: number;
+  post_pack_pipeline?: Array<{
+    step: string;
+    ok: boolean;
+    skipped?: boolean;
+    message?: string | null;
+    offer_replacement_label?: boolean;
+  }>;
+};
+
+export type ProductionPackingAutoPackResult = {
+  attempted: boolean;
+  succeeded: boolean;
+  fallback_reason?: string | null;
+  waybill_print_count?: number;
+  waybill_file_urls?: string[];
+  orders?: ProductionPackingAutoPackOrderResult[];
+};
+
 export type ProductionPackingHandoffHint = {
   after_production_action: "STATUS_ONLY" | "OPEN_PACKING";
   newly_ready_orders: ProductionPackingHandoffOrder[];
+  auto_pack?: ProductionPackingAutoPackResult | null;
 };
 
 export type ProductionOrderSourceItemRead = {

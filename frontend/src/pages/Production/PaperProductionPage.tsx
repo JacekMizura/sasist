@@ -232,7 +232,7 @@ export default function PaperProductionPage() {
           { add_quantity: qty, ...identity },
           warehouseId,
         );
-        handleProductionPackingHandoff(updated, navigate);
+        await handleProductionPackingHandoff(updated, navigate, { tenantId, warehouseId });
       }
       await load();
     } catch {

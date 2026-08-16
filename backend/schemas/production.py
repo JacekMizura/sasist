@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -284,11 +284,33 @@ class ProductionPackingHandoffOrder(BaseModel):
     order_number: str
 
 
+class ProductionPackingAutoPackOrderResult(BaseModel):
+    order_id: int
+    order_number: str
+    ok: bool = True
+    has_shipping_label: bool = True
+    label_count: int = 0
+    waybill_print_count: int = 0
+    post_pack_pipeline: List[dict[str, Any]] = Field(default_factory=list)
+
+
+class ProductionPackingAutoPackResult(BaseModel):
+    """All-or-nothing auto finalize when every newly-ready order already has a waybill."""
+
+    attempted: bool = False
+    succeeded: bool = False
+    fallback_reason: Optional[str] = None
+    waybill_print_count: int = 0
+    waybill_file_urls: List[str] = Field(default_factory=list)
+    orders: List[ProductionPackingAutoPackOrderResult] = Field(default_factory=list)
+
+
 class ProductionPackingHandoffHint(BaseModel):
     """Operator FE hint after source fulfillment — not a global redirect."""
 
     after_production_action: Literal["STATUS_ONLY", "OPEN_PACKING"] = "STATUS_ONLY"
     newly_ready_orders: List[ProductionPackingHandoffOrder] = Field(default_factory=list)
+    auto_pack: Optional[ProductionPackingAutoPackResult] = None
 
 
 class ProductionOrderCreateBody(BaseModel):

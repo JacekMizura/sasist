@@ -1,4 +1,26 @@
-﻿**Status wejściowy — zajęte grayed (produkcja = zbieranie) (2026-08-16).**
+**UAT auto-pack po produkcji — STOP (2026-08-16), bez kodu/commit.**
+- Railway healthz/readyz OK; origin/main = 56969e4 (terminal display)
+- Auto-pack **nie jest na deploy**: lokalne uncommitted (handoff service, packing finish system_auto, FE handleProductionPackingHandoff, order_shipping_label_service untracked)
+- Scenariusze A–G **nie startowane** — pierwsze odstępstwo = brak feature na produkcji
+- Next: commit + push + deploy, potem UAT A
+
+**Auto-pack po produkcji (listy przewozowe) (2026-08-16), bez commit/push.**
+- Trigger: 
+ewly_ready_orders po FG fulfill → packing handoff
+- Warunek: ALL orders has_shipping_label; 1 brak = UI pakowania
+- Finalize = istniejący packing SSOT (pack_all + inish + post-pack settings); actor System
+- FE: skip packing screen; toast + print existing waybills
+- Testy 11 PASS; npm build PASS
+
+﻿**WMS Produkcja — Wygląd terminala (display) egzekwowany (2026-08-16), bez commit.**
+- SSOT: `terminal_display` via `useWmsProductionSettings`
+- Shared: `productionTerminalDisplay` + `WmsProductionProductIdentity`; `WmsProductTaskCard`/`WmsProductCard` showImage/showTitle
+- Wired: kolejki, header pobierania, karty collect/execute, modal rejestracji, ActiveBatchBar
+- BE: `product_barcode` + identity fields na queue/header/MO/BAT lines (bez migracji)
+- GAP: `show_target_location` — brak target w API pobierania/produkcji (nie renderuje się)
+- vitest display 8 PASS; tsc PASS
+
+**Status wejściowy — zajęte grayed (produkcja = zbieranie) (2026-08-16).**
 - Reuse `OrderUiStatusField`/`OrderUiStatusPicker.disabledStatusIds`; produkcja ładuje też źródła zbierania
 - Zbieranie: zajęte widoczne+disabled (wcześniej ukrywane); własny status przy edycji dostępny
 - Backend już blokował duplikat `source_status_id` (prod↔picking); test kolizji ze zbieraniem

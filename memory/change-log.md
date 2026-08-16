@@ -1,4 +1,20 @@
-﻿## 2026-08-16 — Status wejściowy produkcji: zajęte grayed (jak zbieranie)
+## 2026-08-16 — Auto-pack po produkcji gdy listy przewozowe istnieją (no commit)
+
+- SSOT label: order_shipping_label_service.has_shipping_label (OrderDocument LIST_PRZEWOZOWY + file_url)
+- Handoff ORDERS: 	ry_auto_pack_newly_ready_orders → pack-all + packing_finish_order(system_auto, commit=False) all-or-nothing
+- Fail-safe = standardowy ekran pakowania; FE toast + 
+unPackingPostFinishClientActions bez navigate
+- Testy A–I: 	est_production_auto_pack_shipping_labels 11 PASS; FE build PASS
+
+﻿## 2026-08-16 — WMS Produkcja: Wygląd terminala egzekwowany (no commit)
+
+- SSOT `terminal_display` via `useWmsProductionSettings`; shared `productionTerminalDisplay` + `WmsProductionProductIdentity`
+- Queue / collect / execute / modal / headers respektują flags; image OFF bez placeholderu
+- BE: `product_barcode` + identity na queue/header/MO/BAT (bez migracji DB)
+- GAP: `show_target_location` (brak target w collect/execute API); stock FG tylko gdy API ma wartość (collect: warehouse_total)
+- vitest 8 PASS; `tsc --noEmit` PASS; `npm run build` PASS
+
+## 2026-08-16 — Status wejściowy produkcji: zajęte grayed (jak zbieranie)
 
 - Shared `OrderUiStatusPicker`/`OrderUiStatusField`: prop `disabledStatusIds` (widoczne, wyszarzane)
 - Produkcja: `disabledStatusIds` = źródła innych cfg produkcji + zbierania; własny status przy edycji OK

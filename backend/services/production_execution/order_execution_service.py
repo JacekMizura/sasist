@@ -668,21 +668,80 @@ def update_order_production_progress(
             )
         else:
             alloc = {"status_moves": []}
-        from .production_packing_handoff_service import resolve_after_production_action
-        from ...schemas.production import ProductionPackingHandoffHint, ProductionPackingHandoffOrder
+        from .production_packing_handoff_service import (
+            resolve_after_production_action,
+            try_auto_pack_newly_ready_orders,
+        )
+        from ...schemas.production import (
+            ProductionPackingAutoPackOrderResult,
+            ProductionPackingAutoPackResult,
+            ProductionPackingHandoffHint,
+            ProductionPackingHandoffOrder,
+        )
 
         after_action = resolve_after_production_action(db, order)
         moves = list(alloc.get("status_moves") or [])
         out = serialize_order(db, order, with_availability=False, with_order_sources=True)
+        ready_orders = [
+            ProductionPackingHandoffOrder(
+                order_id=int(m["order_id"]),
+                order_number=str(m.get("order_number") or m["order_id"]),
+            )
+            for m in moves
+        ]
+        auto_pack_payload = None
+        if ready_orders:
+            raw_auto = try_auto_pack_newly_ready_orders(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(order.warehouse_id),
+                newly_ready_orders=[
+                    {"order_id": r.order_id, "order_number": r.order_number} for r in ready_orders
+                ],
+            )
+            auto_orders: list[ProductionPackingAutoPackOrderResult] = []
+            for r in raw_auto.get("orders") or []:
+                pipe = []
+                for step in r.get("post_pack_pipeline") or []:
+                    if hasattr(step, "model_dump"):
+                        pipe.append(step.model_dump())
+                    elif isinstance(step, dict):
+                        pipe.append(step)
+                    else:
+                        pipe.append(
+                            {
+                                "step": getattr(step, "step", None),
+                                "ok": getattr(step, "ok", False),
+                                "skipped": getattr(step, "skipped", False),
+                                "message": getattr(step, "message", None),
+                                "offer_replacement_label": getattr(
+                                    step, "offer_replacement_label", False
+                                ),
+                            }
+                        )
+                auto_orders.append(
+                    ProductionPackingAutoPackOrderResult(
+                        order_id=int(r["order_id"]),
+                        order_number=str(r.get("order_number") or r["order_id"]),
+                        ok=bool(r.get("ok", True)),
+                        has_shipping_label=bool(r.get("has_shipping_label", True)),
+                        label_count=int(r.get("label_count") or 0),
+                        waybill_print_count=int(r.get("waybill_print_count") or 0),
+                        post_pack_pipeline=pipe,
+                    )
+                )
+            auto_pack_payload = ProductionPackingAutoPackResult(
+                attempted=bool(raw_auto.get("attempted")),
+                succeeded=bool(raw_auto.get("succeeded")),
+                fallback_reason=raw_auto.get("fallback_reason"),
+                waybill_print_count=int(raw_auto.get("waybill_print_count") or 0),
+                waybill_file_urls=list(raw_auto.get("waybill_file_urls") or []),
+                orders=auto_orders,
+            )
         hint = ProductionPackingHandoffHint(
             after_production_action=after_action,  # type: ignore[arg-type]
-            newly_ready_orders=[
-                ProductionPackingHandoffOrder(
-                    order_id=int(m["order_id"]),
-                    order_number=str(m.get("order_number") or m["order_id"]),
-                )
-                for m in moves
-            ],
+            newly_ready_orders=ready_orders,
+            auto_pack=auto_pack_payload,
         )
         if hasattr(out, "model_copy"):
             return out.model_copy(update={"packing_handoff": hint})

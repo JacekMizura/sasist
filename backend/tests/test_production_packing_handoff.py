@@ -102,6 +102,17 @@ def _patches(monkeypatch):
         "backend.services.recovery_workflow_service.can_order_be_packed",
         lambda *_a, **_k: True,
     )
+    monkeypatch.setattr(
+        "backend.services.production_execution.production_packing_handoff_service.try_auto_pack_newly_ready_orders",
+        lambda *_a, **_k: {
+            "attempted": False,
+            "succeeded": False,
+            "fallback_reason": None,
+            "waybill_print_count": 0,
+            "waybill_file_urls": [],
+            "orders": [],
+        },
+    )
 
     def _serialize(db, order, **_kw):
         from backend.schemas.production import ProductionOrderRead

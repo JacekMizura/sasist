@@ -175,6 +175,10 @@ def _bypass_gates(monkeypatch):
         "backend.services.order_fulfillment_lifecycle_service.on_order_shipped",
         lambda *a, **k: None,
     )
+    monkeypatch.setattr(
+        "backend.services.production_execution.production_packing_handoff_service.consume_production_buffer_stock_on_packing_finish",
+        lambda *a, **k: {"result": "SKIPPED", "reason": "test", "consumed": 0.0},
+    )
 
 
 def _product(db, *, ean: str) -> Product:

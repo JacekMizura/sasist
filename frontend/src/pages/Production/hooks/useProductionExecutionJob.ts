@@ -452,7 +452,7 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
               { add_quantity: add, ...identity },
               warehouseId,
             );
-            handleProductionPackingHandoff(updated, navigate);
+            await handleProductionPackingHandoff(updated, navigate, { tenantId, warehouseId });
           }
           setExecutionDetail(await loadExecutionDetail(tenantId, warehouseId, activeRef));
         });
@@ -501,7 +501,7 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
               { add_quantity: add, ...identity },
               warehouseId,
             );
-            handleProductionPackingHandoff(updated, navigate);
+            await handleProductionPackingHandoff(updated, navigate, { tenantId, warehouseId });
           }
 
           const next = await loadExecutionDetail(tenantId, warehouseId, activeRef);
@@ -519,7 +519,7 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
               await finishProductionPhase(tenantId, activeRef.id, warehouseId, identity);
             } else {
               const finished = await finishOrderProduction(tenantId, activeRef.id, warehouseId, identity);
-              handleProductionPackingHandoff(finished, navigate);
+              await handleProductionPackingHandoff(finished, navigate, { tenantId, warehouseId });
               if (ordersMoSkipsPutaway(finished.source_type)) {
                 toast.success(
                   "Produkcja zakończona. Produkty są dostępne na lokalizacji buforowej.",
@@ -571,12 +571,13 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
           await finishProductionPhase(tenantId, activeRef.id, warehouseId);
         } else {
           const finished = await finishOrderProduction(tenantId, activeRef.id, warehouseId);
-          handleProductionPackingHandoff(finished, navigate);
+          await handleProductionPackingHandoff(finished, navigate, { tenantId, warehouseId });
           if (ordersMoSkipsPutaway(finished.source_type)) {
             const handoff = finished.packing_handoff;
             const navigatedToPacking =
               handoff?.after_production_action === "OPEN_PACKING" &&
-              (handoff.newly_ready_orders?.length ?? 0) > 0;
+              (handoff.newly_ready_orders?.length ?? 0) > 0 &&
+              !handoff?.auto_pack?.succeeded;
             toast.success(
               "Produkcja zakończona. Produkty są dostępne na lokalizacji buforowej.",
               { duration: 6000 },
