@@ -4,6 +4,8 @@
 **Charakter:** dokument projektowy „przed wdrożeniem” całego modułu  
 **Źródło prawdy:** aktualny kod systemu Sasist (nie historyczne koncepcje)  
 **Data opracowania:** 2026-08-16  
+**Ostatnia aktualizacja:** 2026-08-16 — pobieranie multi-LOT (scoped discrepancy) + koszt materiałów z warstw przyjęcia  
+
 
 **Legenda klasyfikacji obszarów**
 
@@ -29,7 +31,7 @@ Moduł **Produkcja** służy do wytwarzania wyrobów gotowych z komponentów (su
 3. **Produkcja na zapas** — planowanie i automatyczne uzupełnianie stanu wyrobu gotowego.
 4. **Operacyjna realizacja WMS** — pobranie komponentów → rejestracja produkcji → przyjęcie wyrobu → rozlokowanie lub pakowanie.
 5. **Identyfikowalność** — LOT / SN / data ważności wyrobu (gdy włączone).
-6. **Koszt jednostkowy** — szacunek z receptury i koszt po zużyciu materiałów.
+6. **Koszt materiałowy** — szacunek z receptury oraz rzeczywisty koszt po zużyciu (warstwy przyjęcia / fallback karty produktu).
 
 ### Powiązanie ERP + WMS
 
@@ -73,8 +75,11 @@ Tylko pojęcia faktycznie używane w systemie:
 | **Status wejściowy** | Status panelu zamówienia, który uruchamia produkcję |
 | **Auto-pack** | Automatyczne zakończenie pakowania po produkcji, gdy wszystkie gotowe zamówienia mają już list przewozowy |
 | **Pobieranie komponentów** | Faza WMS: zebranie materiałów pod MO/BAT |
+| **Slice / partia przy picku** | Wybrany zapas: lokalizacja × LOT × data ważności × (opcjonalnie SN) |
+| **Różnica stanu (discrepancy)** | Potwierdzenie mniejszej ilości niż stan systemowy **wybranego** slice — write-down tylko w tej tożsamości |
 | **Rejestracja produkcji** | Zapisanie wyprodukowanej ilości (może być częściowa) |
 | **combined need** | Łączne zapotrzebowanie produkcyjne: popyt z zamówień + luka magazynowa − zapas − produkcja w toku |
+| **Rzeczywisty koszt materiałów** | Zamrożony koszt zużycia (`material_cost_json` na MO/BAT): receipt FIFO + fallback karty |
 
 ---
 
@@ -113,7 +118,7 @@ Tylko pojęcia faktycznie używane w systemie:
 
 - **Szacowany koszt jednostkowy** receptury = suma (cena zakupu netto komponentu × ilość).
 - Widoczny na liście receptur, karcie receptury, karcie produktu, podglądach tworzenia zlecenia/partii.
-- Po zakończeniu zużycia materiałów system może zapisać **wyliczony koszt jednostkowy** zlecenia/linii na podstawie rzeczywistego RW.
+- **Rzeczywisty koszt** po pobraniu wynika z warstw przyjęcia zużytych komponentów (lub fallback karty produktu) — patrz sekcja 20; nie jest to tylko bieżąca cena katalogowa stemplowana przy RW.
 
 ### Wykorzystanie produktu w innych recepturach
 
@@ -379,11 +384,27 @@ Auto-pack jest niezależny od wyboru „Przejdź do pakowania” — jeżeli war
 3. **Lista zadań** — komponenty z lokalizacjami i wymaganymi ilościami.
 4. **Produkt** — karta zadania sterowana ustawieniami wyglądu terminala.
 5. **Lokalizacja źródłowa** — wskazanie skąd zebrać (gdy włączone w wyglądzie).
-6. **Skanowanie / potwierdzenie** — lokalizacja i produkt (zależnie od trybu pracy karty).
-7. **Ilość** — wprowadzenie ilości pobranej; walidacja względem planu i dostępności.
-8. **Identyfikowalność komponentu** — LOT/SN gdy wymagane na produkcie (częściowo — patrz sekcja 12).
-9. **Zakończenie pobrania** — gdy wszystkie zadania domknięte → RW → przejście do fazy produkcji.
-10. **Przejście do Produkcji** — zlecenie pojawia się w kolejce „Produkcja”.
+6. **Partia (LOT) / SN** — gdy na lokalizacji jest więcej niż jedna partia, operator wybiera LOT (i datę ważności, jeśli rozróżnia warstwę); SN gdy wymagane.
+7. **Skanowanie / potwierdzenie** — lokalizacja i produkt (zależnie od trybu pracy karty).
+8. **Ilość** — podpowiedź = min(pozostało w zadaniu, stan **wybranego** slice); walidacja względem planu i dostępności.
+9. **Identyfikowalność komponentu** — LOT/SN/expiry gdy wymagane na produkcie (patrz sekcja 12).
+10. **Zakończenie pobrania** — gdy wszystkie zadania domknięte → RW → przejście do fazy produkcji.
+11. **Przejście do Produkcji** — zlecenie pojawia się w kolejce „Produkcja”.
+
+### Multi-LOT na jednej lokalizacji
+
+**[ISTNIEJE]**
+
+Na jednej lokalizacji może leżeć kilka partii tego samego komponentu (np. LOT-A = 6, LOT-B = 4, zadanie = 10).
+
+| Zachowanie | Reguła |
+|---|---|
+| Potwierdzenie LOT-A ×6 | Rozlicza wyłącznie LOT-A; LOT-B zostaje nietknięty |
+| Kolejne potwierdzenie LOT-B ×4 | Domknięcie 10/10; RW ma **dwie** linie (6 + 4) |
+| Częściowy pick LOT-A ×4 przy remaining > stan LOT-A | LOT-A zostaje 2, LOT-B nietknięty — to normalny partial, **nie** write-down sąsiedniej partii |
+| Różnica stanu w obrębie LOT | Write-down tylko wybranego LOT (+ expiry + lokalizacja + SN jeśli dotyczy) |
+
+**Zakaz:** traktowanie niedoboru względem sumy całej lokalizacji jako discrepancy, gdy operator wskazał konkretną partię — to prowadziłoby do błędnego skonsumowania drugiej partii.
 
 ### Wygląd terminala
 
@@ -472,11 +493,11 @@ Ustawienia: WMS → Ustawienia → Produkcja → **Wygląd terminala**.
 
 ### Komponenty przy pobieraniu
 
-**[ISTNIEJE CZĘŚCIOWO]** — LOT/SN komponentu mogą być wymagane wg produktu; data ważności komponentu nie jest w pełni egzekwowana w kartach collect jak FG.
+**[ISTNIEJE]** — przy multi-LOT operator wybiera partię (i expiry, gdy warstwy się różnią); consume i discrepancy są scoped do wybranego slice. LOT/SN mogą być dodatkowo **wymagane** polityką produktu / magazynu. Egzekucja „wymagaj expiry” na karcie collect jest pełniejsza dla FG niż dla komponentu (override produktu + polityka).
 
 ### LOT na dokumencie RW
 
-**[ISTNIEJE]** — jedna pozycja RW na **PRODUCT × LOT × data ważności**, z ilościami ze slice/ISSUE (MO i BAT). SN komponentu pozostaje w audycie / operacjach magazynowych (bez kolumny SN na `StockDocumentItem`).
+**[ISTNIEJE]** — jedna pozycja RW na **PRODUCT × LOT × data ważności**, z ilościami ze slice/ISSUE (MO i BAT). Cena linii = średnia ważona kosztów zużytych slice’ów. SN komponentu pozostaje w audycie / operacjach magazynowych (bez kolumny SN na `StockDocumentItem`).
 
 ---
 
@@ -724,30 +745,48 @@ Kolumny / blob `terminal_required` oraz flaga `show_target_location` mogą nadal
 
 ## 20. Koszt produkcji
 
-**[ISTNIEJE — receipt FIFO]**
+**[ISTNIEJE — receipt FIFO + fallback karty]**
 
 Koszt produkcji opiera się na rzeczywistym koszcie zużytych komponentów.
 
-Dla każdej zużytej ilości Sasist w pierwszej kolejności pobiera koszt jednostkowy z dokumentu przyjęcia, z którego pochodzi dany zapas. Koszt podąża za faktycznie zużytą warstwą magazynową (ta sama kolejność co fizyczny consume FIFO/FEFO — bez osobnego sortowania tylko dla kosztu).
+### Zasada nadrzędna
 
-Jeżeli komponent został pobrany z kilku dostaw, koszt wyliczany jest osobno dla każdej części.
+**Koszt nie ma własnego, niezależnego FIFO.**  
+Koszt **podąża za faktycznie zużytą warstwą magazynową**:
 
-Przykład:
-100 szt. z dostawy po 10 zł
-+ 50 szt. z kolejnej dostawy po 12 zł
-= 1600 zł kosztu materiałowego.
+- fizyczny pick FIFO → koszt slice wybranego przez FIFO,
+- FEFO → koszt slice wybranego przez FEFO,
+- LIFO → koszt slice wybranego przez LIFO.
 
-Jeżeli dla danej ilości nie można ustalić kosztu z dokumentu przyjęcia (brak RECEIPT z ceną, legacy stock bez provenance, ręczny stan bez kosztu), system wykorzystuje jako fallback cenę zakupu netto z karty produktu (`purchase_price`). Fallback jest jawny (`cost_source = RECEIPT | PRODUCT_FALLBACK`).
+Nie wolno wyceniać zużycia z najstarszego przyjęcia, jeśli fizycznie FEFO/LIFO zużyło inną partię.
+
+### Receipt → fallback
+
+1. Dla każdej zużytej ilości system w pierwszej kolejności bierze koszt jednostkowy z **dokumentu przyjęcia** (RECEIPT z ceną), powiązanego z danym zapasem / LOT.
+2. Jeżeli komponent pochodzi z kilku dostaw, koszt liczony jest **osobno dla każdej części**.
+3. Jeżeli nie da się ustalić ceny z przyjęcia (brak RECEIPT z ceną, legacy stock, ręczna korekta bez provenance), używany jest fallback: **cena zakupu netto z karty produktu** (`purchase_price`). Źródło jest jawne: `cost_source = RECEIPT | PRODUCT_FALLBACK`.
+
+Przykład (dwa przyjęcia, jeden pick multi-LOT):
+
+| Źródło | Ilość | Cena netto | Składnik kosztu |
+|---|---|---|---|
+| PZ1 / LOT-A | 100 | 10 zł | 1000 |
+| PZ2 / LOT-B | 50 | 12 zł | 600 |
+| **Razem** | **150** | | **1600 zł** |
+
+### Po RW — zamrożenie
 
 | Pojęcie | Opis |
 |---|---|
-| Szacowany koszt receptury | Orientacyjny: Σ (cena z karty / bieżący koszt katalogowy × qty BOM) — przed produkcją |
-| Rzeczywisty koszt materiałów | Po RW: `Σ (slice_qty × source_unit_cost)` — zamrożony w `material_cost_json` na MO/BAT |
+| Szacowany koszt receptury | Orientacyjny przed produkcją: Σ (cena katalogowa × qty BOM) |
+| Rzeczywisty koszt materiałów | Po zakończeniu pobrania: `Σ (slice_qty × unit_cost)` — zapis w `material_cost_json` na MO/BAT (`actual_material_cost`) |
 | Rzeczywisty koszt / szt. | `actual_material_cost / produced_qty` (przy partial: mianownik = planned aż do domknięcia) |
+| Flaga fallback | UI / API: `has_product_cost_fallback`, gdy część slice’ów poszła z karty produktu |
 
-RW: linie PRODUCT×LOT×expiry mają `purchase_price_net` jako średnią ważoną slice’ów; ISSUE `unit_price_net` niesie koszt per slice + metadane źródła receipt.
+RW: linie **PRODUCT × LOT × expiry** mają `purchase_price_net` jako średnią ważoną slice’ów tej linii.  
+ISSUE: `unit_price_net` + metadane źródła receipt (dokument / linia), gdy dostępne.
 
-Koszt historyczny nie zmienia się po późniejszej zmianie ceny produktu.
+**Niezmienność:** zamrożony koszt historyczny **nie zmienia się** po późniejszej zmianie ceny na karcie produktu.
 
 **Nie jest** to pełny controlling ABC / rachunek kosztów z narzutami — to koszt materiałowy oparty o przyjęcia + fallback karty.
 
@@ -803,6 +842,12 @@ Koszt historyczny nie zmienia się po późniejszej zmianie ceny produktu.
 **Warunki:** aktywna receptura; komponenty dostępne.  
 **Przebieg:** utworzenie BAT 10 szt. → pobranie → RW → rejestracja 10 → PW → rozlokowanie → completed.  
 **Rezultat:** +10 na lokalizacji magazynowej; dokumenty RW/PW.
+
+### A2. Pobranie multi-LOT z jednej lokalizacji
+
+**Warunki:** komponent na jednej lokalizacji w dwóch partiach (np. LOT-A = 6, LOT-B = 4); zadanie = 10.  
+**Przebieg:** pick LOT-A ×6 → pick LOT-B ×4 → finish collecting.  
+**Rezultat:** oba picki OK; po pierwszym LOT-B nadal 4; RW z **dwoma** liniami (6 + 4); bez write-down sąsiedniej partii; `actual_material_cost` zgodny z cenami warstw / fallbackiem.
 
 ### B. Produkcja 1 szt. pod zamówienie
 
@@ -875,9 +920,10 @@ W zakresie v1 znajdują się m.in.:
 - automatyczne uzupełnianie zapasu (zlecenia planistyczne),
 - zlecenia i partie, rezerwacje materiałów (FIFO / FEFO / LIFO), obsługa braków i most do zakupów,
 - przypisanie operatora do zlecenia / partii,
-- terminal WMS: pobieranie komponentów i rejestracja produkcji (także częściowa),
-- dokumenty RW (z LOT×expiry na pozycjach) i PW, karta produkcyjna oraz lista pobrania materiałów (wydruk),
+- terminal WMS: pobieranie komponentów (w tym multi-LOT na jednej lokalizacji, discrepancy scoped do wybranej partii) i rejestracja produkcji (także częściowa),
+- dokumenty RW (pozycje PRODUCT × LOT × expiry + koszt ważony) i PW, karta produkcyjna oraz lista pobrania materiałów (wydruk),
 - identyfikowalność wyrobu (LOT / SN / data ważności) wg ustawień magazynu i produktu,
+- rzeczywisty koszt materiałów z warstw przyjęcia (RECEIPT) z jawnym fallbackiem ceny karty produktu; zamrożenie na MO/BAT,
 - konfigurator produkcji (statusy zamówienia, bufor, WMS vs wydruk, akcja po produkcji),
 - wygląd terminala (zdjęcie, nazwa, kody, jednostka, lokalizacja źródłowa, stan),
 - historia produkcji, dziennik zdarzeń, pulpit i analiza kosztów materiałowych,
@@ -893,7 +939,7 @@ W zakresie v1 znajdują się m.in.:
 |---|---|---|---|
 | 1 | Panel zamienników na Brakach to słownik analizy — bez automatycznej zmiany BOM / pick / RW | Pełny workflow accept-substitute (BOM + pick + RW) w dalszym rozwoju; martwa ścieżka `/produkcja/zastepniki-materialow` usunięta | **P2** (poza v1) |
 
-Nie uznajemy za brak v1: rozlokowania przez standardowe WMS Rozlokowanie (PW), bufora ORDERS bez kolejki putaway, trzech strategii prognozy, auto-pack all-or-nothing, możliwości przypisania operatora do zlecenia, LOT na pozycjach RW, listy pobrania z CTA druku, poprawionej metodyki planowania (realized sales + combined need bez double subtraction).
+Nie uznajemy za brak v1: rozlokowania przez standardowe WMS Rozlokowanie (PW), bufora ORDERS bez kolejki putaway, trzech strategii prognozy, auto-pack all-or-nothing, możliwości przypisania operatora do zlecenia, LOT na pozycjach RW, scoped multi-LOT przy pobieraniu (bez write-down sąsiedniej partii), kosztu materiałów z warstw przyjęcia + fallback karty, listy pobrania z CTA druku, poprawionej metodyki planowania (realized sales + combined need bez double subtraction).
 
 ---
 
