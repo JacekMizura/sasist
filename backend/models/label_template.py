@@ -26,7 +26,7 @@ class SavedLabelTemplate(Base, BaseModelMixin):
         index=True,
     )
     name = Column(String, nullable=False)
-    template_type = Column(String(32), nullable=True)  # location | product | cart | basket | order
+    template_type = Column(String(32), nullable=True)  # location | product | cart | basket | carrier | order
     template_json = Column(Text, nullable=False)  # JSON string of LabelTemplate
 
     tenant = relationship(

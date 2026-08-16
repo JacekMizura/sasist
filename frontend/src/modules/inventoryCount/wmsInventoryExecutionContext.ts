@@ -39,6 +39,15 @@ export type WmsInventoryPackaging = {
 
 export const CARRIER_BARCODE_PREFIXES = ["PAL-", "BOX-", "BIN-", "CRT-", "MIX-"] as const;
 
+export function isCarrierScanCode(raw: string): boolean {
+  const t = String(raw ?? "")
+    .trim()
+    .toUpperCase();
+  if (!t) return false;
+  if (/^ESP:CARRIER:\d+$/i.test(t)) return true;
+  return CARRIER_BARCODE_PREFIXES.some((p) => t.startsWith(p));
+}
+
 export type WmsLocationContext = {
   locationId: number;
   locationCode: string;
@@ -59,9 +68,7 @@ export type WmsCountedCarrierGroup = {
 };
 
 export function isCarrierBarcode(code: string): boolean {
-  const t = code.trim().toUpperCase();
-  if (!t) return false;
-  return CARRIER_BARCODE_PREFIXES.some((p) => t.startsWith(p));
+  return isCarrierScanCode(code);
 }
 
 export function locationCodesMatch(taskCode: string | null | undefined, scanned: string): boolean {

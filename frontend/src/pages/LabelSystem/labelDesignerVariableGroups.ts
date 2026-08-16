@@ -40,7 +40,7 @@ export const VARIABLE_UI_GROUPS: VariableUiGroup[] = [
     id: "operator",
     emoji: "👤",
     label: "Operator",
-    categoryIds: ["cart", "basket"],
+    categoryIds: ["cart", "basket", "carrier"],
   },
   {
     id: "system",

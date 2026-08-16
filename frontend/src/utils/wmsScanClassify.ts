@@ -25,6 +25,7 @@ export function classifyWmsScanCode(raw: string): WmsScanKind {
   if (/^\d{8,20}$/.test(s)) return "ean_gtin";
 
   const up = s.toUpperCase();
+  // Typed ESP:carrier:{id} before other ESP/location heuristics.
   if (looksLikeCarrierBarcode(s)) return "carrier_barcode";
 
   // Basket before location: brck1-B01 was wrongly classified as location_like.

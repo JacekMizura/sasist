@@ -75,6 +75,8 @@ export function getTypeIcon(type: string): ReactNode {
       return <ShoppingCart className="h-4 w-4" strokeWidth={2} aria-hidden />;
     case "basket":
       return <ShoppingBasket className="h-4 w-4" strokeWidth={2} aria-hidden />;
+    case "carrier":
+      return <Package className="h-4 w-4" strokeWidth={2} aria-hidden />;
     case "product":
       return <Package className="h-4 w-4" strokeWidth={2} aria-hidden />;
     case "order":

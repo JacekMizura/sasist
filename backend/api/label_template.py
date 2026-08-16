@@ -242,6 +242,27 @@ _PREVIEW_CART_RECORD = {
     "{cart_sections}": "4",
 }
 
+_PREVIEW_CARRIER_RECORD = {
+    "carrier_id": "6",
+    "carrier_code": "PAL-000006",
+    "carrier_barcode": "PAL-000006",
+    "carrier_scan_code": "ESP:carrier:6",
+    "carrier_name": "Nośnik 6",
+    "carrier_group_code": "PAL",
+    "carrier_location": "A1-A-3",
+    "carrier_warehouse": "Magazyn główny",
+    "barcode_data": "ESP:carrier:6",
+    "{carrier_id}": "6",
+    "{carrier_code}": "PAL-000006",
+    "{carrier_barcode}": "PAL-000006",
+    "{carrier_scan_code}": "ESP:carrier:6",
+    "{carrier_name}": "Nośnik 6",
+    "{carrier_group_code}": "PAL",
+    "{carrier_location}": "A1-A-3",
+    "{carrier_warehouse}": "Magazyn główny",
+    "{barcode_data}": "ESP:carrier:6",
+}
+
 
 @router.get("/{template_id}/preview")
 def get_template_preview(
@@ -252,7 +273,7 @@ def get_template_preview(
 ):
     """
     Return SVG preview of the label template with sample data.
-    preview_type: "product" (default) or "cart".
+    preview_type: "product" (default), "cart", or "carrier".
     """
     row = db.query(SavedLabelTemplate).filter(
         SavedLabelTemplate.id == template_id,
@@ -268,7 +289,13 @@ def get_template_preview(
         raise HTTPException(status_code=400, detail="Template JSON is empty")
     width_mm = float(template.get("widthMm", 100))
     height_mm = float(template.get("heightMm", 60))
-    record = _PREVIEW_CART_RECORD if (preview_type or "").strip().lower() == "cart" else _PREVIEW_PRODUCT_RECORD
+    pt = (preview_type or "").strip().lower()
+    if pt == "cart":
+        record = _PREVIEW_CART_RECORD
+    elif pt == "carrier":
+        record = _PREVIEW_CARRIER_RECORD
+    else:
+        record = _PREVIEW_PRODUCT_RECORD
     try:
         svg = build_label_svg_engine(template, width_mm, height_mm, record)
     except Exception as e:

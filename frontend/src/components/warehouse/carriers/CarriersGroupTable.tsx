@@ -37,6 +37,7 @@ type Props = {
   detailPath: (id: number) => string;
   navState?: Record<string, unknown>;
   onRowUpdated: (row: WarehouseCarrierRead) => void;
+  onPrintLabel?: (row: WarehouseCarrierRead) => void;
   emptyHint?: ReactNode;
 };
 
@@ -48,6 +49,7 @@ function CarrierRowMenu({
   onClose,
   onMove,
   onStatus,
+  onPrint,
 }: {
   row: WarehouseCarrierRead;
   busy: boolean;
@@ -56,6 +58,7 @@ function CarrierRowMenu({
   onClose: () => void;
   onMove: () => void;
   onStatus: (status: string) => void;
+  onPrint: () => void;
 }) {
   return (
     <div className="relative">
@@ -76,7 +79,7 @@ function CarrierRowMenu({
               className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-slate-50"
               onClick={() => {
                 onClose();
-                openCarrierLabelPrint(row);
+                onPrint();
               }}
             >
               <Printer size={16} aria-hidden /> Drukuj etykietę
@@ -179,6 +182,7 @@ export function CarriersGroupTable({
   detailPath,
   navState,
   onRowUpdated,
+  onPrintLabel,
   emptyHint,
 }: Props) {
   const navigate = useNavigate();
@@ -281,6 +285,7 @@ export function CarriersGroupTable({
                             onClose={() => setMenuId(null)}
                             onMove={() => setMoveRow(row)}
                             onStatus={(s) => void setStatus(row, s)}
+                            onPrint={() => onPrintLabel?.(row)}
                           />
                         </FleetResourceActionBar>
                       </div>
@@ -318,6 +323,7 @@ export function CarriersGroupTable({
                   onClose={() => setMenuId(null)}
                   onMove={() => setMoveRow(row)}
                   onStatus={(s) => void setStatus(row, s)}
+                  onPrint={() => onPrintLabel?.(row)}
                 />
               </FleetResourceActionBar>
               <button

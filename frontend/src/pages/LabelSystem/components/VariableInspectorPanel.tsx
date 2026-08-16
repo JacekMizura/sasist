@@ -32,6 +32,7 @@ const ROOT_VAR_SECTION_ORDER: (VariableCategoryId | "other")[] = [
   "warehouse",
   "cart",
   "basket",
+  "carrier",
   "fleet",
   "orders",
   "product_basic",
@@ -53,6 +54,8 @@ function SectionMiniIcon({ id }: { id: VariableCategoryId | "other" }) {
       return <ShoppingCart className={c} strokeWidth={2} aria-hidden />;
     case "basket":
       return <ShoppingBasket className={c} strokeWidth={2} aria-hidden />;
+    case "carrier":
+      return <Package className={c} strokeWidth={2} aria-hidden />;
     case "fleet":
       return <Truck className={c} strokeWidth={2} aria-hidden />;
     case "orders":

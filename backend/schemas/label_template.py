@@ -4,7 +4,7 @@ from pydantic import BaseModel
 class SavedLabelTemplatePayload(BaseModel):
     name: str
     template_json: str
-    template_type: str | None = None  # location | product | cart | basket | order
+    template_type: str | None = None  # location | product | cart | basket | carrier | order
     group_id: int | None = None
 
 

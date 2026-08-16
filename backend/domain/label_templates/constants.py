@@ -6,6 +6,7 @@ from __future__ import annotations
 LABEL_TEMPLATE_TYPE_ORDER = "order"
 #: Typ „Etykieta zastępcza” — awaryjna etykieta WMS przy braku listu kurierskiego.
 LABEL_TEMPLATE_TYPE_ORDER_REPLACEMENT = "order_replacement"
+LABEL_TEMPLATE_TYPE_CARRIER = "carrier"
 
 ORDER_FAMILY_TEMPLATE_TYPES: frozenset[str] = frozenset(
     {
@@ -17,6 +18,7 @@ ORDER_FAMILY_TEMPLATE_TYPES: frozenset[str] = frozenset(
 LABEL_TEMPLATE_TYPE_LABELS_PL: dict[str, str] = {
     LABEL_TEMPLATE_TYPE_ORDER: "Zamówienie",
     LABEL_TEMPLATE_TYPE_ORDER_REPLACEMENT: "Etykieta zastępcza",
+    LABEL_TEMPLATE_TYPE_CARRIER: "Nośnik",
 }
 
 

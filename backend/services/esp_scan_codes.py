@@ -2,22 +2,23 @@
 Namespaced internal scan codes (WMS) — no collision with product EAN/SKU.
 
 Formats (ID = database primary key):
-  BULK cart:     ESP:shpcart:{id}
-  MULTI cart:    ESP:brck:{id}
-  Cart basket:  ESP:bsh:{id}
-  Bin/location:  ESP:sh:{id}
-  Order:         ESP:O:{id}
+  BULK cart:         ESP:shpcart:{id}
+  MULTI cart:        ESP:brck:{id}
+  Cart basket:       ESP:bsh:{id}
+  Bin/location:      ESP:sh:{id}
+  Order:             ESP:O:{id}
+  Warehouse carrier: ESP:carrier:{id}
 """
 
 from __future__ import annotations
 
 import re
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
-EspEntityKind = Literal["order", "cart_bulk", "cart_multi", "basket", "location"]
+EspEntityKind = Literal["order", "cart_bulk", "cart_multi", "basket", "location", "carrier"]
 
 ESP_SCAN_RE = re.compile(
-    r"^ESP:(?P<kind>shpcart|brck|bsh|sh|O):(?P<pid>\d+)$",
+    r"^ESP:(?P<kind>shpcart|brck|bsh|sh|O|carrier):(?P<pid>\d+)$",
     re.IGNORECASE,
 )
 
@@ -53,6 +54,11 @@ def order_scan_code(order_id: int) -> str:
     return f"ESP:O:{int(order_id)}"
 
 
+def carrier_scan_code(carrier_id: int) -> str:
+    """Canonical typed QR payload for WarehouseCarrier (not stored in DB)."""
+    return f"ESP:carrier:{int(carrier_id)}"
+
+
 def parse_esp_scan(raw: str) -> tuple[EspEntityKind, int] | None:
     """
     Parse a scanned token into (logical kind, id).
@@ -74,6 +80,8 @@ def parse_esp_scan(raw: str) -> tuple[EspEntityKind, int] | None:
         return ("location", pid)
     if token == "o":
         return ("order", pid)
+    if token == "carrier":
+        return ("carrier", pid)
     return None
 
 

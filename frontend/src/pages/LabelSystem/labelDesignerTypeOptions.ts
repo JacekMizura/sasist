@@ -4,6 +4,7 @@ import type { TemplateType } from "../../types/labelSystem";
 export const LABEL_DESIGNER_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: "location", label: "Lokalizacja" },
   { value: "product", label: "Produkt" },
+  { value: "carrier", label: "Nośnik" },
   { value: "pallet", label: "Paleta" },
   { value: "cart", label: "Wózek" },
   { value: "basket", label: "Koszyk" },
@@ -39,6 +40,7 @@ export function labelDesignerVariableCategoryType(value: string | null | undefin
   if (v === "product") return "product";
   if (v === "cart") return "cart";
   if (v === "basket") return "basket";
+  if (v === "carrier" || v === "pallet") return "carrier";
   if (v === "order" || v === "order_replacement") return "order";
   if (v === "user_login") return "user_login";
   return "location";

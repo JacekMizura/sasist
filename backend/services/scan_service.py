@@ -2,10 +2,12 @@
 Central barcode parser and scan resolution.
 
 Resolves a scanned barcode to entity type, id, and additional_data using:
-- ESP:shpcart:|ESP:brck:|ESP:bsh:|ESP:sh:|ESP:O: + PK → cart / basket / location / order
+- ESP:shpcart:|ESP:brck:|ESP:bsh:|ESP:sh:|ESP:O:|ESP:carrier: + PK
+  → cart / basket / location / order / warehouse carrier
 - 12–14 digit string → product (lookup by EAN)
 - Location pattern (e.g. A1-2-3) → location
-- PRD-* -> product, LOC-* -> location (Bin), CART-*-B* -> basket, CART-* -> cart, ORD-* -> order, PAL-* -> pallet (future).
+- PRD-* -> product, LOC-* -> location (Bin), CART-*-B* -> basket, CART-* -> cart,
+  ORD-* -> order, PAL-/BOX-/BIN-/CRT-/MIX-* -> warehouse carrier (legacy).
 """
 
 import re
@@ -19,7 +21,8 @@ from ..models.order import Order
 from ..models.cart import Cart
 from ..models.cart_basket import CartBasket
 from ..models.warehouse import Bin
-from .esp_scan_codes import cart_type_is_multi, parse_esp_scan
+from ..models.warehouse_carrier import WarehouseCarrier
+from .esp_scan_codes import carrier_scan_code, cart_type_is_multi, parse_esp_scan
 
 # Location code pattern: e.g. A1-2-3, RackA-2-3
 LOCATION_PATTERN = re.compile(r"^[A-Za-z]+\d*-\d+-\d+$")
@@ -28,7 +31,7 @@ LOCATION_PATTERN = re.compile(r"^[A-Za-z]+\d*-\d+-\d+$")
 def parse_barcode_type(barcode: str) -> str | None:
     """
     Determine entity type from barcode prefix.
-    Returns: "product" | "location" | "basket" | "cart" | "order" | "pallet" | None
+    Returns: "product" | "location" | "basket" | "cart" | "order" | "carrier" | "pallet" | None
     """
     if not barcode or not isinstance(barcode, str):
         return None
@@ -46,6 +49,8 @@ def parse_barcode_type(barcode: str) -> str | None:
             return "basket"
         if kind == "location":
             return "location"
+        if kind == "carrier":
+            return "carrier"
         return None
     s = raw.upper()
     if s.startswith("PRD"):
@@ -60,6 +65,9 @@ def parse_barcode_type(barcode: str) -> str | None:
         return "order"
     if s.startswith("RPL"):
         return "replacement_label"
+    for pref in ("PAL-", "BOX-", "BIN-", "CRT-", "MIX-"):
+        if s.startswith(pref):
+            return "carrier"
     if s.startswith("PAL"):
         return "pallet"
     return None
@@ -137,6 +145,22 @@ def resolve_barcode(db: Session, barcode: str) -> dict[str, Any]:
             else:
                 result["additional_data"] = {"location_code": lookup}
             return result
+        if kind == "carrier":
+            row = db.query(WarehouseCarrier).filter(
+                WarehouseCarrier.id == int(eid),
+                WarehouseCarrier.deleted_at.is_(None),
+            ).first()
+            result["type"] = "carrier"
+            if row:
+                result["id"] = row.id
+                result["additional_data"] = {
+                    "code": (row.code or "").strip(),
+                    "barcode": (row.barcode or "").strip(),
+                    "scan_code": carrier_scan_code(int(row.id)),
+                    "tenant_id": int(row.tenant_id),
+                    "name": (row.name or "").strip() or None,
+                }
+            return result
         return result
 
     # EAN: 12–14 digits → product by ean
@@ -166,7 +190,31 @@ def resolve_barcode(db: Session, barcode: str) -> dict[str, Any]:
     result["type"] = t
 
     if t == "pallet":
-        # Future: resolve PAL-* when pallet entity exists
+        # Legacy stub — prefer ``carrier`` for PAL-/BOX-/… prefixes.
+        return result
+
+    if t == "carrier":
+        row = (
+            db.query(WarehouseCarrier)
+            .filter(
+                WarehouseCarrier.deleted_at.is_(None),
+                or_(
+                    func.lower(WarehouseCarrier.barcode) == low,
+                    func.lower(WarehouseCarrier.code) == low,
+                ),
+            )
+            .order_by(WarehouseCarrier.id.asc())
+            .first()
+        )
+        if row:
+            result["id"] = row.id
+            result["additional_data"] = {
+                "code": (row.code or "").strip(),
+                "barcode": (row.barcode or "").strip(),
+                "scan_code": carrier_scan_code(int(row.id)),
+                "tenant_id": int(row.tenant_id),
+                "name": (row.name or "").strip() or None,
+            }
         return result
 
     if t == "product":

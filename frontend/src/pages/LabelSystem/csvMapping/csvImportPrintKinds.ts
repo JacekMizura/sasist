@@ -9,6 +9,7 @@ export type CsvImportPrintKind =
   | "product"
   | "cart"
   | "basket"
+  | "carrier"
   | "order"
   | "documents";
 
@@ -21,6 +22,7 @@ export const CSV_IMPORT_PRINT_KINDS: Array<{
   { id: "product", label: "Produkt", emoji: "📦" },
   { id: "cart", label: "Wózek", emoji: "🛒" },
   { id: "basket", label: "Koszyk", emoji: "🧺" },
+  { id: "carrier", label: "Nośnik", emoji: "🪵" },
   { id: "order", label: "Zamówienie", emoji: "🧾" },
   { id: "documents", label: "Dokumenty", emoji: "📄" },
 ];
@@ -46,6 +48,7 @@ export function csvTemplateTypesForPrintKind(kind: CsvImportPrintKind): Readonly
   if (kind === "product") return new Set(["product"]);
   if (kind === "cart") return new Set(["cart"]);
   if (kind === "basket") return new Set(["basket"]);
+  if (kind === "carrier") return new Set(["carrier"]);
   return new Set(["order"]);
 }
 

@@ -42,6 +42,7 @@ from ..schemas.wms_carriers import (
     WarehouseCarrierScanOut,
 )
 from ..utils.carrier_barcode import generate_carrier_barcode
+from .esp_scan_codes import carrier_scan_code, parse_esp_scan
 from .tenant_default_warehouse import list_tenant_warehouse_ids
 from .wms_warehouse_ownership_service import sync_carrier_current_warehouse
 
@@ -323,6 +324,7 @@ def carrier_to_read(db: Session, c: WarehouseCarrier) -> WarehouseCarrierRead:
         tenant_id=int(c.tenant_id),
         code=(c.code or "").strip(),
         barcode=(c.barcode or "").strip(),
+        scan_code=carrier_scan_code(int(c.id)),
         name=(c.name or "").strip() or None,
         carrier_group_id=int(c.carrier_group_id) if c.carrier_group_id else None,
         carrier_group_code=gcode,
@@ -426,11 +428,27 @@ def find_carrier_by_scan_code(
     """
     Canonical WMS carrier scan resolver (SSOT).
 
-    Matches ``barcode`` OR ``code`` (case-insensitive, trimmed).
+    1. Typed ``ESP:carrier:{id}`` → resolve by primary key (tenant + not deleted).
+    2. Legacy fallback: ``barcode`` OR ``code`` (case-insensitive, trimmed).
+
     Used by ``/wms/carriers/scan`` and all operational flows that activate a carrier.
     """
     raw = (barcode or "").strip()
     if not raw:
+        return None
+    parsed = parse_esp_scan(raw)
+    if parsed:
+        kind, eid = parsed
+        if kind == "carrier":
+            return (
+                db.query(WarehouseCarrier)
+                .filter(
+                    WarehouseCarrier.id == int(eid),
+                    WarehouseCarrier.tenant_id == int(tenant_id),
+                    WarehouseCarrier.deleted_at.is_(None),
+                )
+                .first()
+            )
         return None
     normalized = raw.upper()
     low = normalized.lower()

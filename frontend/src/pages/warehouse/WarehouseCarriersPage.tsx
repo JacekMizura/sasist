@@ -10,6 +10,7 @@ import {
 } from "../../api/wmsCarrierApi";
 import { BulkCreateCarriersModal } from "../../components/warehouse/carriers/BulkCreateCarriersModal";
 import { CarrierGroupCard } from "../../components/warehouse/carriers/CarrierGroupCard";
+import { CarrierLabelPrintModal } from "../../components/warehouse/carriers/CarrierLabelPrintModal";
 import { CarriersGroupTable } from "../../components/warehouse/carriers/CarriersGroupTable";
 import { CreateCarrierGroupModal } from "../../components/warehouse/carriers/CreateCarrierGroupModal";
 import { AppEmptyState } from "../../components/app-shell/AppEmptyState";
@@ -49,6 +50,7 @@ export default function WarehouseCarriersPage() {
   const [groupModalOpen, setGroupModalOpen] = useState(false);
   const [createModal, setCreateModal] = useState<CreateModalState>({ open: false, groupId: null, mode: "bulk" });
   const [toast, setToast] = useState<string | null>(null);
+  const [printCarrier, setPrintCarrier] = useState<WarehouseCarrierRead | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -277,6 +279,7 @@ export default function WarehouseCarriersPage() {
                   detailPath={(id) => paths.detail(id)}
                   navState={navState}
                   onRowUpdated={upsertRow}
+                  onPrintLabel={setPrintCarrier}
                   emptyHint={emptyGroupCta(g.id)}
                 />
               </CarrierGroupCard>
@@ -297,6 +300,7 @@ export default function WarehouseCarriersPage() {
                 detailPath={(id) => paths.detail(id)}
                 navState={navState}
                 onRowUpdated={upsertRow}
+                onPrintLabel={setPrintCarrier}
               />
             </CarrierGroupCard>
           ) : null}
@@ -318,6 +322,13 @@ export default function WarehouseCarriersPage() {
         initialMode={createModal.mode}
         onClose={() => setCreateModal((s) => ({ ...s, open: false }))}
         onSuccess={onCreated}
+      />
+
+      <CarrierLabelPrintModal
+        open={printCarrier != null}
+        carrier={printCarrier}
+        tenantId={tenantId}
+        onClose={() => setPrintCarrier(null)}
       />
     </div>
   );

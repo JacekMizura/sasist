@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, Field
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
 from ..models.cart import Cart
@@ -14,9 +14,10 @@ from ..models.bundle import Bundle
 from ..models.product import Product
 from ..models.stock_document import StockDocument, StockDocumentItem
 from ..models.tenant import Tenant
+from ..models.warehouse_carrier import WarehouseCarrier
 from ..models.wms_order_return import WmsOrderReturn
 from ..models.wms_rmz_line import RMZLine
-from ..services.label_pack_service import _cart_record
+from ..services.label_pack_service import _carrier_record, _cart_record
 from ..services.rack_label_generator import generate_rack_locations
 from ..services.rack_strip_generator import generate_rack_strip
 from ..services.label_pdf_generation_log import log_label_pdf_flow
@@ -75,6 +76,12 @@ class BundleLabelBody(BaseModel):
 
 class CartLabelBody(BaseModel):
     cart_id: int
+    template_id: int
+    quantity: int = 1
+
+
+class CarrierLabelBody(BaseModel):
+    carrier_id: int
     template_id: int
     quantity: int = 1
 
@@ -245,6 +252,48 @@ def post_labels_cart(
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
     record = _cart_record(cart)
+    records = [record] * body.quantity
+    pdf_bytes = render_label_template(
+        db=db,
+        template_id=body.template_id,
+        data=records,
+        tenant_id=tenant_id,
+    )
+    return Response(content=pdf_bytes, media_type="application/pdf")
+
+
+@router.post("/carrier")
+def post_labels_carrier(
+    body: CarrierLabelBody,
+    tenant_id: int = TENANT_ID,
+    db: Session = Depends(get_db),
+):
+    """Generate a warehouse-carrier label PDF (template_type=carrier). QR uses ESP:carrier:{id}."""
+    if body.quantity < 1 or body.quantity > 500:
+        raise HTTPException(status_code=400, detail="quantity must be between 1 and 500")
+    carrier = (
+        db.query(WarehouseCarrier)
+        .options(
+            joinedload(WarehouseCarrier.carrier_group),
+            joinedload(WarehouseCarrier.current_location),
+            joinedload(WarehouseCarrier.current_warehouse),
+        )
+        .filter(
+            WarehouseCarrier.id == body.carrier_id,
+            WarehouseCarrier.tenant_id == tenant_id,
+            WarehouseCarrier.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if not carrier:
+        raise HTTPException(status_code=404, detail="Carrier not found")
+    template = db.query(SavedLabelTemplate).filter(
+        SavedLabelTemplate.id == body.template_id,
+        SavedLabelTemplate.tenant_id == tenant_id,
+    ).first()
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    record = _carrier_record(carrier)
     records = [record] * body.quantity
     pdf_bytes = render_label_template(
         db=db,

@@ -8,7 +8,7 @@ import { analyzeTemplateVariables } from "../variableAnalysis/analyzeTemplateVar
 import type { VariablePreview } from "../variableAnalysis/resolvePreviewVariables";
 import { resolvePreviewVariables } from "../variableAnalysis/resolvePreviewVariables";
 
-type PreviewDataType = "location" | "cart" | "basket" | "product" | "order";
+type PreviewDataType = "location" | "cart" | "basket" | "carrier" | "product" | "order";
 
 export function useTemplateVariableAnalysis(
   template: LabelTemplate,

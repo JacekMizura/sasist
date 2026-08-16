@@ -29,6 +29,7 @@ export type TemplateType =
   | "product"
   | "cart"
   | "basket"
+  | "carrier"
   | "order"
   | "order_replacement"
   | "user_login"
@@ -42,6 +43,7 @@ export const TEMPLATE_TYPE_OPTIONS: { value: TemplateType; label: string }[] = [
   { value: "product", label: "Produkt" },
   { value: "cart", label: "Wózek" },
   { value: "basket", label: "Koszyk" },
+  { value: "carrier", label: "Nośnik" },
   { value: "order", label: "Zamówienie" },
   { value: "order_replacement", label: "Etykieta zastępcza" },
   { value: "user_login", label: "Kod logowania użytkownika" },
@@ -60,6 +62,7 @@ export type VariableCategoryId =
   | "fleet"
   | "cart"
   | "basket"
+  | "carrier"
   | "user"
   | "product_basic"
   | "product_pricing"
@@ -132,6 +135,21 @@ export const LABEL_VARIABLE_CATEGORIES: Array<{
       { id: "basket_level", label: "Poziom koszyka", token: "{basket_level}" },
       { id: "basket_position", label: "Pozycja koszyka", token: "{basket_position}" },
       { id: "basket_cart_id", label: "Wózek (powiązanie)", token: "{cart_id}" },
+    ],
+  },
+  {
+    id: "carrier",
+    label: "Nośnik",
+    items: [
+      { id: "carrier_id", label: "ID nośnika", token: "{carrier_id}" },
+      { id: "carrier_code", label: "Numer nośnika", token: "{carrier_code}" },
+      { id: "carrier_barcode", label: "Legacy barcode", token: "{carrier_barcode}" },
+      { id: "carrier_scan_code", label: "Kod skanu (ESP)", token: "{carrier_scan_code}" },
+      { id: "carrier_name", label: "Nazwa nośnika", token: "{carrier_name}" },
+      { id: "carrier_group_code", label: "Kod grupy", token: "{carrier_group_code}" },
+      { id: "carrier_location", label: "Lokalizacja", token: "{carrier_location}" },
+      { id: "carrier_warehouse", label: "Magazyn", token: "{carrier_warehouse}" },
+      { id: "barcode_data", label: "Dane QR (scan_code)", token: "{barcode_data}" },
     ],
   },
   {
@@ -247,6 +265,7 @@ export const TEMPLATE_TYPE_CATEGORIES: Record<TemplateType, VariableCategoryId[]
   ],
   cart: ["cart", "fleet"],
   basket: ["basket", "cart"],
+  carrier: ["carrier"],
   order: ["orders"],
   order_replacement: ["orders"],
   user_login: ["user"],
@@ -257,7 +276,7 @@ export const TEMPLATE_TYPE_CATEGORIES: Record<TemplateType, VariableCategoryId[]
 };
 
 /** Preview data type for template editor. */
-export type PreviewDataType = "location" | "cart" | "basket" | "product" | "order" | "user_login";
+export type PreviewDataType = "location" | "cart" | "basket" | "carrier" | "product" | "order" | "user_login";
 
 /** Sample records per preview type for realistic barcode/text preview in the template editor. */
 export const PREVIEW_SAMPLES: Record<PreviewDataType, Record<string, unknown>> = {
@@ -336,6 +355,26 @@ export const PREVIEW_SAMPLES: Record<PreviewDataType, Record<string, unknown>> =
     "{basket_level}": "1",
     "{basket_position}": "2",
     "{cart_id}": "1",
+  },
+  carrier: {
+    carrier_id: "6",
+    carrier_code: "PAL-000006",
+    carrier_barcode: "PAL-000006",
+    carrier_scan_code: "ESP:carrier:6",
+    carrier_name: "Nośnik 6",
+    carrier_group_code: "PAL",
+    carrier_location: "A1-A-3",
+    carrier_warehouse: "Magazyn główny",
+    barcode_data: "ESP:carrier:6",
+    "{carrier_id}": "6",
+    "{carrier_code}": "PAL-000006",
+    "{carrier_barcode}": "PAL-000006",
+    "{carrier_scan_code}": "ESP:carrier:6",
+    "{carrier_name}": "Nośnik 6",
+    "{carrier_group_code}": "PAL",
+    "{carrier_location}": "A1-A-3",
+    "{carrier_warehouse}": "Magazyn główny",
+    "{barcode_data}": "ESP:carrier:6",
   },
   product: {
     prod_name: "Karton 40x30x25",

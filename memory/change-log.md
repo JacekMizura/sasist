@@ -1,3 +1,17 @@
+## 2026-08-16 — Carrier ESP:carrier:{id} + template_type=carrier
+
+- Canonical scan: `ESP:carrier:{id}` (computed); `code`/`barcode` unchanged (legacy PAL-/BOX-/…)
+- SSOT: `esp_scan_codes` + `find_carrier_by_scan_code` (ESP-first) + FE `classifyWmsScanCode`
+- Labels: `template_type=carrier`, bindings `carrier_*` / `barcode_data=scan_code`; print via `POST /labels/carrier` + `CarrierLabelPrintModal`
+- Preset: `frontend/src/labelSystem/presets/carrierLabelHorizontal100x50.json`
+- No DB migration
+
+## 2026-08-16 — Carrier label template_json (100×50)
+
+- Plik: `Downloads/nosnik_label_100x50_kolor_import.json` (eksport `label_templates_…41.json` nie zawierał tego szablonu)
+- `{loc_name}` font 62→41; QR 33.5→28 mm; usunięta czarna ramka QR (`borderColor` #e2e8f0); krótsze celowniki; panel 40% + separator 1 mm
+- Bez zmian importu/renderera
+
 ## 2026-08-16 — Paper produce UX (qty form + FG policy)
 
 - FE: `PaperProduceLineCard` — plan/done/remaining, input default=remaining, CTA Zatwierdź; +1/+5 secondary

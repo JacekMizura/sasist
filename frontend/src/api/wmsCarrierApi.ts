@@ -20,6 +20,8 @@ export type WarehouseCarrierRead = {
   tenant_id: number;
   code: string;
   barcode: string;
+  /** Computed canonical QR payload ESP:carrier:{id} — not stored in DB. */
+  scan_code?: string;
   name?: string | null;
   carrier_group_id?: number | null;
   carrier_group_code?: string | null;

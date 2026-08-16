@@ -39,6 +39,8 @@ class WarehouseCarrierRead(BaseModel):
     tenant_id: int
     code: str
     barcode: str
+    #: Computed canonical QR payload ``ESP:carrier:{id}`` — not stored in DB.
+    scan_code: str = ""
     name: Optional[str] = None
     carrier_group_id: Optional[int] = None
     carrier_group_code: Optional[str] = None

@@ -16,6 +16,49 @@ from .label_render_service import build_label_pdf_multi, template_json_to_dict
 logger = logging.getLogger(__name__)
 
 
+def _carrier_record(carrier) -> dict[str, Any]:
+    """Build label record for a warehouse carrier. QR uses typed ``ESP:carrier:{id}``."""
+    from .esp_scan_codes import carrier_scan_code
+
+    cid = int(getattr(carrier, "id", 0) or 0)
+    code = (getattr(carrier, "code", None) or "").strip()
+    barcode = (getattr(carrier, "barcode", None) or "").strip() or code
+    scan = carrier_scan_code(cid) if cid else ""
+    name = (getattr(carrier, "name", None) or "").strip()
+    group_code = ""
+    g = getattr(carrier, "carrier_group", None)
+    if g is not None:
+        group_code = (getattr(g, "code", None) or "").strip()
+    loc = ""
+    loc_row = getattr(carrier, "current_location", None)
+    if loc_row is not None:
+        loc = (getattr(loc_row, "name", None) or "").strip()
+    wh = ""
+    wh_row = getattr(carrier, "current_warehouse", None)
+    if wh_row is not None:
+        wh = (getattr(wh_row, "name", None) or "").strip()
+    return {
+        "carrier_id": str(cid),
+        "carrier_code": code,
+        "carrier_barcode": barcode,
+        "carrier_scan_code": scan,
+        "carrier_name": name or code or f"Nośnik {cid}",
+        "carrier_group_code": group_code,
+        "carrier_location": loc,
+        "carrier_warehouse": wh,
+        "barcode_data": scan,
+        "{carrier_id}": str(cid),
+        "{carrier_code}": code,
+        "{carrier_barcode}": barcode,
+        "{carrier_scan_code}": scan,
+        "{carrier_name}": name or code or f"Nośnik {cid}",
+        "{carrier_group_code}": group_code,
+        "{carrier_location}": loc,
+        "{carrier_warehouse}": wh,
+        "{barcode_data}": scan,
+    }
+
+
 def _cart_record(cart) -> dict[str, Any]:
     """Build label record for a cart. Stable keys: cart_id, cart_number, cart_name, cart_barcode, barcode_data."""
     name = getattr(cart, "name", "") or ""
