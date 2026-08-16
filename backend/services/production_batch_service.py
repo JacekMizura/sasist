@@ -173,6 +173,10 @@ def _append_rw_issue_with_product_audit(
     performed_by_user_id: int | None,
     production_batch_id: int,
     product_id: int,
+    unit_price_net: float | None = None,
+    cost_source: str | None = None,
+    source_document_id: int | None = None,
+    source_document_line_id: int | None = None,
 ) -> None:
     append_issue_operation(
         db,
@@ -184,7 +188,14 @@ def _append_rw_issue_with_product_audit(
         expiry_date=expiry_date,
         serial_number=serial_number,
         operator_admin_id=performed_by_user_id,
-        metadata={"production_batch_id": int(production_batch_id), "source_document_type": "RW"},
+        unit_price_net=unit_price_net,
+        metadata={
+            "production_batch_id": int(production_batch_id),
+            "source_document_type": "RW",
+            "cost_source": cost_source,
+            "source_receipt_document_id": source_document_id,
+            "source_receipt_line_id": source_document_line_id,
+        },
     )
     from .production_execution.production_warehouse_audit import record_production_rw_issue_audit
 
@@ -325,7 +336,10 @@ def serialize_batch(db: Session, batch: ProductionBatch, *, check_shortages: boo
         progress = 100.0
     else:
         progress = 0.0
-    from .production_execution.cost_service import compute_batch_display_unit_cost
+    from .production_execution.cost_service import compute_batch_display_unit_cost, material_cost_read_fields
+
+    cost_fields = material_cost_read_fields(batch)
+    actual_mat = cost_fields.get("actual_material_cost")
 
     return ProductionBatchRead(
         id=int(batch.id),
@@ -361,6 +375,8 @@ def serialize_batch(db: Session, batch: ProductionBatch, *, check_shortages: boo
         created_at=batch.created_at,
         updated_at=batch.updated_at,
         display_unit_cost=compute_batch_display_unit_cost(lines),
+        actual_material_cost=float(actual_mat) if actual_mat is not None else None,
+        has_product_cost_fallback=bool(cost_fields.get("has_product_fallback")),
     )
 
 
@@ -1385,6 +1401,7 @@ def update_collection_task(
                 batch_number=body.batch_number,
                 lot=body.lot,
                 serial_number=body.serial_number,
+                expiry_date=body.expiry_date,
             )
         except ValueError as exc:
             raise ProductionBatchError(str(exc), code="insufficient_stock") from exc
@@ -1400,6 +1417,8 @@ def update_collection_task(
             target_task["selected_lot"] = str(body.lot).strip()
         if body.serial_number is not None:
             target_task["selected_serial_number"] = str(body.serial_number).strip()
+        if body.expiry_date is not None:
+            target_task["selected_expiry_date"] = body.expiry_date.isoformat()
 
     batch.collection_state_json = json.dumps(data, ensure_ascii=False)
     batch.updated_at = datetime.utcnow()
@@ -1642,6 +1661,7 @@ def _consume_batch_materials(
     if series is not None:
         wh = db.query(Warehouse).filter(Warehouse.id == int(batch.warehouse_id)).first()
         assign_series_number_to_stock_document(db, rw_doc, series, warehouse_code=str(getattr(wh, "code", None) or "") or None)
+    all_cost_slices: list = []
     for pid, allocs in alloc_map.items():
         if not allocs:
             continue
@@ -1684,8 +1704,21 @@ def _consume_batch_materials(
                             batch_number=bn,
                             expiry_date=exp,
                             serial_number=(meta.serial_number if meta else None),
+                            unit_cost_net=sl.unit_cost_net,
+                            cost_source=sl.cost_source,
+                            source_document_id=sl.source_document_id,
+                            source_document_line_id=sl.source_document_line_id,
                         )
                     )
+        from .production_execution.material_cost_layers import ensure_rw_issue_slices_costed
+
+        issue_slices = ensure_rw_issue_slices_costed(
+            db,
+            issue_slices,
+            tenant_id=int(batch.tenant_id),
+            warehouse_id=int(batch.warehouse_id),
+            product_id=int(pid),
+        )
         grouped = group_slices_by_lot(issue_slices)
         lines = create_rw_lines_for_lot_groups(
             db,
@@ -1711,8 +1744,29 @@ def _consume_batch_materials(
                     performed_by_user_id=performed_by_user_id,
                     production_batch_id=int(batch.id),
                     product_id=int(pid),
+                    unit_price_net=float(s.unit_cost_net) if s.unit_cost_net is not None else None,
+                    cost_source=s.cost_source,
+                    source_document_id=s.source_document_id,
+                    source_document_line_id=s.source_document_line_id,
+                )
+                all_cost_slices.append(
+                    {
+                        "product_id": int(pid),
+                        "quantity": float(s.quantity),
+                        "unit_cost_net": float(s.unit_cost_net or 0),
+                        "cost_source": s.cost_source,
+                        "batch_number": s.batch_number or None,
+                        "location_id": int(s.location_id),
+                        "source_document_id": s.source_document_id,
+                        "source_document_line_id": s.source_document_line_id,
+                    }
                 )
     batch.rw_stock_document_id = int(rw_doc.id)
+    if all_cost_slices:
+        from .production_execution.cost_service import freeze_material_cost_on_entity
+        from .production_execution.material_cost_layers import cost_breakdown_from_slices
+
+        freeze_material_cost_on_entity(batch, cost_breakdown_from_slices(all_cost_slices))
     return rw_doc
 
 

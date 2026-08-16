@@ -28,7 +28,12 @@ type Props = {
   onConfirm: (
     locationId: number,
     pickQty: number,
-    identity: { batchNumber?: string | null; lot?: string | null; serialNumber?: string | null },
+    identity: {
+      batchNumber?: string | null;
+      lot?: string | null;
+      serialNumber?: string | null;
+      expiryDate?: string | null;
+    },
   ) => void;
 };
 
@@ -76,6 +81,7 @@ export function WmsProductionCollectTaskCard({
   const [pickQty, setPickQty] = useState<number>(0);
   const [batchNumber, setBatchNumber] = useState(task.selected_batch_number ?? task.selected_lot ?? "");
   const [serialNumber, setSerialNumber] = useState(task.selected_serial_number ?? "");
+  const [expiryDate, setExpiryDate] = useState<string>("");
 
   useEffect(() => {
     setSelectedLocId(
@@ -85,6 +91,7 @@ export function WmsProductionCollectTaskCard({
     );
     setBatchNumber(task.selected_batch_number ?? task.selected_lot ?? "");
     setSerialNumber(task.selected_serial_number ?? "");
+    setExpiryDate("");
   }, [task.task_key, task.next_location_id, task.selected_location_id, task.location_id, task.collected_qty]);
 
   const selectedOption = useMemo(
@@ -95,28 +102,49 @@ export function WmsProductionCollectTaskCard({
   const serialOptions = identityOptions.map((lot) => lot.serial_number).filter((v): v is string => Boolean(v));
   const requiresBatch = Boolean(task.production_trace_require_batch);
   const requiresSerial = Boolean(task.production_trace_require_serial);
+  const multiLotAtLocation = identityOptions.filter((l) => (l.batch_number || l.lot || "").trim()).length > 1;
+  const showLotPicker = requiresBatch || multiLotAtLocation;
   const effectiveBatchNumber =
     batchNumber || (identityOptions.length === 1 ? identityOptions[0].batch_number || identityOptions[0].lot || "" : "");
   const effectiveSerialNumber = serialNumber || (serialOptions.length === 1 ? serialOptions[0] : "");
+  const selectedLot = useMemo(() => {
+    if (!effectiveBatchNumber.trim()) return null;
+    const matches = identityOptions.filter(
+      (l) => (l.batch_number || l.lot || "") === effectiveBatchNumber,
+    );
+    if (matches.length === 0) return null;
+    if (expiryDate) {
+      return matches.find((l) => (l.expiry_date || "") === expiryDate) ?? matches[0];
+    }
+    return matches[0];
+  }, [identityOptions, effectiveBatchNumber, expiryDate]);
+  const effectiveExpiryDate = expiryDate || selectedLot?.expiry_date || "";
 
   const locAvailable = selectedOption?.available_qty ?? task.available_qty;
+  const sliceAvailable =
+    selectedLot != null
+      ? Number(selectedLot.available_qty)
+      : effectiveSerialNumber
+        ? 1
+        : locAvailable;
   const whTotal = task.warehouse_total_available;
   const suggested = useMemo(() => {
-    const avail = locAvailable == null ? remaining : Number(locAvailable);
+    const avail = sliceAvailable == null ? remaining : Number(sliceAvailable);
     return Math.max(0, Math.min(remaining, avail));
-  }, [locAvailable, remaining]);
+  }, [sliceAvailable, remaining]);
 
   useEffect(() => {
     setPickQty(requiresSerial ? Math.min(1, suggested) : suggested);
-  }, [suggested, selectedLocId, task.collected_qty, requiresSerial]);
+  }, [suggested, selectedLocId, task.collected_qty, requiresSerial, effectiveBatchNumber, effectiveExpiryDate]);
 
-  const maxAllowed = locAvailable == null ? remaining : Math.min(remaining, Number(locAvailable));
+  const maxAllowed = sliceAvailable == null ? remaining : Math.min(remaining, Number(sliceAvailable));
   const canConfirm =
     selectedLocId != null &&
     pickQty > 1e-9 &&
     pickQty <= maxAllowed + 1e-6 &&
     (!requiresSerial || Math.abs(pickQty - 1) <= 1e-6) &&
     (!requiresBatch || effectiveBatchNumber.trim().length > 0) &&
+    (!multiLotAtLocation || effectiveBatchNumber.trim().length > 0) &&
     (!requiresSerial || effectiveSerialNumber.trim().length > 0) &&
     remaining > 1e-9;
 
@@ -289,25 +317,44 @@ export function WmsProductionCollectTaskCard({
           </div>
           <p className="mt-1 text-xs text-slate-500">
             Podpowiedź: {formatTerminalQuantity(suggested, { unit, showUnit: display.show_unit })} (min. z
-            pozostało / stan lokalizacji). Możesz zmniejszyć, jeśli fizycznie jest mniej.
+            pozostało / {selectedLot ? "wybrana partia" : "stan lokalizacji"}). Możesz zmniejszyć, jeśli
+            fizycznie jest mniej.
           </p>
         </div>
 
-        {requiresBatch ? (
+        {showLotPicker ? (
           <div className="mt-4">
             <label className={WMS_TERMINAL_LABEL}>Numer partii (LOT)</label>
             {identityOptions.length > 0 ? (
               <select
-                value={effectiveBatchNumber}
-                onChange={(e) => setBatchNumber(e.target.value)}
+                value={
+                  effectiveBatchNumber
+                    ? `${effectiveBatchNumber}||${effectiveExpiryDate || ""}`
+                    : ""
+                }
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (!raw) {
+                    setBatchNumber("");
+                    setExpiryDate("");
+                    return;
+                  }
+                  const [bn, exp] = raw.split("||");
+                  setBatchNumber(bn || "");
+                  setExpiryDate(exp || "");
+                }}
                 className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm"
               >
                 <option value="">— wybierz —</option>
                 {identityOptions.map((lot, idx) => {
                   const value = lot.batch_number || lot.lot || "";
+                  const exp = lot.expiry_date || "";
+                  const optValue = `${value}||${exp}`;
                   return (
-                    <option key={`${value}-${idx}`} value={value}>
+                    <option key={`${optValue}-${idx}`} value={optValue}>
                       {value || "—"}
+                      {exp ? ` · wazn. ${exp}` : ""}
+                      {lot.available_qty != null ? ` · ${fmtQty(lot.available_qty)}` : ""}
                     </option>
                   );
                 })}
@@ -360,6 +407,7 @@ export function WmsProductionCollectTaskCard({
                   batchNumber: effectiveBatchNumber || null,
                   lot: effectiveBatchNumber || null,
                   serialNumber: effectiveSerialNumber || null,
+                  expiryDate: effectiveExpiryDate || null,
                 });
               }
             }}
@@ -378,6 +426,7 @@ export function WmsProductionCollectTaskCard({
                   batchNumber: effectiveBatchNumber || null,
                   lot: effectiveBatchNumber || null,
                   serialNumber: effectiveSerialNumber || null,
+                  expiryDate: effectiveExpiryDate || null,
                 });
               }
             }}

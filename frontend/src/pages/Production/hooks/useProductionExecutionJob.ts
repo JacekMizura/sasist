@@ -369,7 +369,12 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
       taskKey: string,
       collectedQty: number,
       locationId?: number,
-      identity?: { batchNumber?: string | null; lot?: string | null; serialNumber?: string | null },
+      identity?: {
+        batchNumber?: string | null;
+        lot?: string | null;
+        serialNumber?: string | null;
+        expiryDate?: string | null;
+      },
     ) => {
       if (activeRef == null || warehouseId == null) return;
       try {
@@ -382,6 +387,7 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
             batch_number: identity?.batchNumber ?? null,
             lot: identity?.lot ?? null,
             serial_number: identity?.serialNumber ?? null,
+            expiry_date: identity?.expiryDate ?? null,
           };
           if (activeRef.kind === "batch") {
             const next = await updateCollectionTask(tenantId, activeRef.id, body, warehouseId);

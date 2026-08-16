@@ -23,6 +23,11 @@ class PickLotSlice:
     expiry_date: date
     inventory_id: Optional[int] = None
     warehouse_carrier_id: Optional[int] = None
+    #: Frozen unit cost at consume time (receipt FIFO → product fallback).
+    unit_cost_net: Optional[float] = None
+    cost_source: Optional[str] = None
+    source_document_id: Optional[int] = None
+    source_document_line_id: Optional[int] = None
 
 
 def lot_key_from_inventory(inv) -> tuple[str, date]:
@@ -40,6 +45,7 @@ def consume_inventory_fifo_slices(
     location_id: int,
     quantity: float,
     batch_number: str | None = None,
+    expiry_date: date | None = None,
     stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
     exclude_order_id: int | None = None,
     exclude_production_order_id: int | None = None,
@@ -59,6 +65,7 @@ def consume_inventory_fifo_slices(
         return []
     sd = normalize_stock_disposition(stock_disposition)
     batch_filter = normalize_batch_number(batch_number) if batch_number else None
+    exp_filter = expiry_date if expiry_date is not None and expiry_date < SENTINEL_EXPIRY else None
     rows = (
         db.query(Inventory)
         .filter(
@@ -75,6 +82,8 @@ def consume_inventory_fifo_slices(
     )
     if batch_filter is not None:
         rows = [r for r in rows if normalize_batch_number(getattr(r, "batch_number", None)) == batch_filter]
+    if exp_filter is not None:
+        rows = [r for r in rows if (getattr(r, "expiry_date", None) or SENTINEL_EXPIRY) == exp_filter]
     # Net available after foreign reservations (own order/MO credited via exclude).
     net_by_id: dict[int, float] = {}
     total_avail = 0.0

@@ -4,7 +4,11 @@ Multi-location flow:
 - each confirm appends a pick_event for one location + qty
 - collected_qty = sum(pick_events)
 - picked_slices = flat inventory slices for RW (no double-consume on finish)
-- discrepancy = max(0, min(remaining, system_qty) - confirmed_qty)
+- system_qty is scoped to selected LOT / expiry / serial when provided
+- discrepancy write-down is scoped to that same identity (never sibling LOTs)
+- when an identity is selected and remaining > system_qty, a lower qty is a
+  partial pick (no write-down); physical short applies when the selected slice
+  could cover the remainder (remaining <= system_qty) but operator confirms less
 """
 
 from __future__ import annotations
@@ -40,6 +44,12 @@ def serialize_picked_slice(
         ),
         "product_id": int(product_id),
         "location_id": int(location_id),
+        "unit_cost_net": float(sl.unit_cost_net) if sl.unit_cost_net is not None else None,
+        "cost_source": str(sl.cost_source) if sl.cost_source else None,
+        "source_document_id": int(sl.source_document_id) if sl.source_document_id is not None else None,
+        "source_document_line_id": (
+            int(sl.source_document_line_id) if sl.source_document_line_id is not None else None
+        ),
     }
 
 
@@ -78,7 +88,31 @@ def location_system_qty(
     warehouse_id: int,
     product_id: int,
     location_id: int,
+    batch_number: str | None = None,
+    expiry_date: date | None = None,
+    serial_number: str | None = None,
 ) -> float:
+    """On-hand qty at location, optionally scoped to selected LOT / expiry / serial."""
+    sn = (serial_number or "").strip()
+    if sn:
+        from ...models.inventory_serial import SERIAL_STATUS_ON_HAND, InventorySerial
+
+        ser = (
+            db.query(InventorySerial)
+            .filter(
+                InventorySerial.tenant_id == int(tenant_id),
+                InventorySerial.warehouse_id == int(warehouse_id),
+                InventorySerial.product_id == int(product_id),
+                InventorySerial.location_id == int(location_id),
+                InventorySerial.serial_number == sn,
+                InventorySerial.status == SERIAL_STATUS_ON_HAND,
+            )
+            .first()
+        )
+        return 1.0 if ser is not None else 0.0
+
+    from ..inventory_lot_keys import normalize_batch_number
+
     rows = (
         db.query(Inventory)
         .filter(
@@ -91,7 +125,20 @@ def location_system_qty(
         )
         .all()
     )
-    return round(sum(float(r.quantity or 0) for r in rows), 4)
+    batch_filter = normalize_batch_number(batch_number) if batch_number else None
+    exp_filter = expiry_date if expiry_date is not None and expiry_date < SENTINEL_EXPIRY else None
+    total = 0.0
+    for r in rows:
+        if batch_filter is not None:
+            if normalize_batch_number(getattr(r, "batch_number", None)) != batch_filter:
+                continue
+        if exp_filter is not None:
+            row_exp = getattr(r, "expiry_date", None) or SENTINEL_EXPIRY
+            if row_exp != exp_filter:
+                continue
+        total += float(r.quantity or 0)
+    return round(total, 4)
+
 
 
 def _location_code(db: Session, location_id: int) -> str:
@@ -175,6 +222,7 @@ def append_collection_location_pick(
     batch_number: str | None = None,
     lot: str | None = None,
     serial_number: str | None = None,
+    expiry_date: date | None = None,
     exclude_production_order_id: int | None = None,
 ) -> dict[str, Any]:
     """Append one location pick. Mutates ``task``. Returns shortage/next hints."""
@@ -216,12 +264,45 @@ def append_collection_location_pick(
             f"Nie można pobrać więcej niż pozostało: wymagane {qty}, pozostało {remaining}."
         )
 
+    # Resolve selected stock identity BEFORE suggested/discrepancy — partial LOT pick must
+    # not treat sibling LOTs on the same location as discrepancy write-down.
+    bn = batch_number if batch_number is not None else task.get("selected_batch_number")
+    lt = lot if lot is not None else task.get("selected_lot")
+    sn = serial_number if serial_number is not None else task.get("selected_serial_number")
+    bn_s = str(bn).strip() if bn else None
+    lt_s = str(lt).strip() if lt else None
+    sn_s = str(sn).strip() if sn else None
+    lot_key = bn_s or lt_s or None
+    exp = expiry_date
+    if exp is None:
+        raw_exp = task.get("selected_expiry_date")
+        if isinstance(raw_exp, date):
+            exp = raw_exp
+        elif raw_exp:
+            try:
+                exp = date.fromisoformat(str(raw_exp)[:10])
+            except ValueError:
+                exp = None
+
+    if bool(task.get("production_trace_require_batch")) and not str(lot_key or "").strip():
+        raise ValueError("Numer partii komponentu jest wymagany przez politykę produkcji.")
+    if bool(task.get("production_trace_require_serial")):
+        if not sn_s:
+            raise ValueError("Numer seryjny komponentu jest wymagany przez politykę produkcji.")
+        if abs(qty - 1.0) > 1e-6:
+            raise ValueError("Komponent śledzony seryjnie należy pobierać po jednej sztuce.")
+    if bool(task.get("production_trace_require_expiry")) and exp is None:
+        raise ValueError("Data ważności komponentu jest wymagana przez politykę produkcji.")
+
     system_qty = location_system_qty(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         product_id=product_id,
         location_id=loc_id,
+        batch_number=lot_key,
+        expiry_date=exp,
+        serial_number=sn_s,
     )
     if qty > system_qty + 1e-6:
         raise ValueError(
@@ -229,18 +310,16 @@ def append_collection_location_pick(
         )
 
     suggested = round(min(remaining, system_qty), 4)
-    discrepancy = round(max(0.0, suggested - qty), 4)
-
-    bn = batch_number if batch_number is not None else task.get("selected_batch_number")
-    lt = lot if lot is not None else task.get("selected_lot")
-    sn = serial_number if serial_number is not None else task.get("selected_serial_number")
-    if bool(task.get("production_trace_require_batch")) and not str(bn or lt or "").strip():
-        raise ValueError("Numer partii komponentu jest wymagany przez politykę produkcji.")
-    if bool(task.get("production_trace_require_serial")):
-        if not str(sn or "").strip():
-            raise ValueError("Numer seryjny komponentu jest wymagany przez politykę produkcji.")
-        if abs(qty - 1.0) > 1e-6:
-            raise ValueError("Komponent śledzony seryjnie należy pobierać po jednej sztuce.")
+    # Classic (no LOT/SN/expiry selected): qty < suggested ⇒ physical short write-down.
+    # Selected identity: if this slice alone cannot finish the task (remaining > system_qty),
+    # a lower qty is a normal partial pick of that LOT — do NOT write down the rest of the slice
+    # (operator will continue collecting). Real short write-down applies when the selected
+    # slice could cover the remainder (remaining <= system_qty) but operator confirms less.
+    identity_selected = bool(lot_key or sn_s or (exp is not None and exp < SENTINEL_EXPIRY))
+    if identity_selected and remaining > system_qty + 1e-9:
+        discrepancy = 0.0
+    else:
+        discrepancy = round(max(0.0, suggested - qty), 4)
     exclude_mo = int(exclude_production_order_id) if exclude_production_order_id else None
 
     slices = consume_production_material_slices(
@@ -250,9 +329,10 @@ def append_collection_location_pick(
         product_id=product_id,
         location_id=loc_id,
         quantity=qty,
-        batch_number=str(bn).strip() if bn else None,
-        lot=str(lt).strip() if lt else None,
-        serial_number=str(sn).strip() if sn else None,
+        batch_number=lot_key,
+        lot=lt_s,
+        serial_number=sn_s,
+        expiry_date=exp,
         exclude_production_order_id=exclude_mo,
     )
     if bool(task.get("production_trace_require_expiry")) and any(
@@ -263,13 +343,13 @@ def append_collection_location_pick(
     event_slices = [
         serialize_picked_slice(sl, product_id=product_id, location_id=loc_id) for sl in slices
     ]
-    if sn:
+    if sn_s:
         for item in event_slices:
-            item["serial_number"] = str(sn).strip()
+            item["serial_number"] = sn_s
     discrepancy_slices: list[dict[str, Any]] = []
     if discrepancy > 1e-9:
-        # Physical short vs system suggested pick — write down ghost stock so it is not
-        # offered again as available on this location.
+        # Physical short vs system suggested pick for the SELECTED stock slice only —
+        # never write down a sibling LOT / expiry / serial on the same location.
         try:
             adj = consume_production_material_slices(
                 db,
@@ -278,6 +358,10 @@ def append_collection_location_pick(
                 product_id=product_id,
                 location_id=loc_id,
                 quantity=discrepancy,
+                batch_number=lot_key,
+                lot=lt_s,
+                serial_number=sn_s,
+                expiry_date=exp,
                 exclude_production_order_id=exclude_mo,
             )
             discrepancy_slices = [
@@ -297,9 +381,10 @@ def append_collection_location_pick(
         "discrepancy_slices": discrepancy_slices,
         "picked_at": datetime.utcnow().isoformat() + "Z",
         "picked_slices": event_slices,
-        "batch_number": str(bn).strip() if bn else None,
-        "lot": str(lt).strip() if lt else None,
-        "serial_number": str(sn).strip() if sn else None,
+        "batch_number": bn_s,
+        "lot": lt_s,
+        "serial_number": sn_s,
+        "expiry_date": exp.isoformat() if exp is not None and exp < SENTINEL_EXPIRY else None,
     }
     events = parse_pick_events(task.get("pick_events"))
     events.append(event)
@@ -312,6 +397,10 @@ def append_collection_location_pick(
         task["selected_lot"] = str(lot).strip()
     if serial_number is not None:
         task["selected_serial_number"] = str(serial_number).strip()
+    if expiry_date is not None:
+        task["selected_expiry_date"] = (
+            expiry_date.isoformat() if expiry_date < SENTINEL_EXPIRY else None
+        )
 
     task["selected_location_id"] = loc_id
     task["location_id"] = loc_id
@@ -460,6 +549,7 @@ def commit_collection_task_pick(
     batch_number: str | None = None,
     lot: str | None = None,
     serial_number: str | None = None,
+    expiry_date: date | None = None,
     exclude_production_order_id: int | None = None,
 ) -> dict[str, Any]:
     """Alias: ``collected_qty`` means qty for this location pick (append), not total."""
@@ -473,6 +563,7 @@ def commit_collection_task_pick(
         batch_number=batch_number,
         lot=lot,
         serial_number=serial_number,
+        expiry_date=expiry_date,
         exclude_production_order_id=exclude_production_order_id,
     )
 

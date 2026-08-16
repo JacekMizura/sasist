@@ -127,6 +127,8 @@ class ProductionBatchRead(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     display_unit_cost: Optional[float] = None
+    actual_material_cost: Optional[float] = None
+    has_product_cost_fallback: bool = False
 
 
 class CollectionLocationLotRead(BaseModel):
@@ -243,6 +245,7 @@ class BatchCollectionUpdateBody(BaseModel):
     batch_number: Optional[str] = None
     lot: Optional[str] = None
     serial_number: Optional[str] = None
+    expiry_date: Optional[date] = None
     action: Literal["confirm_pick", "report_shortage"] = "confirm_pick"
 
 class BatchProductionProgressBody(BaseModel):

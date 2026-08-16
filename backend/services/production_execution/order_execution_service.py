@@ -321,6 +321,7 @@ def update_order_collection_task(
                 batch_number=body.batch_number,
                 lot=body.lot,
                 serial_number=body.serial_number,
+                expiry_date=body.expiry_date,
                 exclude_production_order_id=int(order.id),
             )
         except ValueError as exc:
@@ -336,6 +337,8 @@ def update_order_collection_task(
             target_task["selected_lot"] = str(body.lot).strip()
         if body.serial_number is not None:
             target_task["selected_serial_number"] = str(body.serial_number).strip()
+        if body.expiry_date is not None:
+            target_task["selected_expiry_date"] = body.expiry_date.isoformat()
 
     order.collection_state_json = json.dumps(data, ensure_ascii=False)
     order.updated_at = datetime.utcnow()
@@ -393,6 +396,7 @@ def _consume_order_materials(
         location_id=None,
         created_by_user_id=performed_by_user_id,
     )
+    all_cost_slices: list = []
     for snap in order.line_snapshots or []:
         snap_id = int(snap.id)
         allocs = alloc_map.get(snap_id, [])
@@ -400,7 +404,6 @@ def _consume_order_materials(
             continue
         pid = int(snap.component_product_id)
         qty_sum = sum(q for _, q in allocs)
-        unit_net = float(get_product_current_cost(db, int(order.tenant_id), pid).get("purchase_net") or 0)
         alloc_meta = {(int(a.line_snapshot_id), int(a.location_id)): a for a in component_allocations}
         committed = (committed_slices_by_product or {}).get(pid)
         issue_slices: list[RwIssueSlice] = []
@@ -437,9 +440,27 @@ def _consume_order_materials(
                             batch_number=bn,
                             expiry_date=exp,
                             serial_number=(meta.serial_number if meta else None),
+                            unit_cost_net=sl.unit_cost_net,
+                            cost_source=sl.cost_source,
+                            source_document_id=sl.source_document_id,
+                            source_document_line_id=sl.source_document_line_id,
                         )
                     )
+        from .material_cost_layers import (
+            cost_breakdown_from_slices,
+            ensure_rw_issue_slices_costed,
+        )
+        from .cost_service import freeze_material_cost_on_entity
+
+        issue_slices = ensure_rw_issue_slices_costed(
+            db,
+            issue_slices,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=int(order.warehouse_id),
+            product_id=pid,
+        )
         grouped = group_slices_by_lot(issue_slices)
+        unit_net = float(get_product_current_cost(db, int(order.tenant_id), pid).get("purchase_net") or 0)
         lines = create_rw_lines_for_lot_groups(
             db,
             rw_doc=rw_doc,
@@ -463,7 +484,14 @@ def _consume_order_materials(
                     expiry_date=exp,
                     serial_number=s.serial_number,
                     operator_admin_id=performed_by_user_id,
-                    metadata={"production_order_id": int(order.id), "source_document_type": "RW"},
+                    unit_price_net=float(s.unit_cost_net) if s.unit_cost_net is not None else None,
+                    metadata={
+                        "production_order_id": int(order.id),
+                        "source_document_type": "RW",
+                        "cost_source": s.cost_source,
+                        "source_receipt_document_id": s.source_document_id,
+                        "source_receipt_line_id": s.source_document_line_id,
+                    },
                 )
                 from .production_warehouse_audit import record_production_rw_issue_audit
 
@@ -477,9 +505,33 @@ def _consume_order_materials(
                     batch_number=s.batch_number or None,
                     expiry_date=exp,
                 )
+                all_cost_slices.append(
+                    {
+                        "product_id": int(pid),
+                        "quantity": float(s.quantity),
+                        "unit_cost_net": float(s.unit_cost_net or 0),
+                        "cost_source": s.cost_source,
+                        "batch_number": s.batch_number or None,
+                        "location_id": int(s.location_id),
+                        "source_document_id": s.source_document_id,
+                        "source_document_line_id": s.source_document_line_id,
+                    }
+                )
                 consumed_total += float(s.quantity)
         snap.consumed_quantity = float(consumed_total)
     order.rw_stock_document_id = int(rw_doc.id)
+    if all_cost_slices:
+        from .cost_service import freeze_material_cost_on_entity
+        from .material_cost_layers import cost_breakdown_from_slices
+
+        freeze_material_cost_on_entity(order, cost_breakdown_from_slices(all_cost_slices))
+        from .cost_service import compute_order_unit_cost
+
+        order.calculated_unit_cost = compute_order_unit_cost(
+            rw_doc,
+            produced_quantity=0.0,
+            planned_quantity=float(order.planned_quantity or 0),
+        )
     return rw_doc
 
 
