@@ -1,3 +1,15 @@
+**Paper produce UX (2026-08-16) — FE-first, pushed main.**
+- PaperProduceLineCard: plan/done/remaining + qty input (default=remaining) + Zatwierdź; +1/+5 secondary only
+- Traceability: effective `production_trace_require_*` from BAT/MO serialize (SSOT policy); shared `productionFgIdentity`
+- Progress: single-line = only card; multi = header aggregate + line; „Zakończ produkcję” only allProduced fallback
+- Lifecycle/PW/putaway/production-progress unchanged
+
+**Deploy + re-UAT A multi-LOT PASS (2026-08-16).**
+- Commits: `375348b2` multi-LOT collection; `7af1981c` receipt-layer costing → pushed `main`
+- healthz/readyz OK; FE live; API exposes `actual_material_cost`
+- UAT A: BAT/2026/0023 — pick LOT-A×6 then LOT-B×4 @ B1-A-1 → both 200, disc=0, LOT-B=4 after first, RW/2026/08/28 2 linie (6+4), collected=10
+- Live cost on RK stock: RW unit 1.13 (karta produktu), total 11.3; dual-PZ weighted = test_A PASS (brak bezpiecznego live PZ w tej sesji)
+
 **Multi-LOT collection pick fix (2026-08-16), bez commit/push — gotowe do re-UAT A.**
 - ROOT: `system_qty` = agregat lokalizacji → suggested za duży → discrepancy write-down bez LOT
 - FIX: `system_qty`/consume/discrepancy scoped do wybranego LOT(+expiry+SN); partial gdy remaining>slice bez write-down

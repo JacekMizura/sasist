@@ -1,3 +1,10 @@
+## 2026-08-16 — Paper produce UX (qty form + FG policy)
+
+- FE: `PaperProduceLineCard` — plan/done/remaining, input default=remaining, CTA Zatwierdź; +1/+5 secondary
+- Shared `productionFgIdentity` (+ RegisterProductionModal reuse); progress single vs multi; finish only allProduced fallback
+- BE read-only: `production_trace_require_*` na BAT line / MO serialize (SSOT policy); lifecycle/PW bez zmian
+- vitest 16 + Production 83 PASS; tsc/build PASS
+
 ## 2026-08-16 — Fix multi-LOT collection discrepancy (bez commit/push)
 
 - `append_collection_location_pick`: `system_qty` + write-down scoped do LOT/expiry/SN

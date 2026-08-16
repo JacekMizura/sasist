@@ -260,8 +260,27 @@ def serialize_batch_line(db: Session, line: ProductionBatchLine) -> ProductionBa
                     pw_putaway_status = ps or rs or "NOT_STARTED"
             elif ps == "DONE" or rs == "DONE":
                 pw_putaway_status = "DONE"
-            else:
-                pw_putaway_status = ps or rs or "OPEN"
+        else:
+            pw_putaway_status = ps or rs or "OPEN"
+    require_batch = require_serial = require_expiry = False
+    if p is not None:
+        batch = getattr(line, "batch", None)
+        if batch is None and getattr(line, "batch_id", None):
+            batch = db.query(ProductionBatch).filter(ProductionBatch.id == int(line.batch_id)).first()
+        if batch is not None:
+            from .production_execution.production_traceability_policy import (
+                resolve_effective_production_traceability_for_product,
+            )
+
+            trace = resolve_effective_production_traceability_for_product(
+                db,
+                tenant_id=int(batch.tenant_id),
+                warehouse_id=int(batch.warehouse_id),
+                product=p,
+            )
+            require_batch = bool(trace.require_batch)
+            require_serial = bool(trace.require_serial)
+            require_expiry = bool(trace.require_expiry)
     return ProductionBatchLineRead(
         id=int(line.id),
         product_id=int(line.product_id),
@@ -284,6 +303,9 @@ def serialize_batch_line(db: Session, line: ProductionBatchLine) -> ProductionBa
         product_image_url=((p.image_url or "").strip() or None if p else None),
         composition_name=(comp.name if comp else None),
         notes=line.notes,
+        production_trace_require_batch=require_batch,
+        production_trace_require_serial=require_serial,
+        production_trace_require_expiry=require_expiry,
     )
 
 

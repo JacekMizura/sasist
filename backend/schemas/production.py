@@ -244,6 +244,10 @@ class ProductionOrderRead(BaseModel):
     product_barcode: Optional[str] = None
     product_unit: Optional[str] = None
     product_image_url: Optional[str] = None
+    #: Effective FG policy from production_traceability_policy (per product × warehouse settings).
+    production_trace_require_batch: bool = False
+    production_trace_require_serial: bool = False
+    production_trace_require_expiry: bool = False
     warehouse_name: Optional[str] = None
     location_name: Optional[str] = None
     recipe_name: Optional[str] = None

@@ -171,6 +171,10 @@ export type ProductionOrderRead = {
   product_barcode?: string | null;
   product_unit?: string | null;
   product_image_url?: string | null;
+  /** Effective FG policy (SSOT production_traceability_policy). */
+  production_trace_require_batch?: boolean;
+  production_trace_require_serial?: boolean;
+  production_trace_require_expiry?: boolean;
   warehouse_name?: string | null;
   location_name?: string | null;
   recipe_name?: string | null;
@@ -605,6 +609,10 @@ export type ProductionBatchLineRead = {
   product_image_url?: string | null;
   composition_name?: string | null;
   notes?: string | null;
+  /** Effective FG policy (SSOT production_traceability_policy). */
+  production_trace_require_batch?: boolean;
+  production_trace_require_serial?: boolean;
+  production_trace_require_expiry?: boolean;
 };
 
 export type ProductionBatchRead = {

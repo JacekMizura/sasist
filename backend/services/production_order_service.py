@@ -320,6 +320,18 @@ def serialize_order(
 ) -> ProductionOrderRead:
     p = db.query(Product).filter(Product.id == int(order.product_id)).first()
     wh = db.query(Warehouse).filter(Warehouse.id == int(order.warehouse_id)).first()
+    fg_trace = None
+    if p is not None:
+        from .production_execution.production_traceability_policy import (
+            resolve_effective_production_traceability_for_product,
+        )
+
+        fg_trace = resolve_effective_production_traceability_for_product(
+            db,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=int(order.warehouse_id),
+            product=p,
+        )
     loc = (
         db.query(Location).filter(Location.id == int(order.location_id)).first()
         if order.location_id is not None
@@ -519,6 +531,9 @@ def serialize_order(
         product_barcode=((getattr(p, "barcode", None) or "").strip() or None if p else None),
         product_unit=((p.unit or "").strip() or None if p else None),
         product_image_url=((p.image_url or "").strip() or None if p else None),
+        production_trace_require_batch=bool(fg_trace.require_batch) if fg_trace else False,
+        production_trace_require_serial=bool(fg_trace.require_serial) if fg_trace else False,
+        production_trace_require_expiry=bool(fg_trace.require_expiry) if fg_trace else False,
         warehouse_name=(wh.name if wh else None),
         location_name=(loc.name if loc else None),
         recipe_name=recipe_name,

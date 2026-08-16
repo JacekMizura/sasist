@@ -58,6 +58,10 @@ class ProductionBatchLineRead(BaseModel):
     product_image_url: Optional[str] = None
     composition_name: Optional[str] = None
     notes: Optional[str] = None
+    #: Effective FG policy from production_traceability_policy (per product × warehouse settings).
+    production_trace_require_batch: bool = False
+    production_trace_require_serial: bool = False
+    production_trace_require_expiry: bool = False
 
 
 class ProductionBatchCreateBody(BaseModel):

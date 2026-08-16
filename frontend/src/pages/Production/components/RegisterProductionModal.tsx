@@ -6,6 +6,11 @@ import { AppOverlayPortal } from "@/components/overlay";
 import { PrimaryButton, SecondaryButton } from "@/design-system";
 import { formatProductionQuantity } from "../productionUi";
 import {
+  buildFgIdentityBody,
+  canSubmitFgProduction,
+  parseFgSerialList,
+} from "../productionFgIdentity";
+import {
   buildProductIdentityMetaLine,
   resolveProductUnit,
   resolveWmsProductionProductIdentity,
@@ -70,15 +75,14 @@ export function RegisterProductionModal({
   if (!open) return null;
 
   const qty = Number(qtyText.replace(",", "."));
-  const qtyOk = Number.isFinite(qty) && qty > 0 && qty <= remainingQty + 1e-9;
-  const serialList = fgSerials
-    .split(/[\n,;]+/)
-    .map((v) => v.trim())
-    .filter(Boolean);
-  const identityOk =
-    (!requireBatch || Boolean(fgBatchNumber.trim())) &&
-    (!requireExpiry || Boolean(fgExpiryDate)) &&
-    (!requireSerial || serialList.length === Math.floor(qty));
+  const canSubmit = canSubmitFgProduction(
+    qty,
+    remainingQty,
+    { batchNumber: fgBatchNumber, expiryDate: fgExpiryDate, serialsRaw: fgSerials },
+    { requireBatch, requireSerial, requireExpiry },
+  );
+  const serialList = parseFgSerialList(fgSerials);
+  const expectedSerials = Math.floor(Number.isFinite(qty) && qty > 0 ? qty : remainingQty);
 
   const productIdentity = resolveWmsProductionProductIdentity(display, {
     name: productName,
@@ -97,12 +101,15 @@ export function RegisterProductionModal({
   const unit = resolveProductUnit(productUnit);
 
   const submit = () => {
-    if (!qtyOk || !identityOk || busy) return;
-    void onConfirm(qty, {
-      fg_batch_number: fgBatchNumber.trim() || null,
-      fg_expiry_date: fgExpiryDate || null,
-      fg_serial_numbers: serialList,
-    });
+    if (!canSubmit || busy) return;
+    void onConfirm(
+      qty,
+      buildFgIdentityBody({
+        batchNumber: fgBatchNumber,
+        expiryDate: fgExpiryDate,
+        serialsRaw: fgSerials,
+      }),
+    );
   };
 
   return (
@@ -196,7 +203,8 @@ export function RegisterProductionModal({
               ) : null}
               {requireSerial ? (
                 <label className="block text-xs font-semibold text-slate-600">
-                  Numery seryjne ({Math.floor(qtyOk ? qty : remainingQty)} unikalnych SN)
+                  Numery seryjne ({expectedSerials} unikalnych SN
+                  {serialList.length > 0 ? ` · podano ${serialList.length}` : ""})
                   <textarea
                     value={fgSerials}
                     disabled={busy}
@@ -217,7 +225,7 @@ export function RegisterProductionModal({
             <PrimaryButton
               type="button"
               className="flex-1"
-              disabled={busy || !qtyOk || !identityOk}
+              disabled={busy || !canSubmit}
               onClick={submit}
             >
               {busy ? "Zapisywanie…" : "Zatwierdź"}

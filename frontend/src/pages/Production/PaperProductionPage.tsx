@@ -32,6 +32,7 @@ import { PaperCollectTaskCard } from "./components/PaperCollectTaskCard";
 import { PaperProduceLineCard } from "./components/PaperProduceLineCard";
 import { erpProductionPaths, wmsProductionPaths } from "./productionPaths";
 import { executionStatusLabel, executionStatusTone, formatStartCollectingError, productionProgressTone } from "./productionUi";
+import { shouldShowPaperHeaderProductionProgress } from "./productionFgIdentity";
 import { handleProductionPackingHandoff } from "./hooks/handleProductionPackingHandoff";
 import {
   ProductionDocumentsSection,
@@ -41,7 +42,6 @@ import {
 } from "./components/ProductionDocumentsSection";
 import type { ProductionBatchRead, ProductionOrderRead } from "@/api/productionApi";
 import { WMS_ROUTES } from "../wms/wmsRoutes";
-import { useWmsProductionSettings } from "./hooks/useWmsProductionSettings";
 import type { FinishedGoodsIdentityBody } from "@/api/productionApi";
 
 const DEFAULT_TENANT = 1;
@@ -56,7 +56,6 @@ export default function PaperProductionPage() {
   const { warehouse } = useWarehouse();
   const tenantId = warehouse?.tenant_id ?? DEFAULT_TENANT;
   const warehouseId = warehouse?.id;
-  const { traceability } = useWmsProductionSettings();
   const jobKind = kind === "order" ? "order" : "batch";
   const jobId = Number(id);
 
@@ -72,6 +71,9 @@ export default function PaperProductionPage() {
       productImageUrl?: string | null;
       plannedQuantity: number;
       completedQuantity: number;
+      requireBatch?: boolean;
+      requireSerial?: boolean;
+      requireExpiry?: boolean;
     }>
   >([]);
   const [expandedTaskKey, setExpandedTaskKey] = useState<string | null>(null);
@@ -105,6 +107,9 @@ export default function PaperProductionPage() {
             productImageUrl: ln.product_image_url,
             plannedQuantity: ln.planned_quantity,
             completedQuantity: ln.completed_quantity,
+            requireBatch: Boolean(ln.production_trace_require_batch),
+            requireSerial: Boolean(ln.production_trace_require_serial),
+            requireExpiry: Boolean(ln.production_trace_require_expiry),
           })),
         );
       } else if (batch.status === "awaiting_putaway" || batch.status === "putaway") {
@@ -135,6 +140,9 @@ export default function PaperProductionPage() {
           productImageUrl: order.product_image_url,
           plannedQuantity: order.planned_quantity,
           completedQuantity: order.produced_quantity,
+          requireBatch: Boolean(order.production_trace_require_batch),
+          requireSerial: Boolean(order.production_trace_require_serial),
+          requireExpiry: Boolean(order.production_trace_require_expiry),
         },
       ]);
     } else if (order.status === "awaiting_putaway" || order.status === "putaway") {
@@ -333,7 +341,7 @@ export default function PaperProductionPage() {
             </div>
             <ProgressBar value={collectPct} tone={collectTone} size="lg" />
           </div>
-        ) : status === "in_progress" ? (
+        ) : status === "in_progress" && shouldShowPaperHeaderProductionProgress(executionLines.length) ? (
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2 text-sm">
               <span className="font-medium text-slate-600">Postęp produkcji</span>
@@ -383,12 +391,25 @@ export default function PaperProductionPage() {
               plannedQuantity={ln.plannedQuantity}
               completedQuantity={ln.completedQuantity}
               busy={busy}
-              traceabilityEnabled={traceability.mode === "CONFIGURED"}
-              canFinishJob={allProduced}
+              requireBatch={ln.requireBatch}
+              requireSerial={ln.requireSerial}
+              requireExpiry={ln.requireExpiry}
+              showProgress
               onProduce={(qty, identity) => void addProductionQty(ln.lineKey, qty, identity)}
-              onFinish={() => void finishProduction()}
             />
           ))}
+          {/* Idempotent fallback when all lines are done but auto_finish left status in_progress. */}
+          {allProduced ? (
+            <PrimaryButton
+              type="button"
+              density="comfortable"
+              disabled={busy}
+              onClick={() => void finishProduction()}
+              className="w-full py-3 text-sm"
+            >
+              Zakończ produkcję
+            </PrimaryButton>
+          ) : null}
         </div>
       ) : null}
 
