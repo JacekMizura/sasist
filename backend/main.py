@@ -625,10 +625,14 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 @app.exception_handler(RequestValidationError)
 async def request_validation_exception_handler(request: Request, exc: RequestValidationError):
+    from fastapi.encoders import jsonable_encoder
+
     from .services.direct_sale.direct_sales_validation_log import log_direct_sales_validation
 
     log_direct_sales_validation(request, exc)
-    response = JSONResponse(status_code=422, content={"detail": exc.errors()})
+    # Pydantic may embed non-JSON objects in error ctx (e.g. nested ValueError) → bare
+    # JSONResponse(exc.errors()) raises TypeError and collapses into global 500.
+    response = JSONResponse(status_code=422, content={"detail": jsonable_encoder(exc.errors())})
     for k, v in _cors_headers_for_request(request).items():
         response.headers[k] = v
     return _attach_request_id(request, response)
