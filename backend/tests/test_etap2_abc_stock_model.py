@@ -69,6 +69,16 @@ def test_E_planning_ignores_b_c_on_hand() -> None:
     assert need != wrong
 
 
+def test_E2_planning_partial_a_cover() -> None:
+    """A=5 B=20 demand=10 → need 5 (B must not cover)."""
+    assert (
+        combined_production_need(
+            order_demand=10.0, target_stock=0.0, on_hand=5.0, in_pipeline=0.0
+        )
+        == 5.0
+    )
+
+
 def test_F_marketplace_commercial_is_a_only(monkeypatch) -> None:
     def _fake_disp(_db, *, product_id, tenant_id, warehouse_id=None):
         return {
@@ -156,6 +166,22 @@ def test_warehouse_net_available_filters_reserved_by_disposition(monkeypatch) ->
     assert (
         warehouse_net_available(MagicMock(), tenant_id=1, warehouse_id=1, product_id=1) == 7.0
     )
+
+
+def test_production_materials_default_saleable_only(monkeypatch) -> None:
+    """A=5 B=20 → material ATP = 5 (default production does not auto-use B)."""
+    from backend.services.production_planning.material_availability_service import _warehouse_stock
+
+    def _net(*_a, **kwargs):
+        # Default path omits stock_disposition → SALEABLE in warehouse_net_available.
+        assert kwargs.get("stock_disposition", STOCK_DISPOSITION_SALEABLE) == STOCK_DISPOSITION_SALEABLE
+        return 5.0
+
+    monkeypatch.setattr(
+        "backend.services.production_planning.material_availability_service.warehouse_net_available",
+        _net,
+    )
+    assert _warehouse_stock(MagicMock(), tenant_id=1, warehouse_id=1, product_id=99) == 5.0
 
 
 def test_forecast_need_with_a_zero() -> None:

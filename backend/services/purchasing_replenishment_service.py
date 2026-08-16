@@ -11,6 +11,7 @@ from ..models.product import Product
 from ..models.supplier import Supplier
 from ..models.supplier_product import SupplierProduct
 from . import purchasing_replenish_core as core
+from .product_disposition_snapshot_service import disposition_snapshots_for_products
 from .product_inventory_snapshot_service import inventory_snapshots_for_products
 from .product_cost_service import get_products_current_costs
 
@@ -207,7 +208,9 @@ def _build_sorted_rows(
     pid_list = [int(p.id) for p in products]
     cost_by_product = get_products_current_costs(db, tenant_id, pid_list)
     snaps = inventory_snapshots_for_products(db, tenant_id, warehouse_id, pid_list)
-    available_map = {pid: float(s["available"]) for pid, s in snaps.items()}
+    disp = disposition_snapshots_for_products(db, tenant_id, warehouse_id, pid_list)
+    # Replenishment cover uses SALEABLE ATP only (legacy snaps.available = physical A+B+C).
+    available_map = {pid: float(s.get("saleable_available_qty") or 0.0) for pid, s in disp.items()}
     inbound_total_map = {pid: float(s["inbound_total"]) for pid, s in snaps.items()}
     sup_ids: Set[int] = set()
     for p in products:

@@ -16,6 +16,7 @@ from ..models.purchase_order import PurchaseOrder
 from ..models.stock_document import StockDocument, StockDocumentItem
 from ..models.purchasing_alert import PurchasingAlertEvent, PurchasingAlertRule, PurchasingAutoDraft
 from . import purchasing_replenish_core as core
+from .product_disposition_snapshot_service import disposition_snapshots_for_products
 from .product_inventory_snapshot_service import inventory_snapshots_for_products
 from .purchasing_forecast_service import (
     forecast_candidate_product_ids,
@@ -137,9 +138,12 @@ def run_alert_scan(db: Session, tenant_id: int, warehouse_id: Optional[int]) -> 
         products = []
 
     scan_pids = [int(p.id) for p in products]
+    # Cover/replenish alerts use SALEABLE ATP — not legacy physical available (A+B+C).
+    disp = disposition_snapshots_for_products(db, tenant_id, warehouse_id, scan_pids) if scan_pids else {}
+    available_map = {pid: float(s.get("saleable_available_qty") or 0.0) for pid, s in disp.items()}
     scan_snaps = inventory_snapshots_for_products(db, tenant_id, warehouse_id, scan_pids) if scan_pids else {}
-    available_map = {pid: float(s["available"]) for pid, s in scan_snaps.items()}
     inbound_map = {pid: float(s["inbound_total"]) for pid, s in scan_snaps.items()}
+    # Dead-stock / capital-locked: physical total (A+B+C) — capital sits in all pools.
     on_hand_map = {pid: float(s["on_hand"]) for pid, s in scan_snaps.items()}
 
     sales_7 = sales_qty_by_days(db, tenant_id, warehouse_id, 7)

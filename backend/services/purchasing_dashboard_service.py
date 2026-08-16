@@ -21,6 +21,7 @@ from ..models.product import Product
 from ..models.stock_document import StockDocument
 from ..models.supplier import Supplier
 from . import purchasing_replenish_core as core
+from .product_disposition_snapshot_service import disposition_snapshots_for_products
 from .product_inventory_snapshot_service import inventory_snapshots_for_products
 
 
@@ -60,7 +61,9 @@ def build_purchasing_dashboard(db: Session, tenant_id: int, warehouse_id: Option
 
     pid_list = [int(p.id) for p in products]
     snaps = inventory_snapshots_for_products(db, tenant_id, warehouse_id, pid_list) if pid_list else {}
-    available_map = {pid: float(s["available"]) for pid, s in snaps.items()}
+    disp = disposition_snapshots_for_products(db, tenant_id, warehouse_id, pid_list) if pid_list else {}
+    # Dashboard cover metrics use SALEABLE ATP (legacy snaps.available = physical A+B+C).
+    available_map = {pid: float(s.get("saleable_available_qty") or 0.0) for pid, s in disp.items()}
     inbound_map = {pid: float(s["inbound_total"]) for pid, s in snaps.items()}
 
     metrics: List[core.ProductReplenishMetrics] = [

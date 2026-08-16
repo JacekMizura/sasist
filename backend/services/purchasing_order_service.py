@@ -22,6 +22,7 @@ from ..models.supplier_product import SupplierProduct
 from ..models.tenant_warehouse import TenantWarehouse
 from . import purchasing_replenish_core as core
 from . import currency_rate_service as fx_rates
+from .product_disposition_snapshot_service import disposition_snapshots_for_products
 from .product_inventory_snapshot_service import inventory_snapshots_for_products
 from .purchasing_replenishment_service import replenishment_rows_for_export
 from .purchase_order_warehouse_sync_service import sync_purchase_order_status_for_po_id
@@ -350,7 +351,9 @@ def _po_lines_enriched(db: Session, po: PurchaseOrder) -> List[Dict[str, Any]]:
     cat_first = core.catalog_supplier_first(db, int(po.tenant_id))
     price_map = core.supplier_price_map(db, int(po.tenant_id))
     line_snaps = inventory_snapshots_for_products(db, int(po.tenant_id), po.warehouse_id, pids)
-    available_map = {pid: float(s["available"]) for pid, s in line_snaps.items()}
+    line_disp = disposition_snapshots_for_products(db, int(po.tenant_id), po.warehouse_id, pids)
+    # PO line "available" = SALEABLE ATP (not legacy physical A+B+C).
+    available_map = {pid: float(s.get("saleable_available_qty") or 0.0) for pid, s in line_disp.items()}
     inbound_map = {pid: float(s["inbound_total"]) for pid, s in line_snaps.items()}
     # Odczyt powiązań produkt–dostawca; przy błędzie DB nie przerywamy odpowiedzi — cena z linii PO, lead z dostawcy.
     sp_by_pid: Dict[int, Any] = {}

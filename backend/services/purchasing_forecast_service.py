@@ -18,6 +18,7 @@ from ..models.supplier_product import SupplierProduct
 from . import purchasing_replenish_core as core
 from . import currency_rate_service as fx_rates
 from .delivery_line_pricing import pick_unit_net_from_steps, tier_steps_for_catalog_product
+from .product_disposition_snapshot_service import disposition_snapshots_for_products
 from .product_inventory_snapshot_service import inventory_snapshots_for_products
 from .product_cost_service import get_product_current_cost, get_products_current_costs
 
@@ -255,7 +256,9 @@ def build_purchasing_forecast(
 
     fc_pid_list = [int(p.id) for p in products]
     fc_snaps = inventory_snapshots_for_products(db, tenant_id, warehouse_id, fc_pid_list) if fc_pid_list else {}
-    fc_available = {pid: float(s["available"]) for pid, s in fc_snaps.items()}
+    fc_disp = disposition_snapshots_for_products(db, tenant_id, warehouse_id, fc_pid_list) if fc_pid_list else {}
+    # Forecast cover uses SALEABLE ATP (legacy snaps.available = physical A+B+C).
+    fc_available = {pid: float(s.get("saleable_available_qty") or 0.0) for pid, s in fc_disp.items()}
     fc_inbound = {pid: float(s["inbound_total"]) for pid, s in fc_snaps.items()}
 
     cat_first = core.catalog_supplier_first(db, tenant_id)
@@ -415,7 +418,9 @@ def _last_delivery_meta_for_product(db: Session, tenant_id: int, product_id: int
 def _build_product_detail(db: Session, tenant_id: int, warehouse_id: Optional[int], p: Product) -> Dict[str, Any]:
     det_snaps = inventory_snapshots_for_products(db, tenant_id, warehouse_id, [int(p.id)])
     s0 = det_snaps.get(int(p.id), {})
-    available_map = {int(p.id): float(s0.get("available", 0.0))}
+    det_disp = disposition_snapshots_for_products(db, tenant_id, warehouse_id, [int(p.id)])
+    d0 = det_disp.get(int(p.id), {})
+    available_map = {int(p.id): float(d0.get("saleable_available_qty") or 0.0)}
     inbound_map = {int(p.id): float(s0.get("inbound_total", 0.0))}
     cat_first = core.catalog_supplier_first(db, tenant_id)
     sales_7 = sales_qty_by_days(db, tenant_id, warehouse_id, 7)

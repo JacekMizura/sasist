@@ -1694,7 +1694,9 @@ def _inventory_sums_by_product_location(
     warehouse_id: int,
     pairs: Sequence[tuple[int, int]],
 ) -> dict[tuple[int, int], float]:
-    """Suma ``Inventory.quantity`` dla par (product_id, location_id)."""
+    """Suma ``Inventory.quantity`` SALEABLE dla par (product_id, location_id) — picking list ATP display."""
+    from .stock_disposition import DEFAULT_STOCK_DISPOSITION
+
     uniq = list({(int(a), int(b)) for a, b in pairs})
     if not uniq:
         return {}
@@ -1707,6 +1709,7 @@ def _inventory_sums_by_product_location(
         .filter(
             Inventory.tenant_id == int(tenant_id),
             Inventory.warehouse_id == int(warehouse_id),
+            Inventory.stock_disposition == DEFAULT_STOCK_DISPOSITION,
             tuple_(Inventory.product_id, Inventory.location_id).in_(uniq),
         )
         .group_by(Inventory.product_id, Inventory.location_id)
