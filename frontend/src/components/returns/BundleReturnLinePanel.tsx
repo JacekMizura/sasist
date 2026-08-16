@@ -13,9 +13,8 @@ import type {
   WmsReturnLineRead,
 } from "../../types/wmsReturn";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
-import { DisassemblyPreviewTable } from "./intake/DisassemblyPreviewTable";
-import { IntakeStructureInfoPanel } from "./intake/IntakeStructureInfoPanel";
-import { StockIntakeModeTiles } from "./intake/StockIntakeModeTiles";
+import { ReturnStockIntakeSection } from "./intake/ReturnStockIntakeSection";
+import type { IntakeComponentRow } from "./intake/IntakeComponentRows";
 import {
   BUNDLE_INTAKE_COPY,
   clampInt,
@@ -51,6 +50,14 @@ type RowState = {
   acceptedQty: number;
   lots: Array<{ lot_number: string; picked_qty?: number }>;
 };
+
+function bundleManyLabel(n: number): string {
+  if (n === 1) return "1 zestawu";
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} zestawów`;
+  return `${n} zestawów`;
+}
 
 export function BundleReturnLinePanel({
   tenantId,
@@ -223,6 +230,10 @@ export function BundleReturnLinePanel({
   const onSelectTile = useCallback(
     (tile: StockIntakeTileId) => {
       if (disabled || !canDisassemble) return;
+      if (physical <= 1 && tile === "MIXED") {
+        applyFgDq(0, physical);
+        return;
+      }
       const next = splitReturnedQty(physical, tile, tile === "MIXED" ? Math.min(1, physical) : undefined);
       applyFgDq(next.fg, next.dq);
     },
@@ -305,120 +316,35 @@ export function BundleReturnLinePanel({
 
   const title = bundleName || treeNode.bundle_name || "Zestaw";
   const showDisassembleUi = canDisassemble && intakeMode !== "FG";
-  const previewSource =
-    showDisassembleUi && (treeNode.snapshot_components?.length ?? 0) > 0
-      ? treeNode.snapshot_components!
-      : treeNode.components;
 
-  const previewRows = (showDisassembleUi ? rows : previewSource.map((c) => {
-    const per = Math.max(0, Math.floor(Number(c.quantity_per_bundle ?? 0) || 0));
-    return {
-      snapshotId: c.snapshot_id,
-      label: c.component_name,
-      sku: c.sku?.trim() || null,
-      perBundle: per,
-      returnedQty: per,
-      acceptedQty: per,
-      maxReturnable: per,
-    };
-  })).map((r) => {
-    const per = "perBundle" in r ? Number(r.perBundle) : 0;
-    const fromMany = showDisassembleUi ? Number(r.returnedQty || r.maxReturnable || 0) : per * Math.max(disassemblyQty, 1);
-    const rowState = rows.find((x) => x.snapshotId === r.snapshotId);
-    return {
-      key: r.snapshotId,
-      name: r.label,
-      sku: ("sku" in r ? r.sku : null) ?? rowState?.sku ?? null,
-      ratioLabel: `${per || rowState?.perBundle || 0} szt.`,
-      perOneLabel: `${per || rowState?.perBundle || 0} szt.`,
-      perManyLabel: `${fromMany} szt.`,
-      availableLabel: "—",
-      detail:
-        showDisassembleUi && rowState ? (
-          <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-700">
-            <span>
-              Expected: <span className="font-semibold tabular-nums">{rowState.returnedQty}</span>
-            </span>
-            <label className="inline-flex items-center gap-1.5">
-              Przyjęto
-              <input
-                type="number"
-                min={0}
-                max={rowState.returnedQty}
-                className="w-14 rounded border border-slate-200 px-1 py-0.5 text-right tabular-nums"
-                value={rowState.acceptedQty}
-                disabled={disabled}
-                onChange={(e) => setQty(rowState.snapshotId, "acceptedQty", Number(e.target.value))}
-              />
-            </label>
-            <span className="tabular-nums text-slate-500">
-              scrap {Math.max(0, rowState.returnedQty - rowState.acceptedQty)}
-            </span>
-          </div>
-        ) : undefined,
-    };
-  });
+  const componentRows: IntakeComponentRow[] = showDisassembleUi
+    ? rows.map((r) => ({
+        key: r.snapshotId,
+        name: r.label,
+        sku: r.sku,
+        perUnit: r.perBundle,
+        expected: r.returnedQty || r.maxReturnable,
+        accepted: r.acceptedQty,
+        scrap: Math.max(0, (r.returnedQty || r.maxReturnable) - r.acceptedQty),
+      }))
+    : [];
 
-  const structureChildren = (treeNode.components.length ? treeNode.components : previewSource).map(
-    (c) => c.component_name || c.sku || `#${c.component_product_id}`,
+  const saveFooter = (
+    <div className="flex items-center justify-between gap-3 pt-0.5">
+      <span className="text-[11px] font-semibold tabular-nums text-slate-600">
+        Refund (snapshot): {refundPreview.toFixed(2)} zł
+      </span>
+      <PrimaryButton type="button" disabled={disabled || saving} onClick={() => void save()}>
+        {saving ? "Zapis…" : "Zapisz składniki"}
+      </PrimaryButton>
+    </div>
   );
 
-  return (
-    <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</p>
-
-      {canDisassemble ? (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
-          <div className="min-w-0 space-y-3">
-            <StockIntakeModeTiles
-              copy={BUNDLE_INTAKE_COPY}
-              physicalQty={physical}
-              mode={intakeMode}
-              fgQty={fgQty}
-              disassemblyQty={disassemblyQty}
-              disabled={disabled}
-              onSelectTile={onSelectTile}
-              onMixedFgChange={(fg) => applyFgDq(fg, Math.max(0, physical - clampInt(fg, 0, physical)))}
-              onMixedDqChange={(dq) => {
-                const dqN = clampInt(dq, 0, physical);
-                applyFgDq(Math.max(0, physical - dqN), dqN);
-              }}
-            />
-            {disassemblyQty > 0 || intakeMode !== "FG" ? (
-              <DisassemblyPreviewTable
-                title={BUNDLE_INTAKE_COPY.previewTitle}
-                headers={BUNDLE_INTAKE_COPY.tableHeaders}
-                manyQty={Math.max(disassemblyQty, 1)}
-                rows={previewRows}
-              />
-            ) : (
-              <DisassemblyPreviewTable
-                title={BUNDLE_INTAKE_COPY.previewTitle}
-                headers={BUNDLE_INTAKE_COPY.tableHeaders}
-                manyQty={1}
-                rows={previewRows}
-                defaultOpen={false}
-              />
-            )}
-            <div className="flex items-center justify-between gap-3 pt-1">
-              <span className="text-xs font-semibold tabular-nums text-slate-700">
-                Refund (snapshot): {refundPreview.toFixed(2)} zł
-              </span>
-              <PrimaryButton type="button" disabled={disabled || saving} onClick={() => void save()}>
-                {saving ? "Zapis…" : "Zapisz składniki"}
-              </PrimaryButton>
-            </div>
-          </div>
-          <IntakeStructureInfoPanel
-            title={BUNDLE_INTAKE_COPY.sideTitle}
-            rootLabel="Zestaw"
-            childLabels={structureChildren}
-            lead={BUNDLE_INTAKE_COPY.sideLead}
-            body={BUNDLE_INTAKE_COPY.sideBody}
-          />
-        </div>
-      ) : (
-        <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+  if (!canDisassemble) {
+    return (
+      <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</p>
+        <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
           <p className="text-xs text-slate-600">Zestaw bez rozmontowania magazynowego — zwrot elementów opcjonalny.</p>
           {rows.map((r) => (
             <label
@@ -481,7 +407,33 @@ export function BundleReturnLinePanel({
             </PrimaryButton>
           </div>
         </div>
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</p>
+      <ReturnStockIntakeSection
+        copy={BUNDLE_INTAKE_COPY}
+        physicalQty={physical}
+        mode={intakeMode}
+        fgQty={fgQty}
+        disassemblyQty={disassemblyQty}
+        components={componentRows}
+        manyQtyLabel={bundleManyLabel(Math.max(disassemblyQty, 1))}
+        disabled={disabled}
+        overLimit={fgQty + disassemblyQty > physical}
+        underLimit={fgQty + disassemblyQty < physical && fgQty + disassemblyQty > 0}
+        footer={saveFooter}
+        onSelectMode={onSelectTile}
+        onMixedFgChange={(fg) => applyFgDq(fg, Math.max(0, physical - clampInt(fg, 0, physical)))}
+        onMixedDqChange={(dq) => {
+          const dqN = clampInt(dq, 0, physical);
+          applyFgDq(Math.max(0, physical - dqN), dqN);
+        }}
+        onAcceptedChange={(key, accepted) => setQty(Number(key), "acceptedQty", accepted)}
+      />
     </div>
   );
 }

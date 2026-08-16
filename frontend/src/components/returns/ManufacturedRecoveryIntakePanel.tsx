@@ -6,9 +6,8 @@ import type {
   WmsReturnComponentRecoveryRead,
   WmsReturnLineRead,
 } from "../../types/wmsReturn";
-import { DisassemblyPreviewTable } from "./intake/DisassemblyPreviewTable";
-import { IntakeStructureInfoPanel } from "./intake/IntakeStructureInfoPanel";
-import { StockIntakeModeTiles } from "./intake/StockIntakeModeTiles";
+import { ReturnStockIntakeSection } from "./intake/ReturnStockIntakeSection";
+import type { IntakeComponentRow } from "./intake/IntakeComponentRows";
 import {
   MANUFACTURED_INTAKE_COPY,
   clampInt,
@@ -133,6 +132,10 @@ export function ManufacturedRecoveryIntakePanel({ line, mode, value, onChange, d
   const applyTile = (tile: StockIntakeTileId) => {
     if (disabled || locked) return;
     if (required && tile === "FG") return;
+    if (physical <= 1 && tile === "MIXED") {
+      emit(line, value, 0, physical, onChange);
+      return;
+    }
     const next = splitReturnedQty(physical, required ? "DISASSEMBLE" : tile, tile === "MIXED" ? Math.min(1, physical) : undefined);
     emit(line, value, next.fg, next.dq, onChange);
   };
@@ -164,7 +167,7 @@ export function ManufacturedRecoveryIntakePanel({ line, mode, value, onChange, d
   };
 
   const comps = line.bom_preview?.components ?? [];
-  const previewRows = comps.map((c) => {
+  const componentRows: IntakeComponentRow[] = comps.map((c) => {
     const per =
       Number(c.quantity_per_unit ?? 0) ||
       Number(c.expected_qty ?? 0) / Math.max(1, Number(line.bom_preview?.disassembly_qty ?? 1));
@@ -173,98 +176,36 @@ export function ManufacturedRecoveryIntakePanel({ line, mode, value, onChange, d
     const expected = Number(recovery?.expected_qty ?? fromMany);
     const accepted = Number(recovery?.accepted_qty ?? expected);
     const scrap = Number(recovery?.scrap_qty ?? Math.max(0, expected - accepted));
-    const name = c.component_name?.trim() || `Komponent #${c.component_product_id}`;
     return {
       key: c.composition_line_id,
-      name,
+      name: c.component_name?.trim() || `Komponent #${c.component_product_id}`,
       sku: c.component_sku?.trim() || null,
-      ratioLabel: `${per} szt.`,
-      perOneLabel: `${per} szt.`,
-      perManyLabel: `${fromMany} szt.`,
-      availableLabel: "—",
-      detail:
-        dq > 0 ? (
-          <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-700">
-            <span>
-              Do odzysku: <span className="font-semibold tabular-nums">{expected}</span> szt.
-            </span>
-            <label className="inline-flex items-center gap-1.5">
-              Przyjmij na stan
-              <input
-                type="number"
-                min={0}
-                max={expected}
-                step={1}
-                className="w-16 rounded border border-slate-200 px-1.5 py-0.5 text-right tabular-nums"
-                value={accepted}
-                disabled={disabled || locked}
-                onChange={(e) => setAccepted(c.composition_line_id, Number(e.target.value))}
-              />
-            </label>
-            <span className="tabular-nums text-slate-600">
-              Odrzut: <span className="font-semibold">{scrap}</span>
-            </span>
-          </div>
-        ) : undefined,
+      perUnit: per,
+      expected,
+      accepted,
+      scrap,
     };
   });
 
-  const structureChildren = comps.map(
-    (c) => c.component_name?.trim() || c.component_sku?.trim() || `#${c.component_product_id}`,
-  );
-
   return (
-    <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
-      {lockedReason ? (
-        <p className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-950">
-          {lockedReason}
-        </p>
-      ) : null}
-      {required ? (
-        <p className="text-[11px] font-medium text-slate-600">Wymagane rozmontowanie produktu.</p>
-      ) : null}
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
-        <div className="min-w-0 space-y-3">
-          <StockIntakeModeTiles
-            copy={MANUFACTURED_INTAKE_COPY}
-            physicalQty={physical}
-            mode={activeMode}
-            fgQty={fg}
-            disassemblyQty={dq}
-            disabled={disabled || locked}
-            forceDisassemble={required}
-            onSelectTile={applyTile}
-            onMixedFgChange={setMixedFg}
-            onMixedDqChange={setMixedDq}
-          />
-          {over ? (
-            <p className="text-[11px] font-medium text-rose-700">
-              Suma gotowego wyrobu i rozmontowania nie może przekroczyć ilości zwróconej ({physical} szt.).
-            </p>
-          ) : null}
-          {under ? (
-            <p className="text-[11px] font-medium text-amber-800">
-              Gotowy wyrób + rozmontowanie powinny sumować się do ilości zwróconej ({physical} szt.).
-            </p>
-          ) : null}
-          {dq > 0 ? (
-            <DisassemblyPreviewTable
-              title={MANUFACTURED_INTAKE_COPY.previewTitle}
-              headers={MANUFACTURED_INTAKE_COPY.tableHeaders}
-              manyQty={dq}
-              rows={previewRows}
-            />
-          ) : null}
-        </div>
-        <IntakeStructureInfoPanel
-          title={MANUFACTURED_INTAKE_COPY.sideTitle}
-          rootLabel="Gotowy produkt"
-          childLabels={structureChildren}
-          lead={MANUFACTURED_INTAKE_COPY.sideLead}
-          body={MANUFACTURED_INTAKE_COPY.sideBody}
-        />
-      </div>
-    </div>
+    <ReturnStockIntakeSection
+      copy={MANUFACTURED_INTAKE_COPY}
+      physicalQty={physical}
+      mode={activeMode}
+      fgQty={fg}
+      disassemblyQty={dq}
+      components={componentRows}
+      manyQtyLabel={`${Math.max(dq, 1)} szt.`}
+      disabled={disabled || locked}
+      forceDisassemble={required}
+      lockedReason={lockedReason}
+      requiredHint={required}
+      overLimit={over}
+      underLimit={under}
+      onSelectMode={applyTile}
+      onMixedFgChange={setMixedFg}
+      onMixedDqChange={setMixedDq}
+      onAcceptedChange={(key, accepted) => setAccepted(Number(key), accepted)}
+    />
   );
 }

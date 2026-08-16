@@ -13,7 +13,7 @@ export function clampInt(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Math.floor(n)));
 }
 
-/** Keep FG + disassembly covering the full returned qty (reference UX). */
+/** Keep FG + disassembly covering the full returned qty. */
 export function splitReturnedQty(
   physical: number,
   tile: StockIntakeTileId,
@@ -30,113 +30,55 @@ export function splitReturnedQty(
   return { fg, dq: Math.max(0, phys - fg), mode: "MIXED" };
 }
 
-export type ManufacturedIntakeCopy = {
+export type IntakeCopy = {
   sectionTitle: string;
-  tiles: {
-    id: StockIntakeTileId;
-    title: string;
-    description: string;
-    footerKind: "fg" | "disassemble" | "mixed";
-    mixedFgLabel: string;
-    mixedDqLabel: string;
-  }[];
-  previewTitle: string;
-  sideTitle: string;
-  sideLead: string;
-  sideBody: string;
-  tableHeaders: {
-    name: string;
-    sku: string;
-    ratio: string;
-    perOne: string;
-    perMany: string;
-    available: string;
-    action: string;
-  };
+  badgeLabel: string;
+  badgeHint: string;
+  segments: { id: StockIntakeTileId; label: string }[];
+  fgResultLabel: string;
+  disassembleResultLabel: string;
+  mixedFgLabel: string;
+  mixedDqLabel: string;
+  componentsTitle: string;
+  perUnitSuffix: string;
+  qtyOneDisassembleLead: string;
 };
 
-export const MANUFACTURED_INTAKE_COPY: ManufacturedIntakeCopy = {
+export const MANUFACTURED_INTAKE_COPY: IntakeCopy = {
   sectionTitle: "Sposób przyjęcia magazynowego",
-  tiles: [
-    {
-      id: "FG",
-      title: "Przyjmij jako gotowy produkt",
-      description: "Zwracamy wyrób bez rozmontowania.",
-      footerKind: "fg",
-      mixedFgLabel: "Gotowy wyrób",
-      mixedDqLabel: "Do rozmontowania",
-    },
-    {
-      id: "DISASSEMBLE",
-      title: "Rozmontuj produkt (wszystko)",
-      description: "Rozmontuj cały wyrób na komponenty zgodnie ze strukturą produkcji.",
-      footerKind: "disassemble",
-      mixedFgLabel: "Gotowy wyrób",
-      mixedDqLabel: "Do rozmontowania",
-    },
-    {
-      id: "MIXED",
-      title: "Częściowo rozmontuj",
-      description: "Część przyjmij jako wyrób, a część rozmontuj na komponenty.",
-      footerKind: "mixed",
-      mixedFgLabel: "Gotowy wyrób",
-      mixedDqLabel: "Do rozmontowania",
-    },
+  badgeLabel: "Produkt produkowany",
+  badgeHint: "Produkt ma recepturę i może zostać rozmontowany na komponenty.",
+  segments: [
+    { id: "FG", label: "Gotowy produkt" },
+    { id: "DISASSEMBLE", label: "Rozmontuj" },
+    { id: "MIXED", label: "Częściowo" },
   ],
-  previewTitle: "Podgląd komponentów w przypadku rozmontowania",
-  sideTitle: "Struktura produkcji",
-  sideLead: "Produkt produkowany",
-  sideBody: "Możesz przyjąć wyrób lub rozmontować go na komponenty zgodnie z recepturą.",
-  tableHeaders: {
-    name: "Komponent",
-    sku: "SKU",
-    ratio: "Współczynnik w wyrobie",
-    perOne: "Ilość z 1 szt.",
-    perMany: "Ilość z {n} szt.",
-    available: "Dostępne na stanie",
-    action: "Akcja",
-  },
+  fgResultLabel: "Przyjęte jako wyrób",
+  disassembleResultLabel: "Do rozmontowania",
+  mixedFgLabel: "Gotowy wyrób",
+  mixedDqLabel: "Rozmontuj",
+  componentsTitle: "Komponenty po rozmontowaniu",
+  perUnitSuffix: "szt. / wyrób",
+  qtyOneDisassembleLead: "Rozmontuj cały produkt",
 };
 
-export const BUNDLE_INTAKE_COPY: ManufacturedIntakeCopy = {
+export const BUNDLE_INTAKE_COPY: IntakeCopy = {
   sectionTitle: "Sposób przyjęcia magazynowego",
-  tiles: [
-    {
-      id: "FG",
-      title: "Przyjmij zestaw jako całość",
-      description: "Zwracamy kompletny zestaw bez rozmontowania.",
-      footerKind: "fg",
-      mixedFgLabel: "Zestaw jako całość",
-      mixedDqLabel: "Do rozmontowania",
-    },
-    {
-      id: "DISASSEMBLE",
-      title: "Rozmontuj zestaw (wszystko)",
-      description: "Rozmontuj cały zestaw na poszczególne elementy.",
-      footerKind: "disassemble",
-      mixedFgLabel: "Zestaw jako całość",
-      mixedDqLabel: "Do rozmontowania",
-    },
-    {
-      id: "MIXED",
-      title: "Częściowo rozmontuj",
-      description: "Część przyjmij jako zestaw, a część rozmontuj na elementy.",
-      footerKind: "mixed",
-      mixedFgLabel: "Zestaw jako całość",
-      mixedDqLabel: "Do rozmontowania",
-    },
+  badgeLabel: "Zestaw",
+  badgeHint: "Zestaw handlowy można zwrócić w całości lub rozmontować na elementy.",
+  segments: [
+    { id: "FG", label: "Zestaw w całości" },
+    { id: "DISASSEMBLE", label: "Rozmontuj" },
+    { id: "MIXED", label: "Częściowo" },
   ],
-  previewTitle: "Podgląd elementów zestawu w przypadku rozmontowania",
-  sideTitle: "Zawartość zestawu",
-  sideLead: "To zestaw handlowy",
-  sideBody: "Możesz zwrócić zestaw w całości lub rozmontować go na elementy zgodnie ze składem.",
-  tableHeaders: {
-    name: "Element zestawu",
-    sku: "SKU",
-    ratio: "Ilość w zestawie",
-    perOne: "Ilość z 1 zestawu",
-    perMany: "Ilość z {n} zestawów",
-    available: "Dostępne na stanie",
-    action: "Akcja",
-  },
+  fgResultLabel: "Przyjęte jako zestaw",
+  disassembleResultLabel: "Do rozmontowania",
+  mixedFgLabel: "Zestaw",
+  mixedDqLabel: "Rozmontuj",
+  componentsTitle: "Elementy zestawu",
+  perUnitSuffix: "szt. / zestaw",
+  qtyOneDisassembleLead: "Rozmontuj cały zestaw",
 };
+
+/** @deprecated alias — keep old import sites compiling during refactor */
+export type ManufacturedIntakeCopy = IntakeCopy;
