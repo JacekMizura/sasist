@@ -11,6 +11,11 @@ import { WmsProductTaskCard } from "@/components/wms/WmsProductTaskCard";
 import { WMS_TERMINAL_LABEL } from "@/components/wms/execution/wmsLayoutTokens";
 import { PrimaryButton } from "@/design-system";
 import { formatProductionQuantity } from "../productionUi";
+import {
+  buildProductIdentityMetaLine,
+  formatTerminalQuantity,
+  resolveWmsProductionProductIdentity,
+} from "../display/productionTerminalDisplay";
 import { RegisterProductionModal } from "./RegisterProductionModal";
 
 type Props = {
@@ -44,37 +49,48 @@ export function WmsProductionExecuteTaskCard({
   const [modalOpen, setModalOpen] = useState(false);
   const traceOn = traceability.mode === "CONFIGURED";
 
-  const identityBits: string[] = [];
-  if (display.show_sku && line.productSku) identityBits.push(line.productSku);
-  if (display.show_ean && line.productEan) identityBits.push(line.productEan);
-  if (display.show_catalog_number && line.productCatalogNumber) {
-    identityBits.push(line.productCatalogNumber);
-  }
+  const identity = resolveWmsProductionProductIdentity(display, {
+    name: line.productName,
+    sku: line.productSku,
+    ean: line.productEan,
+    catalogNumber: line.productCatalogNumber,
+    barcode: line.productBarcode,
+    imageUrl: line.productImageUrl,
+    unit: line.productUnit,
+  });
+  const metaLine = buildProductIdentityMetaLine(display, {
+    sku: line.productSku,
+    ean: line.productEan,
+    catalogNumber: line.productCatalogNumber,
+    barcode: line.productBarcode,
+  });
 
   const summary = (
     <>
-      {fmtQty(line.completedQuantity)} / {fmtQty(line.plannedQuantity)}
-      {identityBits[0] ? ` · ${identityBits[0]}` : ""}
+      {formatTerminalQuantity(line.completedQuantity, {
+        unit: line.productUnit,
+        showUnit: display.show_unit,
+      })}
+      {" / "}
+      {formatTerminalQuantity(line.plannedQuantity, {
+        unit: line.productUnit,
+        showUnit: display.show_unit,
+      })}
+      {metaLine ? ` · ${metaLine.split(" · ")[0]}` : ""}
     </>
   );
 
   const metaBody = (
     <>
-      {identityBits.length > 0 ? (
-        <p className="mt-1 font-mono text-sm text-slate-500">{identityBits.join(" · ")}</p>
-      ) : null}
+      {metaLine ? <p className="mt-1 font-mono text-sm text-slate-500">{metaLine}</p> : null}
       <div className="mt-4 grid grid-cols-3 gap-2">
         <div>
           <p className={WMS_TERMINAL_LABEL}>Plan</p>
-          <p className="mt-1 text-xl font-black tabular-nums text-slate-900">
-            {fmtQty(line.plannedQuantity)}
-          </p>
+          <p className="mt-1 text-xl font-black tabular-nums text-slate-900">{fmtQty(line.plannedQuantity)}</p>
         </div>
         <div>
           <p className={WMS_TERMINAL_LABEL}>Wyprodukowano</p>
-          <p className="mt-1 text-xl font-black tabular-nums text-slate-900">
-            {fmtQty(line.completedQuantity)}
-          </p>
+          <p className="mt-1 text-xl font-black tabular-nums text-slate-900">{fmtQty(line.completedQuantity)}</p>
         </div>
         <div>
           <p className={WMS_TERMINAL_LABEL}>Pozostało</p>
@@ -108,8 +124,10 @@ export function WmsProductionExecuteTaskCard({
     <>
       <WmsProductTaskCard
         index={index}
-        imageUrl={line.productImageUrl}
+        imageUrl={identity.imageUrl}
+        showImage={identity.showImage}
         title={line.productName}
+        showTitle={identity.showName}
         summary={summary}
         body={metaBody}
         footer={actionFooter}
@@ -121,17 +139,23 @@ export function WmsProductionExecuteTaskCard({
       />
       <RegisterProductionModal
         open={modalOpen}
+        display={display}
         productName={line.productName}
+        productSku={line.productSku}
+        productEan={line.productEan}
+        productCatalogNumber={line.productCatalogNumber}
+        productBarcode={line.productBarcode}
         plannedQty={line.plannedQuantity}
         producedQty={line.completedQuantity}
         remainingQty={remaining}
+        productUnit={line.productUnit}
         busy={busy}
         requireBatch={traceOn && Boolean(traceability.require_batch)}
         requireSerial={traceOn && Boolean(traceability.require_serial)}
         requireExpiry={traceOn && Boolean(traceability.require_expiry)}
         onClose={() => setModalOpen(false)}
-        onConfirm={async (qty, identity) => {
-          await onRegister(qty, identity);
+        onConfirm={async (qty, identityBody) => {
+          await onRegister(qty, identityBody);
           setModalOpen(false);
         }}
       />

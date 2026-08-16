@@ -15,12 +15,14 @@ def _product_fields(p: Product | None) -> dict[str, Any]:
         return {
             "product_ean": None,
             "product_catalog_number": None,
+            "product_barcode": None,
             "product_unit": None,
             "product_image_url": None,
         }
     return {
         "product_ean": (p.ean or "").strip() or None,
         "product_catalog_number": (p.symbol or "").strip() or None,
+        "product_barcode": (getattr(p, "barcode", None) or "").strip() or None,
         "product_unit": (p.unit or "").strip() or None,
         "product_image_url": (p.image_url or "").strip() or None,
     }

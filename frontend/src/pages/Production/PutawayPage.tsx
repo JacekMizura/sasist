@@ -17,6 +17,7 @@ import { WMS_TASK_GRID, WMS_TERMINAL_LABEL } from "../../components/wms/executio
 import { wmsProductionPaths } from "./productionPaths";
 import { formatProductionQuantity } from "./productionUi";
 import { useProductionExecutionJob } from "./hooks/useProductionExecutionJob";
+import { useWmsProductionSettings } from "./hooks/useWmsProductionSettings";
 
 export default function PutawayPage() {
   const { kind, id, batchId } = useParams();
@@ -24,6 +25,7 @@ export default function PutawayPage() {
     () => parseWmsProductionRouteParams({ kind, id, batchId }),
     [kind, id, batchId],
   );
+  const { display } = useWmsProductionSettings();
 
   const { queue, reloadQueue, putawayDetail, busy, detailLoading, openJob, refreshPutawayDetail } =
     useProductionExecutionJob("putaway", activeRef);
@@ -78,7 +80,14 @@ export default function PutawayPage() {
                   key={refKey({ kind: job.kind, id: job.id })}
                   kind={job.kind}
                   number={job.number}
-                  productLine={job.product_label}
+                  display={display}
+                  productName={job.product_label}
+                  productSku={job.product_sku}
+                  productEan={job.product_ean}
+                  productCatalogNumber={job.product_catalog_number}
+                  productBarcode={job.product_barcode}
+                  productImageUrl={job.product_image_url}
+                  productUnit={job.product_unit}
                   quantity={job.completed_quantity || job.planned_quantity}
                   status={job.status}
                   accent="emerald"
@@ -96,7 +105,8 @@ export default function PutawayPage() {
             kind={activeRef.kind}
             label="Rozlokowanie wyrobów gotowych"
             number={putawayDetail.number}
-            productLine={putawayDetail.productLabel}
+            display={display}
+            productName={putawayDetail.productLabel}
             accent="emerald"
           />
 

@@ -162,6 +162,10 @@ export type ProductionOrderRead = {
   operator_name?: string | null;
   product_name?: string | null;
   product_sku?: string | null;
+  product_ean?: string | null;
+  product_catalog_number?: string | null;
+  product_barcode?: string | null;
+  product_unit?: string | null;
   product_image_url?: string | null;
   warehouse_name?: string | null;
   location_name?: string | null;
@@ -564,6 +568,10 @@ export type ProductionBatchLineRead = {
   pw_putaway_status?: string | null;
   product_name?: string | null;
   product_sku?: string | null;
+  product_ean?: string | null;
+  product_catalog_number?: string | null;
+  product_barcode?: string | null;
+  product_unit?: string | null;
   product_image_url?: string | null;
   composition_name?: string | null;
   notes?: string | null;
@@ -952,7 +960,11 @@ export type CollectionOutputProductRead = {
   product_id: number;
   product_name: string;
   product_sku?: string | null;
+  product_ean?: string | null;
+  product_catalog_number?: string | null;
+  product_barcode?: string | null;
   product_image_url?: string | null;
+  product_unit?: string | null;
   planned_quantity: number;
 };
 
@@ -992,6 +1004,7 @@ export type CollectionTaskRead = {
   product_image_url?: string | null;
   product_ean?: string | null;
   product_catalog_number?: string | null;
+  product_barcode?: string | null;
   product_unit?: string | null;
   required_qty: number;
   collected_qty: number;
@@ -1323,6 +1336,11 @@ export type ProductionExecutionJobRead = {
   phase?: ProductionExecutionPhase | null;
   product_label: string;
   product_image_url?: string | null;
+  product_sku?: string | null;
+  product_ean?: string | null;
+  product_catalog_number?: string | null;
+  product_barcode?: string | null;
+  product_unit?: string | null;
   planned_quantity: number;
   completed_quantity: number;
   progress_percent: number;

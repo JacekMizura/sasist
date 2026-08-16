@@ -379,7 +379,12 @@ export const productionSettingsHelp = {
   },
   show_barcode: {
     title: "Kod kreskowy",
-    description: <p>Pokazuje kod kreskowy produktu pomocny przy skanowaniu w terminalu.</p>,
+    description: (
+      <p>
+        Pokazuje osobny kod kreskowy produktu (pole <code>barcode</code> w karcie produktu — np. PRD-…),
+        niezależny od EAN. Jeśli produkt nie ma kodu, nic nie jest wyświetlane.
+      </p>
+    ),
   },
 
   // —— Dokumenty ——

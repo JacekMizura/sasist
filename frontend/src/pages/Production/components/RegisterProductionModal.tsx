@@ -1,13 +1,25 @@
 import { useEffect, useId, useState } from "react";
 
 import type { FinishedGoodsIdentityBody } from "@/api/productionApi";
+import type { ProductionTerminalDisplaySettings } from "@/api/wmsProductionSettingsApi";
 import { AppOverlayPortal } from "@/components/overlay";
 import { PrimaryButton, SecondaryButton } from "@/design-system";
 import { formatProductionQuantity } from "../productionUi";
+import {
+  buildProductIdentityMetaLine,
+  resolveProductUnit,
+  resolveWmsProductionProductIdentity,
+} from "../display/productionTerminalDisplay";
 
 type Props = {
   open: boolean;
+  display: ProductionTerminalDisplaySettings;
   productName: string;
+  productSku?: string | null;
+  productEan?: string | null;
+  productCatalogNumber?: string | null;
+  productBarcode?: string | null;
+  productUnit?: string | null;
   plannedQty: number;
   producedQty: number;
   remainingQty: number;
@@ -24,7 +36,13 @@ type Props = {
  */
 export function RegisterProductionModal({
   open,
+  display,
   productName,
+  productSku,
+  productEan,
+  productCatalogNumber,
+  productBarcode,
+  productUnit,
   plannedQty,
   producedQty,
   remainingQty,
@@ -62,6 +80,22 @@ export function RegisterProductionModal({
     (!requireExpiry || Boolean(fgExpiryDate)) &&
     (!requireSerial || serialList.length === Math.floor(qty));
 
+  const productIdentity = resolveWmsProductionProductIdentity(display, {
+    name: productName,
+    sku: productSku,
+    ean: productEan,
+    catalogNumber: productCatalogNumber,
+    barcode: productBarcode,
+    unit: productUnit,
+  });
+  const metaLine = buildProductIdentityMetaLine(display, {
+    sku: productSku,
+    ean: productEan,
+    catalogNumber: productCatalogNumber,
+    barcode: productBarcode,
+  });
+  const unit = resolveProductUnit(productUnit);
+
   const submit = () => {
     if (!qtyOk || !identityOk || busy) return;
     void onConfirm(qty, {
@@ -90,7 +124,10 @@ export function RegisterProductionModal({
           <h3 id={titleId} className="text-base font-bold text-slate-900">
             Zarejestruj produkcję
           </h3>
-          <p className="mt-1 text-sm text-slate-600">{productName}</p>
+          {productIdentity.showName ? (
+            <p className="mt-1 text-sm text-slate-600">{productName}</p>
+          ) : null}
+          {metaLine ? <p className="mt-0.5 font-mono text-xs text-slate-500">{metaLine}</p> : null}
           <dl className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
             <div className="rounded-lg bg-slate-50 px-2 py-2">
               <dt className="text-slate-500">Plan</dt>
@@ -125,7 +162,7 @@ export function RegisterProductionModal({
                 onChange={(e) => setQtyText(e.target.value)}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-lg font-bold tabular-nums text-slate-900"
               />
-              <span className="shrink-0 text-sm text-slate-500">szt.</span>
+              {display.show_unit ? <span className="shrink-0 text-sm text-slate-500">{unit}</span> : null}
             </div>
           </label>
 

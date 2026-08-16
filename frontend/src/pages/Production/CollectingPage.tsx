@@ -106,8 +106,14 @@ export default function CollectingPage() {
                     key={refKey({ kind: job.kind, id: job.id })}
                     kind={job.kind}
                     number={job.number}
-                    productLine={job.product_label}
+                    display={display}
+                    productName={job.product_label}
+                    productSku={job.product_sku}
+                    productEan={job.product_ean}
+                    productCatalogNumber={job.product_catalog_number}
+                    productBarcode={job.product_barcode}
                     productImageUrl={job.product_image_url}
+                    productUnit={job.product_unit}
                     quantity={job.planned_quantity}
                     status={job.status}
                     accent="amber"
@@ -135,6 +141,7 @@ export default function CollectingPage() {
           <WmsProductionCollectJobHeader
             kind={activeRef.kind}
             header={collectionState.header}
+            display={display}
             collectedCount={collectionState.collectedCount}
             totalCount={collectionState.totalCount}
           />

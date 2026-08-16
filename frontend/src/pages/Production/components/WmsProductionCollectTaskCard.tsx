@@ -7,6 +7,14 @@ import { LocationBadge } from "@/components/warehouse/LocationBadge";
 import { WmsProductTaskCard } from "@/components/wms/WmsProductTaskCard";
 import { WMS_TERMINAL_LABEL } from "@/components/wms/execution/wmsLayoutTokens";
 import { formatProductionQuantity } from "../productionUi";
+import {
+  buildProductIdentityMetaLine,
+  formatTerminalQuantity,
+  resolveProductUnit,
+  resolveWmsProductionProductIdentity,
+  shouldShowSourceLocation,
+  shouldShowStockLevel,
+} from "../display/productionTerminalDisplay";
 
 type Props = {
   index: number;
@@ -38,8 +46,23 @@ export function WmsProductionCollectTaskCard({
   onToggle,
   onConfirm,
 }: Props) {
-  const unit = (task.product_unit ?? "szt.").trim() || "szt.";
-  const barcode = (task.product_ean ?? task.product_sku ?? "").trim();
+  const unit = resolveProductUnit(task.product_unit);
+  const identity = resolveWmsProductionProductIdentity(display, {
+    name: task.product_name,
+    sku: task.product_sku,
+    ean: task.product_ean,
+    catalogNumber: task.product_catalog_number,
+    barcode: task.product_barcode,
+    imageUrl: task.product_image_url,
+    unit: task.product_unit,
+  });
+  const metaLine = buildProductIdentityMetaLine(display, {
+    sku: task.product_sku,
+    ean: task.product_ean,
+    catalogNumber: task.product_catalog_number,
+    barcode: task.product_barcode,
+  });
+
   const remaining =
     task.remaining_qty != null
       ? Number(task.remaining_qty)
@@ -98,59 +121,38 @@ export function WmsProductionCollectTaskCard({
     remaining > 1e-9;
 
   const pickEvents = task.pick_events ?? [];
+  const showSource = shouldShowSourceLocation(display);
+  const showStock = shouldShowStockLevel(display);
 
   const summary = (
     <>
-      {fmtQty(task.collected_qty)} / {fmtQty(task.required_qty)} {unit}
-      {task.shortage_reported ? " · BRAK" : task.location_code ? ` · ${task.location_code}` : ""}
+      {formatTerminalQuantity(task.collected_qty, { unit, showUnit: display.show_unit })}
+      {" / "}
+      {formatTerminalQuantity(task.required_qty, { unit, showUnit: display.show_unit })}
+      {task.shortage_reported ? " · BRAK" : showSource && task.location_code ? ` · ${task.location_code}` : ""}
     </>
   );
 
   const metaBody = (
     <>
-      <dl className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
-        {display.show_sku && task.product_sku ? (
-          <div>
-            <dt className={WMS_TERMINAL_LABEL}>SKU</dt>
-            <dd className="font-mono font-semibold text-slate-800">{task.product_sku}</dd>
-          </div>
-        ) : null}
-        {display.show_ean && task.product_ean ? (
-          <div>
-            <dt className={WMS_TERMINAL_LABEL}>EAN</dt>
-            <dd className="font-mono font-semibold text-slate-800">{task.product_ean}</dd>
-          </div>
-        ) : null}
-        {display.show_catalog_number && task.product_catalog_number ? (
-          <div>
-            <dt className={WMS_TERMINAL_LABEL}>Nr katalogowy</dt>
-            <dd className="font-mono font-semibold text-slate-800">{task.product_catalog_number}</dd>
-          </div>
-        ) : null}
-        {display.show_barcode && barcode ? (
-          <div>
-            <dt className={WMS_TERMINAL_LABEL}>Kod kreskowy</dt>
-            <dd className="font-mono font-semibold text-slate-800">{barcode}</dd>
-          </div>
-        ) : null}
-      </dl>
+      {metaLine ? <p className="mt-1 font-mono text-sm text-slate-500">{metaLine}</p> : null}
 
       <div className="mt-4 grid gap-4 sm:grid-cols-3">
         <div>
           <p className={WMS_TERMINAL_LABEL}>Do pobrania</p>
           <p className="mt-1 text-2xl font-black tabular-nums text-slate-900">
-            {fmtQty(task.required_qty)}
-            {display.show_unit ? (
-              <span className="ml-1 text-sm font-semibold text-slate-500">{unit}</span>
-            ) : null}
+            {formatTerminalQuantity(task.required_qty, { unit, showUnit: display.show_unit })}
           </p>
         </div>
-        {display.show_stock_level ? (
+        {showStock ? (
           <div>
             <p className={WMS_TERMINAL_LABEL}>Dostępne tu</p>
             <p className="mt-1 text-xl font-black tabular-nums text-slate-800">{fmtQty(locAvailable)}</p>
             {whTotal != null ? (
-              <p className="mt-0.5 text-xs text-slate-500">({fmtQty(whTotal)} {unit} w magazynie)</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                (
+                {formatTerminalQuantity(whTotal, { unit, showUnit: display.show_unit })} w magazynie)
+              </p>
             ) : null}
           </div>
         ) : null}
@@ -160,7 +162,9 @@ export function WmsProductionCollectTaskCard({
             {fmtQty(task.collected_qty)}
             <span className="text-base font-bold text-slate-400"> / {fmtQty(task.required_qty)}</span>
           </p>
-          <p className="mt-0.5 text-xs font-semibold text-amber-800">Zostało: {fmtQty(remaining)} {unit}</p>
+          <p className="mt-0.5 text-xs font-semibold text-amber-800">
+            Zostało: {formatTerminalQuantity(remaining, { unit, showUnit: display.show_unit })}
+          </p>
         </div>
       </div>
 
@@ -172,7 +176,7 @@ export function WmsProductionCollectTaskCard({
               <li key={ev.event_id} className="flex flex-wrap justify-between gap-2 tabular-nums">
                 <span className="font-mono font-semibold">{ev.location_code || `#${ev.location_id}`}</span>
                 <span>
-                  {fmtQty(ev.quantity)} {unit}
+                  {formatTerminalQuantity(ev.quantity, { unit, showUnit: display.show_unit })}
                   {ev.discrepancy && ev.discrepancy > 1e-6 ? (
                     <span className="ml-2 text-xs font-semibold text-rose-600">
                       (różnica {fmtQty(ev.discrepancy)})
@@ -228,7 +232,7 @@ export function WmsProductionCollectTaskCard({
                   ) : null}
                 </div>
                 <p className="mt-2 text-sm font-bold tabular-nums text-slate-900">
-                  {fmtQty(opt.available_qty)} {unit} dostępne
+                  {formatTerminalQuantity(opt.available_qty, { unit, showUnit: display.show_unit })} dostępne
                 </p>
                 {lot ? (
                   <dl className="mt-2 grid gap-1 text-xs text-slate-600 sm:grid-cols-2">
@@ -251,10 +255,10 @@ export function WmsProductionCollectTaskCard({
           })}
         </div>
 
-        {selectedOption && display.show_source_location ? (
+        {selectedOption && showSource ? (
           <p className="mt-4 inline-flex items-center gap-2 font-mono text-lg font-bold text-slate-800">
             <MapPin className="h-5 w-5 text-amber-600" aria-hidden />
-            {selectedOption.location_code}
+            Pobierz z: {selectedOption.location_code}
           </p>
         ) : null}
 
@@ -279,11 +283,13 @@ export function WmsProductionCollectTaskCard({
               }}
               className="w-full rounded-xl border border-slate-200 px-3 py-3 text-lg font-bold tabular-nums text-slate-900"
             />
-            <span className="shrink-0 text-sm font-semibold text-slate-500">{unit}</span>
+            {display.show_unit ? (
+              <span className="shrink-0 text-sm font-semibold text-slate-500">{unit}</span>
+            ) : null}
           </div>
           <p className="mt-1 text-xs text-slate-500">
-            Podpowiedź: {fmtQty(suggested)} {unit} (min. z pozostało / stan lokalizacji). Możesz zmniejszyć,
-            jeśli fizycznie jest mniej.
+            Podpowiedź: {formatTerminalQuantity(suggested, { unit, showUnit: display.show_unit })} (min. z
+            pozostało / stan lokalizacji). Możesz zmniejszyć, jeśli fizycznie jest mniej.
           </p>
         </div>
 
@@ -299,7 +305,11 @@ export function WmsProductionCollectTaskCard({
                 <option value="">— wybierz —</option>
                 {identityOptions.map((lot, idx) => {
                   const value = lot.batch_number || lot.lot || "";
-                  return <option key={`${value}-${idx}`} value={value}>{value || "—"}</option>;
+                  return (
+                    <option key={`${value}-${idx}`} value={value}>
+                      {value || "—"}
+                    </option>
+                  );
                 })}
               </select>
             ) : (
@@ -322,7 +332,11 @@ export function WmsProductionCollectTaskCard({
                 className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm"
               >
                 <option value="">— wybierz —</option>
-                {serialOptions.map((serial) => <option key={serial} value={serial}>{serial}</option>)}
+                {serialOptions.map((serial) => (
+                  <option key={serial} value={serial}>
+                    {serial}
+                  </option>
+                ))}
               </select>
             ) : (
               <input
@@ -352,7 +366,7 @@ export function WmsProductionCollectTaskCard({
             className="col-span-2 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-4 text-base font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
           >
             <Check className="h-5 w-5" aria-hidden />
-            Potwierdź pobranie ({fmtQty(pickQty)} {unit})
+            Potwierdź pobranie ({formatTerminalQuantity(pickQty, { unit, showUnit: display.show_unit })})
           </button>
           <button
             type="button"
@@ -379,15 +393,17 @@ export function WmsProductionCollectTaskCard({
         <Check className="h-4 w-4" aria-hidden />
         {task.shortage_reported
           ? `Zgłoszono brak — pobrano ${fmtQty(task.collected_qty)} / ${fmtQty(task.required_qty)}`
-          : `Pobrano ${fmtQty(task.collected_qty)} ${unit} (${pickEvents.length || 1} lokalizacji)`}
+          : `Pobrano ${formatTerminalQuantity(task.collected_qty, { unit, showUnit: display.show_unit })} (${pickEvents.length || 1} lokalizacji)`}
       </p>
     ) : null;
 
   return (
     <WmsProductTaskCard
       index={index}
-      imageUrl={task.product_image_url}
+      imageUrl={identity.imageUrl}
+      showImage={identity.showImage}
       title={task.product_name}
+      showTitle={identity.showName}
       summary={summary}
       body={metaBody}
       footer={locationFooter}

@@ -1,26 +1,30 @@
 import type { CollectionJobHeaderRead } from "@/api/productionApi";
+import type { ProductionTerminalDisplaySettings } from "@/api/wmsProductionSettingsApi";
 import {
   PRODUCTION_KIND_LABEL,
   type ProductionExecutionKind,
 } from "@/modules/production/productionExecutionTypes";
 import { WMS_TERMINAL_LABEL } from "@/components/wms/execution/wmsLayoutTokens";
-import { formatProductionQuantity } from "../productionUi";
-import { ProductThumb } from "./ProductThumb";
+import { WmsProductionProductIdentity } from "../display/WmsProductionProductIdentity";
+import { formatTerminalQuantity } from "../display/productionTerminalDisplay";
 import { ProgressBar } from "./ProgressBar";
 
 type Props = {
   kind: ProductionExecutionKind;
   header: CollectionJobHeaderRead;
+  display: ProductionTerminalDisplaySettings;
   collectedCount: number;
   totalCount: number;
 };
 
-function fmtQty(n: number): string {
-  return formatProductionQuantity(n);
-}
-
 /** Finished-good context for single-screen raw-material collecting. */
-export function WmsProductionCollectJobHeader({ kind, header, collectedCount, totalCount }: Props) {
+export function WmsProductionCollectJobHeader({
+  kind,
+  header,
+  display,
+  collectedCount,
+  totalCount,
+}: Props) {
   const primary = header.outputs[0];
 
   return (
@@ -37,19 +41,30 @@ export function WmsProductionCollectJobHeader({ kind, header, collectedCount, to
 
         <div className="space-y-3">
           {header.outputs.map((out) => (
-            <div key={out.product_id} className="flex gap-4">
-              <ProductThumb imageUrl={out.product_image_url} name={out.product_name} size="lg" />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Produkt końcowy</p>
-                <p className="mt-1 text-xl font-bold leading-snug text-slate-900">{out.product_name}</p>
-                {out.product_sku ? (
-                  <p className="mt-1 font-mono text-sm text-slate-500">{out.product_sku}</p>
-                ) : null}
+            <div key={out.product_id} className="space-y-1">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Produkt końcowy</p>
+              <WmsProductionProductIdentity
+                display={display}
+                product={{
+                  name: out.product_name,
+                  sku: out.product_sku,
+                  ean: out.product_ean,
+                  catalogNumber: out.product_catalog_number,
+                  barcode: out.product_barcode,
+                  imageUrl: out.product_image_url,
+                  unit: out.product_unit,
+                }}
+                thumbSize="lg"
+                nameClassName="text-xl font-bold leading-snug text-slate-900"
+              >
                 <p className="mt-2 text-3xl font-black tabular-nums text-slate-900">
-                  {fmtQty(out.planned_quantity)}
-                  <span className="ml-1 text-sm font-semibold text-slate-500">szt. do wyprodukowania</span>
+                  {formatTerminalQuantity(out.planned_quantity, {
+                    unit: out.product_unit,
+                    showUnit: display.show_unit,
+                  })}
+                  <span className="ml-1 text-sm font-semibold text-slate-500">do wyprodukowania</span>
                 </p>
-              </div>
+              </WmsProductionProductIdentity>
             </div>
           ))}
         </div>

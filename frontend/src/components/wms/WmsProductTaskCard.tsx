@@ -6,7 +6,11 @@ import { WmsProductCard, wmsProductCardMetaMuted } from "./WmsProductCard";
 export type WmsProductTaskCardProps = {
   index: number;
   imageUrl: string | null | undefined;
+  /** When false, omit thumbnail entirely (collapsed + expanded). Default true. */
+  showImage?: boolean;
   title: string;
+  /** When false, hide product title (process labels stay in body/summary). Default true. */
+  showTitle?: boolean;
   /** Collapsed summary (qty, location) shown when card is folded. */
   summary?: ReactNode;
   /** Primary meta block inside expanded card body (SKU, EAN, …). */
@@ -28,7 +32,9 @@ export type WmsProductTaskCardProps = {
 export function WmsProductTaskCard({
   index,
   imageUrl,
+  showImage = true,
   title,
+  showTitle = true,
   summary,
   body,
   footer,
@@ -55,15 +61,19 @@ export function WmsProductTaskCard({
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-sm font-bold tabular-nums text-slate-700 ring-1 ring-slate-200/80">
           {done ? <Check className="h-4 w-4 text-emerald-600" aria-hidden /> : index}
         </span>
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-50">
-          {imageUrl ? (
-            <img src={imageUrl} alt="" className="max-h-full max-w-full object-contain" />
-          ) : (
-            <span className="text-[10px] font-medium text-slate-400">Brak</span>
-          )}
-        </div>
+        {showImage ? (
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-50">
+            {imageUrl ? (
+              <img src={imageUrl} alt="" className="max-h-full max-w-full object-contain" />
+            ) : (
+              <span className="text-[10px] font-medium text-slate-400">Brak</span>
+            )}
+          </div>
+        ) : null}
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-bold text-slate-900">{title}</p>
+          {showTitle && title.trim() ? (
+            <p className="truncate text-sm font-bold text-slate-900">{title}</p>
+          ) : null}
           {summary ? <div className={wmsProductCardMetaMuted}>{summary}</div> : null}
         </div>
         {!done ? (
@@ -89,12 +99,15 @@ export function WmsProductTaskCard({
         <WmsProductCard
           index={index}
           imageUrl={imageUrl}
+          showImage={showImage}
           interactive={false}
           busy={busy}
           subdued={done}
           body={
             <>
-              <p className="text-lg font-bold leading-snug text-slate-900">{title}</p>
+              {showTitle && title.trim() ? (
+                <p className="text-lg font-bold leading-snug text-slate-900">{title}</p>
+              ) : null}
               {body}
             </>
           }

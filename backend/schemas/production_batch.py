@@ -51,6 +51,10 @@ class ProductionBatchLineRead(BaseModel):
     pw_putaway_status: Optional[str] = None
     product_name: Optional[str] = None
     product_sku: Optional[str] = None
+    product_ean: Optional[str] = None
+    product_catalog_number: Optional[str] = None
+    product_barcode: Optional[str] = None
+    product_unit: Optional[str] = None
     product_image_url: Optional[str] = None
     composition_name: Optional[str] = None
     notes: Optional[str] = None
@@ -149,7 +153,11 @@ class CollectionOutputProductRead(BaseModel):
     product_id: int
     product_name: str
     product_sku: Optional[str] = None
+    product_ean: Optional[str] = None
+    product_catalog_number: Optional[str] = None
+    product_barcode: Optional[str] = None
     product_image_url: Optional[str] = None
+    product_unit: Optional[str] = None
     planned_quantity: float
 
 
@@ -189,6 +197,7 @@ class CollectionTaskRead(BaseModel):
     product_image_url: Optional[str] = None
     product_ean: Optional[str] = None
     product_catalog_number: Optional[str] = None
+    product_barcode: Optional[str] = None
     product_unit: Optional[str] = None
     required_qty: float
     collected_qty: float = 0.0

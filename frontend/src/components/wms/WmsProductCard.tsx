@@ -23,6 +23,8 @@ type WmsProductCardProps = {
   /** Decorative layer (e.g. completed putaway watermark). Pointer-events none; rendered behind main content. */
   overlay?: ReactNode;
   imageUrl: string | null | undefined;
+  /** When false, omit image column entirely (no placeholder). Default true. */
+  showImage?: boolean;
   body: ReactNode;
   footer: ReactNode;
   interactive: boolean;
@@ -46,6 +48,7 @@ export function WmsProductCard({
   menu,
   overlay,
   imageUrl,
+  showImage = true,
   body,
   footer,
   interactive,
@@ -79,13 +82,15 @@ export function WmsProductCard({
       </div>
 
       <div className="flex min-h-0 flex-1 gap-3">
-        <div className={WMS_PRODUCT_CARD_IMG_BOX}>
-          {imageUrl ? (
-            <img src={imageUrl} alt="" className="max-h-full max-w-full object-contain object-center" />
-          ) : (
-            <span className="text-xs font-medium text-slate-400">Brak zdjęcia</span>
-          )}
-        </div>
+        {showImage ? (
+          <div className={WMS_PRODUCT_CARD_IMG_BOX}>
+            {imageUrl ? (
+              <img src={imageUrl} alt="" className="max-h-full max-w-full object-contain object-center" />
+            ) : (
+              <span className="text-xs font-medium text-slate-400">Brak zdjęcia</span>
+            )}
+          </div>
+        ) : null}
         <div className="min-w-0 flex-1">{body}</div>
       </div>
 

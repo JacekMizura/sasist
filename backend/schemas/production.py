@@ -235,6 +235,10 @@ class ProductionOrderRead(BaseModel):
     operator_name: Optional[str] = None
     product_name: Optional[str] = None
     product_sku: Optional[str] = None
+    product_ean: Optional[str] = None
+    product_catalog_number: Optional[str] = None
+    product_barcode: Optional[str] = None
+    product_unit: Optional[str] = None
     product_image_url: Optional[str] = None
     warehouse_name: Optional[str] = None
     location_name: Optional[str] = None

@@ -16,7 +16,11 @@ def _product_output(db: Session, *, product_id: int, planned_quantity: float) ->
         product_id=int(product_id),
         product_name=(p.name if p else f"Produkt #{product_id}"),
         product_sku=((p.sku or p.symbol) if p else None),
+        product_ean=((p.ean or "").strip() or None if p else None),
+        product_catalog_number=((p.symbol or "").strip() or None if p else None),
+        product_barcode=((getattr(p, "barcode", None) or "").strip() or None if p else None),
         product_image_url=((p.image_url or "").strip() or None if p else None),
+        product_unit=((p.unit or "").strip() or None if p else None),
         planned_quantity=float(planned_quantity),
     )
 

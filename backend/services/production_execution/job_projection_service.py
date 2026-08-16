@@ -2,12 +2,33 @@
 
 from __future__ import annotations
 
+from ...models.product import Product
 from ...models.product_composition import ProductionBatch
 from ...models.production import ProductionOrder
 from ...schemas.production_execution import ProductionExecutionJobRead
 from .constants import execution_phase_for_status
 from ..production_batch_service import serialize_batch
 from ..production_order_service import serialize_order
+
+
+def _product_identity(p: Product | None) -> dict:
+    if p is None:
+        return {
+            "product_sku": None,
+            "product_ean": None,
+            "product_catalog_number": None,
+            "product_barcode": None,
+            "product_unit": None,
+            "product_image_url": None,
+        }
+    return {
+        "product_sku": ((p.sku or p.symbol) or "").strip() or None,
+        "product_ean": (p.ean or "").strip() or None,
+        "product_catalog_number": (p.symbol or "").strip() or None,
+        "product_barcode": (getattr(p, "barcode", None) or "").strip() or None,
+        "product_unit": (p.unit or "").strip() or None,
+        "product_image_url": (p.image_url or "").strip() or None,
+    }
 
 
 def project_batch_job(db, batch: ProductionBatch) -> ProductionExecutionJobRead:
@@ -33,6 +54,22 @@ def project_batch_job(db, batch: ProductionBatch) -> ProductionExecutionJobRead:
     phase = execution_phase_for_status(status)
     if status in ("completed", "cancelled"):
         phase = None
+
+    identity = {
+        "product_sku": None,
+        "product_ean": None,
+        "product_catalog_number": None,
+        "product_barcode": None,
+        "product_unit": None,
+        "product_image_url": first_image,
+    }
+    first_pid = int(lines[0].product_id) if lines else 0
+    if first_pid > 0:
+        p = db.query(Product).filter(Product.id == first_pid).first()
+        identity = _product_identity(p)
+        if first_image:
+            identity["product_image_url"] = first_image
+
     return ProductionExecutionJobRead(
         kind="batch",
         id=int(batch.id),
@@ -41,7 +78,6 @@ def project_batch_job(db, batch: ProductionBatch) -> ProductionExecutionJobRead:
         status=status,  # type: ignore[arg-type]
         phase=phase,
         product_label=product_label,
-        product_image_url=first_image,
         planned_quantity=float(full.total_planned_units or 0),
         completed_quantity=float(full.total_completed_units or 0),
         progress_percent=float(full.progress_percent or 0),
@@ -50,6 +86,7 @@ def project_batch_job(db, batch: ProductionBatch) -> ProductionExecutionJobRead:
         released_to_wms_at=getattr(batch, "released_to_wms_at", None),
         operator_name=full.operator_name,
         created_at=batch.created_at,
+        **identity,
     )
 
 
@@ -63,6 +100,12 @@ def project_order_job(db, order: ProductionOrder) -> ProductionExecutionJobRead:
     progress = float(full.progress_percent or 0)
     if status == "collecting":
         progress = float(full.collection_progress_percent or 0)
+
+    p = db.query(Product).filter(Product.id == int(order.product_id)).first()
+    identity = _product_identity(p)
+    if full.product_image_url:
+        identity["product_image_url"] = full.product_image_url
+
     return ProductionExecutionJobRead(
         kind="order",
         id=int(order.id),
@@ -71,7 +114,6 @@ def project_order_job(db, order: ProductionOrder) -> ProductionExecutionJobRead:
         status=status,  # type: ignore[arg-type]
         phase=phase,
         product_label=product_label,
-        product_image_url=full.product_image_url,
         planned_quantity=float(order.planned_quantity or 0),
         completed_quantity=float(order.produced_quantity or 0),
         progress_percent=progress,
@@ -80,4 +122,5 @@ def project_order_job(db, order: ProductionOrder) -> ProductionExecutionJobRead:
         released_to_wms_at=getattr(order, "released_to_wms_at", None),
         operator_name=full.operator_name,
         created_at=order.created_at,
+        **identity,
     )

@@ -1,11 +1,12 @@
 import { WMS_TERMINAL_LABEL } from "@/components/wms/execution/wmsLayoutTokens";
+import type { ProductionTerminalDisplaySettings } from "@/api/wmsProductionSettingsApi";
 import {
   PRODUCTION_KIND_LABEL,
   type ProductionExecutionKind,
 } from "@/modules/production/productionExecutionTypes";
 import { operationalBadgeBase, operationalBadgeNeutralClass } from "@/components/operational/operationalSemanticBadges";
-import { formatProductionQuantity } from "../productionUi";
-import { ProductThumb } from "./ProductThumb";
+import { WmsProductionProductIdentity } from "../display/WmsProductionProductIdentity";
+import { formatTerminalQuantity } from "../display/productionTerminalDisplay";
 
 type Accent = "amber" | "blue" | "emerald";
 
@@ -19,10 +20,15 @@ type Props = {
   kind?: ProductionExecutionKind;
   label: string;
   number: string;
-  productLine?: string;
+  display: ProductionTerminalDisplaySettings;
+  productName?: string | null;
+  productSku?: string | null;
+  productEan?: string | null;
+  productCatalogNumber?: string | null;
+  productBarcode?: string | null;
   productImageUrl?: string | null;
+  productUnit?: string | null;
   quantity?: number | string;
-  quantitySuffix?: string;
   accent?: Accent;
 };
 
@@ -31,33 +37,53 @@ export function WmsProductionActiveBatchBar({
   kind,
   label,
   number,
-  productLine,
+  display,
+  productName,
+  productSku,
+  productEan,
+  productCatalogNumber,
+  productBarcode,
   productImageUrl,
+  productUnit,
   quantity,
-  quantitySuffix = "szt.",
   accent = "amber",
 }: Props) {
+  const qtyNode =
+    quantity == null
+      ? null
+      : typeof quantity === "number"
+        ? formatTerminalQuantity(quantity, { unit: productUnit, showUnit: display.show_unit })
+        : quantity;
+
   return (
     <div className="relative w-full overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className={`absolute bottom-0 left-0 top-0 w-1 ${ACCENT_STRIP[accent]}`} aria-hidden />
-      <div className="flex gap-4 pl-3">
-        <ProductThumb imageUrl={productImageUrl} name={productLine ?? number} size="lg" />
-        <div className="min-w-0 flex-1">
+      <div className="space-y-3 pl-3">
         {kind ? (
-          <span className={`${operationalBadgeBase} ${operationalBadgeNeutralClass} mb-2 inline-flex text-xs uppercase tracking-wide`}>
+          <span className={`${operationalBadgeBase} ${operationalBadgeNeutralClass} inline-flex text-xs uppercase tracking-wide`}>
             {PRODUCTION_KIND_LABEL[kind]}
           </span>
         ) : null}
         <p className={WMS_TERMINAL_LABEL}>{label}</p>
-        <p className="mt-1 font-mono text-2xl font-black text-slate-900">{number}</p>
-        {productLine ? <p className="mt-2 text-base font-semibold text-slate-800">{productLine}</p> : null}
-        {quantity != null ? (
-          <p className="mt-1 text-3xl font-black tabular-nums text-slate-900">
-            {typeof quantity === "number" ? formatProductionQuantity(quantity) : quantity}
-            <span className="ml-1.5 text-sm font-semibold text-slate-500">{quantitySuffix}</span>
-          </p>
-        ) : null}
-        </div>
+        <p className="font-mono text-2xl font-black text-slate-900">{number}</p>
+        <WmsProductionProductIdentity
+          display={display}
+          product={{
+            name: productName,
+            sku: productSku,
+            ean: productEan,
+            catalogNumber: productCatalogNumber,
+            barcode: productBarcode,
+            imageUrl: productImageUrl,
+            unit: productUnit,
+          }}
+          thumbSize="lg"
+          nameClassName="text-base font-semibold text-slate-800"
+        >
+          {qtyNode != null ? (
+            <p className="mt-1 text-3xl font-black tabular-nums text-slate-900">{qtyNode}</p>
+          ) : null}
+        </WmsProductionProductIdentity>
       </div>
     </div>
   );

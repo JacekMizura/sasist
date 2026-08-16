@@ -34,6 +34,11 @@ class ProductionExecutionJobRead(BaseModel):
     phase: Optional[ProductionExecutionPhase] = None
     product_label: str = ""
     product_image_url: Optional[str] = None
+    product_sku: Optional[str] = None
+    product_ean: Optional[str] = None
+    product_catalog_number: Optional[str] = None
+    product_barcode: Optional[str] = None
+    product_unit: Optional[str] = None
     planned_quantity: float = 0.0
     completed_quantity: float = 0.0
     progress_percent: float = 0.0
