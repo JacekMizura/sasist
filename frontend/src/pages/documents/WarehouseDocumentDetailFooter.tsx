@@ -25,6 +25,8 @@ type Props = {
   isPzDetail: boolean;
   lineEditEnabled: boolean;
   canPostAccept: boolean;
+  showPzActions: boolean;
+  canDeleteDocument: boolean;
   onReceiveAll: () => void;
   onSaveDraft: () => void;
   onAccept: () => void;
@@ -41,21 +43,19 @@ export function WarehouseDocumentDetailFooter({
   onPrint,
   canEditMetadata,
   onSaveMetadata,
-  isDraft,
-  isWmsCompleteDraft,
-  isPzDetail,
+  isDraft: _isDraft,
+  isWmsCompleteDraft: _isWmsCompleteDraft,
+  isPzDetail: _isPzDetail,
   lineEditEnabled,
   canPostAccept,
+  showPzActions,
+  canDeleteDocument,
   onReceiveAll,
   onSaveDraft,
   onAccept,
 }: Props) {
-  const showPzActions = (isDraft || isWmsCompleteDraft) && isPzDetail;
-  const acceptLabel = detailBusy
-    ? "Przetwarzanie…"
-    : isWmsCompleteDraft
-      ? "Zaksięguj"
-      : "Zatwierdź przyjęcie";
+  const acceptLabel = detailBusy ? "Przetwarzanie…" : "Zatwierdź przyjęcie";
+  const showEditPencil = lineEditEnabled;
 
   return (
     <footer className="flex h-14 shrink-0 items-center gap-2 border-t border-slate-200 bg-white px-3 shadow-[0_-1px_0_0_rgb(226_232_240)]">
@@ -66,7 +66,8 @@ export function WarehouseDocumentDetailFooter({
 
         {detailId != null && detail ? (
           <>
-              <div className="flex items-center gap-1" data-print-menu-root>
+            <div className="flex items-center gap-1" data-print-menu-root>
+              {showEditPencil ? (
                 <button
                   type="button"
                   aria-label="Edytuj pozycje"
@@ -77,26 +78,29 @@ export function WarehouseDocumentDetailFooter({
                 >
                   <Pencil className="h-4 w-4" strokeWidth={2} aria-hidden />
                 </button>
-                <button
-                  type="button"
-                  aria-label="Drukuj"
-                  title="Drukuj"
-                  disabled={detailBusy}
-                  onClick={onPrint}
-                  className={`${warehouseDocIconBtnClass} !h-9 !w-9`}
-                >
-                  <Printer className="h-4 w-4" strokeWidth={2} aria-hidden />
-                </button>
+              ) : null}
               <button
                 type="button"
-                aria-label="Usuń dokument"
-                title="Usuń dokument"
+                aria-label="Drukuj"
+                title="Drukuj"
                 disabled={detailBusy}
-                onClick={onDelete}
-                className={`${warehouseDocIconBtnDangerClass} !h-9 !w-9`}
+                onClick={onPrint}
+                className={`${warehouseDocIconBtnClass} !h-9 !w-9`}
               >
-                <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden />
+                <Printer className="h-4 w-4" strokeWidth={2} aria-hidden />
               </button>
+              {canDeleteDocument ? (
+                <button
+                  type="button"
+                  aria-label="Usuń dokument"
+                  title="Usuń dokument"
+                  disabled={detailBusy}
+                  onClick={onDelete}
+                  className={`${warehouseDocIconBtnDangerClass} !h-9 !w-9`}
+                >
+                  <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden />
+                </button>
+              ) : null}
             </div>
 
             <button type="button" onClick={onDuplicate} disabled={detailBusy} className={warehouseDocSecondaryBtnClass}>

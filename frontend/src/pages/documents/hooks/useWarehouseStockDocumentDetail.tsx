@@ -45,6 +45,7 @@ import {
   shouldApplyCarrierColumn,
   syncLineStateFromDocument,
 } from "./warehouseStockDocumentDetailMutations";
+import { resolveAcceptActionGate } from "./warehouseStockDocumentAcceptGates";
 
 export type UseWarehouseStockDocumentDetailParams = {
   documentId: number;
@@ -193,6 +194,10 @@ export function useWarehouseStockDocumentDetail({
 
   const saveDraft = useCallback(async () => {
     if (!detail) return;
+    if ((detail.edit_mode ?? "none") !== "full") {
+      window.alert("Dokument nie jest edytowalny — nie można zapisać ilości pozycji.");
+      return;
+    }
     const built = buildPatchItems(detail, receivedByLineId);
     if (!built.ok) {
       window.alert(built.msg);
@@ -215,16 +220,14 @@ export function useWarehouseStockDocumentDetail({
 
   const accept = useCallback(async () => {
     if (!detail) return;
-    if (detail.warehouse_id == null || detail.warehouse_id <= 0) {
-      window.alert(
-        "Ustaw magazyn przyjęcia (np. w WMS → Przyjęcie lub domyślny magazyn organizacji), potem zatwierdź PZ tutaj.",
-      );
+    const gate = resolveAcceptActionGate(detail);
+    if (!gate.ok) {
+      window.alert(gate.message ?? "Nie można zatwierdzić przyjęcia.");
       return;
     }
-    const skipLinePatch = detail.edit_mode === "metadata";
     let linePatch: { id: number; received_quantity: number; suggested_warehouse_carrier_id?: number | null }[] | null =
       null;
-    if (!skipLinePatch) {
+    if (gate.patchLines) {
       const built = buildPatchItems(detail, receivedByLineId);
       if (!built.ok) {
         window.alert(built.msg);
@@ -410,6 +413,8 @@ export function useWarehouseStockDocumentDetail({
     canPostAccept: derived.canPostAccept,
     canEditMetadata: derived.canEditMetadata,
     isWmsCompleteDraft: derived.isWmsCompleteDraft,
+    showPzActions: derived.showPzActions,
+    canDeleteDocument: derived.canDeleteDocument,
     detailBusy: detailBusy || queuePrintBusy || printFlow.pending,
     metaCurrency,
     metaNet,

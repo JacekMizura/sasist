@@ -1833,7 +1833,13 @@ def accept_stock_document(db: Session, tenant_id: int, document_id: int) -> Stoc
         raise ValueError("Document not found")
     if is_stock_document_cancelled(doc):
         raise ValueError("Nie można zaksięgować anulowanego dokumentu")
-    if _doc_status_lower(doc) not in ("draft", "zakonczone"):
+    st = _doc_status_lower(doc)
+    if st == "zakonczone":
+        # WMS already closed receive+putaway; stock is on final locations — no OMS re-post.
+        raise ValueError(
+            "Dokument został zakończony w WMS — nie wymaga ponownego księgowania w OMS."
+        )
+    if st != "draft":
         raise ValueError("Document is already posted")
 
     recalculate_wms_document_completion(db, tenant_id, document_id)

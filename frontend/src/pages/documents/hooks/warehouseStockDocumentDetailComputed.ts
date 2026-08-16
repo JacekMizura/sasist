@@ -10,6 +10,11 @@ import {
   type WarehouseDocumentType,
 } from "../warehouseDocumentsUi";
 import type { WarehouseStockDocumentLineSummary } from "../../../components/documents/warehouse/WarehouseStockDocumentDetailView";
+import {
+  canPostAcceptPz,
+  canShowPzMutationActions,
+  isWmsCompletedPzStatus,
+} from "./warehouseStockDocumentAcceptGates";
 
 export const WAREHOUSE_STOCK_DOC_INPUT_CLASS =
   "w-full min-w-[4.5rem] rounded-lg border border-slate-200 px-2 py-1.5 text-right text-sm tabular-nums text-slate-800 focus:border-violet-400 focus:ring-2 focus:ring-violet-500";
@@ -31,6 +36,7 @@ export function fmtMoneyCur(n: number | null | undefined, currency: string | und
 
 export type WarehouseStockDocumentDerived = {
   isDraft: boolean;
+  /** True when status=zakonczone (WMS final). Not a draft — read-only in OMS. */
   isWmsCompleteDraft: boolean;
   isPzDetail: boolean;
   isWzDetail: boolean;
@@ -39,6 +45,9 @@ export type WarehouseStockDocumentDerived = {
   lineEditEnabled: boolean;
   canPostAccept: boolean;
   canEditMetadata: boolean;
+  /** Show Przyjmij / Zapisz / Zatwierdź — draft PZ only. */
+  showPzActions: boolean;
+  canDeleteDocument: boolean;
 };
 
 export function computeDetailDerived(
@@ -47,15 +56,22 @@ export function computeDetailDerived(
 ): WarehouseStockDocumentDerived {
   const docStatusLower = (detail?.status || "").toLowerCase();
   const isDraft = docStatusLower === "draft";
-  const isWmsCompleteDraft = docStatusLower === "zakonczone";
+  const isWmsCompleteDraft = isWmsCompletedPzStatus(detail?.status);
   const isPzDetail = detail ? normalizeWarehouseDocType(detail.document_type) === "PZ" : false;
   const isWzDetail = detail ? normalizeWarehouseDocType(detail.document_type) === "WZ" : false;
   const detailDocType = detail ? normalizeWarehouseDocType(detail.document_type) : docTypeFallback;
   const editMode = detail?.edit_mode ?? "none";
   const lineEditEnabled = Boolean(isDraft && isPzDetail && editMode === "full");
-  const canPostAccept =
-    detail != null && detail.warehouse_id != null && detail.warehouse_id > 0 && (isDraft || isWmsCompleteDraft);
+  const canPostAccept = canPostAcceptPz({
+    status: detail?.status,
+    warehouseId: detail?.warehouse_id,
+  });
   const canEditMetadata = isDraft && (editMode === "full" || editMode === "metadata");
+  const showPzActions = canShowPzMutationActions({
+    status: detail?.status,
+    isPzDetail,
+  });
+  const canDeleteDocument = isDraft;
   return {
     isDraft,
     isWmsCompleteDraft,
@@ -66,6 +82,8 @@ export function computeDetailDerived(
     lineEditEnabled,
     canPostAccept,
     canEditMetadata,
+    showPzActions,
+    canDeleteDocument,
   };
 }
 
@@ -96,7 +114,7 @@ export function computeDetailBizStatus(
     receivedQty: tr,
     pendingPutaway,
     linkedDeliveryId: detail.delivery_id ?? null,
-    canFinalize: canPostAccept && (biz === "GOTOWE" || biz === "ZAKOŃCZONE"),
+    canFinalize: canPostAccept && biz === "GOTOWE",
     receivingStatus: detail.receiving_status,
     putawayStatus: detail.putaway_status,
     relocationStatus: detail.relocation_status,

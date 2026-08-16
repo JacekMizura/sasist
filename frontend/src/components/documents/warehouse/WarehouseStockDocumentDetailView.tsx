@@ -40,6 +40,8 @@ export type WarehouseStockDocumentDetailViewProps = {
   canPostAccept: boolean;
   canEditMetadata: boolean;
   isWmsCompleteDraft: boolean;
+  showPzActions: boolean;
+  canDeleteDocument: boolean;
   detailBusy: boolean;
   metaCurrency: string;
   metaNet: string;
@@ -97,6 +99,8 @@ export function WarehouseStockDocumentDetailView({
   canPostAccept,
   canEditMetadata,
   isWmsCompleteDraft,
+  showPzActions,
+  canDeleteDocument,
   detailBusy,
   metaCurrency,
   metaNet,
@@ -244,6 +248,8 @@ export function WarehouseStockDocumentDetailView({
           isPzDetail={isPzDetail}
           lineEditEnabled={lineEditEnabled}
           canPostAccept={canPostAccept}
+          showPzActions={showPzActions}
+          canDeleteDocument={canDeleteDocument}
           onReceiveAll={onReceiveAll}
           onSaveDraft={onSaveDraft}
           onAccept={onAccept}
