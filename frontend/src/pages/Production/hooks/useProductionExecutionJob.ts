@@ -21,6 +21,7 @@ import {
   type ProductionExecutionJobRead,
   type ProductionExecutionPhase,
   type FinishedGoodsIdentityBody,
+  type ProductionOrderRead,
 } from "@/api/productionApi";
 import { useWmsMessage } from "@/components/wms/WmsMessageProvider";
 import { useWarehouse } from "@/context/WarehouseContext";
@@ -34,7 +35,10 @@ import {
 import { wmsProductionPaths } from "../productionPaths";
 import { WMS_ROUTES } from "../../wms/wmsRoutes";
 import { START_COLLECTING_BLOCKED_TOOLTIP, formatStartCollectingError } from "../productionUi";
-import { handleProductionPackingHandoff } from "./handleProductionPackingHandoff";
+import {
+  handleProductionPackingHandoff,
+  selectPackingHandoffCarrier,
+} from "./handleProductionPackingHandoff";
 import {
   formatProductionMutationError,
   ordersMoSkipsPutaway,
@@ -486,6 +490,7 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
 
       try {
         await withMutationLock(mutationLockRef, setBusy, async () => {
+          let progressOrder: ProductionOrderRead | null = null;
           if (activeRef.kind === "batch") {
             const lineId = Number(lineKey);
             await updateProductionProgress(
@@ -495,13 +500,12 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
               warehouseId,
             );
           } else {
-            const updated = await updateOrderProductionProgress(
+            progressOrder = await updateOrderProductionProgress(
               tenantId,
               activeRef.id,
               { add_quantity: add, ...identity },
               warehouseId,
             );
-            await handleProductionPackingHandoff(updated, navigate, { tenantId, warehouseId });
           }
 
           const next = await loadExecutionDetail(tenantId, warehouseId, activeRef);
@@ -518,14 +522,30 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
             if (activeRef.kind === "batch") {
               await finishProductionPhase(tenantId, activeRef.id, warehouseId, identity);
             } else {
-              const finished = await finishOrderProduction(tenantId, activeRef.id, warehouseId, identity);
-              await handleProductionPackingHandoff(finished, navigate, { tenantId, warehouseId });
+              const finished = await finishOrderProduction(
+                tenantId,
+                activeRef.id,
+                warehouseId,
+                identity,
+              );
+              // One owner: progress carries auto_pack / newly_ready; finish does not.
+              const handoffCarrier = selectPackingHandoffCarrier(progressOrder, finished);
+              const handoffResult = handoffCarrier
+                ? await handleProductionPackingHandoff(handoffCarrier, navigate, {
+                    tenantId,
+                    warehouseId,
+                  })
+                : { acted: false, kind: "none" as const, navigatedToPacking: false };
               if (ordersMoSkipsPutaway(finished.source_type)) {
-                toast.success(
-                  "Produkcja zakończona. Produkty są dostępne na lokalizacji buforowej.",
-                  { duration: 6000 },
-                );
-                navigate(wmsProductionPaths.execute());
+                if (handoffResult.kind !== "auto_pack") {
+                  toast.success(
+                    "Produkcja zakończona. Produkty są dostępne na lokalizacji buforowej.",
+                    { duration: 6000 },
+                  );
+                }
+                if (!handoffResult.navigatedToPacking) {
+                  navigate(wmsProductionPaths.execute());
+                }
                 await reloadQueue();
                 return;
               }
@@ -543,6 +563,9 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
             return;
           }
 
+          if (progressOrder) {
+            await handleProductionPackingHandoff(progressOrder, navigate, { tenantId, warehouseId });
+          }
           toast.success(
             `Zarejestrowano ${add} szt. (${nextLine ? `${nextLine.completedQuantity}/${nextLine.plannedQuantity}` : ""})`,
           );
@@ -571,18 +594,18 @@ export function useProductionExecutionJob(phase: ProductionExecutionPhase, activ
           await finishProductionPhase(tenantId, activeRef.id, warehouseId);
         } else {
           const finished = await finishOrderProduction(tenantId, activeRef.id, warehouseId);
-          await handleProductionPackingHandoff(finished, navigate, { tenantId, warehouseId });
+          const handoffResult = await handleProductionPackingHandoff(finished, navigate, {
+            tenantId,
+            warehouseId,
+          });
           if (ordersMoSkipsPutaway(finished.source_type)) {
-            const handoff = finished.packing_handoff;
-            const navigatedToPacking =
-              handoff?.after_production_action === "OPEN_PACKING" &&
-              (handoff.newly_ready_orders?.length ?? 0) > 0 &&
-              !handoff?.auto_pack?.succeeded;
-            toast.success(
-              "Produkcja zakończona. Produkty są dostępne na lokalizacji buforowej.",
-              { duration: 6000 },
-            );
-            if (!navigatedToPacking) {
+            if (handoffResult.kind !== "auto_pack") {
+              toast.success(
+                "Produkcja zakończona. Produkty są dostępne na lokalizacji buforowej.",
+                { duration: 6000 },
+              );
+            }
+            if (!handoffResult.navigatedToPacking) {
               navigate(wmsProductionPaths.execute());
             }
             await reloadQueue();

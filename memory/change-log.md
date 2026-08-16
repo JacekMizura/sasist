@@ -1,3 +1,10 @@
+## 2026-08-16 — FE: jeden toast auto-pack po produkcji
+
+- Root: `useProductionExecutionJob.registerProductionQty` wołał `handleProductionPackingHandoff` po progress i po finish
+- Fix: `selectPackingHandoffCarrier` (prefer progress); session fingerprint idempotency; bez drugiego toastu bufora przy auto_pack
+- Pliki: `handleProductionPackingHandoff.ts`, `useProductionExecutionJob.ts`, testy
+- vitest 6 PASS; tsc PASS; npm build PASS; BE bez zmian
+
 ## 2026-08-16 — Auto-pack respektuje print_label (no commit)
 
 - Usunięto BE inject print_label przy system_auto; handoff nie zawyża waybill_print_count z samego istnienia labela
