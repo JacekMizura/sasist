@@ -387,7 +387,7 @@ export const productionSettingsHelp = {
     title: "Karta produkcyjna",
     description: (
       <p>
-        Szablon wydruku karty produkcyjnej zlecenia lub partii. Używany m.in. przy realizacji przez
+        Szablon karty produkcyjnej zlecenia lub partii. Używany m.in. gdy realizacja odbywa się przez
         wydruk zlecenia.
       </p>
     ),

@@ -49,7 +49,7 @@ export function DocumentTemplateSelect({
 
   return (
     <div className="space-y-2">
-      <label className="block text-sm font-medium text-slate-700">{label}</label>
+      {label.trim() ? <label className="block text-sm font-medium text-slate-700">{label}</label> : null}
       <input
         type="search"
         className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
@@ -78,10 +78,10 @@ export function DocumentTemplateSelect({
       </select>
       {selected ? (
         <p className="text-xs text-slate-500">
-          {selected.kind_name} · wariant {selected.variant_code} · {selected.status_label}
+          {[selected.kind_name, selected.status_label].filter(Boolean).join(" · ")}
         </p>
       ) : (
-        <p className="text-xs text-slate-400">Brak wyboru — użyty zostanie standardowy binding typu dokumentu.</p>
+        <p className="text-xs text-slate-400">Brak wyboru — zostanie użyty domyślny szablon.</p>
       )}
     </div>
   );

@@ -434,14 +434,7 @@ export const WMS_SETTINGS_SEARCH_CATALOG: WmsSettingsSearchEntry[] = [
     label: "Strategia prognozy",
     tabId: "production",
     sectionId: "wms-production-forecast",
-    sectionLabel: "Ogólne",
-  }),
-  e({
-    id: "production.require_quality_control",
-    label: "Kontrola jakości",
-    tabId: "production",
-    sectionId: "wms-production-terminal-required",
-    sectionLabel: "Terminal",
+    sectionLabel: "Prognozowanie i zapas",
   }),
 
   // Smart / 3D

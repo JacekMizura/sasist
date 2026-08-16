@@ -1,4 +1,4 @@
-import { Boxes, ClipboardList, Factory, FileText, Fingerprint, LayoutTemplate, Settings2 } from "lucide-react";
+import { Boxes, Factory, FileText, Fingerprint, LayoutTemplate, Settings2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
 
@@ -44,7 +44,6 @@ const DEFAULT_TRACEABILITY: ProductionTraceabilitySettings = {
 };
 
 const SECTION_DISPLAY = "wms-production-terminal-display";
-const SECTION_REQUIRED = "wms-production-terminal-required";
 
 type Props = {
   warehouseId: number | null;
@@ -64,7 +63,6 @@ function SectionCard({
     { id: SECTION_FORECAST, icon: Settings2, iconClassName: "bg-slate-100 text-slate-600" },
     { id: SECTION_RESERVATION, icon: Boxes, iconClassName: "bg-amber-50 text-amber-600" },
     { id: SECTION_TRACEABILITY, icon: Fingerprint, iconClassName: "bg-teal-50 text-teal-700" },
-    { id: SECTION_REQUIRED, icon: ClipboardList, iconClassName: "bg-violet-50 text-violet-600" },
     { id: SECTION_DISPLAY, icon: LayoutTemplate, iconClassName: "bg-sky-50 text-sky-600" },
     { id: "wms-production-document-templates", icon: FileText, iconClassName: "bg-indigo-50 text-indigo-600" },
   ].find((s) => s.id === sectionId);
@@ -90,19 +88,6 @@ const DISPLAY_FIELDS: {
   { key: "show_stock_level", label: "Stan magazynowy", helpKey: "show_stock_level" },
   { key: "show_unit", label: "Jednostka", helpKey: "show_unit" },
   { key: "show_barcode", label: "Kod kreskowy", helpKey: "show_barcode" },
-];
-
-const REQUIRED_FIELDS: {
-  key: keyof ProductionTerminalRequiredSettings;
-  label: string;
-  help: (typeof productionSettingsHelp)["requireOperator"];
-}[] = [
-  { key: "require_operator", label: "Operator", help: productionSettingsHelp.requireOperator },
-  {
-    key: "require_quality_control",
-    label: "Kontrola jakości",
-    help: productionSettingsHelp.requireQualityControl,
-  },
 ];
 
 const PRODUCTION_DOCUMENT_KINDS = PRODUCTION_SCOPE_KINDS.map((k) => ({
@@ -237,15 +222,9 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
       icon: Factory,
       iconClassName: "bg-orange-50 text-orange-600",
     },
-    { id: SECTION_FORECAST, label: "Ogólne / prognoza", icon: Settings2, iconClassName: "bg-slate-100 text-slate-600" },
+    { id: SECTION_FORECAST, label: "Prognozowanie i zapas", icon: Settings2, iconClassName: "bg-slate-100 text-slate-600" },
     { id: SECTION_RESERVATION, label: "Rezerwacje", icon: Boxes, iconClassName: "bg-amber-50 text-amber-600" },
     { id: SECTION_TRACEABILITY, label: "Identyfikowalność", icon: Fingerprint, iconClassName: "bg-teal-50 text-teal-700" },
-    {
-      id: SECTION_REQUIRED,
-      label: "Terminal / sposób pracy",
-      icon: ClipboardList,
-      iconClassName: "bg-violet-50 text-violet-600",
-    },
     {
       id: SECTION_DISPLAY,
       label: "Wygląd terminala",
@@ -287,7 +266,7 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
         <ProductionConfiguratorPanel warehouseId={warehouseId ?? resolvedWh} />
       </SectionCard>
 
-      <SectionCard sectionId={SECTION_FORECAST} title="Ogólne / prognoza">
+      <SectionCard sectionId={SECTION_FORECAST} title="Prognozowanie i zapas">
         <div className={wmsSettingsRowsStackClass}>
           <WmsControlSettingRow
             label="Strategia prognozy"
@@ -494,21 +473,6 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
               />
             );
           })}
-        </div>
-      </SectionCard>
-
-      <SectionCard sectionId={SECTION_REQUIRED} title="Terminal / sposób pracy">
-        <div className={wmsSettingsRowsStackClass}>
-          {REQUIRED_FIELDS.map(({ key, label, help }) => (
-            <WmsBoolSettingRow
-              key={key}
-              label={label}
-              checked={draftRequired[key]}
-              hint={help.description}
-              infoTitle={help.title}
-              onChange={(v) => setDraftRequired((prev) => (prev ? { ...prev, [key]: v } : prev))}
-            />
-          ))}
         </div>
       </SectionCard>
 

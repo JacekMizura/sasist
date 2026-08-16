@@ -123,6 +123,7 @@ export function DocumentTemplateScopeSection({
                 variantCode={k.variantCode}
                 value={values[k.kindCode] ?? null}
                 onChange={(versionId) => void onChange(k.kindCode, k.variantCode, versionId)}
+                label=""
               />
             </div>
           ) : (
@@ -140,6 +141,7 @@ export function DocumentTemplateScopeSection({
                   variantCode={k.variantCode}
                   value={values[k.kindCode] ?? null}
                   onChange={(versionId) => void onChange(k.kindCode, k.variantCode, versionId)}
+                  label=""
                 />
               </div>
             </div>
