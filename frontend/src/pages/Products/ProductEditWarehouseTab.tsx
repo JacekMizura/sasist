@@ -12,6 +12,8 @@ import {
   type ProductWarehouseStockBreakdown,
 } from "../../api/multiWarehouseUiApi";
 import type { MagazynInvRowDisplay } from "../../components/products/MagazynInventoryLine";
+import { ProductDispositionStockSummary } from "../../components/products/ProductDispositionStockSummary";
+import { ProductLocationDispositionMatrix } from "../../components/products/ProductLocationDispositionMatrix";
 import { ProductLogisticsPackagingMatchingSection } from "../../components/products/ProductLogisticsPackagingMatchingSection";
 import { ProductStockCorrectionModal } from "../../components/products/ProductStockCorrectionModal";
 import type { ProductDispositionStock } from "../../types/productDispositionStock";
@@ -348,7 +350,7 @@ export function ProductEditWarehouseTab({
   warehouseId,
   physicalStockDisplay,
   inventoryBreakdown,
-  dispositionStock: _dispositionStock,
+  dispositionStock,
   commerciallySellableQty,
   salesBlockedQty: _salesBlockedQty,
   networkCommerciallySellableQty,
@@ -453,6 +455,11 @@ export function ProductEditWarehouseTab({
                     {availableTrade === "—" ? "—" : `${availableTrade} szt.`}
                   </span>
                 </div>
+                {dispositionStock != null ? (
+                  <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                    <ProductDispositionStockSummary variant="panel" disposition={dispositionStock} />
+                  </div>
+                ) : null}
                 {networkTrade != null ? (
                   <div className="flex items-center justify-between text-xs text-gray-500">
                     <span>
@@ -515,7 +522,10 @@ export function ProductEditWarehouseTab({
             </div>
 
             {!isNew && productId != null && tenantId != null && inventoryRows.length > 0 ? (
-              <LocationCapacityTiles productId={productId} tenantId={tenantId} inventoryRows={inventoryRows} />
+              <div className="space-y-4">
+                <ProductLocationDispositionMatrix rows={inventoryRows} />
+                <LocationCapacityTiles productId={productId} tenantId={tenantId} inventoryRows={inventoryRows} />
+              </div>
             ) : (
               <p className="text-sm text-gray-500">{emptyLocationsMessage}</p>
             )}
