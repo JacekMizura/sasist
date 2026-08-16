@@ -27,6 +27,35 @@ TERMINAL_FULFILLMENT_STATE = frozenset(
     }
 )
 
+# Realized sales for forecast history — complement of open demand, excluding cancels/returns.
+# Reuses the same status/fulfillment SSOT tokens as order_demand_service (packed / shipped / done).
+CANCELLED_LIKE_ORDER_STATUS = frozenset(
+    {
+        "CANCELLED",
+        "CANCELLED_RETURN",
+        "RETURNED",
+        "ARCHIVED",
+        "ANULOWANE",
+    }
+)
+
+REALIZED_SALES_ORDER_STATUS = frozenset(
+    {
+        "SHIPPED",
+        "COMPLETED",
+        "DELIVERED",
+        "ZAKONCZONE",
+    }
+)
+
+REALIZED_SALES_FULFILLMENT_STATE = frozenset(
+    {
+        "SHIPPED",
+        "DELIVERED",
+        "COMPLETED",
+    }
+)
+
 PIPELINE_BATCH_MO_STATUSES = frozenset({"planned", "collecting", "in_progress", "putaway"})
 
 DEFAULT_SALES_LOOKBACK_DAYS = 30

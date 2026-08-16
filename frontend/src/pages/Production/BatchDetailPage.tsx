@@ -6,9 +6,11 @@ import toast from "react-hot-toast";
 import { useWarehouse } from "../../context/WarehouseContext";
 import {
   cancelProductionBatch,
+  downloadBatchMaterialPickListPdf,
   downloadBatchProductionCardPdf,
   fetchBatchPickPlan,
   getProductionBatch,
+  printBatchMaterialPickListBrowser,
   printBatchProductionCardBrowser,
   releaseBatchToWms,
   startErpExecutionBatch,
@@ -55,7 +57,10 @@ export default function BatchDetailPage() {
   const [batch, setBatch] = useState<ProductionBatchRead | null>(null);
   const [plan, setPlan] = useState<ProductionBatchPickPlanRead | null>(null);
   const [busy, setBusy] = useState(false);
-  const { queueProductionBatchCard } = useQueuePrint({ tenantId, warehouseId });
+  const { queueProductionBatchCard, queueProductionBatchMaterialPickList } = useQueuePrint({
+    tenantId,
+    warehouseId,
+  });
   const printFlow = usePrintMethodFlow({ tenantId, warehouseId, printerKind: "a4" });
 
   const load = useCallback(async () => {
@@ -114,6 +119,26 @@ export default function BatchDetailPage() {
         await queueProductionBatchCard(id, warehouseId, workstationId, templateVersionId);
       },
       onDownloadPdf: () => downloadBatchProductionCardPdf(tenantId, id, warehouseId),
+    });
+  };
+
+  const printPickList = () => {
+    if (!batchId || warehouseId == null) return;
+    const id = Number(batchId);
+    void printFlow.requestPrint({
+      kindCode: "production_material_pick_list",
+      documentTypeKey: "production_batch_material_pick_list",
+      title: "Drukuj listę pobrania",
+      onBrowserPrint: () => printBatchMaterialPickListBrowser(tenantId, id, warehouseId),
+      onCloudPrint: async (workstationId, templateVersionId) => {
+        await queueProductionBatchMaterialPickList(
+          id,
+          warehouseId,
+          workstationId,
+          templateVersionId,
+        );
+      },
+      onDownloadPdf: () => downloadBatchMaterialPickListPdf(tenantId, id, warehouseId),
     });
   };
 
@@ -203,6 +228,7 @@ export default function BatchDetailPage() {
               onReleaseToWms: () => void releaseToWms(),
               onStartErpExecution: () => void startErp(),
               onPrintProductionCard: printCard,
+              onPrintMaterialPickList: printPickList,
               onOpenErpExecution: batch.is_erp_interface ? openErp : undefined,
               onCancel: () => void cancel(),
               releaseDisabled: collectingBlocked,

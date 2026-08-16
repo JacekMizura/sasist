@@ -129,7 +129,10 @@ class WmsProductionSettingsSave(BaseModel):
     tenant_id: int
     warehouse_id: int | None = None
     terminal_display: ProductionTerminalDisplaySettings
-    terminal_required: ProductionTerminalRequiredSettings
+    # Legacy JSON blob — unused in v1 UI; kept optional so clients need not round-trip it.
+    terminal_required: ProductionTerminalRequiredSettings = Field(
+        default_factory=ProductionTerminalRequiredSettings
+    )
     forecast: ProductionForecastSettings = Field(default_factory=ProductionForecastSettings)
     reservation: ProductionReservationSettings = Field(default_factory=ProductionReservationSettings)
     traceability: ProductionTraceabilitySettings = Field(default_factory=ProductionTraceabilitySettings)

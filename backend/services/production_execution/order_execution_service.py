@@ -377,6 +377,14 @@ def _consume_order_materials(
         doc = db.query(StockDocument).filter(StockDocument.id == int(order.rw_stock_document_id)).first()
         if doc is not None:
             return doc
+    from .rw_lot_lines import (
+        RwIssueSlice,
+        create_rw_lines_for_lot_groups,
+        group_slices_by_lot,
+        lot_key,
+        slices_from_committed_dicts,
+    )
+
     alloc_map = _resolve_component_allocations(db, order, component_allocations=component_allocations)
     rw_doc = _create_production_stock_document(
         db,
@@ -390,50 +398,70 @@ def _consume_order_materials(
         allocs = alloc_map.get(snap_id, [])
         if not allocs:
             continue
-        line = StockDocumentItem(
-            document_id=int(rw_doc.id),
-            product_id=int(snap.component_product_id),
-            ordered_quantity=sum(q for _, q in allocs),
-            received_quantity=sum(q for _, q in allocs),
-            quantity=sum(q for _, q in allocs),
-            batch_number="",
-            expiry_date=date(9999, 12, 31),
-        )
-        db.add(line)
-        db.flush()
-        unit_net = float(get_product_current_cost(db, int(order.tenant_id), int(snap.component_product_id)).get("purchase_net") or 0)
-        line.purchase_price_net = unit_net
-        consumed_total = 0.0
-        alloc_meta = {(int(a.line_snapshot_id), int(a.location_id)): a for a in component_allocations}
         pid = int(snap.component_product_id)
+        qty_sum = sum(q for _, q in allocs)
+        unit_net = float(get_product_current_cost(db, int(order.tenant_id), pid).get("purchase_net") or 0)
+        alloc_meta = {(int(a.line_snapshot_id), int(a.location_id)): a for a in component_allocations}
         committed = (committed_slices_by_product or {}).get(pid)
+        issue_slices: list[RwIssueSlice] = []
         if committed:
-            # Inventory already decremented at WMS confirm — post RW lines only.
-            qty_sum = sum(q for _, q in allocs)
             committed_total = sum(float(s.get("quantity") or 0) for s in committed)
             if abs(committed_total - float(qty_sum)) > 1e-2:
                 raise ProductionOrderError(
                     f"Zatwierdzone pobranie składnika #{pid} ({committed_total}) ≠ wymagane ({qty_sum}).",
                     code="allocation_mismatch",
                 )
-            for s in committed:
-                loc_id = int(s.get("location_id") or 0)
-                if loc_id <= 0:
-                    continue
-                exp_raw = s.get("expiry_date")
-                try:
-                    exp = date.fromisoformat(str(exp_raw)) if exp_raw else date(9999, 12, 31)
-                except ValueError:
-                    exp = date(9999, 12, 31)
+            issue_slices = slices_from_committed_dicts(pid, committed)
+        else:
+            for loc_id, qty in allocs:
+                meta = alloc_meta.get((snap_id, int(loc_id)))
+                slices = consume_production_material_slices(
+                    db,
+                    tenant_id=int(order.tenant_id),
+                    warehouse_id=int(order.warehouse_id),
+                    product_id=pid,
+                    location_id=int(loc_id),
+                    quantity=float(qty),
+                    batch_number=(meta.batch_number or meta.lot) if meta else None,
+                    lot=meta.lot if meta else None,
+                    serial_number=meta.serial_number if meta else None,
+                    exclude_production_order_id=int(order.id),
+                )
+                for sl in slices:
+                    bn, exp = lot_key(sl.batch_number, sl.expiry_date)
+                    issue_slices.append(
+                        RwIssueSlice(
+                            product_id=pid,
+                            quantity=float(sl.quantity),
+                            location_id=int(loc_id),
+                            batch_number=bn,
+                            expiry_date=exp,
+                            serial_number=(meta.serial_number if meta else None),
+                        )
+                    )
+        grouped = group_slices_by_lot(issue_slices)
+        lines = create_rw_lines_for_lot_groups(
+            db,
+            rw_doc=rw_doc,
+            grouped=grouped,
+            unit_net_by_product={pid: unit_net},
+        )
+        consumed_total = 0.0
+        for key, group in grouped.items():
+            line = lines.get(key)
+            if line is None:
+                continue
+            for s in group:
+                exp = s.expiry_date if s.expiry_date < NO_EXPIRY_SENTINEL else None
                 append_issue_operation(
                     db,
                     rw_doc,
                     line,
-                    float(s.get("quantity") or 0),
-                    from_location_id=loc_id,
-                    batch_number=str(s.get("batch_number") or ""),
-                    expiry_date=exp if exp < NO_EXPIRY_SENTINEL else None,
-                    serial_number=str(s.get("serial_number") or "") or None,
+                    float(s.quantity),
+                    from_location_id=int(s.location_id),
+                    batch_number=s.batch_number or "",
+                    expiry_date=exp,
+                    serial_number=s.serial_number,
                     operator_admin_id=performed_by_user_id,
                     metadata={"production_order_id": int(order.id), "source_document_type": "RW"},
                 )
@@ -443,55 +471,13 @@ def _consume_order_materials(
                     db,
                     rw_doc=rw_doc,
                     product_id=pid,
-                    quantity=float(s.get("quantity") or 0),
-                    from_location_id=loc_id,
+                    quantity=float(s.quantity),
+                    from_location_id=int(s.location_id),
                     performed_by_user_id=performed_by_user_id,
-                    batch_number=str(s.get("batch_number") or "") or None,
-                    expiry_date=exp if exp < NO_EXPIRY_SENTINEL else None,
+                    batch_number=s.batch_number or None,
+                    expiry_date=exp,
                 )
-                consumed_total += float(s.get("quantity") or 0)
-            snap.consumed_quantity = float(consumed_total)
-            continue
-        for loc_id, qty in allocs:
-            meta = alloc_meta.get((snap_id, int(loc_id)))
-            slices = consume_production_material_slices(
-                db,
-                tenant_id=int(order.tenant_id),
-                warehouse_id=int(order.warehouse_id),
-                product_id=pid,
-                location_id=int(loc_id),
-                quantity=float(qty),
-                batch_number=(meta.batch_number or meta.lot) if meta else None,
-                lot=meta.lot if meta else None,
-                serial_number=meta.serial_number if meta else None,
-                exclude_production_order_id=int(order.id),
-            )
-            for sl in slices:
-                append_issue_operation(
-                    db,
-                    rw_doc,
-                    line,
-                    float(sl.quantity),
-                    from_location_id=int(loc_id),
-                    batch_number=sl.batch_number or "",
-                    expiry_date=sl.expiry_date if sl.expiry_date < NO_EXPIRY_SENTINEL else None,
-                    serial_number=(meta.serial_number if meta else None),
-                    operator_admin_id=performed_by_user_id,
-                    metadata={"production_order_id": int(order.id), "source_document_type": "RW"},
-                )
-                from .production_warehouse_audit import record_production_rw_issue_audit
-
-                record_production_rw_issue_audit(
-                    db,
-                    rw_doc=rw_doc,
-                    product_id=pid,
-                    quantity=float(sl.quantity),
-                    from_location_id=int(loc_id),
-                    performed_by_user_id=performed_by_user_id,
-                    batch_number=sl.batch_number or None,
-                    expiry_date=sl.expiry_date if sl.expiry_date < NO_EXPIRY_SENTINEL else None,
-                )
-                consumed_total += float(sl.quantity)
+                consumed_total += float(s.quantity)
         snap.consumed_quantity = float(consumed_total)
     order.rw_stock_document_id = int(rw_doc.id)
     return rw_doc

@@ -168,6 +168,46 @@ export function useQueuePrint({ tenantId, warehouseId }: Options) {
     [queuePrint, warehouseId],
   );
 
+  const queueProductionBatchMaterialPickList = useCallback(
+    (
+      batchId: number,
+      warehouseIdOverride?: number | null,
+      workstationId?: number | null,
+      templateVersionId?: number | null,
+    ) =>
+      queuePrint(
+        {
+          document_type: "production_batch_material_pick_list",
+          document_id: batchId,
+          warehouse_id: warehouseIdOverride ?? warehouseId ?? null,
+          template_version_id: templateVersionId ?? null,
+          copies: 1,
+        },
+        workstationId,
+      ),
+    [queuePrint, warehouseId],
+  );
+
+  const queueProductionOrderMaterialPickList = useCallback(
+    (
+      orderId: number,
+      warehouseIdOverride?: number | null,
+      workstationId?: number | null,
+      templateVersionId?: number | null,
+    ) =>
+      queuePrint(
+        {
+          document_type: "production_order_material_pick_list",
+          document_id: orderId,
+          warehouse_id: warehouseIdOverride ?? warehouseId ?? null,
+          template_version_id: templateVersionId ?? null,
+          copies: 1,
+        },
+        workstationId,
+      ),
+    [queuePrint, warehouseId],
+  );
+
   return {
     busy,
     queuePrint,
@@ -176,6 +216,8 @@ export function useQueuePrint({ tenantId, warehouseId }: Options) {
     queueLabelPrint,
     queueProductionBatchCard,
     queueProductionOrderCard,
+    queueProductionBatchMaterialPickList,
+    queueProductionOrderMaterialPickList,
   };
 }
 

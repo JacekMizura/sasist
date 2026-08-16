@@ -1209,6 +1209,36 @@ export async function downloadBatchProductionCardPdf(
   downloadPdfBlob(await fetchBatchProductionCardPdf(tenantId, batchId, warehouseId), filename);
 }
 
+export async function fetchBatchMaterialPickListPdf(
+  tenantId: number,
+  batchId: number,
+  warehouseId?: number,
+): Promise<Blob> {
+  return fetchAuthenticatedProductionPdfBlob(
+    `/production/batches/${batchId}/material-pick-list.pdf`,
+    productionQueryParams(tenantId, warehouseId),
+  );
+}
+
+export async function printBatchMaterialPickListBrowser(
+  tenantId: number,
+  batchId: number,
+  warehouseId?: number,
+): Promise<void> {
+  const blob = await fetchBatchMaterialPickListPdf(tenantId, batchId, warehouseId);
+  const w = openPdfBlobInPrintViewer(blob, { autoPrint: true });
+  if (!w) throw new Error("Przeglądarka zablokowała nową kartę. Zezwól na wyskakujące okna.");
+}
+
+export async function downloadBatchMaterialPickListPdf(
+  tenantId: number,
+  batchId: number,
+  warehouseId?: number,
+  filename = `lista-pobrania-partia-${batchId}.pdf`,
+): Promise<void> {
+  downloadPdfBlob(await fetchBatchMaterialPickListPdf(tenantId, batchId, warehouseId), filename);
+}
+
 export async function printBulkProductionCards(
   tenantId: number,
   batchIds: number[],
@@ -1483,6 +1513,36 @@ export async function downloadOrderProductionCardPdf(
   filename = `karta-produkcyjna-zlecenie-${orderId}.pdf`,
 ): Promise<void> {
   downloadPdfBlob(await fetchOrderProductionCardPdf(tenantId, orderId, warehouseId), filename);
+}
+
+export async function fetchOrderMaterialPickListPdf(
+  tenantId: number,
+  orderId: number,
+  warehouseId?: number,
+): Promise<Blob> {
+  return fetchAuthenticatedProductionPdfBlob(
+    `/production/orders/${orderId}/material-pick-list.pdf`,
+    productionQueryParams(tenantId, warehouseId),
+  );
+}
+
+export async function printOrderMaterialPickListBrowser(
+  tenantId: number,
+  orderId: number,
+  warehouseId?: number,
+): Promise<void> {
+  const blob = await fetchOrderMaterialPickListPdf(tenantId, orderId, warehouseId);
+  const w = openPdfBlobInPrintViewer(blob, { autoPrint: true });
+  if (!w) throw new Error("Przeglądarka zablokowała nową kartę. Zezwól na wyskakujące okna.");
+}
+
+export async function downloadOrderMaterialPickListPdf(
+  tenantId: number,
+  orderId: number,
+  warehouseId?: number,
+  filename = `lista-pobrania-zlecenie-${orderId}.pdf`,
+): Promise<void> {
+  downloadPdfBlob(await fetchOrderMaterialPickListPdf(tenantId, orderId, warehouseId), filename);
 }
 
 export type OrderCollectionStateRead = {

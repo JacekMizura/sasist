@@ -12,12 +12,16 @@ import pytest
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
 
+from backend.models.activity_event import ActivityEvent, ActivityEventLink
+from backend.models.app_user import AppUser
+from backend.models.document_series import DocumentSeries
 from backend.models.fulfillment_event import FE_PICK, FulfillmentEvent
 from backend.models.inventory import Inventory
 from backend.models.location import Location
 from backend.models.order import Order
 from backend.models.order_item import OrderItem
 from backend.models.order_item_pick_allocation import OrderItemPickAllocation
+from backend.models.order_issue_task import OrderIssueTask
 from backend.models.order_ui_status import OrderUiStatus
 from backend.models.picking_config import PickingConfig
 from backend.models.product import Product
@@ -32,11 +36,14 @@ from backend.models.production import (
     ProductionOrderLineSnapshot,
     ProductionOrderSourceItem,
 )
+from backend.models.production_fg_output import ProductionFgOutput
 from backend.models.stock_document import StockDocument, StockDocumentItem
 from backend.models.stock_operation import StockOperation
 from backend.models.stock_reservation import StockReservation
 from backend.models.tenant import Tenant
 from backend.models.warehouse import Warehouse
+from backend.models.warehouse_inventory_movement import WarehouseInventoryMovement
+from backend.models.wms_product_warehouse_operation import WmsProductWarehouseOperation
 from backend.schemas.production_execution import OrderProductionProgressBody
 from backend.services.production_execution.order_execution_service import (
     finish_order_production,
@@ -119,6 +126,7 @@ def _bootstrap(*, with_buffer: bool = True):
     engine = _engine()
     for model in (
         Tenant,
+        AppUser,
         Warehouse,
         Location,
         OrderUiStatus,
@@ -128,9 +136,12 @@ def _bootstrap(*, with_buffer: bool = True):
         PickingConfig,
         Order,
         OrderItem,
+        OrderIssueTask,
         ProductionOrder,
         ProductionOrderLineSnapshot,
         ProductionOrderSourceItem,
+        ProductionFgOutput,
+        DocumentSeries,
         Inventory,
         StockDocument,
         StockDocumentItem,
@@ -138,12 +149,26 @@ def _bootstrap(*, with_buffer: bool = True):
         StockReservation,
         FulfillmentEvent,
         OrderItemPickAllocation,
+        WarehouseInventoryMovement,
+        WmsProductWarehouseOperation,
+        ActivityEvent,
+        ActivityEventLink,
     ):
         model.__table__.create(engine, checkfirst=True)
 
     Session = sessionmaker(bind=engine)
     db = Session()
     db.add(Tenant(id=1, name="T", default_warehouse_id=1))
+    db.add(
+        AppUser(
+            id=1,
+            login="op1",
+            email="op1@test.local",
+            password_hash="x",
+            role="admin",
+            is_active=True,
+        )
+    )
     db.add(Warehouse(id=1, tenant_id=1, name="WH", requires_putaway=False))
     db.add(Location(id=1, warehouse_id=1, name="PICK", location_type="NORMAL", is_active=True))
     db.add(Location(id=50, warehouse_id=1, name="BUFOR_PRODUKCJA_A", location_type="NORMAL", is_active=True))

@@ -89,8 +89,10 @@ from ..services.production_execution.print_execution_service import (
     start_print_execution_order,
 )
 from ..services.production_execution.production_card_pdf_service import (
+    generate_batch_material_pick_list_pdf_bytes,
     generate_batch_production_card_pdf_bytes,
     generate_bulk_batch_production_cards_pdf_bytes,
+    generate_order_material_pick_list_pdf_bytes,
     generate_order_production_card_pdf_bytes,
 )
 from ..services.production_execution.wms_queue_service import list_wms_execution_queue
@@ -969,6 +971,37 @@ def api_batch_production_card_pdf(
     )
 
 
+@router.get("/batches/{batch_id}/material-pick-list.pdf")
+def api_batch_material_pick_list_pdf(
+    batch_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _gate_production_batch(
+        db, user, tenant_id=tenant_id, batch_id=batch_id, warehouse_id=warehouse_id
+    )
+    try:
+        pdf = generate_batch_material_pick_list_pdf_bytes(db, tenant_id=tenant_id, batch_id=batch_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="PDF engine not configured (install Node deps in backend/scripts/structure_report_pdf).",
+        ) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="lista-pobrania-batch-{batch_id}.pdf"'
+        },
+    )
+
+
 @router.post("/batches/production-cards.pdf")
 def api_bulk_batch_production_cards_pdf(
     body: BulkProductionCardsBody,
@@ -1347,6 +1380,32 @@ def api_order_production_card_pdf(
         content=pdf,
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="karta-produkcyjna-order-{order_id}.pdf"'},
+    )
+
+
+@router.get("/orders/{order_id}/material-pick-list.pdf")
+def api_order_material_pick_list_pdf(
+    order_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_active_or_query_operable_warehouse),
+    db: Session = Depends(get_db),
+    user: AppUser = Depends(get_current_user),
+):
+    _gate_production_order(
+        db, user, tenant_id=tenant_id, order_id=order_id, warehouse_id=warehouse_id
+    )
+    try:
+        pdf = generate_order_material_pick_list_pdf_bytes(db, tenant_id=tenant_id, order_id=order_id)
+    except ProductionOrderError as exc:
+        raise _order_err(exc) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="lista-pobrania-order-{order_id}.pdf"'
+        },
     )
 
 

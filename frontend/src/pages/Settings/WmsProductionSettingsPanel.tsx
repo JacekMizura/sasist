@@ -9,7 +9,6 @@ import {
   type ProductionReservationSettings,
   type ProductionTraceabilitySettings,
   type ProductionTerminalDisplaySettings,
-  type ProductionTerminalRequiredSettings,
   type WmsProductionSettings,
 } from "../../api/wmsProductionSettingsApi";
 import { SettingInfoButton } from "./SettingInfoButton";
@@ -84,7 +83,6 @@ const DISPLAY_FIELDS: {
   { key: "show_ean", label: "EAN", helpKey: "show_ean" },
   { key: "show_catalog_number", label: "Numer katalogowy", helpKey: "show_catalog_number" },
   { key: "show_source_location", label: "Lokalizacja źródłowa", helpKey: "show_source_location" },
-  { key: "show_target_location", label: "Lokalizacja docelowa", helpKey: "show_target_location" },
   { key: "show_stock_level", label: "Stan magazynowy", helpKey: "show_stock_level" },
   { key: "show_unit", label: "Jednostka", helpKey: "show_unit" },
   { key: "show_barcode", label: "Kod kreskowy", helpKey: "show_barcode" },
@@ -133,7 +131,6 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<WmsProductionSettings | null>(null);
   const [draftDisplay, setDraftDisplay] = useState<ProductionTerminalDisplaySettings | null>(null);
-  const [draftRequired, setDraftRequired] = useState<ProductionTerminalRequiredSettings | null>(null);
   const [draftForecast, setDraftForecast] = useState<ProductionForecastSettings | null>(null);
   const [draftReservation, setDraftReservation] = useState<ProductionReservationSettings | null>(null);
   const [draftTraceability, setDraftTraceability] = useState<ProductionTraceabilitySettings | null>(null);
@@ -147,8 +144,7 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
         warehouseId: warehouseId != null && warehouseId > 0 ? warehouseId : undefined,
       });
       setSaved(data);
-      setDraftDisplay(data.terminal_display);
-      setDraftRequired(data.terminal_required);
+      setDraftDisplay({ ...data.terminal_display, show_target_location: false });
       setDraftForecast(
         data.forecast ?? {
           strategy: "PERIOD_AVERAGE",
@@ -173,21 +169,21 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
   }, [load]);
 
   const dirty = useMemo(() => {
-    if (!saved || !draftDisplay || !draftRequired || !draftForecast || !draftReservation || !draftTraceability) {
+    if (!saved || !draftDisplay || !draftForecast || !draftReservation || !draftTraceability) {
       return false;
     }
+    const savedDisplay = { ...saved.terminal_display, show_target_location: false };
     return (
-      JSON.stringify(saved.terminal_display) !== JSON.stringify(draftDisplay) ||
-      JSON.stringify(saved.terminal_required) !== JSON.stringify(draftRequired) ||
+      JSON.stringify(savedDisplay) !== JSON.stringify(draftDisplay) ||
       JSON.stringify(saved.forecast) !== JSON.stringify(draftForecast) ||
       JSON.stringify(saved.reservation ?? { allocation_strategy: "FEFO", allow_sales_locations: false }) !==
         JSON.stringify(draftReservation) ||
       JSON.stringify(saved.traceability ?? DEFAULT_TRACEABILITY) !== JSON.stringify(draftTraceability)
     );
-  }, [saved, draftDisplay, draftRequired, draftForecast, draftReservation, draftTraceability]);
+  }, [saved, draftDisplay, draftForecast, draftReservation, draftTraceability]);
 
   const save = async () => {
-    if (!draftDisplay || !draftRequired || !draftForecast || !draftReservation || !draftTraceability || !dirty) {
+    if (!draftDisplay || !draftForecast || !draftReservation || !draftTraceability || !dirty) {
       return;
     }
     setSaving(true);
@@ -195,15 +191,13 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
       const data = await saveWmsProductionSettings({
         tenant_id: DAMAGE_TENANT_ID,
         warehouse_id: warehouseId ?? resolvedWh ?? undefined,
-        terminal_display: draftDisplay,
-        terminal_required: draftRequired,
+        terminal_display: { ...draftDisplay, show_target_location: false },
         forecast: draftForecast,
         reservation: draftReservation,
         traceability: draftTraceability,
       });
       setSaved(data);
-      setDraftDisplay(data.terminal_display);
-      setDraftRequired(data.terminal_required);
+      setDraftDisplay({ ...data.terminal_display, show_target_location: false });
       setDraftForecast(data.forecast);
       setDraftReservation(data.reservation ?? { allocation_strategy: "FEFO", allow_sales_locations: false });
       setDraftTraceability(data.traceability ?? DEFAULT_TRACEABILITY);
@@ -239,7 +233,7 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
     },
   ];
 
-  if (loading || !draftDisplay || !draftRequired || !draftForecast || !draftReservation || !draftTraceability) {
+  if (loading || !draftDisplay || !draftForecast || !draftReservation || !draftTraceability) {
     return <p className="text-sm text-slate-500">Wczytywanie ustawień produkcji…</p>;
   }
 
@@ -253,8 +247,7 @@ export default function WmsProductionSettingsPanel({ warehouseId }: Props) {
       onSave={() => void save()}
       onRestoreDefaults={() => {
         if (saved) {
-          setDraftDisplay(saved.terminal_display);
-          setDraftRequired(saved.terminal_required);
+          setDraftDisplay({ ...saved.terminal_display, show_target_location: false });
           setDraftForecast(saved.forecast);
           setDraftReservation(saved.reservation ?? { allocation_strategy: "FEFO", allow_sales_locations: false });
           setDraftTraceability(saved.traceability ?? DEFAULT_TRACEABILITY);

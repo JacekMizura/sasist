@@ -1,3 +1,11 @@
+**§26 Produkcja v1 backlog — wdrożony (2026-08-16), bez commit/push.**
+- Cleanup: usunięto UI „Lokalizacja docelowa” + martwy `terminal_required` round-trip; usunięto path zamienników
+- RW: linia = PRODUCT×LOT×expiry (MO+BAT); SN tylko audit/ops
+- Planning: `combined = max(0, orders+target−stock−pipeline)`; historia = realized sales (packed/shipped/done)
+- Lista pobrania: CTA + DTE `production_material_pick_list` + queue print
+- Docs TRYB_PRODUKCJI zaktualizowane; §26 zostawia tylko zamienniki jako dalszy rozwój
+- Testy: planning CASE A–I PASS; RW LOT PASS; collection PASS; vitest Production 67 PASS; tsc PASS; npm build PASS
+
 **Forecast strategies: only 3 (2026-08-16).**
 - Removed MEDIAN / MAX_DAILY / AI_SMART from BE+FE; SSOT: PERIOD/WEIGHTED/WEEKDAY
 - UI: Standardowa / Uwzględniaj trend / Według dni tygodnia; no legacy notice

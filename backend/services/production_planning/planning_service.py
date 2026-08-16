@@ -207,7 +207,7 @@ def build_planning_snapshot(db: Session, ctx: PlanningContext) -> ProductionDema
         order_need = max(0.0, order_demand - on_hand - in_pipeline)
         combined_raw = combined_production_need(
             order_demand=order_demand,
-            forecast_need=forecast_need,
+            target_stock=target,
             on_hand=on_hand,
             in_pipeline=in_pipeline,
         )

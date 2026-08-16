@@ -172,6 +172,7 @@ export type ProductionOperationalState = {
 
 export type ProductionSecondaryActionId =
   | "print_card"
+  | "print_pick_list"
   | "start_paper"
   | "open_erp"
   | "open_wms"
@@ -598,6 +599,7 @@ export function resolveProductionSecondaryActions(
 
   if (!terminal) {
     out.push({ id: "print_card", label: print ? "Podgląd karty" : "Drukuj kartę" });
+    out.push({ id: "print_pick_list", label: "Drukuj listę pobrania" });
   }
 
   if (

@@ -31,7 +31,6 @@ export const erpProductionPaths = {
   shortages: `${ERP_PRODUCTION_BASE}/materialy/braki`,
   /** @deprecated Use materialsAnalysis */
   materialAnalysis: `${ERP_PRODUCTION_BASE}/materialy/analiza`,
-  materialSubstitutes: `${ERP_PRODUCTION_BASE}/zastepniki-materialow`,
 } as const;
 
 /** WMS terminal — operator execution only (collect → produce → standard putaway). */

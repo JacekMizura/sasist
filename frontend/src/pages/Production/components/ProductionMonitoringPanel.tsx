@@ -30,6 +30,7 @@ export type ProductionMonitoringActions = {
   onReleaseToWms?: () => void;
   onStartErpExecution?: () => void;
   onPrintProductionCard?: () => void;
+  onPrintMaterialPickList?: () => void;
   onStartPrintExecution?: () => void;
   onOpenErpExecution?: () => void;
   onCancel?: () => void;
@@ -242,6 +243,9 @@ export function ProductionMonitoringPanel({
       case "preview_print":
         actions?.onPrintProductionCard?.();
         break;
+      case "print_pick_list":
+        actions?.onPrintMaterialPickList?.();
+        break;
       case "start_paper":
         actions?.onStartErpExecution?.();
         break;
@@ -261,6 +265,9 @@ export function ProductionMonitoringPanel({
   const secondaryForBar = secondary.filter((s) => {
     if (s.id === "print_card" || s.id === "preview_print") {
       return Boolean(actions?.onPrintProductionCard);
+    }
+    if (s.id === "print_pick_list") {
+      return Boolean(actions?.onPrintMaterialPickList);
     }
     if (s.id === "start_paper") return Boolean(actions?.onStartErpExecution);
     if (s.id === "open_erp") return Boolean(actions?.onOpenErpExecution);

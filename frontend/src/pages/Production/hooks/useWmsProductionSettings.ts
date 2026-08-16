@@ -3,7 +3,6 @@ import { useCallback, useEffect, useState } from "react";
 import {
   getWmsProductionSettings,
   type ProductionTerminalDisplaySettings,
-  type ProductionTerminalRequiredSettings,
   type ProductionTraceabilitySettings,
   type WmsProductionSettings,
 } from "@/api/wmsProductionSettingsApi";
@@ -21,16 +20,6 @@ const DEFAULT_DISPLAY: ProductionTerminalDisplaySettings = {
   show_stock_level: true,
   show_unit: true,
   show_barcode: true,
-};
-
-const DEFAULT_REQUIRED: ProductionTerminalRequiredSettings = {
-  require_batch_number: false,
-  require_serial: false,
-  require_lot: false,
-  require_production_date: false,
-  require_expiry_date: false,
-  require_operator: false,
-  require_quality_control: false,
 };
 
 const DEFAULT_TRACEABILITY: ProductionTraceabilitySettings = {
@@ -62,7 +51,15 @@ export function useWmsProductionSettings() {
         tenant_id: tenantId,
         warehouse_id: warehouseId,
         terminal_display: DEFAULT_DISPLAY,
-        terminal_required: DEFAULT_REQUIRED,
+        terminal_required: {
+          require_batch_number: false,
+          require_serial: false,
+          require_lot: false,
+          require_production_date: false,
+          require_expiry_date: false,
+          require_operator: false,
+          require_quality_control: false,
+        },
         traceability: DEFAULT_TRACEABILITY,
         forecast: {
           strategy: "PERIOD_AVERAGE",
@@ -85,7 +82,6 @@ export function useWmsProductionSettings() {
   return {
     loading,
     display: settings?.terminal_display ?? DEFAULT_DISPLAY,
-    required: settings?.terminal_required ?? DEFAULT_REQUIRED,
     traceability: settings?.traceability ?? DEFAULT_TRACEABILITY,
     reload,
   };

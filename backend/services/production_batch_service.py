@@ -1612,6 +1612,14 @@ def _consume_batch_materials(
         doc = db.query(StockDocument).filter(StockDocument.id == int(batch.rw_stock_document_id)).first()
         if doc is not None:
             return doc
+    from .production_execution.rw_lot_lines import (
+        RwIssueSlice,
+        create_rw_lines_for_lot_groups,
+        group_slices_by_lot,
+        lot_key,
+        slices_from_committed_dicts,
+    )
+
     alloc_map = _resolve_batch_allocations(db, batch, totals=totals, component_allocations=component_allocations)
     try:
         series = require_warehouse_series(db, tenant_id=int(batch.tenant_id), warehouse_id=int(batch.warehouse_id), subtype="RW")
@@ -1638,77 +1646,68 @@ def _consume_batch_materials(
         if not allocs:
             continue
         qty_sum = sum(q for _, q in allocs)
-        line = StockDocumentItem(
-            document_id=int(rw_doc.id),
-            product_id=int(pid),
-            ordered_quantity=qty_sum,
-            received_quantity=qty_sum,
-            quantity=qty_sum,
-            batch_number="",
-            expiry_date=date(9999, 12, 31),
-        )
-        db.add(line)
-        db.flush()
         unit_net = float(get_product_current_cost(db, int(batch.tenant_id), int(pid)).get("purchase_net") or 0)
-        line.purchase_price_net = unit_net
         alloc_meta = {
             (int(a.line_snapshot_id), int(a.location_id)): a for a in (component_allocations or [])
         }
         committed = (committed_slices_by_product or {}).get(int(pid))
+        issue_slices: list[RwIssueSlice] = []
         if committed:
-            # Inventory already decremented at WMS confirm — post RW lines only.
             committed_total = sum(float(s.get("quantity") or 0) for s in committed)
             if abs(committed_total - float(qty_sum)) > 1e-2:
                 raise ProductionBatchError(
                     f"Zatwierdzone pobranie składnika #{pid} ({committed_total}) ≠ wymagane ({qty_sum}).",
                     code="allocation_mismatch",
                 )
-            for s in committed:
-                loc_id = int(s.get("location_id") or 0)
-                if loc_id <= 0:
-                    continue
-                exp_raw = s.get("expiry_date")
-                try:
-                    exp = date.fromisoformat(str(exp_raw)) if exp_raw else date(9999, 12, 31)
-                except ValueError:
-                    exp = date(9999, 12, 31)
-                _append_rw_issue_with_product_audit(
+            issue_slices = slices_from_committed_dicts(int(pid), committed)
+        else:
+            for loc_id, qty in allocs:
+                meta = alloc_meta.get((int(pid), int(loc_id)))
+                slices = consume_production_material_slices(
                     db,
-                    rw_doc=rw_doc,
-                    line=line,
-                    slice_qty=float(s.get("quantity") or 0),
-                    from_location_id=loc_id,
-                    batch_number=str(s.get("batch_number") or ""),
-                    expiry_date=exp if exp < NO_EXPIRY_SENTINEL else None,
-                    serial_number=str(s.get("serial_number") or "") or None,
-                    performed_by_user_id=performed_by_user_id,
-                    production_batch_id=int(batch.id),
+                    tenant_id=int(batch.tenant_id),
+                    warehouse_id=int(batch.warehouse_id),
                     product_id=int(pid),
+                    location_id=int(loc_id),
+                    quantity=float(qty),
+                    batch_number=(meta.batch_number or meta.lot) if meta else None,
+                    lot=meta.lot if meta else None,
+                    serial_number=meta.serial_number if meta else None,
                 )
-            continue
-        for loc_id, qty in allocs:
-            meta = alloc_meta.get((int(pid), int(loc_id)))
-            slices = consume_production_material_slices(
-                db,
-                tenant_id=int(batch.tenant_id),
-                warehouse_id=int(batch.warehouse_id),
-                product_id=int(pid),
-                location_id=int(loc_id),
-                quantity=float(qty),
-                batch_number=(meta.batch_number or meta.lot) if meta else None,
-                lot=meta.lot if meta else None,
-                serial_number=meta.serial_number if meta else None,
-            )
-            for sl in slices:
+                for sl in slices:
+                    bn, exp = lot_key(sl.batch_number, sl.expiry_date)
+                    issue_slices.append(
+                        RwIssueSlice(
+                            product_id=int(pid),
+                            quantity=float(sl.quantity),
+                            location_id=int(loc_id),
+                            batch_number=bn,
+                            expiry_date=exp,
+                            serial_number=(meta.serial_number if meta else None),
+                        )
+                    )
+        grouped = group_slices_by_lot(issue_slices)
+        lines = create_rw_lines_for_lot_groups(
+            db,
+            rw_doc=rw_doc,
+            grouped=grouped,
+            unit_net_by_product={int(pid): unit_net},
+        )
+        for key, group in grouped.items():
+            line = lines.get(key)
+            if line is None:
+                continue
+            for s in group:
+                exp = s.expiry_date if s.expiry_date < NO_EXPIRY_SENTINEL else None
                 _append_rw_issue_with_product_audit(
                     db,
                     rw_doc=rw_doc,
                     line=line,
-                    slice_qty=float(sl.quantity),
-                    from_location_id=int(loc_id),
-                    batch_number=sl.batch_number or "",
-                    expiry_date=sl.expiry_date if sl.expiry_date < NO_EXPIRY_SENTINEL else None,
-                    serial_number=(meta.serial_number if meta else None),
+                    slice_qty=float(s.quantity),
+                    from_location_id=int(s.location_id),
+                    batch_number=s.batch_number or "",
+                    expiry_date=exp,
+                    serial_number=s.serial_number,
                     performed_by_user_id=performed_by_user_id,
                     production_batch_id=int(batch.id),
                     product_id=int(pid),

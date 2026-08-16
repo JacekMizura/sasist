@@ -66,12 +66,18 @@ def forecast_target_stock(
 def combined_production_need(
     *,
     order_demand: float,
-    forecast_need: float,
+    target_stock: float,
     on_hand: float,
     in_pipeline: float,
 ) -> float:
-    """Net production: order gap + stock gap minus existing supply (single subtraction)."""
-    return max(0.0, float(order_demand) + float(forecast_need) - float(on_hand) - float(in_pipeline))
+    """
+    Net production need (single subtraction of supply):
+
+    combined_need = max(0, order_demand + target_stock − on_hand − pipeline)
+
+    Do not pass a pre-subtracted ``forecast_need`` — that double-counts stock/pipeline.
+    """
+    return max(0.0, float(order_demand) + float(target_stock) - float(on_hand) - float(in_pipeline))
 
 
 def raw_production_gap(
@@ -81,9 +87,13 @@ def raw_production_gap(
     on_hand: float,
     in_pipeline: float,
 ) -> float:
-    """Gross gap vs stock target + orders (legacy helper)."""
-    return max(0.0, float(order_demand) + float(target_stock) - float(on_hand) - float(in_pipeline))
-
+    """Alias of combined_production_need (legacy name)."""
+    return combined_production_need(
+        order_demand=order_demand,
+        target_stock=target_stock,
+        on_hand=on_hand,
+        in_pipeline=in_pipeline,
+    )
 
 def forecast_stock_need(
     *,

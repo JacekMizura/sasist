@@ -95,10 +95,6 @@ export function shouldShowSourceLocation(display: ProductionTerminalDisplaySetti
   return Boolean(display.show_source_location);
 }
 
-export function shouldShowTargetLocation(display: ProductionTerminalDisplaySettings): boolean {
-  return Boolean(display.show_target_location);
-}
-
 export function shouldShowStockLevel(display: ProductionTerminalDisplaySettings): boolean {
   return Boolean(display.show_stock_level);
 }

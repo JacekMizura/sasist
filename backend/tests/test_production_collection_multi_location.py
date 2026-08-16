@@ -168,8 +168,13 @@ def multi_loc_db(monkeypatch):
     db.close()
 
 
-def _set_stock(db, rows: list[tuple[int, float]]):
+def _set_stock(db, rows: list[tuple[int, float]], *, lot: str = "", expiry: date | None = None):
     db.query(Inventory).filter(Inventory.product_id == 192).delete()
+    _add_stock(db, rows, lot=lot, expiry=expiry)
+
+
+def _add_stock(db, rows: list[tuple[int, float]], *, lot: str = "", expiry: date | None = None):
+    exp = expiry if expiry is not None else date(9999, 12, 31)
     for loc_id, qty in rows:
         db.add(
             Inventory(
@@ -179,14 +184,14 @@ def _set_stock(db, rows: list[tuple[int, float]]):
                 product_id=192,
                 quantity=qty,
                 stock_disposition=STOCK_DISPOSITION_SALEABLE,
-                batch_number="",
-                expiry_date=date(9999, 12, 31),
+                batch_number=lot,
+                expiry_date=exp,
             )
         )
     db.commit()
 
 
-def _pick(db, qty: float, location_id: int):
+def _pick(db, qty: float, location_id: int, *, batch_number: str | None = None):
     return update_collection_task(
         db,
         tenant_id=1,
@@ -196,6 +201,7 @@ def _pick(db, qty: float, location_id: int):
             collected_qty=qty,
             location_id=location_id,
             action="confirm_pick",
+            batch_number=batch_number,
         ),
     )
 
@@ -299,3 +305,47 @@ def test_report_shortage_closes_component(multi_loc_db):
     assert result.status == "in_progress"
     items = db.query(StockDocumentItem).filter(StockDocumentItem.document_id == result.rw_stock_document_id).all()
     assert sum(float(i.quantity) for i in items) == pytest.approx(27.0)
+
+
+def test_rw_splits_lines_by_lot_and_expiry(multi_loc_db):
+    """PRODUCT × LOT × expiry → one StockDocumentItem each (not one empty-LOT total)."""
+    db = multi_loc_db
+    db.query(Inventory).filter(Inventory.product_id == 192).delete()
+    _add_stock(db, [(1, 6.0)], lot="LOT-A", expiry=date(2027, 1, 1))
+    _add_stock(db, [(2, 4.0)], lot="LOT-B", expiry=date(2027, 3, 1))
+    # Required is 28 in fixture — lower for this case via task patch.
+    batch = db.query(ProductionBatch).filter(ProductionBatch.id == 20).one()
+    batch.collection_state_json = json.dumps(
+        {
+            "tasks": [
+                {
+                    "task_key": "192",
+                    "component_product_id": 192,
+                    "product_name": "Sznurowadła CAT 150 cm",
+                    "required_qty": 10.0,
+                    "collected_qty": 0.0,
+                    "location_id": 0,
+                    "location_code": "",
+                }
+            ]
+        }
+    )
+    db.commit()
+    _pick(db, 6.0, 1, batch_number="LOT-A")
+    _pick(db, 4.0, 2, batch_number="LOT-B")
+    result = finish_collecting(db, tenant_id=1, batch_id=20, performed_by_user_id=1)
+    db.commit()
+    items = (
+        db.query(StockDocumentItem)
+        .filter(StockDocumentItem.document_id == result.rw_stock_document_id)
+        .order_by(StockDocumentItem.batch_number.asc())
+        .all()
+    )
+    assert len(items) == 2
+    assert items[0].batch_number == "LOT-A"
+    assert float(items[0].quantity) == pytest.approx(6.0)
+    assert items[0].expiry_date == date(2027, 1, 1)
+    assert items[1].batch_number == "LOT-B"
+    assert float(items[1].quantity) == pytest.approx(4.0)
+    assert items[1].expiry_date == date(2027, 3, 1)
+    assert sum(float(i.quantity) for i in items) == pytest.approx(10.0)

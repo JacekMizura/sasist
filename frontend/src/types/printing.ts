@@ -87,7 +87,9 @@ export type QueuePrintRequest = {
     | "sale_document"
     | "label"
     | "production_batch_card"
-    | "production_order_card";
+    | "production_order_card"
+    | "production_batch_material_pick_list"
+    | "production_order_material_pick_list";
   document_id?: number | null;
   document_id_str?: string | null;
   warehouse_id?: number | null;

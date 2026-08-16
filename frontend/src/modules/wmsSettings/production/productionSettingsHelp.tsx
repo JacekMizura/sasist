@@ -343,15 +343,6 @@ export const productionSettingsHelp = {
       <p>Pokazuje lokalizację, z której pobierany jest materiał lub towar w trakcie pracy.</p>
     ),
   },
-  show_target_location: {
-    title: "Lokalizacja docelowa",
-    description: (
-      <p>
-        Pokazuje lokalizację docelową na ekranach produkcji, gdy dany ekran to obsługuje (np. gdzie
-        ma trafić wyrób).
-      </p>
-    ),
-  },
   show_stock_level: {
     title: "Stan magazynowy",
     description: <p>Pokazuje dostępny stan magazynowy produktu podczas pracy produkcyjnej.</p>,

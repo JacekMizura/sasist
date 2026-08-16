@@ -320,6 +320,36 @@ def generate_pdf_bytes(db: Session, *, tenant_id: int, payload: QueuePrintReques
             order_id=int(payload.document_id),
             template_version_id=payload.template_version_id,
         )
+    if document_type == "production_batch_material_pick_list":
+        if payload.document_id is None:
+            raise PrintingError(
+                "document_id is required for production_batch_material_pick_list", status_code=400
+            )
+        from ..production_execution.production_card_pdf_service import (
+            generate_batch_material_pick_list_pdf_bytes,
+        )
+
+        return generate_batch_material_pick_list_pdf_bytes(
+            db,
+            tenant_id=tenant_id,
+            batch_id=int(payload.document_id),
+            template_version_id=payload.template_version_id,
+        )
+    if document_type == "production_order_material_pick_list":
+        if payload.document_id is None:
+            raise PrintingError(
+                "document_id is required for production_order_material_pick_list", status_code=400
+            )
+        from ..production_execution.production_card_pdf_service import (
+            generate_order_material_pick_list_pdf_bytes,
+        )
+
+        return generate_order_material_pick_list_pdf_bytes(
+            db,
+            tenant_id=tenant_id,
+            order_id=int(payload.document_id),
+            template_version_id=payload.template_version_id,
+        )
     raise PrintingError(f"Unsupported document_type: {document_type}", status_code=400)
 
 

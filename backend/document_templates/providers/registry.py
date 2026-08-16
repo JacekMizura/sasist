@@ -64,6 +64,20 @@ def build_domain_print_context(
 
                 return sample_production_context()
             raise DocumentProviderError("Wymagany batch_id lub order_id.", code="missing_param")
+        if kind_code == "production_material_pick_list":
+            if params.get("batch_id") is not None:
+                return production_provider.build_batch_production_card(
+                    db, tenant_id=tenant_id, batch_id=int(params["batch_id"])
+                )
+            if params.get("order_id") is not None:
+                return production_provider.build_order_production_card(
+                    db, tenant_id=tenant_id, order_id=int(params["order_id"])
+                )
+            if params.get("sample"):
+                from .sample_data import sample_production_context
+
+                return sample_production_context()
+            raise DocumentProviderError("Wymagany batch_id lub order_id.", code="missing_param")
         if params.get("batch_id"):
             return production_provider.build_batch_production_card(
                 db,

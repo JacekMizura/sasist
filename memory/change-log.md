@@ -1,3 +1,11 @@
+## 2026-08-16 — §26 Produkcja v1 backlog (bez commit/push)
+
+- Cleanup UI: lokalizacja docelowa, terminal_required, path zamienników
+- RW LOT split PRODUCT×LOT×expiry (MO+BAT); SN poza StockDocumentItem
+- Planning: combined = orders+target−stock−pipeline; realized sales history
+- Lista pobrania: CTA + DTE + queue print
+- TRYB_PRODUKCJI zaktualizowany; pozostały GAP: pełny workflow zamienników (poza v1)
+
 ## 2026-08-16 — Prognoza: tylko 3 strategie (BE+FE)
 
 - Usunięto MEDIAN / MAX_DAILY / AI_SMART z enumów, rejestru, FE i testów

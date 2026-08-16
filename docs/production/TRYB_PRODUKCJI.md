@@ -154,12 +154,17 @@ Pokazać, **ile trzeba wyprodukować**, żeby:
 
 ### Jak powstaje rekomendacja (język biznesowy)
 
-1. Z historii sprzedaży wyliczana jest **średnia dzienna** (według strategii).
-2. **Cel zapasu** = średnia dzienna × dni pokrycia (z ograniczeniem min/max).
-3. **Luka magazynowa** = cel − stan − produkcja w toku.
-4. **Potrzeba łączna (combined need)** = popyt z zamówień + luka magazynowa − stan − produkcja w toku (nie mniej niż 0).
+1. Z **zrealizowanej** sprzedaży (packed / shipped / completed — bez anulowanych) wyliczana jest **średnia dzienna** (według strategii).
+2. **Cel zapasu (target_stock)** = średnia dzienna × dni pokrycia (z ograniczeniem min/max produktu).
+3. **Popyt z otwartych zamówień (order_demand)** = ilości na zamówieniach jeszcze niezrealizowanych (osobny strumień — nie wchodzi do historii prognozy).
+4. **Potrzeba łączna (combined need)** =
+   `max(0, order_demand + target_stock − on_hand − pipeline)`  
+   Stan i pipeline są odejmowane **raz**. Nie liczy się najpierw „luki magazynowej”, a potem ponownie nie odejmuje zapasu.
 5. Ilość jest zaokrąglana do MOQ / wielokrotności i ograniczana dostępnością materiałów.
 6. Priorytet: CRITICAL / HIGH / MEDIUM / LOW (m.in. gdy zamówienia przekraczają zapas+pipeline lub pokrycie dni jest niskie).
+
+**Przykład:** daily_rate=10, coverage=7 → target=70; otwarte zamówienia=20; stock=0 → combined=90  
+(20 na bieżące zamówienia + 70 docelowego zapasu po ich obsłużeniu).
 
 ### Strategie prognozowania
 
@@ -188,11 +193,7 @@ Pokazać, **ile trzeba wyprodukować**, żeby:
 **Co tworzy automat:** wyłącznie **zlecenia MO źródła PLANNING** (tworzy nowe lub dokłada ilość do istniejącego draft/planned).  
 **Nie tworzy BAT** z schedulera.
 
-Kolejność pracy automatu: najpierw budzenie / obsługa braków pod zamówienia, potem nadprodukcja na zapas z pozostałych materiałów.
-
-### Uwaga produktowa (nie jest błędem procesu, ale decyzją do świadomości)
-
-Historia sprzedaży opiera się na zamówieniach **niekońcowych**. Jednocześnie popyt zamówieniowy liczy otwarte zamówienia. Przy agresywnych ustawieniach prognozy i popyt mogą się **nakładać** — wymaga decyzji produktowej (sekcja końcowa).
+Kolejność pracy automatu: najpierw budzenie / obsługa braków pod zamówienia, potem nadprodukcja na zapas z pozostałych materiałów. Auto-replenishment używa tej samej metodyki `target_stock` / `forecast_stock_need` (dla nadprodukcji: order_demand=0).
 
 ---
 
@@ -439,7 +440,6 @@ Ustawienia: WMS → Ustawienia → Produkcja → **Wygląd terminala**.
 | Jednostka | Jednostka przy ilościach | collect/execute/kolejki | **ISTNIEJE** |
 | Lokalizacja źródłowa | Skąd zbierać | Karty pobierania | **ISTNIEJE** |
 | Stan magazynowy | „Dostępne tu” | Karty pobierania | **ISTNIEJE** |
-| Lokalizacja docelowa | Docelowe miejsce wyrobu | — | **[GAP]** — przełącznik istnieje, ale brak danych/targetu w API i brak renderu |
 
 ---
 
@@ -464,8 +464,6 @@ Ustawienia: WMS → Ustawienia → Produkcja → **Wygląd terminala**.
 | LOT (numer partii) | Tak — przy rejestracji wyrobu |
 | Numer seryjny | Tak — lista SN przy rejestracji |
 | Data ważności | Tak — przy rejestracji wyrobu |
-| Data produkcji | **[GAP]** — jest w osobnym bloku „terminal_required”, ale **bez UI ustawień i bez egzekucji** w procesie |
-| Wymóg operatora / QC | **[GAP]** — j.w. (pola w modelu ustawień, brak procesu) |
 
 ### Moment rejestracji
 
@@ -478,7 +476,7 @@ Ustawienia: WMS → Ustawienia → Produkcja → **Wygląd terminala**.
 
 ### LOT na dokumencie RW
 
-**[GAP]** — przy tworzeniu pozycji RW numer partii komponentu nie jest kompletnie przenoszony na pozycję dokumentu (ruch magazynowy może nieść LOT, pozycja RW — nie). Wymaga domknięcia, jeśli biznes wymaga LOT na RW.
+**[ISTNIEJE]** — jedna pozycja RW na **PRODUCT × LOT × data ważności**, z ilościami ze slice/ISSUE (MO i BAT). SN komponentu pozostaje w audycie / operacjach magazynowych (bez kolumny SN na `StockDocumentItem`).
 
 ---
 
@@ -492,7 +490,7 @@ Ustawienia: WMS → Ustawienia → Produkcja → **Wygląd terminala**.
 | **PW (na zapas)** | Koniec produkcji BAT/PLANNING/MANUAL | Przyjęcie wyrobu na staging | Kolejka Rozlokowanie |
 | **PW (bufor ORDERS)** | Rejestracja FG ORDERS | Przyjęcie na bufor | Od razu domknięte pod kątem rozlokowania; dalej pakowanie |
 | **Karta produkcyjna** | Wydruk ze zlecenia/partii | Instrukcja / karta pracy | Szablon dokumentu; druk z ERP |
-| **Lista pobrania materiałów** | Szablon konfigurowalny | Lista picku | **[GAP]** — szablon da się przypisać w ustawieniach, brak CTA druku na ekranach produkcji |
+| **Lista pobrania materiałów** | Wydruk ze zlecenia/partii | Lista picku (MO/BAT, FG, komponenty, lokalizacje) | Szablon `production_material_pick_list`; CTA „Drukuj listę pobrania” |
 | **Raport produkcji (szablon)** | Rodzaj szablonu w systemie szablonów | — | **[ISTNIEJE CZĘŚCIOWO]** — rodzaj istnieje w mapie szablonów; nie jest osobnym, domkniętym raportem operacyjnym |
 
 ### Dokumenty ze starej koncepcji (RWP / ZS / ZWP / PWP)
@@ -612,12 +610,11 @@ Patrz sekcja 11.
 | Ustawienie | Działanie |
 |---|---|
 | Przypisanie szablonu „Karta produkcyjna” | Druk karty ze zleceń/partii |
-| Przypisanie szablonu „Lista pobrania materiałów” | **[GAP]** brak CTA druku w UI produkcji |
+| Przypisanie szablonu „Lista pobrania materiałów” | Druk listy pobrania ze zlecenia/partii (ten sam flow druku) |
 
-### 16.7 Blok „wymagania terminala” (ukryty)
+### 16.7 Legacy JSON (bez UI)
 
-W modelu ustawień istnieją flagi: wymagaj LOT/SN/daty produkcji/daty ważności/operatora/QC.  
-**[GAP]** — brak UI i brak egzekucji procesu (osobno od sekcji Identyfikowalność).
+Kolumny / blob `terminal_required` oraz flaga `show_target_location` mogą nadal istnieć w JSON ustawień dla kompatybilności technicznej — **nie sterują** produktem v1 i nie mają aktywnego UI. Traceability SSOT: sekcja Identyfikowalność.
 
 ---
 
@@ -847,119 +844,55 @@ W modelu ustawień istnieją flagi: wymagaj LOT/SN/daty produkcji/daty ważnośc
 
 ---
 
-# Podsumowanie wdrożeniowe
+## 25. Zakres Produkcji v1
 
-## 1. Zakres modułu
+Moduł Produkcja w Sasist v1 obejmuje wytwarzanie wyrobów według receptury, z pełną kontrolą magazynową i operacyjną w dwóch modelach:
 
-Moduł obejmuje:
-- receptury i kartę produktu (Produkcja),
-- planowanie popytu i auto-uzupełnianie,
-- zlecenia MO (ORDERS / PLANNING / MANUAL) i partie BAT,
-- rezerwacje i braki materiałów,
-- WMS pobieranie + produkcja,
-- dokumenty RW/PW,
-- rozlokowanie wyrobu na zapas,
-- handoff do pakowania i auto-pack,
-- identyfikowalność FG,
-- koszty materiałowe,
-- historię i audyt,
-- konfigurator i ustawienia magazynowe produkcji.
+**Produkcja na zapas** — partie i zlecenia planistyczne: pobranie komponentów → produkcja → przyjęcie wewnętrzne (PW) → standardowe Rozlokowanie WMS → stan magazynowy.
 
-## 2. Funkcje istniejące
+**Produkcja pod zamówienie** — zlecenia powiązane z zamówieniami klientów: pobranie → produkcja → lokalizacja buforowa → status po produkcji → Pakowanie albo automatyczne pakowanie (gdy wszystkie nowo gotowe zamówienia mają już list przewozowy).
 
-- Receptury BOM + koszt szacowany + użycie w innych produktach (karta produktu)
-- Planowanie (combined need, symulacja → BAT)
-- Auto-uzupełnianie → MO PLANNING
-- Trigger MO z statusu zamówienia + agregacja
-- Rezerwacje FIFO/FEFO/LIFO
-- WMS collect + execute (także częściowa produkcja)
-- RW / PW
-- ORDERS → bufor → packing / auto-pack (all-or-nothing, print_label)
-- Konfigurator z unikalnym statusem wejściowym
-- Terminal display (poza target location)
-- Identyfikowalność FG w modalu WMS
-- Historia, activity, analiza kosztów, pulpit
-- Most braków → zakupy
-- Tryb wydruku zlecenia / paper execution
+W zakresie v1 znajdują się m.in.:
 
-## 3. Funkcje częściowe
+- receptury (skład, ilości, koszt szacowany) oraz zakładka Produkcja na karcie produktu,
+- planowanie zapotrzebowania z trzema strategiami prognozy: Standardowa, Uwzględniaj trend, Według dni tygodnia,
+- automatyczne uzupełnianie zapasu (zlecenia planistyczne),
+- zlecenia i partie, rezerwacje materiałów (FIFO / FEFO / LIFO), obsługa braków i most do zakupów,
+- przypisanie operatora do zlecenia / partii,
+- terminal WMS: pobieranie komponentów i rejestracja produkcji (także częściowa),
+- dokumenty RW (z LOT×expiry na pozycjach) i PW, karta produkcyjna oraz lista pobrania materiałów (wydruk),
+- identyfikowalność wyrobu (LOT / SN / data ważności) wg ustawień magazynu i produktu,
+- konfigurator produkcji (statusy zamówienia, bufor, WMS vs wydruk, akcja po produkcji),
+- wygląd terminala (zdjęcie, nazwa, kody, jednostka, lokalizacja źródłowa, stan),
+- historia produkcji, dziennik zdarzeń, pulpit i analiza kosztów materiałowych,
+- handoff do Pakowania oraz auto-pack zgodny z ustawieniami Pakowania (w tym druk listu wyłącznie gdy włączony).
 
-- Wersjonowanie receptur (atrybut, nie bogaty PLM)
-- Putaway produkcji (działa przez PW WMS, nie przez osobny terminal produkcji)
-- Druk listy pobrania (szablon bez CTA)
-- Identyfikowalność komponentów / expiry na collect
-- Uprawnienia (tryb WMS, brak granularnych permission keys)
-- Raportowość zarządcza (jest historia/koszty, brak Gantta i raportu zużycia)
-- Trzy strategie prognozy (Standardowa / trend / dni tygodnia) — bez AI/mediany/max
-- Słownik statusu `putaway` vs runtime
-
-## 4. GAP-y wymagające domknięcia
-
-1. **`show_target_location`** — ustawienie bez danych i bez UI.
-2. **`terminal_required`** (data produkcji, operator, QC…) — bez UI i bez egzekucji.
-3. **Projekcja rozlokowania produkcji** vs dokumentowe Rozlokowanie WMS (ryzyko „pustej kolejki”).
-4. **LOT na pozycji RW** — niespójność dokumentu.
-5. **CTA druku listy pobrania materiałów**.
-6. **Ścieżka zamienników materiałów** — elementy backend/ERP niepełnie spięte routingiem FE.
-7. **Nakładanie się historii sprzedaży i order demand** w planowaniu — decyzja metodyki.
-8. **Brak dedykowanych permission keys produkcji**.
-
-## 5. Elementy ze starej specyfikacji („Tryb Produkcji.docx”), których obecny Sasist NIE posiada
-
-| Stara koncepcja | Stan w Sasist |
-|---|---|
-| Osobny „magazyn półproduktów” jako oznaczenie regału + wykluczenie z zbierania | Brak jako osobny byt; są lokalizacje / strefy / rezerwacje |
-| Przyjęcie surowców bez EAN przez nośniki w przebudowanym PZ | Nie jest częścią modułu Produkcja (osobny temat przyjęć) |
-| Przypisanie operatora + push na kolektor + ekskluzywna widoczność zleceń | Brak domkniętego procesu |
-| Zwrot niewykorzystanych komponentów po produkcji („zwróć na magazyn”) | Brak jako osobny etap WMS Produkcja |
-| Dokumenty ZS / ZWP / RWP / PWP jako nazwane typy | Są RW/PW + MO/BAT |
-| Planowanie dostaw surowców w module produkcji | Częściowo most do zakupów z braków — nie pełne „pilnowanie dostaw” |
-| Oś czasu zleceń (Gantt) | Brak |
-| Raport zużycia surowców + raport produkcji okresowy | Brak jako gotowe raporty |
-| Statystyki wydajności pracy trybu produkcji | Brak |
-| Waga / krok jednostki przy pobieraniu (ważenie 100 g) | Brak specjalnego UX wagi w produkcji |
-| Skan gotowych wyrobów kodem jako równoległy sposób rejestracji FG | Rejestracja ilościowa w modalu; nie „skan sztuka po sztuce FG” jako osobny tryb |
-| Produkcja od razu na magazyn bez przyjęcia (ustawienie) | ORDERS idzie na bufor; zapas zawsze przez PW/putaway |
-
-## 6. Decyzje produktowe wymagające podjęcia
-
-1. **Czy rozlokowanie produkcji ma pozostać wyłącznie dokumentowe (PW), czy wraca osobny terminal BAT?**  
-   (obecnie: dokumenty + redirect)
-2. **Czy auto-pack ma nadal omijać ustawienie „Przejdź do pakowania”, czy być mu podporządkowany?**  
-   (obecnie: niezależny przy spełnionych listach)
-3. **Czy historia sprzedaży w planowaniu ma liczyć sprzedaż zrealizowaną, czy otwarte zamówienia?**  
-   (ryzyko podwójnego liczenia z order demand)
-4. **Czy auto-uzupełnianie ma tworzyć BAT zamiast / obok MO PLANNING?**  
-   (obecnie tylko MO PLANNING)
-5. **Czy rozszerzać scope triggera ORDERS poza zamówienia 1-pozycyjne?**
-6. **Czy domykać LOT na RW i target location w terminalu przed rolloutem?**
-7. **Czy budować uprawnienia granularne produkcji, czy wystarczy tryb WMS + rola magazynu?**
-8. **Które elementy starej koncepcji (push, zwrot komponentów, Gantt, raport zużycia) wchodzą do roadmapy v1 / v2 / poza zakres?**
+**Powierzchnie użytkownika v1:** ERP Produkcja (pulpit, zlecenia, planowanie, receptury, materiały, historia, koszty, ustawienia), WMS Produkcja (pobieranie, produkcja), WMS Rozlokowanie (PW z produkcji na zapas), WMS Pakowanie (po ORDERS / auto-pack).
 
 ---
 
-## Aneks — mapa ekranów (orientacyjna)
+## 26. Do domknięcia przed wydaniem
 
-### ERP Produkcja
+| # | Problem | Oczekiwane zachowanie | Priorytet |
+|---|---|---|---|
+| 1 | Panel zamienników na Brakach to słownik analizy — bez automatycznej zmiany BOM / pick / RW | Pełny workflow accept-substitute (BOM + pick + RW) w dalszym rozwoju; martwa ścieżka `/produkcja/zastepniki-materialow` usunięta | **P2** (poza v1) |
 
-- Pulpit  
-- Zlecenia (+ nowy / szczegół)  
-- Planowanie (+ partie)  
-- Receptury (+ szczegół)  
-- Materiały: Braki / Rezerwacje / Analiza  
-- Historia  
-- Analiza kosztów  
-- Realizacja papierowa / ERP  
-- Karta produktu → zakładka Produkcja  
-- Ustawienia WMS → Produkcja  
-
-### WMS
-
-- Produkcja → Pobieranie komponentów  
-- Produkcja → Produkcja  
-- Rozlokowanie (PW z produkcji)  
-- Pakowanie (po ORDERS / auto-pack)  
+Nie uznajemy za brak v1: rozlokowania przez standardowe WMS Rozlokowanie (PW), bufora ORDERS bez kolejki putaway, trzech strategii prognozy, auto-pack all-or-nothing, możliwości przypisania operatora do zlecenia, LOT na pozycjach RW, listy pobrania z CTA druku, poprawionej metodyki planowania (realized sales + combined need bez double subtraction).
 
 ---
 
-*Koniec dokumentu. Klasyfikacje i opisy wynikają z audytu aktualnego kodu Sasist; dokument „Tryb Produkcji.docx” użyto wyłącznie jako wzór formy i poziomu szczegółowości.*
+## 27. Dalszy rozwój
+
+Funkcje świadomie **niewchodzące** do Produkcji v1:
+
+- oś czasu zleceń (Gantt) i rozbudowane raporty zarządcze (zużycie surowców, wydajność pracy),
+- ograniczenie realizacji wyłącznie do przypisanego operatora, dedykowana kolejka oraz powiadomienia push (samo przypisanie operatora do zlecenia już jest w v1),
+- zwrot niewykorzystanych komponentów po produkcji jako osobny etap,
+- pełne wersjonowanie receptur w stylu PLM,
+- automatyczna produkcja z zamówień wielopozycyjnych,
+- osobne, granularne uprawnienia produkcji poza trybem WMS / kontekstem magazynu,
+- osobny terminal „Rozlokowanie produkcji” równoległy do dokumentów PW,
+- ważenie / krok jednostki przy pobieraniu oraz rejestracja FG wyłącznie skanem sztuka po sztuce,
+- automatyczny workflow zamienników materiałów (zmiana BOM / pick / RW),
+- wymagania procesu: operator / QC / data produkcji (poza LOT/SN/expiry),
+- osobna kolumna SN na pozycji dokumentu RW.

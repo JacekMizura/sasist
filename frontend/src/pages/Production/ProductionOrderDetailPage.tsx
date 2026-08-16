@@ -6,8 +6,10 @@ import toast from "react-hot-toast";
 import { useWarehouse } from "../../context/WarehouseContext";
 import {
   cancelProductionOrder,
+  downloadOrderMaterialPickListPdf,
   downloadOrderProductionCardPdf,
   getProductionOrder,
+  printOrderMaterialPickListBrowser,
   printOrderProductionCardBrowser,
   releaseOrderToWms,
   startErpExecutionOrder,
@@ -62,7 +64,10 @@ export default function ProductionOrderDetailPage() {
   const [printStartOpen, setPrintStartOpen] = useState(false);
   const [componentsOpen, setComponentsOpen] = useState(true);
 
-  const { queueProductionOrderCard } = useQueuePrint({ tenantId, warehouseId });
+  const { queueProductionOrderCard, queueProductionOrderMaterialPickList } = useQueuePrint({
+    tenantId,
+    warehouseId,
+  });
   const printFlow = usePrintMethodFlow({ tenantId, warehouseId, printerKind: "a4" });
 
   const load = useCallback(async () => {
@@ -125,6 +130,25 @@ export default function ProductionOrderDetailPage() {
         await queueProductionOrderCard(order.id, warehouseId, workstationId, templateVersionId);
       },
       onDownloadPdf: () => downloadOrderProductionCardPdf(tenantId, order.id, warehouseId),
+    });
+  };
+
+  const printPickList = () => {
+    if (!order || warehouseId == null) return;
+    void printFlow.requestPrint({
+      kindCode: "production_material_pick_list",
+      documentTypeKey: "production_order_material_pick_list",
+      title: "Drukuj listę pobrania",
+      onBrowserPrint: () => printOrderMaterialPickListBrowser(tenantId, order.id, warehouseId),
+      onCloudPrint: async (workstationId, templateVersionId) => {
+        await queueProductionOrderMaterialPickList(
+          order.id,
+          warehouseId,
+          workstationId,
+          templateVersionId,
+        );
+      },
+      onDownloadPdf: () => downloadOrderMaterialPickListPdf(tenantId, order.id, warehouseId),
     });
   };
 
@@ -382,6 +406,7 @@ export default function ProductionOrderDetailPage() {
             onReleaseToWms: isPrintMethod ? undefined : () => void releaseToWms(),
             onStartErpExecution: isPrintMethod ? undefined : () => void startErp(),
             onPrintProductionCard: printCard,
+            onPrintMaterialPickList: printPickList,
             onStartPrintExecution:
               isPrintMethod && !printStarted ? () => setPrintStartOpen(true) : undefined,
             onOpenErpExecution:

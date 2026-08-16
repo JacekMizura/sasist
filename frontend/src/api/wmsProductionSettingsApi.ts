@@ -60,7 +60,8 @@ export type WmsProductionSettingsSave = {
   tenant_id: number;
   warehouse_id?: number | null;
   terminal_display: ProductionTerminalDisplaySettings;
-  terminal_required: ProductionTerminalRequiredSettings;
+  /** Legacy unused blob — optional; BE fills defaults when omitted. */
+  terminal_required?: ProductionTerminalRequiredSettings;
   forecast?: ProductionForecastSettings;
   reservation?: ProductionReservationSettings;
   traceability?: ProductionTraceabilitySettings;

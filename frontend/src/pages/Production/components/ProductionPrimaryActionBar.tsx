@@ -32,6 +32,8 @@ function secondaryPresentation(action: ProductionSecondaryAction) {
     case "print_card":
     case "preview_print":
       return { Icon: Printer, title: "Drukuj kartę produkcyjną", tone: "neutral" as const };
+    case "print_pick_list":
+      return { Icon: Printer, title: "Drukuj listę pobrania materiałów", tone: "neutral" as const };
     case "start_paper":
       return { Icon: FileText, title: "Otwórz realizację papierową", tone: "neutral" as const };
     case "open_erp":

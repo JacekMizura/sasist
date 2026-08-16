@@ -14,6 +14,7 @@ from ..services.document_render_service import render_document
 logger = logging.getLogger(__name__)
 
 KIND_CODE = "production_card"
+PICK_LIST_KIND_CODE = "production_material_pick_list"
 
 
 def render_batch_production_card_html(
@@ -22,12 +23,13 @@ def render_batch_production_card_html(
     tenant_id: int,
     batch_id: int,
     template_version_id: int | None = None,
+    kind_code: str = KIND_CODE,
 ) -> str:
     try:
         html = render_document(
             db,
             tenant_id=int(tenant_id),
-            kind_code=KIND_CODE,
+            kind_code=kind_code,
             params={"batch_id": int(batch_id)},
             output_format=DocumentOutputFormat.HTML,
             warehouse_id=_batch_warehouse_id(db, tenant_id=tenant_id, batch_id=batch_id),
@@ -36,9 +38,10 @@ def render_batch_production_card_html(
         return str(html)
     except Exception:
         logger.exception(
-            "render_batch_production_card_html failed tenant_id=%s batch_id=%s",
+            "render_batch_production_card_html failed tenant_id=%s batch_id=%s kind=%s",
             tenant_id,
             batch_id,
+            kind_code,
         )
         raise
 
@@ -49,12 +52,13 @@ def render_order_production_card_html(
     tenant_id: int,
     order_id: int,
     template_version_id: int | None = None,
+    kind_code: str = KIND_CODE,
 ) -> str:
     try:
         html = render_document(
             db,
             tenant_id=int(tenant_id),
-            kind_code=KIND_CODE,
+            kind_code=kind_code,
             params={"order_id": int(order_id)},
             output_format=DocumentOutputFormat.HTML,
             warehouse_id=_order_warehouse_id(db, tenant_id=tenant_id, order_id=order_id),
@@ -63,7 +67,48 @@ def render_order_production_card_html(
         return str(html)
     except Exception:
         logger.exception(
-            "render_order_production_card_html failed tenant_id=%s order_id=%s",
+            "render_order_production_card_html failed tenant_id=%s order_id=%s kind=%s",
+            tenant_id,
+            order_id,
+            kind_code,
+        )
+        raise
+
+
+def generate_batch_material_pick_list_pdf_bytes(db: Session, *, tenant_id: int, batch_id: int) -> bytes:
+    try:
+        pdf = render_document(
+            db,
+            tenant_id=int(tenant_id),
+            kind_code=PICK_LIST_KIND_CODE,
+            params={"batch_id": int(batch_id)},
+            output_format=DocumentOutputFormat.PDF,
+            warehouse_id=_batch_warehouse_id(db, tenant_id=tenant_id, batch_id=batch_id),
+        )
+        return bytes(pdf)
+    except Exception:
+        logger.exception(
+            "generate_batch_material_pick_list_pdf_bytes failed tenant_id=%s batch_id=%s",
+            tenant_id,
+            batch_id,
+        )
+        raise
+
+
+def generate_order_material_pick_list_pdf_bytes(db: Session, *, tenant_id: int, order_id: int) -> bytes:
+    try:
+        pdf = render_document(
+            db,
+            tenant_id=int(tenant_id),
+            kind_code=PICK_LIST_KIND_CODE,
+            params={"order_id": int(order_id)},
+            output_format=DocumentOutputFormat.PDF,
+            warehouse_id=_order_warehouse_id(db, tenant_id=tenant_id, order_id=order_id),
+        )
+        return bytes(pdf)
+    except Exception:
+        logger.exception(
+            "generate_order_material_pick_list_pdf_bytes failed tenant_id=%s order_id=%s",
             tenant_id,
             order_id,
         )

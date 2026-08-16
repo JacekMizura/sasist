@@ -579,6 +579,75 @@ def generate_order_production_card_pdf_bytes(
         raise
 
 
+def generate_batch_material_pick_list_pdf_bytes(
+    db: Session,
+    *,
+    tenant_id: int,
+    batch_id: int,
+    template_version_id: int | None = None,
+) -> bytes:
+    from ...document_templates.adapters.production_card_adapter import (
+        PICK_LIST_KIND_CODE,
+        generate_batch_material_pick_list_pdf_bytes as dte_pdf,
+        render_batch_production_card_html,
+    )
+
+    try:
+        if template_version_id is not None:
+            html = render_batch_production_card_html(
+                db,
+                tenant_id=tenant_id,
+                batch_id=batch_id,
+                template_version_id=template_version_id,
+                kind_code=PICK_LIST_KIND_CODE,
+            )
+            return html_document_to_pdf_bytes(html)
+        return dte_pdf(db, tenant_id=tenant_id, batch_id=batch_id)
+    except Exception:
+        logger.exception(
+            "generate_batch_material_pick_list_pdf_bytes failed tenant_id=%s batch_id=%s",
+            tenant_id,
+            batch_id,
+        )
+        # Same component context as production card (legacy fallback).
+        html = build_batch_production_card_html(db, tenant_id=tenant_id, batch_id=batch_id)
+        return html_document_to_pdf_bytes(html)
+
+
+def generate_order_material_pick_list_pdf_bytes(
+    db: Session,
+    *,
+    tenant_id: int,
+    order_id: int,
+    template_version_id: int | None = None,
+) -> bytes:
+    from ...document_templates.adapters.production_card_adapter import (
+        PICK_LIST_KIND_CODE,
+        generate_order_material_pick_list_pdf_bytes as dte_pdf,
+        render_order_production_card_html,
+    )
+
+    try:
+        if template_version_id is not None:
+            html = render_order_production_card_html(
+                db,
+                tenant_id=tenant_id,
+                order_id=order_id,
+                template_version_id=template_version_id,
+                kind_code=PICK_LIST_KIND_CODE,
+            )
+            return html_document_to_pdf_bytes(html)
+        return dte_pdf(db, tenant_id=tenant_id, order_id=order_id)
+    except Exception:
+        logger.exception(
+            "generate_order_material_pick_list_pdf_bytes failed tenant_id=%s order_id=%s",
+            tenant_id,
+            order_id,
+        )
+        html = build_order_production_card_html(db, tenant_id=tenant_id, order_id=order_id)
+        return html_document_to_pdf_bytes(html)
+
+
 def generate_bulk_batch_production_cards_pdf_bytes(
     db: Session,
     *,
