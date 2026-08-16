@@ -258,6 +258,42 @@ def test_create_update_multi_hall_and_status_conflicts():
         )
 
 
+def test_production_create_rejects_source_used_by_picking():
+    """Global uniqueness: source_status_id cannot collide with standard picking."""
+    db = _make_db()
+    db.add(
+        PickingConfig(
+            tenant_id=1,
+            warehouse_id=2,
+            source_status_id=13,
+            target_status_id=14,
+            strategy="locations",
+            pick_unit="products",
+            order_sort="date",
+            single_mode="bulk",
+            multi_mode="bulk",
+            all_mode="bulk",
+            is_production_mode=False,
+            is_active=True,
+        )
+    )
+    db.commit()
+    with pytest.raises(ValueError, match="zbierania lub produkcji"):
+        create_production_config(
+            db,
+            ProductionConfigCreate(
+                tenant_id=1,
+                warehouse_id=2,
+                name="Kolizja ze zbieraniem",
+                source_status_id=13,
+                status_after_production_id=11,
+                status_on_component_shortage_id=12,
+                status_awaiting_production_id=15,
+                finished_goods_buffer_location_id=100,
+            ),
+        )
+
+
 def test_disable_keeps_row_for_historical_mo_lookup():
     db = _make_db()
     # Minimal ProductionOrder table for FK check — create only if model table available

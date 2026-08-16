@@ -32,7 +32,12 @@ export function flattenPanelStatuses(summary: OrderUiStatusPanelSummary | null |
  */
 export function allowedPickingSourceStatusIds(opts: {
   summary: OrderUiStatusPanelSummary | null | undefined;
-  /** source_status_id innych reguł — nie pokazuj (poza bieżącą edycją). */
+  /**
+   * source_status_id innych reguł — wyklucz z zestawu *wybieralnego*.
+   * W UI zajęte statusy zostają widoczne i są grayed przez `disabledStatusIds`
+   * na {@link OrderUiStatusField} / {@link OrderUiStatusPicker} (nie ukrywaj ich
+   * przez `filterPanelSummaryByStatusIds` bez `excludeSourceIds: []`).
+   */
   excludeSourceIds?: Iterable<number>;
 }): Set<number> {
   const excluded = new Set(

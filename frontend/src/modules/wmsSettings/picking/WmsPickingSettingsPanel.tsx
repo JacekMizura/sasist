@@ -1297,6 +1297,16 @@ function PickingConfiguratorEditor({
 }) {
   const statusNameById = useMemo(() => buildOrderUiStatusNameById(orderUiSummary), [orderUiSummary]);
 
+  /** Widoczne w pickerze (w tym zajęte — grayed via disabledStatusIds). */
+  const sourceVisibleIds = useMemo(
+    () =>
+      allowedPickingSourceStatusIds({
+        summary: orderUiSummary,
+        excludeSourceIds: [],
+      }),
+    [orderUiSummary],
+  );
+  /** Wybieralne (bez źródeł zajętych przez inne reguły). */
   const sourceAllowedIds = useMemo(
     () =>
       allowedPickingSourceStatusIds({
@@ -1318,8 +1328,8 @@ function PickingConfiguratorEditor({
   const selectedTargetId = statusIdFromSettingValue(statusAfterPick);
 
   const sourcePanelSummary = useMemo(
-    () => filterPanelSummaryByStatusIds(orderUiSummary, sourceAllowedIds),
-    [orderUiSummary, sourceAllowedIds],
+    () => filterPanelSummaryByStatusIds(orderUiSummary, sourceVisibleIds),
+    [orderUiSummary, sourceVisibleIds],
   );
   const targetPanelSummary = useMemo(
     () => filterPanelSummaryByStatusIds(orderUiSummary, targetAllowedIds),
@@ -1330,7 +1340,7 @@ function PickingConfiguratorEditor({
     warehouseId == null ||
     orderUiLoading ||
     orderUiErr != null ||
-    (sourceAllowedIds.size === 0 && targetAllowedIds.size === 0);
+    (sourceVisibleIds.size === 0 && targetAllowedIds.size === 0);
 
   const canPickStatus = !selectDisabled;
   const statusToPickRequired = canPickStatus && statusToPickShowError && statusToPick === "";
@@ -1362,7 +1372,7 @@ function PickingConfiguratorEditor({
       {!orderUiLoading &&
       warehouseId != null &&
       orderUiErr == null &&
-      sourceAllowedIds.size === 0 ? (
+      sourceVisibleIds.size === 0 ? (
         <p className="text-sm text-slate-600">
           Brak statusów, z których można rozpocząć zbieranie. Dodaj aktywne statusy w grupie NOWE / W TOKU
           w ustawieniach zamówień (statusy panelu).
@@ -1389,14 +1399,16 @@ function PickingConfiguratorEditor({
               panelSubgroups={panelSubgroups}
               statusNameById={statusNameById}
               selectedStatusId={selectedSourceId}
+              disabledStatusIds={excludeSourceStatusIds}
               onPick={(id) => {
+                if (id != null && excludeSourceStatusIds.includes(id)) return;
                 onStatusToPickChange(id != null ? String(id) : "");
                 onStatusToPickBlur();
               }}
               allowClear
               clearLabel="— wybierz —"
               placeholder="Wybierz status zamówienia…"
-              disabled={selectDisabled || sourceAllowedIds.size === 0}
+              disabled={selectDisabled || sourceVisibleIds.size === 0}
               floatingZIndexClass="z-[5100]"
             />
             {statusToPickRequired ? (

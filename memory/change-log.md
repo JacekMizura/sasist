@@ -1,4 +1,19 @@
-﻿## 2026-08-16 — Konfiguracja produkcji UX (no commit)
+﻿## 2026-08-16 — Status wejściowy produkcji: zajęte grayed (jak zbieranie)
+
+- Shared `OrderUiStatusPicker`/`OrderUiStatusField`: prop `disabledStatusIds` (widoczne, wyszarzane)
+- Produkcja: `disabledStatusIds` = źródła innych cfg produkcji + zbierania; własny status przy edycji OK
+- Zbieranie: ten sam mechanizm (zamiast ukrywania zajętych); eligibility helper bez zmian semantyki walidacji
+- Backend: bez zmian logiki (już unikalność `source_status_id`); test kolizji prod↔picking
+- Testy: `test_production_config_ssot` 6 passed; vitest eligibility; `npm run build` PASS
+
+## 2026-08-16 — Pomoc kontekstowa (i) w ustawieniach Produkcji (no commit)
+
+- Canonical copy: `productionSettingsHelp.tsx`; UI: `SettingInfoButton` / `hint` na wierszach WMS
+- Strategia prognozy + alokacji: dropdown z (i) przy każdej opcji; AI_SMART disabled
+- Konfigurator / dokumenty: uzupełnione brakujące (i); usunięty długi opis pod „Automatyczne przeliczanie”
+- `npm run build` PASS
+
+## 2026-08-16 — Konfiguracja produkcji UX (no commit)
 
 - Lista: Status wejściowy | Realizacja; usunięto Nazwę, badge Aktywna, opisy i przełącznik aktywności
 - Status wejściowy edytowalny przez `OrderUiStatusField`; PUT z `source_status_id`

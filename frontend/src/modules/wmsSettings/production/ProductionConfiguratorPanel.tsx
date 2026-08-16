@@ -2,6 +2,7 @@ import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 
+import { listPickingConfigs } from "../../../api/wmsPickingConfigApi";
 import {
   createProductionConfig,
   deleteProductionConfig,
@@ -263,11 +264,9 @@ function ProductionConfigForm({
               panelSubgroups={panelSubgroups}
               statusNameById={statusNameById}
               selectedStatusId={sourceId}
+              disabledStatusIds={excludeSourceIds}
               onPick={(id) => {
-                if (excludeSourceIds.includes(id ?? -1)) {
-                  toast.error("Ten status ma już przypisaną konfigurację produkcji.");
-                  return;
-                }
+                if (id != null && excludeSourceIds.includes(id)) return;
                 const nextId = id != null ? String(id) : "";
                 setDraft((d) => {
                   if (!d) return d;
@@ -564,6 +563,7 @@ function ProductionConfigListRow({
 
 export function ProductionConfiguratorPanel({ warehouseId }: Props) {
   const [configs, setConfigs] = useState<ProductionConfigRead[]>([]);
+  const [pickingSourceStatusIds, setPickingSourceStatusIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
@@ -577,10 +577,18 @@ export function ProductionConfiguratorPanel({ warehouseId }: Props) {
   const [orderUiErr, setOrderUiErr] = useState<string | null>(null);
   const [bufferLocations, setBufferLocations] = useState<WarehouseLocationItem[]>([]);
 
-  const usedSourceStatusIds = useMemo(
-    () => configs.map((c) => c.source_status_id).filter((id) => Number.isFinite(id) && id > 0),
-    [configs],
-  );
+  /** Źródła zajęte przez inne reguły produkcji lub zbierania (SSOT: unikalne source_status_id). */
+  const usedSourceStatusIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const id of pickingSourceStatusIds) {
+      if (Number.isFinite(id) && id > 0) ids.add(id);
+    }
+    for (const c of configs) {
+      const id = c.source_status_id;
+      if (Number.isFinite(id) && id > 0) ids.add(id);
+    }
+    return [...ids];
+  }, [configs, pickingSourceStatusIds]);
 
   const draftDirty = useMemo(() => {
     if (!draft) return false;
@@ -592,12 +600,21 @@ export function ProductionConfiguratorPanel({ warehouseId }: Props) {
   const loadConfigs = useCallback(async () => {
     if (warehouseId == null) {
       setConfigs([]);
+      setPickingSourceStatusIds([]);
       return;
     }
     setLoading(true);
     try {
-      const rows = await listProductionConfigs(DAMAGE_TENANT_ID, warehouseId, true);
-      setConfigs(rows);
+      const [prodRows, pickingRows] = await Promise.all([
+        listProductionConfigs(DAMAGE_TENANT_ID, warehouseId, true),
+        listPickingConfigs(DAMAGE_TENANT_ID, warehouseId).catch(() => []),
+      ]);
+      setConfigs(prodRows);
+      setPickingSourceStatusIds(
+        pickingRows
+          .map((r) => r.source_status_id)
+          .filter((id) => Number.isFinite(id) && id > 0),
+      );
     } catch {
       toast.error("Nie udało się wczytać konfiguracji produkcji.");
     } finally {

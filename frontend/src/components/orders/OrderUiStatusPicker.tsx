@@ -27,6 +27,11 @@ export type OrderUiStatusPickerProps = {
   /** Single-select only: show a clear row (e.g. „— brak —”). */
   allowClear?: boolean;
   clearLabel?: string;
+  /**
+   * Statusy widoczne w hierarchii, ale nieklikalne (np. zajęte przez inną konfigurację).
+   * Używane m.in. przez konfiguratory zbierania / produkcji.
+   */
+  disabledStatusIds?: ReadonlySet<number> | readonly number[];
   focusStatusId?: number | null;
   onFocusStatusHandled?: () => void;
   className?: string;
@@ -55,6 +60,7 @@ function StatusRow({
   mainGroup,
   selected,
   highlighted,
+  disabled = false,
   rowRef,
   onPick,
 }: {
@@ -62,6 +68,7 @@ function StatusRow({
   mainGroup: OrderUiMainGroup;
   selected: boolean;
   highlighted: boolean;
+  disabled?: boolean;
   rowRef?: (el: HTMLButtonElement | null) => void;
   onPick: () => void;
 }) {
@@ -73,20 +80,32 @@ function StatusRow({
       type="button"
       id={`order-ui-st-${status.id}`}
       aria-pressed={selected}
+      aria-disabled={disabled || undefined}
+      disabled={disabled}
+      title={disabled ? "Status zajęty przez inną konfigurację" : undefined}
       className={`flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left text-sm transition-colors ${
-        selected
-          ? "border-orange-200 bg-orange-50 font-medium text-slate-900"
-          : "border-transparent font-normal text-slate-700 hover:bg-slate-50"
-      } ${highlighted ? "ring-2 ring-orange-400 ring-offset-1" : ""}`}
-      onClick={onPick}
+        disabled
+          ? "cursor-not-allowed border-transparent font-normal text-slate-400 opacity-55"
+          : selected
+            ? "border-orange-200 bg-orange-50 font-medium text-slate-900"
+            : "border-transparent font-normal text-slate-700 hover:bg-slate-50"
+      } ${highlighted && !disabled ? "ring-2 ring-orange-400 ring-offset-1" : ""}`}
+      onClick={() => {
+        if (disabled) return;
+        onPick();
+      }}
     >
       <span
         className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-          selected ? "border-orange-500 bg-orange-500 text-white" : "border-slate-300 bg-white"
+          disabled
+            ? "border-slate-200 bg-slate-100 text-slate-300"
+            : selected
+              ? "border-orange-500 bg-orange-500 text-white"
+              : "border-slate-300 bg-white"
         }`}
         aria-hidden
       >
-        {selected ? <Check className="h-2.5 w-2.5" strokeWidth={3} /> : null}
+        {selected && !disabled ? <Check className="h-2.5 w-2.5" strokeWidth={3} /> : null}
       </span>
       <PanelStatusWmsIconColumn markers={markers} />
       <OrderUiStatusBadge
@@ -121,6 +140,7 @@ export function OrderUiStatusPicker({
   onPick,
   allowClear = false,
   clearLabel = "— brak —",
+  disabledStatusIds,
   focusStatusId = null,
   onFocusStatusHandled,
   className = "",
@@ -130,6 +150,14 @@ export function OrderUiStatusPicker({
   const multi = typeof onSelectedIdsChange === "function";
   const selectedIds = selectedStatusIds ?? EMPTY_IDS;
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const disabledIdSet = useMemo(() => {
+    if (!disabledStatusIds) return null;
+    if (disabledStatusIds instanceof Set) return disabledStatusIds;
+    return new Set(
+      [...disabledStatusIds].filter((id) => Number.isFinite(id) && id > 0).map((id) => Number(id)),
+    );
+  }, [disabledStatusIds]);
+  const isStatusDisabled = (id: number) => Boolean(disabledIdSet?.has(id));
 
   const [searchQuery, setSearchQuery] = useState("");
   const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -196,6 +224,7 @@ export function OrderUiStatusPicker({
   const isSelected = (id: number) => (multi ? selectedIdSet.has(id) : selectedStatusId === id);
 
   const activate = (id: number) => {
+    if (isStatusDisabled(id)) return;
     if (multi) {
       const next = selectedIdSet.has(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id];
       onSelectedIdsChange!(next);
@@ -293,6 +322,7 @@ export function OrderUiStatusPicker({
                     mainGroup={mainGroup}
                     selected={isSelected(status.id)}
                     highlighted={flashId === status.id}
+                    disabled={isStatusDisabled(status.id)}
                     rowRef={bindRow(status.id)}
                     onPick={() => activate(status.id)}
                   />
@@ -339,6 +369,7 @@ export function OrderUiStatusPicker({
                           mainGroup={mainGroup}
                           selected={isSelected(s.id)}
                           highlighted={flashId === s.id}
+                          disabled={isStatusDisabled(s.id)}
                           rowRef={bindRow(s.id)}
                           onPick={() => activate(s.id)}
                         />
@@ -355,6 +386,7 @@ export function OrderUiStatusPicker({
                               mainGroup={mainGroup}
                               selected={isSelected(s.id)}
                               highlighted={flashId === s.id}
+                              disabled={isStatusDisabled(s.id)}
                               rowRef={bindRow(s.id)}
                               onPick={() => activate(s.id)}
                             />

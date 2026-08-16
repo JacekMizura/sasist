@@ -1,4 +1,15 @@
-﻿**Konfiguracja produkcji UX (2026-08-16), bez commit/push.**
+﻿**Status wejściowy — zajęte grayed (produkcja = zbieranie) (2026-08-16).**
+- Reuse `OrderUiStatusField`/`OrderUiStatusPicker.disabledStatusIds`; produkcja ładuje też źródła zbierania
+- Zbieranie: zajęte widoczne+disabled (wcześniej ukrywane); własny status przy edycji dostępny
+- Backend już blokował duplikat `source_status_id` (prod↔picking); test kolizji ze zbieraniem
+- FE build + pytest SSOT PASS
+
+**Pomoc kontekstowa (i) — Ustawienia WMS Produkcja (2026-08-16).**
+- Każde ustawienie: `SettingInfoButton`; strategie z (i) przy opcjach; AI_SMART disabled
+- Usunięte subtitle sekcji + opis pod „Produkcja”; skrócone labelki (rezerwacje/prognoza)
+- FE build PASS
+
+**Konfiguracja produkcji UX (2026-08-16), bez commit/push.**
 - Uproszczony UI: Status wejściowy | Realizacja; bez Nazwy/Aktywnej/opisów
 - Status wejściowy edytowalny (OrderUiStatusField); PUT wysyła `source_status_id`
 - Labelki: WMS / Zmień status / Przejdź do pakowania; `is_active` ukryte, zawsze true przy zapisie

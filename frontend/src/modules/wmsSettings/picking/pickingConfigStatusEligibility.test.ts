@@ -104,6 +104,21 @@ describe("pickingConfigStatusEligibility", () => {
     expect([...ids].sort((a, b) => a - b)).toEqual([1, 11]);
   });
 
+  it("source without exclude keeps occupied ids for visible+disabled picker UX", () => {
+    const visible = allowedPickingSourceStatusIds({
+      summary: summaryFixture(),
+      excludeSourceIds: [],
+    });
+    const selectable = allowedPickingSourceStatusIds({
+      summary: summaryFixture(),
+      excludeSourceIds: [10],
+    });
+    expect(visible.has(10)).toBe(true);
+    expect(selectable.has(10)).toBe(false);
+    const panel = filterPanelSummaryByStatusIds(summaryFixture(), visible);
+    expect(panel?.groups.flatMap((g) => g.sub_statuses.map((s) => s.id))).toContain(10);
+  });
+
   it("target: active IN_PROGRESS plus packing starts", () => {
     const ids = allowedPickingTargetStatusIds({
       summary: summaryFixture(),

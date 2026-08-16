@@ -34,6 +34,11 @@ export type OrderUiStatusFieldProps = {
   onSelectedIdsChange?: (ids: number[]) => void;
   placeholder?: string;
   disabled?: boolean;
+  /**
+   * Statusy widoczne, ale nieklikalne (np. zajęte przez inną konfigurację zbierania/produkcji).
+   * Przekazywane do {@link OrderUiStatusPicker}.
+   */
+  disabledStatusIds?: ReadonlySet<number> | readonly number[];
   className?: string;
   listMaxHeightClass?: string;
   /**
@@ -60,6 +65,7 @@ export function OrderUiStatusField({
   onSelectedIdsChange,
   placeholder = "Wybierz status…",
   disabled = false,
+  disabledStatusIds,
   className = "",
   listMaxHeightClass = "max-h-64",
   floatingZIndexClass = "z-[130]",
@@ -212,6 +218,7 @@ export function OrderUiStatusField({
               clearLabel={clearLabel}
               selectedStatusIds={multi ? selectedIds : undefined}
               onSelectedIdsChange={multi ? handleSelectedIdsChange : undefined}
+              disabledStatusIds={disabledStatusIds}
               focusStatusId={focusStatusId}
               onFocusStatusHandled={() => setFocusStatusId(null)}
               listMaxHeightClass={listMaxHeightClass}
