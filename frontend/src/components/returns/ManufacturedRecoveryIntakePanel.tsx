@@ -6,6 +6,16 @@ import type {
   WmsReturnComponentRecoveryRead,
   WmsReturnLineRead,
 } from "../../types/wmsReturn";
+import { DisassemblyPreviewTable } from "./intake/DisassemblyPreviewTable";
+import { IntakeStructureInfoPanel } from "./intake/IntakeStructureInfoPanel";
+import { StockIntakeModeTiles } from "./intake/StockIntakeModeTiles";
+import {
+  MANUFACTURED_INTAKE_COPY,
+  clampInt,
+  resolveStockIntakeMode,
+  splitReturnedQty,
+  type StockIntakeTileId,
+} from "./intake/stockIntakeMode";
 
 export type ManufacturedRecoveryDraft = {
   stock_intake_mode: StockIntakeMode | null;
@@ -22,14 +32,6 @@ type Props = {
   disabled?: boolean;
 };
 
-function stepperBtnClass(disabled?: boolean) {
-  return `inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40`;
-}
-
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n));
-}
-
 function scaleMatrix(
   preview: WmsBomPreviewRead | null | undefined,
   disassemblyQty: number,
@@ -39,7 +41,9 @@ function scaleMatrix(
   if (comps.length < 1 || disassemblyQty < 1) return [];
   const byLine = new Map(existing.map((r) => [r.composition_line_id, r]));
   return comps.map((c) => {
-    const per = Number(c.quantity_per_unit ?? 0) || Number(c.expected_qty ?? 0) / Math.max(1, Number(preview?.disassembly_qty ?? 1));
+    const per =
+      Number(c.quantity_per_unit ?? 0) ||
+      Number(c.expected_qty ?? 0) / Math.max(1, Number(preview?.disassembly_qty ?? 1));
     const expected = per * disassemblyQty;
     const prev = byLine.get(c.composition_line_id);
     const accepted = prev != null ? Number(prev.accepted_qty) : expected;
@@ -47,19 +51,27 @@ function scaleMatrix(
     return {
       composition_line_id: c.composition_line_id,
       component_product_id: c.component_product_id,
-      accepted_qty: clamp(accepted, 0, expected),
+      accepted_qty: clampInt(accepted, 0, expected),
       scrap_qty: scrap,
       expected_qty: expected,
     };
   });
 }
 
-export function draftFromLine(line: WmsReturnLineRead, mode: ManufacturedComponentRecoveryMode): ManufacturedRecoveryDraft {
+export function draftFromLine(
+  line: WmsReturnLineRead,
+  mode: ManufacturedComponentRecoveryMode,
+): ManufacturedRecoveryDraft {
   const physical = Math.max(0, Math.floor(Number(line.quantity) || 0));
   const required = mode === "REQUIRED";
   const locked = Boolean(line.manufactured_recovery_locked_reason);
   let fg = line.fg_intake_qty != null ? Math.max(0, Math.floor(Number(line.fg_intake_qty))) : required ? 0 : physical;
-  let dq = line.disassembly_qty != null ? Math.max(0, Math.floor(Number(line.disassembly_qty))) : required ? physical : 0;
+  let dq =
+    line.disassembly_qty != null
+      ? Math.max(0, Math.floor(Number(line.disassembly_qty)))
+      : required
+        ? physical
+        : 0;
   if (required) {
     fg = 0;
     if (dq < 1 && !locked) dq = physical;
@@ -69,25 +81,39 @@ export function draftFromLine(line: WmsReturnLineRead, mode: ManufacturedCompone
   }
   let intake: StockIntakeMode | null = line.stock_intake_mode ?? null;
   if (!intake) {
-    if (fg > 0 && dq > 0) intake = "MIXED";
-    else if (dq > 0) intake = "DISASSEMBLE";
-    else if (fg > 0) intake = "FG";
+    intake = resolveStockIntakeMode(fg, dq);
   }
-  const recoveries: WmsReturnComponentRecoveryIn[] =
-    (line.component_recoveries ?? []).map((r: WmsReturnComponentRecoveryRead) => ({
+  const recoveries: WmsReturnComponentRecoveryIn[] = (line.component_recoveries ?? []).map(
+    (r: WmsReturnComponentRecoveryRead) => ({
       composition_line_id: r.composition_line_id,
       component_product_id: r.component_product_id,
       accepted_qty: Number(r.accepted_qty ?? 0),
       scrap_qty: Number(r.scrap_qty ?? 0),
       expected_qty: Number(r.expected_qty ?? 0),
-    }));
+    }),
+  );
   return {
     stock_intake_mode: intake,
     fg_intake_qty: fg,
     disassembly_qty: dq,
-    component_recoveries:
-      recoveries.length > 0 ? recoveries : scaleMatrix(line.bom_preview, dq, []),
+    component_recoveries: recoveries.length > 0 ? recoveries : scaleMatrix(line.bom_preview, dq, []),
   };
+}
+
+function emit(
+  line: WmsReturnLineRead,
+  value: ManufacturedRecoveryDraft,
+  fg: number,
+  dq: number,
+  onChange: (next: ManufacturedRecoveryDraft) => void,
+) {
+  const recoveries = scaleMatrix(line.bom_preview, dq, value.component_recoveries);
+  onChange({
+    stock_intake_mode: resolveStockIntakeMode(fg, dq),
+    fg_intake_qty: fg,
+    disassembly_qty: dq,
+    component_recoveries: recoveries,
+  });
 }
 
 export function ManufacturedRecoveryIntakePanel({ line, mode, value, onChange, disabled }: Props) {
@@ -101,40 +127,27 @@ export function ManufacturedRecoveryIntakePanel({ line, mode, value, onChange, d
   const dq = value.disassembly_qty;
   const sum = fg + dq;
   const over = sum > physical;
+  const under = sum < physical && sum > 0;
+  const activeMode = value.stock_intake_mode ?? resolveStockIntakeMode(fg, dq);
 
-  const setFg = (nextFg: number) => {
-    if (disabled || locked || required) return;
-    const fgN = clamp(Math.floor(nextFg), 0, physical);
-    const dqN = clamp(dq, 0, physical - fgN);
-    const recoveries = scaleMatrix(line.bom_preview, dqN, value.component_recoveries);
-    let intake: StockIntakeMode | null = null;
-    if (fgN > 0 && dqN > 0) intake = "MIXED";
-    else if (dqN > 0) intake = "DISASSEMBLE";
-    else if (fgN > 0) intake = "FG";
-    onChange({
-      stock_intake_mode: intake,
-      fg_intake_qty: fgN,
-      disassembly_qty: dqN,
-      component_recoveries: recoveries,
-    });
+  const applyTile = (tile: StockIntakeTileId) => {
+    if (disabled || locked) return;
+    if (required && tile === "FG") return;
+    const next = splitReturnedQty(physical, required ? "DISASSEMBLE" : tile, tile === "MIXED" ? Math.min(1, physical) : undefined);
+    emit(line, value, next.fg, next.dq, onChange);
   };
 
-  const setDq = (nextDq: number) => {
+  const setMixedFg = (nextFg: number) => {
+    if (disabled || locked || required) return;
+    const fgN = clampInt(nextFg, 0, physical);
+    emit(line, value, fgN, Math.max(0, physical - fgN), onChange);
+  };
+
+  const setMixedDq = (nextDq: number) => {
     if (disabled || locked) return;
-    const maxDq = required ? physical : physical - fg;
-    const dqN = clamp(Math.floor(nextDq), required ? 1 : 0, maxDq);
-    const fgN = required ? 0 : fg;
-    const recoveries = scaleMatrix(line.bom_preview, dqN, value.component_recoveries);
-    let intake: StockIntakeMode | null = null;
-    if (fgN > 0 && dqN > 0) intake = "MIXED";
-    else if (dqN > 0) intake = "DISASSEMBLE";
-    else if (fgN > 0) intake = "FG";
-    onChange({
-      stock_intake_mode: intake,
-      fg_intake_qty: fgN,
-      disassembly_qty: dqN,
-      component_recoveries: recoveries,
-    });
+    const dqN = clampInt(nextDq, required ? 1 : 0, physical);
+    const fgN = required ? 0 : Math.max(0, physical - dqN);
+    emit(line, value, fgN, dqN, onChange);
   };
 
   const setAccepted = (compositionLineId: number, accepted: number) => {
@@ -144,105 +157,114 @@ export function ManufacturedRecoveryIntakePanel({ line, mode, value, onChange, d
       component_recoveries: value.component_recoveries.map((r) => {
         if (r.composition_line_id !== compositionLineId) return r;
         const expected = Number(r.expected_qty ?? 0);
-        const acc = clamp(Math.floor(accepted), 0, expected);
+        const acc = clampInt(accepted, 0, expected);
         return { ...r, accepted_qty: acc, scrap_qty: Math.max(0, expected - acc) };
       }),
     });
   };
 
-  const labelByLine = new Map(
-    (line.bom_preview?.components ?? []).map((c) => [
-      c.composition_line_id,
-      {
-        name: c.component_name?.trim() || `Komponent #${c.component_product_id}`,
-        sku: c.component_sku?.trim() || null,
-      },
-    ]),
+  const comps = line.bom_preview?.components ?? [];
+  const previewRows = comps.map((c) => {
+    const per =
+      Number(c.quantity_per_unit ?? 0) ||
+      Number(c.expected_qty ?? 0) / Math.max(1, Number(line.bom_preview?.disassembly_qty ?? 1));
+    const fromMany = per * Math.max(dq, 1);
+    const recovery = value.component_recoveries.find((r) => r.composition_line_id === c.composition_line_id);
+    const expected = Number(recovery?.expected_qty ?? fromMany);
+    const accepted = Number(recovery?.accepted_qty ?? expected);
+    const scrap = Number(recovery?.scrap_qty ?? Math.max(0, expected - accepted));
+    const name = c.component_name?.trim() || `Komponent #${c.component_product_id}`;
+    return {
+      key: c.composition_line_id,
+      name,
+      sku: c.component_sku?.trim() || null,
+      ratioLabel: `${per} szt.`,
+      perOneLabel: `${per} szt.`,
+      perManyLabel: `${fromMany} szt.`,
+      availableLabel: "—",
+      detail:
+        dq > 0 ? (
+          <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-700">
+            <span>
+              Do odzysku: <span className="font-semibold tabular-nums">{expected}</span> szt.
+            </span>
+            <label className="inline-flex items-center gap-1.5">
+              Przyjmij na stan
+              <input
+                type="number"
+                min={0}
+                max={expected}
+                step={1}
+                className="w-16 rounded border border-slate-200 px-1.5 py-0.5 text-right tabular-nums"
+                value={accepted}
+                disabled={disabled || locked}
+                onChange={(e) => setAccepted(c.composition_line_id, Number(e.target.value))}
+              />
+            </label>
+            <span className="tabular-nums text-slate-600">
+              Odrzut: <span className="font-semibold">{scrap}</span>
+            </span>
+          </div>
+        ) : undefined,
+    };
+  });
+
+  const structureChildren = comps.map(
+    (c) => c.component_name?.trim() || c.component_sku?.trim() || `#${c.component_product_id}`,
   );
 
   return (
-    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-3">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Przyjęcie magazynowe</p>
-      <p className="mt-0.5 text-xs text-slate-600">
-        Ilość zwrócona: <span className="font-semibold tabular-nums">{physical}</span>
-        {required ? " · wymagane rozmontowanie" : null}
-      </p>
+    <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
       {lockedReason ? (
-        <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] font-medium text-amber-950">
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-950">
           {lockedReason}
         </p>
       ) : null}
-      <div className="mt-2 space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-medium text-slate-700">Przyjmij jako gotowy produkt</span>
-          <div className="flex items-center gap-1.5">
-            <button type="button" className={stepperBtnClass(disabled || locked || required)} disabled={disabled || locked || required} onClick={() => setFg(fg - 1)}>
-              −
-            </button>
-            <span className="min-w-[2rem] text-center text-sm font-bold tabular-nums text-slate-900">{fg}</span>
-            <button type="button" className={stepperBtnClass(disabled || locked || required)} disabled={disabled || locked || required} onClick={() => setFg(fg + 1)}>
-              +
-            </button>
-          </div>
+      {required ? (
+        <p className="text-[11px] font-medium text-slate-600">Wymagane rozmontowanie produktu.</p>
+      ) : null}
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
+        <div className="min-w-0 space-y-3">
+          <StockIntakeModeTiles
+            copy={MANUFACTURED_INTAKE_COPY}
+            physicalQty={physical}
+            mode={activeMode}
+            fgQty={fg}
+            disassemblyQty={dq}
+            disabled={disabled || locked}
+            forceDisassemble={required}
+            onSelectTile={applyTile}
+            onMixedFgChange={setMixedFg}
+            onMixedDqChange={setMixedDq}
+          />
+          {over ? (
+            <p className="text-[11px] font-medium text-rose-700">
+              Suma gotowego wyrobu i rozmontowania nie może przekroczyć ilości zwróconej ({physical} szt.).
+            </p>
+          ) : null}
+          {under ? (
+            <p className="text-[11px] font-medium text-amber-800">
+              Gotowy wyrób + rozmontowanie powinny sumować się do ilości zwróconej ({physical} szt.).
+            </p>
+          ) : null}
+          {dq > 0 ? (
+            <DisassemblyPreviewTable
+              title={MANUFACTURED_INTAKE_COPY.previewTitle}
+              headers={MANUFACTURED_INTAKE_COPY.tableHeaders}
+              manyQty={dq}
+              rows={previewRows}
+            />
+          ) : null}
         </div>
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-medium text-slate-700">Rozmontuj</span>
-          <div className="flex items-center gap-1.5">
-            <button type="button" className={stepperBtnClass(disabled || locked)} disabled={disabled || locked} onClick={() => setDq(dq - 1)}>
-              −
-            </button>
-            <span className="min-w-[2rem] text-center text-sm font-bold tabular-nums text-slate-900">{dq}</span>
-            <button type="button" className={stepperBtnClass(disabled || locked)} disabled={disabled || locked} onClick={() => setDq(dq + 1)}>
-              +
-            </button>
-          </div>
-        </div>
+        <IntakeStructureInfoPanel
+          title={MANUFACTURED_INTAKE_COPY.sideTitle}
+          rootLabel="Gotowy produkt"
+          childLabels={structureChildren}
+          lead={MANUFACTURED_INTAKE_COPY.sideLead}
+          body={MANUFACTURED_INTAKE_COPY.sideBody}
+        />
       </div>
-      {over ? (
-        <p className="mt-2 text-[11px] font-medium text-rose-700">
-          Suma FG + rozmontowanie nie może przekroczyć ilości zwróconej.
-        </p>
-      ) : null}
-      {dq > 0 ? (
-        <div className="mt-3 space-y-2 border-t border-slate-200/80 pt-3">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Komponenty</p>
-          {value.component_recoveries.map((r) => {
-            const expected = Number(r.expected_qty ?? 0);
-            const accepted = Number(r.accepted_qty ?? 0);
-            const scrap = Number(r.scrap_qty ?? 0);
-            const meta = labelByLine.get(r.composition_line_id);
-            const label = meta?.name ?? `Komponent #${r.component_product_id}`;
-            const sku = meta?.sku ?? null;
-            return (
-              <div key={r.composition_line_id} className="rounded-md border border-slate-200 bg-white px-2.5 py-2">
-                <div className="text-xs font-semibold text-slate-800">{label}</div>
-                {sku ? <div className="mt-0.5 font-mono text-[11px] text-slate-500">{sku}</div> : null}
-                <div className="mt-0.5 text-[11px] text-slate-500">
-                  Do odzysku: <span className="font-semibold tabular-nums text-slate-700">{expected}</span> szt.
-                </div>
-                <div className="mt-1.5 flex flex-wrap items-center gap-3 text-[11px]">
-                  <label className="inline-flex items-center gap-1.5 text-slate-700">
-                    Przyjmij na stan
-                    <input
-                      type="number"
-                      min={0}
-                      max={expected}
-                      step={1}
-                      className="w-16 rounded border border-slate-200 px-1.5 py-0.5 text-right tabular-nums"
-                      value={accepted}
-                      disabled={disabled || locked}
-                      onChange={(e) => setAccepted(r.composition_line_id, Number(e.target.value))}
-                    />
-                  </label>
-                  <span className="tabular-nums text-slate-600">
-                    Odrzut: <span className="font-semibold">{scrap}</span>
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : null}
     </div>
   );
 }

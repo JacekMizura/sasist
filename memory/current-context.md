@@ -1,4 +1,15 @@
-**OMS panel RMZ disassembly reuse (2026-08-16) — NO commit/push.**
+**OMS returns intake UX tiles (2026-08-16) — NO commit/push.**
+- Shared `StockIntakeModeTiles` + `DisassemblyPreviewTable` + `IntakeStructureInfoPanel`
+- Manufactured + Bundle panels match reference (3 tiles FG/DISASSEMBLE/MIXED); quality decision unchanged
+- Payload SSOT unchanged (`stock_intake_mode` / fg / dq / recoveries); available-on-hand column = "—" (not in bom_preview)
+
+**ETAP 2 A/B/C — regression PASS path (2026-08-16).**
+- Model locked: A=SALEABLE B=OUTLET_B C=SERVICE_C; legacy on_hand/available = physical A+B+C
+- Commits on main: `82c21dd3` (purchasing+picking SALEABLE), `dee4ea27` (order line explicit OUTLET_B)
+- Live: #143 A+B @ A1-A-2; offers 99/1; returns B on normal pick locs; planning on_hand = saleable
+- Junk UAT orders left: #1280–1282 (SALEABLE mis-bound before fix) — cancel manually if needed
+
+**OMS panel RMZ disassembly reuse (2026-08-16) — on main via 4085e3fa.**
 - Reuse WMS SSOT: `ManufacturedRecoveryIntakePanel` + `BundleReturnLinePanel` on `ReturnsReturnDetailPage`
 - Finalize payload merges `stock_intake_mode` / `fg_intake_qty` / `disassembly_qty` / `component_recoveries`
 - „Rozdzielenie ilości” = commercial A/B/C/reject split (same as WMS) — not a second disassembly model

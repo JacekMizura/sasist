@@ -1,3 +1,9 @@
+## 2026-08-16 — ETAP 2 regression + SALEABLE ATP hardening
+
+- Commits: `82c21dd3` purchasing/picking SALEABLE; `dee4ea27` product_id+OUTLET_B; `23714d28` SERVICE_C→422; `273811df` Magazyn A|B|C matrix
+- Live UAT #143 A1-A-2: A=99 B=1 Razem=100; offers 99/1; outlet order sd=OUTLET_B; SERVICE_C HTTP 422; B on normal locs #46/#340
+- Junk UAT orders ~#1280–1285 — cancel manually if needed
+
 ## 2026-08-16 — OMS RMZ disassembly = WMS SSOT (no commit)
 
 - Panel `ReturnsReturnDetailPage` embeds ManufacturedRecoveryIntakePanel + BundleReturnLinePanel
