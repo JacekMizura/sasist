@@ -675,6 +675,7 @@ def resolve_order_create_lines(
     from .product_sales_offers import (
         disposition_for_offer,
         get_default_offer_for_product,
+        list_active_offers_for_product,
         resolve_effective_offer_price,
         resolve_offer_for_order_line,
     )
@@ -724,13 +725,33 @@ def resolve_order_create_lines(
         p = db.query(Product).filter(Product.id == pid, Product.tenant_id == tenant_id).first()
         if not p:
             raise BundleExplosionError(f"Unknown product_id or wrong tenant: {pid}")
-        offer = get_default_offer_for_product(db, tenant_id=tenant_id, product_id=pid)
-        if offer is None:
-            offer = ensure_default_offer_for_product(db, product=p)
-            db.flush()
-        req_disp = disposition_for_offer(offer)
+
+        # Explicit line disposition wins (OUTLET_B). Never silently fall back to default SALEABLE offer.
+        line_disp_raw = getattr(line, "required_stock_disposition", None)
+        explicit_disp = (
+            disposition_for_new_order_line(line_disp_raw)
+            if line_disp_raw is not None and str(line_disp_raw).strip()
+            else None
+        )
+
+        offer = None
+        if explicit_disp is not None:
+            from .stock_disposition import normalize_stock_disposition
+
+            for cand in list_active_offers_for_product(db, tenant_id=tenant_id, product_id=pid):
+                if normalize_stock_disposition(getattr(cand, "stock_disposition", None)) == explicit_disp:
+                    offer = cand
+                    break
+            req_disp = explicit_disp
+        else:
+            offer = get_default_offer_for_product(db, tenant_id=tenant_id, product_id=pid)
+            if offer is None:
+                offer = ensure_default_offer_for_product(db, product=p)
+                db.flush()
+            req_disp = disposition_for_offer(offer)
+
         unit_override = line.unit_price
-        if unit_override is None:
+        if unit_override is None and offer is not None:
             unit_override = resolve_effective_offer_price(db, offer)
         exploded.append(
             explode_product_line(
@@ -738,8 +759,8 @@ def resolve_order_create_lines(
                 quantity=qty,
                 line_unit_price_override=unit_override,
                 required_stock_disposition=req_disp,
-                product_sales_offer_id=int(offer.id),
-                offer_name=str(offer.name),
+                product_sales_offer_id=int(offer.id) if offer is not None else None,
+                offer_name=str(offer.name) if offer is not None else None,
             )
         )
     merged = merge_resolved_lines(exploded)

@@ -161,7 +161,38 @@ def test_outlet_offer_two_units_rejected_without_touching_saleable(isolated_db) 
     assert offer_available_qty(db, offer=saleable_offer, tenant_id=1, warehouse_id=1) == pytest.approx(100.0)
 
 
-def test_effective_price_falls_back_to_product() -> None:
+def test_product_line_explicit_outlet_disposition_not_default_saleable(isolated_db) -> None:
+    """product_id + required_stock_disposition=OUTLET_B must not silently use default SALEABLE offer."""
+    db, product = isolated_db
+    ensure_default_offer_for_product(db, product=product)
+    outlet = create_outlet_offer_preset(db, product=product)
+    db.commit()
+
+    line = OrderCreateLine(
+        product_id=int(product.id),
+        quantity=1,
+        required_stock_disposition=STOCK_DISPOSITION_OUTLET_B,
+    )
+    resolved = resolve_order_create_lines(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        raw_lines=[line],
+        check_bundle_stock=False,
+    )
+    assert len(resolved.lines) == 1
+    row = resolved.lines[0]
+    assert row.required_stock_disposition == STOCK_DISPOSITION_OUTLET_B
+    assert int(row.product_sales_offer_id or 0) == int(outlet.id)
+
+
+def test_service_c_order_line_rejected_by_schema() -> None:
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError) as exc:
+        OrderCreateLine(product_id=1, quantity=1, required_stock_disposition="SERVICE_C")
+    assert "not reservable" in str(exc.value).lower() or "SERVICE_C" in str(exc.value)
+
     product = Product(id=1, tenant_id=1, name="P", sale_price=50.0)
     offer = ProductSalesOffer(
         tenant_id=1,

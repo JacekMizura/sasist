@@ -586,7 +586,11 @@ class OrderCreateLine(BaseModel):
             return None
         from ..services.stock_disposition import disposition_for_new_order_line
 
-        return disposition_for_new_order_line(v)
+        try:
+            return disposition_for_new_order_line(v)
+        except ValueError as e:
+            # Keep as ValueError so FastAPI/Pydantic returns 422 (not an unhandled 500).
+            raise ValueError(str(e)) from e
 
     @model_validator(mode="after")
     def _exactly_one_catalog_ref(self) -> "OrderCreateLine":
@@ -756,7 +760,10 @@ class OrderAddLineBody(BaseModel):
             return None
         from ..services.stock_disposition import disposition_for_new_order_line
 
-        return disposition_for_new_order_line(v)
+        try:
+            return disposition_for_new_order_line(v)
+        except ValueError as e:
+            raise ValueError(str(e)) from e
 
     @model_validator(mode="after")
     def _exactly_one_catalog_line(self) -> "OrderAddLineBody":
