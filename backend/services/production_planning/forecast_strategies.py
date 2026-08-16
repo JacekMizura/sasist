@@ -4,14 +4,10 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import date
-from statistics import median
 
 from .constants import (
     DEFAULT_FORECAST_STRATEGY,
     FORECAST_STRATEGIES,
-    FORECAST_STRATEGY_AI_SMART,
-    FORECAST_STRATEGY_MAX_DAILY,
-    FORECAST_STRATEGY_MEDIAN,
     FORECAST_STRATEGY_PERIOD_AVERAGE,
     FORECAST_STRATEGY_WEEKDAY_AVERAGE,
     FORECAST_STRATEGY_WEIGHTED_AVERAGE,
@@ -29,7 +25,7 @@ class DemandForecastStrategy(ABC):
 
 class PeriodAverageStrategy(DemandForecastStrategy):
     key = FORECAST_STRATEGY_PERIOD_AVERAGE
-    label = "Średnia z okresu"
+    label = "Standardowa"
 
     def daily_rate(self, history: list[tuple[date, float]]) -> float:
         if not history:
@@ -39,7 +35,7 @@ class PeriodAverageStrategy(DemandForecastStrategy):
 
 class WeightedAverageStrategy(DemandForecastStrategy):
     key = FORECAST_STRATEGY_WEIGHTED_AVERAGE
-    label = "Średnia ważona"
+    label = "Uwzględniaj trend"
 
     def daily_rate(self, history: list[tuple[date, float]]) -> float:
         if not history:
@@ -51,7 +47,7 @@ class WeightedAverageStrategy(DemandForecastStrategy):
 
 class WeekdayAverageStrategy(DemandForecastStrategy):
     key = FORECAST_STRATEGY_WEEKDAY_AVERAGE
-    label = "Średnia z tego samego dnia tygodnia"
+    label = "Według dni tygodnia"
 
     def daily_rate(self, history: list[tuple[date, float]]) -> float:
         if not history:
@@ -63,45 +59,12 @@ class WeekdayAverageStrategy(DemandForecastStrategy):
         return sum(q for _, q in history) / len(history)
 
 
-class MedianStrategy(DemandForecastStrategy):
-    key = FORECAST_STRATEGY_MEDIAN
-    label = "Mediana sprzedaży"
-
-    def daily_rate(self, history: list[tuple[date, float]]) -> float:
-        if not history:
-            return 0.0
-        return float(median([q for _, q in history]))
-
-
-class MaxDailyStrategy(DemandForecastStrategy):
-    key = FORECAST_STRATEGY_MAX_DAILY
-    label = "Maksymalna sprzedaż dzienna"
-
-    def daily_rate(self, history: list[tuple[date, float]]) -> float:
-        if not history:
-            return 0.0
-        return max(q for _, q in history)
-
-
-class AiSmartStrategy(DemandForecastStrategy):
-    """Placeholder — future ML/AI engine; currently weighted average fallback."""
-
-    key = FORECAST_STRATEGY_AI_SMART
-    label = "Inteligentna (AI — w przygotowaniu)"
-
-    def daily_rate(self, history: list[tuple[date, float]]) -> float:
-        return WeightedAverageStrategy().daily_rate(history)
-
-
 _STRATEGIES: dict[str, DemandForecastStrategy] = {
     s.key: s
     for s in (
         PeriodAverageStrategy(),
         WeightedAverageStrategy(),
         WeekdayAverageStrategy(),
-        MedianStrategy(),
-        MaxDailyStrategy(),
-        AiSmartStrategy(),
     )
 }
 

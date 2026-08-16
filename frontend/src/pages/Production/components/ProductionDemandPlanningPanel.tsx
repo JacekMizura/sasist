@@ -16,6 +16,7 @@ import {
   type StatusTone,
 } from "@/design-system";
 import { SettingInfoButton } from "../../Settings/SettingInfoButton";
+import { forecastStrategyDisplayLabel } from "@/modules/wmsSettings/production/forecastStrategyLabels";
 import { ProductThumb } from "./ProductThumb";
 import { MaterialProductionStatusBadge } from "./MaterialProductionStatusBadge";
 import { productionSectionLabelClass } from "../productionLayoutTokens";
@@ -174,7 +175,13 @@ export function ProductionDemandPlanningPanel({
                 <span className="font-semibold tabular-nums">{data.sales_lookback_days} dni</span>
               </>
             ) : null}
-            {data?.forecast_strategy_label ? (
+            {data?.forecast_strategy ? (
+              <>
+                {" "}
+                · Metoda:{" "}
+                <span className="font-medium">{forecastStrategyDisplayLabel(data.forecast_strategy)}</span>
+              </>
+            ) : data?.forecast_strategy_label ? (
               <>
                 {" "}
                 · Metoda: <span className="font-medium">{data.forecast_strategy_label}</span>

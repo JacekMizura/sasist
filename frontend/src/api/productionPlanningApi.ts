@@ -5,10 +5,7 @@ export type CoverageColor = "red" | "orange" | "green" | "blue";
 export type ForecastStrategyKey =
   | "PERIOD_AVERAGE"
   | "WEIGHTED_AVERAGE"
-  | "WEEKDAY_AVERAGE"
-  | "MEDIAN"
-  | "MAX_DAILY"
-  | "AI_SMART";
+  | "WEEKDAY_AVERAGE";
 
 export type ProductionPlanningDashboard = {
   critical_products: number;

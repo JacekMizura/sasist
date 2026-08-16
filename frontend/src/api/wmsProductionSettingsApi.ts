@@ -25,13 +25,7 @@ export type ProductionTerminalRequiredSettings = {
 };
 
 export type ProductionForecastSettings = {
-  strategy:
-    | "PERIOD_AVERAGE"
-    | "WEIGHTED_AVERAGE"
-    | "WEEKDAY_AVERAGE"
-    | "MEDIAN"
-    | "MAX_DAILY"
-    | "AI_SMART";
+  strategy: "PERIOD_AVERAGE" | "WEIGHTED_AVERAGE" | "WEEKDAY_AVERAGE";
   sales_lookback_days: number;
   auto_stock_replenishment?: boolean;
   stock_replenishment_coverage_days?: 1 | 3 | 7 | 14;

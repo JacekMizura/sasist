@@ -108,64 +108,47 @@ export const productionSettingsHelp = {
     title: "Strategia prognozy",
     description: (
       <p>
-        Określa, w jaki sposób Sasist oblicza przewidywaną dzienną sprzedaż produktu. Wynik jest
-        używany do wyliczenia zapotrzebowania produkcyjnego i docelowego zapasu.
+        Określa, jak Sasist liczy przewidywaną dzienną sprzedaż produktu. Na tej podstawie wyliczany
+        jest docelowy zapas, zapotrzebowanie produkcyjne i — jeśli włączone — automatyczne
+        uzupełnianie.
       </p>
     ),
   } satisfies SettingHelpContent,
   forecastStrategyOptions: {
     PERIOD_AVERAGE: {
-      title: "Średnia z okresu",
+      title: "Standardowa",
       description: (
-        <p>
-          Średnia dzienna sprzedaż z wybranego okresu. Przykład: 300 szt. sprzedanych przez 30 dni =
-          prognoza 10 szt./dzień.
-        </p>
+        <>
+          <p>
+            Równa średnia sprzedaży z wybranego okresu historii. Przykład: 300 szt. w 30 dni → ok. 10
+            szt./dzień.
+          </p>
+          <p>Domyślny wybór dla większości asortymentu o stabilnej sprzedaży.</p>
+        </>
       ),
     },
     WEIGHTED_AVERAGE: {
-      title: "Średnia ważona",
+      title: "Uwzględniaj trend",
       description: (
-        <p>
-          Nowsza sprzedaż ma większy wpływ na prognozę niż starsza. Przydatne, gdy sprzedaż produktu
-          rośnie lub spada.
-        </p>
+        <>
+          <p>
+            Nowsza sprzedaż ma większy wpływ na prognozę niż starsza. Jeśli sprzedaż ostatnio rośnie
+            lub spada, system szybciej to uwzględni.
+          </p>
+          <p>Dobra dla produktów w fazie wzrostu, spadku lub po zmianie oferty.</p>
+        </>
       ),
     },
     WEEKDAY_AVERAGE: {
-      title: "Średnia z tego samego dnia tygodnia",
+      title: "Według dni tygodnia",
       description: (
-        <p>
-          Prognoza uwzględnia sprzedaż z odpowiadających dni tygodnia. Przydatne, gdy np. weekendy
-          znacząco różnią się od dni roboczych.
-        </p>
-      ),
-    },
-    MEDIAN: {
-      title: "Mediana sprzedaży",
-      description: (
-        <p>
-          Wykorzystuje typową dzienną sprzedaż i ogranicza wpływ pojedynczych bardzo wysokich lub
-          niskich dni.
-        </p>
-      ),
-    },
-    MAX_DAILY: {
-      title: "Maksymalna sprzedaż dzienna",
-      description: (
-        <p>
-          Przyjmuje najwyższą dzienną sprzedaż z analizowanego okresu. To najbardziej zachowawcza
-          strategia — utrzymuje większy zapas.
-        </p>
-      ),
-    },
-    AI_SMART: {
-      title: "Inteligentna (AI — w przygotowaniu)",
-      description: (
-        <p>
-          Strategia będzie automatycznie analizować charakter sprzedaży produktu i dobierać
-          prognozę. Funkcja nie jest jeszcze dostępna.
-        </p>
+        <>
+          <p>
+            Prognoza opiera się na sprzedaży z odpowiadających dni tygodnia, np. poniedziałki są
+            porównywane z poniedziałkami.
+          </p>
+          <p>Dobra dla produktów o wyraźnym rytmie tygodniowym.</p>
+        </>
       ),
     },
   } satisfies Record<ProductionForecastSettings["strategy"], SettingHelpContent>,
@@ -405,17 +388,15 @@ export const productionSettingsHelp = {
   },
 } as const;
 
+/** Only strategies offered in the settings select (legacy enums stay in API/types). */
 export const FORECAST_STRATEGY_OPTIONS: {
   key: ProductionForecastSettings["strategy"];
   label: string;
   disabled?: boolean;
 }[] = [
-  { key: "PERIOD_AVERAGE", label: "Średnia z okresu" },
-  { key: "WEIGHTED_AVERAGE", label: "Średnia ważona" },
-  { key: "WEEKDAY_AVERAGE", label: "Średnia z tego samego dnia tygodnia" },
-  { key: "MEDIAN", label: "Mediana sprzedaży" },
-  { key: "MAX_DAILY", label: "Maksymalna sprzedaż dzienna" },
-  { key: "AI_SMART", label: "Inteligentna (AI — w przygotowaniu)", disabled: true },
+  { key: "PERIOD_AVERAGE", label: "Standardowa" },
+  { key: "WEIGHTED_AVERAGE", label: "Uwzględniaj trend" },
+  { key: "WEEKDAY_AVERAGE", label: "Według dni tygodnia" },
 ];
 
 export const ALLOCATION_STRATEGY_OPTIONS: {

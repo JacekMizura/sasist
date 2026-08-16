@@ -365,6 +365,15 @@ class TestForecastSettingsBackwardCompat(unittest.TestCase):
         self.assertEqual(s.stock_replenishment_coverage_days, 7)
         self.assertEqual(s.strategy, "PERIOD_AVERAGE")
 
+    def test_unknown_strategy_key_becomes_period_average(self):
+        from backend.services.production_planning.forecast_settings_service import parse_forecast_settings_json
+
+        s = parse_forecast_settings_json(
+            '{"strategy":"NOT_A_REAL_STRATEGY","sales_lookback_days":45}'
+        )
+        self.assertEqual(s.strategy, "PERIOD_AVERAGE")
+        self.assertEqual(s.sales_lookback_days, 45)
+
 
 if __name__ == "__main__":
     unittest.main()

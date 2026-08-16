@@ -39,9 +39,6 @@ ForecastStrategyKey = Literal[
     "PERIOD_AVERAGE",
     "WEIGHTED_AVERAGE",
     "WEEKDAY_AVERAGE",
-    "MEDIAN",
-    "MAX_DAILY",
-    "AI_SMART",
 ]
 
 

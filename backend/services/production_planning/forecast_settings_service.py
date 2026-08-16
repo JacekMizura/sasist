@@ -15,6 +15,7 @@ from .constants import (
     DEFAULT_SALES_LOOKBACK_DAYS,
     DEFAULT_STOCK_REPLENISHMENT_COVERAGE_DAYS,
     DEFAULT_STOCK_REPLENISHMENT_INTERVAL,
+    FORECAST_STRATEGIES,
     STOCK_REPLENISHMENT_COVERAGE_PRESETS,
     STOCK_REPLENISHMENT_INTERVAL_HOURS,
     STOCK_REPLENISHMENT_INTERVAL_PRESETS,
@@ -28,6 +29,10 @@ def parse_forecast_settings_json(raw: str | None) -> ProductionForecastSettings:
         data = json.loads(str(raw))
         if not isinstance(data, dict):
             return ProductionForecastSettings()
+        # Unknown / removed strategy keys → default (no named legacy branches).
+        strat = str(data.get("strategy") or "").strip().upper()
+        if strat not in FORECAST_STRATEGIES:
+            data["strategy"] = DEFAULT_FORECAST_STRATEGY
         settings = ProductionForecastSettings.model_validate(data)
         return _normalize_forecast_settings(settings)
     except (TypeError, ValueError, json.JSONDecodeError):
@@ -35,14 +40,7 @@ def parse_forecast_settings_json(raw: str | None) -> ProductionForecastSettings:
 
 
 def _normalize_forecast_settings(settings: ProductionForecastSettings) -> ProductionForecastSettings:
-    if settings.strategy not in (
-        "PERIOD_AVERAGE",
-        "WEIGHTED_AVERAGE",
-        "WEEKDAY_AVERAGE",
-        "MEDIAN",
-        "MAX_DAILY",
-        "AI_SMART",
-    ):
+    if settings.strategy not in FORECAST_STRATEGIES:
         settings.strategy = DEFAULT_FORECAST_STRATEGY  # type: ignore[assignment]
     if settings.sales_lookback_days < 7:
         settings.sales_lookback_days = DEFAULT_SALES_LOOKBACK_DAYS

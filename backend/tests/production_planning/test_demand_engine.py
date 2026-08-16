@@ -6,8 +6,6 @@ import unittest
 from datetime import date, timedelta
 
 from backend.services.production_planning.forecast_strategies import (
-    MaxDailyStrategy,
-    MedianStrategy,
     PeriodAverageStrategy,
     WeightedAverageStrategy,
     WeekdayAverageStrategy,
@@ -36,13 +34,12 @@ class TestForecastStrategies(unittest.TestCase):
         rate = s.daily_rate(_history([0.0, 0.0, 30.0]))
         self.assertGreater(rate, 10.0)
 
-    def test_median(self):
-        s = MedianStrategy()
-        self.assertEqual(s.daily_rate(_history([1.0, 5.0, 100.0])), 5.0)
-
-    def test_max_daily(self):
-        s = MaxDailyStrategy()
-        self.assertEqual(s.daily_rate(_history([1.0, 5.0, 100.0])), 100.0)
+    def test_weekday_average_same_weekday(self):
+        s = WeekdayAverageStrategy()
+        # Last day drives weekday filter; include matching weekdays only in average.
+        hist = _history([10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0])
+        rate = s.daily_rate(hist)
+        self.assertGreater(rate, 0.0)
 
 
 class TestMoqAndMultiple(unittest.TestCase):

@@ -1,3 +1,16 @@
+## 2026-08-16 — Prognoza: tylko 3 strategie (BE+FE)
+
+- Usunięto MEDIAN / MAX_DAILY / AI_SMART z enumów, rejestru, FE i testów
+- UI: Standardowa / Uwzględniaj trend / Według dni tygodnia; bez legacy
+- Nieznany klucz w JSON → PERIOD_AVERAGE; lokalne sqlite bez starych wartości
+- Commit + push
+
+## 2026-08-16 — Specyfikacja biznesowa TRYB PRODUKCJI (no commit)
+
+- Pełny audyt modułu Produkcja → dokument `docs/production/TRYB_PRODUKCJI.md`
+- Forma jak projekt przed wdrożeniem; klasyfikacja ISTNIEJE / CZĘŚCIOWO / GAP / PLANOWANE
+- Bez implementacji / commit / push
+
 ## 2026-08-16 — FE: jeden toast auto-pack po produkcji
 
 - Root: `useProductionExecutionJob.registerProductionQty` wołał `handleProductionPackingHandoff` po progress i po finish

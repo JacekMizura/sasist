@@ -1,3 +1,9 @@
+**Forecast strategies: only 3 (2026-08-16).**
+- Removed MEDIAN / MAX_DAILY / AI_SMART from BE+FE; SSOT: PERIOD/WEIGHTED/WEEKDAY
+- UI: Standardowa / Uwzględniaj trend / Według dni tygodnia; no legacy notice
+- Unknown strategy in JSON → PERIOD_AVERAGE; local sqlite: no old values found
+- pytest planning PASS; vitest 3 PASS; tsc+build PASS
+
 **FE auto-pack double toast fix (2026-08-16).**
 - Root: `registerProductionQty` handled `packing_handoff` after progress **and** after finish (two owners)
 - Fix: `selectPackingHandoffCarrier` → one call; session fingerprint idempotency (no debounce); skip buffer toast when auto_pack

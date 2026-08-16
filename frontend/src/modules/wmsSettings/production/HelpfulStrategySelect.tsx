@@ -32,7 +32,7 @@ function HelpfulStrategySelect({
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const listId = useId();
-  const selected = options.find((o) => o.key === value) ?? options.find((o) => !o.disabled) ?? options[0];
+  const selected = options.find((o) => o.key === value) ?? options[0];
 
   useEffect(() => {
     if (!open) return;
