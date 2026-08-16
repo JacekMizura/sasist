@@ -366,13 +366,41 @@ class TestForecastSettingsBackwardCompat(unittest.TestCase):
         self.assertEqual(s.strategy, "PERIOD_AVERAGE")
 
     def test_unknown_strategy_key_becomes_period_average(self):
+        from unittest.mock import patch
+
         from backend.services.production_planning.forecast_settings_service import parse_forecast_settings_json
 
-        s = parse_forecast_settings_json(
-            '{"strategy":"NOT_A_REAL_STRATEGY","sales_lookback_days":45}'
-        )
+        with patch(
+            "backend.services.production_planning.forecast_settings_service.logger.warning"
+        ) as warn:
+            s = parse_forecast_settings_json(
+                '{"strategy":"NOT_A_REAL_STRATEGY","sales_lookback_days":45}',
+                warehouse_id=7,
+                tenant_id=1,
+            )
         self.assertEqual(s.strategy, "PERIOD_AVERAGE")
         self.assertEqual(s.sales_lookback_days, 45)
+        warn.assert_called_once()
+        msg = warn.call_args[0][0] % warn.call_args[0][1:]
+        self.assertIn("NOT_A_REAL_STRATEGY", msg)
+        self.assertIn("PERIOD_AVERAGE", msg)
+        self.assertIn("7", msg)
+
+    def test_known_strategy_does_not_warn(self):
+        from unittest.mock import patch
+
+        from backend.services.production_planning.forecast_settings_service import parse_forecast_settings_json
+
+        with patch(
+            "backend.services.production_planning.forecast_settings_service.logger.warning"
+        ) as warn:
+            s = parse_forecast_settings_json(
+                '{"strategy":"WEIGHTED_AVERAGE","sales_lookback_days":30}',
+                warehouse_id=1,
+                tenant_id=1,
+            )
+        self.assertEqual(s.strategy, "WEIGHTED_AVERAGE")
+        warn.assert_not_called()
 
 
 if __name__ == "__main__":

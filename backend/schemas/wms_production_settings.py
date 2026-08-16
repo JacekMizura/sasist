@@ -166,7 +166,13 @@ def production_settings_from_row(row: Any) -> tuple[ProductionTerminalDisplaySet
 def forecast_settings_from_row(row: Any) -> ProductionForecastSettings:
     from ..services.production_planning.forecast_settings_service import parse_forecast_settings_json
 
-    return parse_forecast_settings_json(getattr(row, "production_forecast_json", None))
+    wh = getattr(row, "warehouse_id", None)
+    tid = getattr(row, "tenant_id", None)
+    return parse_forecast_settings_json(
+        getattr(row, "production_forecast_json", None),
+        warehouse_id=int(wh) if wh is not None else None,
+        tenant_id=int(tid) if tid is not None else None,
+    )
 
 
 def reservation_settings_from_row(row: Any) -> ProductionReservationSettings:

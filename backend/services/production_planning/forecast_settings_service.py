@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime
 from typing import Any
 
@@ -21,18 +22,35 @@ from .constants import (
     STOCK_REPLENISHMENT_INTERVAL_PRESETS,
 )
 
+logger = logging.getLogger(__name__)
 
-def parse_forecast_settings_json(raw: str | None) -> ProductionForecastSettings:
+
+def parse_forecast_settings_json(
+    raw: str | None,
+    *,
+    warehouse_id: int | None = None,
+    tenant_id: int | None = None,
+) -> ProductionForecastSettings:
     if not raw:
         return ProductionForecastSettings()
     try:
         data = json.loads(str(raw))
         if not isinstance(data, dict):
             return ProductionForecastSettings()
-        # Unknown / removed strategy keys → default (no named legacy branches).
-        strat = str(data.get("strategy") or "").strip().upper()
-        if strat not in FORECAST_STRATEGIES:
-            data["strategy"] = DEFAULT_FORECAST_STRATEGY
+        # Unknown non-empty strategy → in-memory default only (does not rewrite DB on read).
+        if "strategy" in data and data.get("strategy") is not None:
+            received = data.get("strategy")
+            strat = str(received).strip().upper()
+            if strat not in FORECAST_STRATEGIES:
+                logger.warning(
+                    "Unknown production forecast strategy key=%r; using %s "
+                    "(warehouse_id=%s tenant_id=%s)",
+                    received,
+                    DEFAULT_FORECAST_STRATEGY,
+                    warehouse_id,
+                    tenant_id,
+                )
+                data["strategy"] = DEFAULT_FORECAST_STRATEGY
         settings = ProductionForecastSettings.model_validate(data)
         return _normalize_forecast_settings(settings)
     except (TypeError, ValueError, json.JSONDecodeError):
@@ -67,7 +85,13 @@ def _normalize_forecast_settings(settings: ProductionForecastSettings) -> Produc
 def load_forecast_settings(db: Session, *, tenant_id: int, warehouse_id: int) -> ProductionForecastSettings:
     row = get_or_create_wms_settings_row(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
     raw = getattr(row, "production_forecast_json", None)
-    return _normalize_forecast_settings(parse_forecast_settings_json(raw))
+    return _normalize_forecast_settings(
+        parse_forecast_settings_json(
+            raw,
+            warehouse_id=int(warehouse_id),
+            tenant_id=int(tenant_id),
+        )
+    )
 
 
 def save_forecast_settings(
