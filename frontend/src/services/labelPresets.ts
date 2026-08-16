@@ -4,9 +4,16 @@
  */
 
 import type { GroupElement, LabelTemplate, TemplateElement } from "../types/labelSystem";
+import { TEMPLATE_TYPE_OPTIONS } from "../types/labelSystem";
+import carrierLabelHorizontal100x50 from "../labelSystem/presets/carrierLabelHorizontal100x50.json";
 
 function genId(prefix: string, i: number): string {
   return `${prefix}-${Date.now()}-${i}`;
+}
+
+function presetTypeLabel(templateType: string | undefined): string {
+  const key = (templateType ?? "location").trim().toLowerCase();
+  return TEMPLATE_TYPE_OPTIONS.find((o) => o.value === key)?.label ?? "Lokalizacja";
 }
 
 export const PRESET_TYPES = [
@@ -14,6 +21,7 @@ export const PRESET_TYPES = [
   "LOCATION_BARCODE_LARGE",
   "RACK_SEGMENT_STRIP",
   "PALLET_LABEL",
+  "CARRIER_LABEL_HORIZONTAL",
   "AISLE_LABEL",
   "FLOOR_LOCATION",
   "RACK_BEAM_MULTISECTION",
@@ -27,6 +35,7 @@ export const PRESET_LABELS: Record<PresetType, string> = {
   LOCATION_BARCODE_LARGE: "Lokalizacja (duży kod kreskowy)",
   RACK_SEGMENT_STRIP: "Pasek segmentu regału",
   PALLET_LABEL: "Etykieta palety",
+  CARRIER_LABEL_HORIZONTAL: "Etykieta nośnika — pozioma",
   AISLE_LABEL: "Etykieta oznaczenia rzędu",
   FLOOR_LOCATION: "Lokalizacja podłogowa",
   RACK_BEAM_MULTISECTION: "Belka regału (wielosekcyjna)",
@@ -38,6 +47,8 @@ export const PRESET_USAGE_HINTS: Record<PresetType, string> = {
   LOCATION_BARCODE_LARGE: "Większy kod i czytelna nazwa — skan z większej odległości.",
   RACK_SEGMENT_STRIP: "Pas wielu segmentów w jednym szablonie — druk taśmy regałowej.",
   PALLET_LABEL: "Oznaczenie palety w magazynie wysokiego składowania.",
+  CARRIER_LABEL_HORIZONTAL:
+    "Etykieta nośnika 100×50 — kod nośnika + QR ESP:carrier:{id} (barcode_data).",
   AISLE_LABEL: "Pionowa etykieta alei / rzędu regałów.",
   FLOOR_LOCATION: "Duża etykieta lokalizacji podłogowej lub strefy.",
   RACK_BEAM_MULTISECTION: "Wiele małych pól na jednej belce — segmentacja belki.",
@@ -50,6 +61,8 @@ export type PresetCardMeta = {
   barcodeLabel: string;
   /** Drukarka / technologia (skrót informacyjny). */
   formatLabel: string;
+  /** Typ szablonu (SSOT) — wpływa na linię metadanych karty. */
+  templateType?: string;
 };
 
 export const PRESET_CARD_META: Record<PresetType, PresetCardMeta> = {
@@ -57,6 +70,13 @@ export const PRESET_CARD_META: Record<PresetType, PresetCardMeta> = {
   LOCATION_BARCODE_LARGE: { widthMm: 100, heightMm: 50, barcodeLabel: "Kod 128", formatLabel: "Zebra" },
   RACK_SEGMENT_STRIP: { widthMm: 400, heightMm: 50, barcodeLabel: "Kod 128", formatLabel: "Zebra" },
   PALLET_LABEL: { widthMm: 100, heightMm: 80, barcodeLabel: "Kod 128", formatLabel: "Zebra" },
+  CARRIER_LABEL_HORIZONTAL: {
+    widthMm: 100,
+    heightMm: 50,
+    barcodeLabel: "QR",
+    formatLabel: "Zebra",
+    templateType: "carrier",
+  },
   AISLE_LABEL: { widthMm: 80, heightMm: 120, barcodeLabel: "Kod 128", formatLabel: "Zebra" },
   FLOOR_LOCATION: { widthMm: 150, heightMm: 80, barcodeLabel: "Kod 128", formatLabel: "Zebra" },
   RACK_BEAM_MULTISECTION: { widthMm: 300, heightMm: 40, barcodeLabel: "Kod 128", formatLabel: "Zebra" },
@@ -65,7 +85,8 @@ export const PRESET_CARD_META: Record<PresetType, PresetCardMeta> = {
 /** Jedna linia metadanych: np. „Lokalizacja • 100 × 50 mm”. */
 export function formatPresetSpecLine(type: PresetType): string {
   const m = PRESET_CARD_META[type];
-  return `Lokalizacja • ${m.widthMm} × ${m.heightMm} mm`;
+  const typeLabel = presetTypeLabel(m.templateType ?? "location");
+  return `${typeLabel} • ${m.widthMm} × ${m.heightMm} mm`;
 }
 
 /**
@@ -211,6 +232,23 @@ export function generatePreset(type: PresetType): LabelTemplate {
             },
           },
         ] as TemplateElement[],
+      };
+    }
+
+    case "CARRIER_LABEL_HORIZONTAL": {
+      const preset = carrierLabelHorizontal100x50 as LabelTemplate;
+      return {
+        ...preset,
+        id: `preset-CARRIER_LABEL_HORIZONTAL-${Date.now()}`,
+        name: PRESET_LABELS.CARRIER_LABEL_HORIZONTAL,
+        dpi: preset.dpi ?? 300,
+        template_type: "carrier",
+        updatedAt: new Date().toISOString(),
+        widthMm: preset.widthMm ?? 100,
+        heightMm: preset.heightMm ?? 50,
+        elements: Array.isArray(preset.elements)
+          ? (JSON.parse(JSON.stringify(preset.elements)) as TemplateElement[])
+          : [],
       };
     }
 

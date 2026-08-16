@@ -50,6 +50,7 @@ export const PRESET_SECTION: Record<PresetType, ReadySectionId> = {
   RACK_SEGMENT_STRIP: "racks",
   RACK_BEAM_MULTISECTION: "racks",
   PALLET_LABEL: "pallets",
+  CARRIER_LABEL_HORIZONTAL: "pallets",
 };
 
 export function presetsForFilter(filter: ReadyFilterId): PresetType[] {

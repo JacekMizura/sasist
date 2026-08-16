@@ -1,3 +1,9 @@
+## 2026-08-16 — Fix carrier type in Label System editor
+
+- ROOT: preset JSON istniał, ale nie był w `labelPresets` / Ready Templates; UI grupowało `carrier` pod „Operator”; istniejące szablony w DB z `template_type=location` poprawnie pokazywały Lokalizacja (bez maskowania)
+- FIX: `CARRIER_LABEL_HORIZONTAL` z `template_type=carrier`; grupa UI „Nośnik”; CSV mapping carrier; etykiety zmiennych PL
+- Tests: `labelDesignerCarrierType.test.ts` 6 PASS; BE `test_carrier_label_template` 2 PASS; tsc+build PASS
+
 ## 2026-08-16 — Fix QR PDF + transparent fill (label engine)
 
 - ReportLab 4.x: QR via `ImageReader` (`_draw_qr_image_on_canvas`); `qrMargin` quiet zone

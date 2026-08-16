@@ -1,4 +1,10 @@
-**Carrier labels + QR PDF fix — PASS, committing/pushing (2026-08-16).**
+**Carrier template_type in Label System editor — FIXED (2026-08-16).**
+- ROOT: orphaned preset JSON + Variables UI group mis-label; production template likely still `location` in DB (FE correctly shows Lokalizacja — re-create/import as carrier or change TYP→Nośnik and save)
+- Wired `CARRIER_LABEL_HORIZONTAL` into presets/ready catalog; UI group „Nośnik”; CSV carrier group
+- SSOT already had carrier in TEMPLATE_TYPE_OPTIONS / LABEL_DESIGNER_TYPE_OPTIONS / PREVIEW_SAMPLES / BE API
+- vitest 6 + BE 2 + tsc/build PASS
+
+**Carrier labels + QR PDF fix — PASS, on main (2026-08-16).**
 - E2E: CarrierLabelPrintModal → POST /labels/carrier → render_label_template → PDF (parity CartLabelPrintModal / PDF viewer; no HTML fallback)
 - QR ImageReader + transparent fill/strokeWidth=0; preset 100×50; decode ESP:carrier:6
 - Tests: BE 14 + FE vitest 11 + tsc + npm build PASS

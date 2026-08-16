@@ -18,6 +18,7 @@ export type CsvMappingUiGroupId =
   | "document"
   | "cart"
   | "trolley"
+  | "carrier"
   | "system";
 
 export type CsvMappingUiGroup = {
@@ -44,6 +45,7 @@ export const CSV_MAPPING_UI_GROUPS: CsvMappingUiGroup[] = [
   { id: "document", label: "Dokument", categoryIds: ["documents", "orders"] },
   { id: "cart", label: "Koszyk", categoryIds: ["basket"] },
   { id: "trolley", label: "Wózek", categoryIds: ["cart"] },
+  { id: "carrier", label: "Nośnik", categoryIds: ["carrier"] },
   { id: "system", label: "System", categoryIds: [] },
 ];
 
@@ -93,6 +95,7 @@ export function resolveCsvTemplateKind(templateType: string | null | undefined):
   if (v === "product") return "product";
   if (v === "basket") return "cart";
   if (v === "cart") return "trolley";
+  if (v === "carrier") return "carrier";
   if (v === "order" || v === "document" || v.startsWith("document_")) return "document";
   if (LOCATION_SUBTYPES.has(v)) return "location";
   return "other";
@@ -103,6 +106,7 @@ function kindToTemplateType(kind: CsvTemplateKind): TemplateType {
   if (kind === "product") return "product";
   if (kind === "cart") return "basket";
   if (kind === "trolley") return "cart";
+  if (kind === "carrier") return "carrier";
   if (kind === "document") return "document_invoice";
   return "location";
 }

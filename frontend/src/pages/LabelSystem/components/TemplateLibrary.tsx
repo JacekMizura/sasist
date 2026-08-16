@@ -46,13 +46,14 @@ const PRESET_CATEGORY: Record<PresetType, PresetCategory> = {
   RACK_SEGMENT_STRIP: "rack",
   RACK_BEAM_MULTISECTION: "rack",
   PALLET_LABEL: "fleet",
+  CARRIER_LABEL_HORIZONTAL: "fleet",
 };
 
 const CATEGORY_LABELS: Record<PresetCategory, string> = {
   all: "Wszystkie",
   location: "Lokalizacja",
   rack: "Regał",
-  fleet: "Paleta / wózek",
+  fleet: "Paleta / nośnik",
 };
 
 function formatTemplateCount(count: number): string {

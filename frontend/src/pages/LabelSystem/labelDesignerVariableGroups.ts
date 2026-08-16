@@ -1,6 +1,12 @@
 import type { LabelVariable, VariableCategoryId } from "../../types/labelSystem";
 
-export type VariableUiGroupId = "location" | "product" | "company" | "operator" | "system";
+export type VariableUiGroupId =
+  | "location"
+  | "product"
+  | "company"
+  | "operator"
+  | "carrier"
+  | "system";
 
 export type VariableUiGroup = {
   id: VariableUiGroupId;
@@ -40,7 +46,13 @@ export const VARIABLE_UI_GROUPS: VariableUiGroup[] = [
     id: "operator",
     emoji: "👤",
     label: "Operator",
-    categoryIds: ["cart", "basket", "carrier"],
+    categoryIds: ["cart", "basket"],
+  },
+  {
+    id: "carrier",
+    emoji: "🪵",
+    label: "Nośnik",
+    categoryIds: ["carrier"],
   },
   {
     id: "system",
