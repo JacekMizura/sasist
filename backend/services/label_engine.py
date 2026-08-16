@@ -153,6 +153,77 @@ try:
 except ImportError:
     HAS_QR = False
 
+try:
+    from reportlab.lib.utils import ImageReader as _ImageReader
+except ImportError:  # pragma: no cover
+    _ImageReader = None  # type: ignore[misc, assignment]
+
+
+def _qr_border_modules(source: dict[str, Any] | None) -> int:
+    """Quiet-zone modules for QR (matches FE ``qrMargin``; default 1)."""
+    if not isinstance(source, dict):
+        return 1
+    raw = source.get("qrMargin")
+    if raw is None:
+        raw = source.get("qr_margin")
+    if raw is None:
+        return 1
+    try:
+        return max(0, min(4, int(raw)))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _draw_qr_image_on_canvas(
+    c: Any,
+    val: str,
+    x_pt: float,
+    y_pt: float,
+    w_pt: float,
+    h_pt: float,
+    *,
+    border_modules: int = 1,
+    print_mode: bool = False,
+) -> None:
+    """
+    Draw a QR code as a PNG via ReportLab ImageReader.
+
+    ReportLab 4.x ``drawImage`` rejects raw ``BytesIO`` (TypeError: PathLike).
+    Always wrap with ``ImageReader``. Keep square aspect inside the element box.
+    """
+    if not HAS_QR or not (val or "").strip():
+        return
+    if _ImageReader is None:
+        raise RuntimeError("reportlab.lib.utils.ImageReader unavailable")
+    border = max(0, min(4, int(border_modules)))
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=8,
+        border=border,
+    )
+    qr.add_data((val or "").strip())
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    black = to_print_color("#000000", print_mode)
+    c.saveState()
+    c.setFillColor(black)
+    c.setStrokeColor(black)
+    # preserveAspectRatio keeps modules square; anchor=c centers within the element box
+    c.drawImage(
+        _ImageReader(buf),
+        float(x_pt),
+        float(y_pt),
+        width=float(w_pt),
+        height=float(h_pt),
+        preserveAspectRatio=True,
+        anchor="c",
+    )
+    c.restoreState()
+
 
 def _binding_scalar_to_str(val: Any) -> str:
     if val is None:
@@ -667,14 +738,21 @@ def _compute_layout_items(
             item["barcodeFormat"] = (el.get("format") or "Code128").lower()
             item["showValue"] = el.get("showValue", False)
             item["textPosition"] = el.get("textPosition") or "below"
+            item["qrMargin"] = _qr_border_modules(el)
         elif el_type in ("rect", "rectangle"):
             print("ELEMENT:", el)
             print("CONDITIONS RAW:", el.get("conditions"))
             print("CONDITIONS STYLES:", el.get("conditionalStyles"))
             conditions = _rect_conditions_from_element(el)
             print("CONDITIONS NORMALIZED:", conditions)
-            item["strokeWidth"] = float(el.get("strokeWidth") or el.get("stroke_width") or 0.5)
-            item["fill"] = el.get("fill") or el.get("backgroundColor") or el.get("color")
+            item["strokeWidth"] = _stroke_width_mm_from_el(el, default=0.5)
+            # Keep explicit transparent/none — do not coerce with ``or`` (truthy "transparent" must survive).
+            raw_fill = el.get("fill")
+            if raw_fill is None:
+                raw_fill = el.get("backgroundColor")
+            if raw_fill is None:
+                raw_fill = el.get("color")
+            item["fill"] = raw_fill
             if conditions:
                 for cond in conditions:
                     expr = (cond.get("if") or "").strip()
@@ -956,24 +1034,41 @@ def _draw_barcode(
     fmt = (el.get("format") or "Code128").lower()
     try:
         if fmt == "qr" and HAS_QR:
-            # QR: bitmap (no standard vector QR in ReportLab); border=0, minimal margin
-            qr = qrcode.QRCode(version=1, box_size=4, border=0)
-            qr.add_data(val)
-            qr.make(fit=True)
-            img = qr.make_image(fill_color="black", back_color="white")
-            buf = io.BytesIO()
-            img.save(buf, format="PNG")
-            buf.seek(0)
-            black = to_print_color("#000000", print_mode)
-            c.saveState()
-            c.setFillColor(black)
-            c.setStrokeColor(black)
-            c.drawImage(buf, x_pt, y_pt, width=w_pt, height=h_pt)
-            c.restoreState()
+            _draw_qr_image_on_canvas(
+                c,
+                val,
+                x_pt,
+                y_pt,
+                w_pt,
+                h_pt,
+                border_modules=_qr_border_modules(el),
+                print_mode=print_mode,
+            )
         else:
             _draw_code128_fitted(c, val, x_pt, y_pt, w_pt, h_pt, print_mode=print_mode)
     except Exception as e:
         logger.warning("Barcode render failed %r: %s", val[:20], e)
+
+
+def _is_paint_fill(fill: Any) -> bool:
+    """False for none/transparent/empty — those must not paint (ReportLab would treat them as black)."""
+    if fill is None:
+        return False
+    s = str(fill).strip().lower()
+    return s not in ("", "none", "transparent", "rgba(0,0,0,0)")
+
+
+def _stroke_width_mm_from_el(el: dict[str, Any], *, default: float = 0.5) -> float:
+    """Respect explicit 0 (no stroke). ``or`` would turn 0 into the default."""
+    raw = el.get("strokeWidth")
+    if raw is None:
+        raw = el.get("stroke_width")
+    if raw is None:
+        return float(default)
+    try:
+        return max(0.0, float(raw))
+    except (TypeError, ValueError):
+        return float(default)
 
 
 def _draw_rectangle(
@@ -989,29 +1084,41 @@ def _draw_rectangle(
     print_mode: bool = False,
 ) -> None:
     # fill is resolved in compute_layout (incl. conditions); draw uses that value first — not backgroundColor alone
-    fill = el.get("fill") or el.get("backgroundColor") or el.get("color") or "#ffffff"
+    raw_fill = el.get("fill")
+    if raw_fill is None:
+        raw_fill = el.get("backgroundColor")
+    if raw_fill is None:
+        raw_fill = el.get("color")
+    do_fill = _is_paint_fill(raw_fill)
     stroke = el.get("borderColor") or el.get("stroke") or "#374151"
-    stroke_width = max(0.5, float(el.get("strokeWidth") or el.get("stroke_width") or 0.5) * geom_line_scale)
-    fill_c = to_print_color(str(fill), print_mode)
-    stroke_c = to_print_color(str(stroke), print_mode)
+    stroke_width = _stroke_width_mm_from_el(el) * geom_line_scale
+    do_stroke = stroke_width > 1e-9
+    fill_c = to_print_color(str(raw_fill), print_mode) if do_fill else None
+    stroke_c = to_print_color(str(stroke), print_mode) if do_stroke else None
     r_mm = _clamp_corner_radius_mm(el.get("cornerRadius"), w_pt / geom_line_scale, h_pt / geom_line_scale)
     r_pt = r_mm * geom_line_scale
 
     if r_pt < 0.01:
-        if fill:
+        if do_fill and fill_c is not None:
             c.setFillColor(fill_c)
             c.rect(x_pt, y_pt, w_pt, h_pt, fill=1, stroke=0)
-        c.setStrokeColor(stroke_c)
-        c.setLineWidth(stroke_width)
-        c.rect(x_pt, y_pt, w_pt, h_pt, fill=0, stroke=1)
+        if do_stroke and stroke_c is not None:
+            c.setStrokeColor(stroke_c)
+            c.setLineWidth(stroke_width)
+            c.rect(x_pt, y_pt, w_pt, h_pt, fill=0, stroke=1)
         return
 
-    c.setStrokeColor(stroke_c)
-    c.setLineWidth(stroke_width)
-    if fill:
+    if do_fill and fill_c is not None and do_stroke and stroke_c is not None:
         c.setFillColor(fill_c)
+        c.setStrokeColor(stroke_c)
+        c.setLineWidth(stroke_width)
         c.roundRect(x_pt, y_pt, w_pt, h_pt, r_pt, stroke=1, fill=1)
-    else:
+    elif do_fill and fill_c is not None:
+        c.setFillColor(fill_c)
+        c.roundRect(x_pt, y_pt, w_pt, h_pt, r_pt, stroke=0, fill=1)
+    elif do_stroke and stroke_c is not None:
+        c.setStrokeColor(stroke_c)
+        c.setLineWidth(stroke_width)
         c.roundRect(x_pt, y_pt, w_pt, h_pt, r_pt, stroke=1, fill=0)
 
 
@@ -1473,19 +1580,16 @@ def _draw_barcode_layout(
     fmt = (item.get("barcodeFormat") or "code128").lower()
     try:
         if fmt == "qr" and HAS_QR:
-            qr = qrcode.QRCode(version=1, box_size=4, border=0)
-            qr.add_data(val)
-            qr.make(fit=True)
-            img = qr.make_image(fill_color="black", back_color="white")
-            buf = io.BytesIO()
-            img.save(buf, format="PNG")
-            buf.seek(0)
-            black = to_print_color("#000000", print_mode)
-            c.saveState()
-            c.setFillColor(black)
-            c.setStrokeColor(black)
-            c.drawImage(buf, x_pt, y_pt, width=w_pt, height=h_pt)
-            c.restoreState()
+            _draw_qr_image_on_canvas(
+                c,
+                val,
+                x_pt,
+                y_pt,
+                w_pt,
+                h_pt,
+                border_modules=_qr_border_modules(item),
+                print_mode=print_mode,
+            )
         else:
             _draw_code128_fitted(c, val, x_pt, y_pt, w_pt, h_pt, print_mode=print_mode)
     except Exception as e:

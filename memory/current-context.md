@@ -1,3 +1,8 @@
+**Carrier labels + QR PDF fix — PASS, committing/pushing (2026-08-16).**
+- E2E: CarrierLabelPrintModal → POST /labels/carrier → render_label_template → PDF (parity CartLabelPrintModal / PDF viewer; no HTML fallback)
+- QR ImageReader + transparent fill/strokeWidth=0; preset 100×50; decode ESP:carrier:6
+- Tests: BE 14 + FE vitest 11 + tsc + npm build PASS
+
 **Paper produce UX (2026-08-16) — FE-first, pushed main.**
 - PaperProduceLineCard: plan/done/remaining + qty input (default=remaining) + Zatwierdź; +1/+5 secondary only
 - Traceability: effective `production_trace_require_*` from BAT/MO serialize (SSOT policy); shared `productionFgIdentity`

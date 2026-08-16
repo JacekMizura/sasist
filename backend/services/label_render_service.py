@@ -138,26 +138,26 @@ def _render_barcode_qr(
     y_pt: float,
     w_pt: float,
     h_pt: float,
+    *,
+    border_modules: int = 1,
 ) -> None:
     """Draw QR at (x_pt, y_pt) in PDF points, size w_pt x h_pt. No human-readable text."""
     if not HAS_QR or not val:
         return
     try:
-        qr = qrcode.QRCode(version=1, box_size=4, border=0)
-        qr.add_data(val)
-        qr.make(fit=True)
-        img = qr.make_image(fill_color="black", back_color="white")
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        buf.seek(0)
-        from .label_engine import hex_to_cmyk
+        # Shared SSOT path (ImageReader) — same as label_engine PDF pipeline.
+        from .label_engine import _draw_qr_image_on_canvas
 
-        black = hex_to_cmyk("#000000")
-        c.saveState()
-        c.setFillColor(black)
-        c.setStrokeColor(black)
-        c.drawImage(buf, x_pt, y_pt, width=w_pt, height=h_pt)
-        c.restoreState()
+        _draw_qr_image_on_canvas(
+            c,
+            val,
+            x_pt,
+            y_pt,
+            w_pt,
+            h_pt,
+            border_modules=border_modules,
+            print_mode=False,
+        )
     except Exception as e:
         logger.warning("QR render failed for %r: %s", val[:20], e)
 
@@ -228,7 +228,11 @@ def _render_element(
         fmt = (el.get("format") or "Code128").lower()
         show_value = el.get("showValue", False)
         if fmt == "qr":
-            _render_barcode_qr(c, val, x_pt, y_pt, w_pt, h_pt)
+            from .label_engine import _qr_border_modules
+
+            _render_barcode_qr(
+                c, val, x_pt, y_pt, w_pt, h_pt, border_modules=_qr_border_modules(el)
+            )
         else:
             _render_barcode_code128(c, val, x_pt, y_pt, w_pt, h_pt, show_value)
 

@@ -1,3 +1,10 @@
+## 2026-08-16 — Fix QR PDF + transparent fill (label engine)
+
+- ReportLab 4.x: QR via `ImageReader` (`_draw_qr_image_on_canvas`); `qrMargin` quiet zone
+- `fill=transparent` no longer paints black over labels; `strokeWidth=0` respected
+- Preset carrier 100×50 refined (autoFit code, QR 27 mm)
+- Tests: `test_label_engine_qr_pdf` (QR/Code128/transparent border)
+
 ## 2026-08-16 — Carrier ESP:carrier:{id} + template_type=carrier
 
 - Canonical scan: `ESP:carrier:{id}` (computed); `code`/`barcode` unchanged (legacy PAL-/BOX-/…)
