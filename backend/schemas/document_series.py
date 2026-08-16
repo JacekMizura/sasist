@@ -92,8 +92,8 @@ class DocumentSeriesBase(BaseModel):
     is_active: bool = True
     notes: Optional[str] = None
     collective_return_receipt: bool = Field(
-        default=True,
-        description="Z-PZ: jeden zbiorczy dokument na dzień zamiast osobnego Z-PZ per RMZ.",
+        default=False,
+        description="Z-PZ: zbiorczy dokument (dopisywanie RMZ). False = osobny Z-PZ per zwrot (preferowane).",
     )
     company_name: Optional[str] = Field(None, max_length=256)
     company_street: Optional[str] = Field(None, max_length=256)

@@ -186,13 +186,14 @@ function renderReturnUserCell(
             #{displayWarehouseDocumentNumber(r.rmz_number) || r.rmz_number}
           </div>
           <div className="mt-1 text-xs text-slate-400">{formatReturnDate(r.created_at)}</div>
-          {r.warehouse_document_id != null && r.warehouse_document_number ? (
+          {r.warehouse_document_id != null ? (
             <Link
               to={`/wms/putaway/${r.warehouse_document_id}`}
               className="mt-1 block text-xs font-medium text-slate-600 hover:underline"
               onClick={(e) => e.stopPropagation()}
             >
-              {displayWarehouseDocumentNumber(r.warehouse_document_number)}
+              {displayWarehouseDocumentNumber(r.warehouse_document_number) ||
+                `Z-PZ #${r.warehouse_document_id}`}
             </Link>
           ) : null}
         </td>

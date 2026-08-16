@@ -2214,7 +2214,7 @@ def get_active_collective_z_pz(
         series = _resolve_z_pz_series(db, int(tenant_id), wh_id)
     except Exception:
         return None
-    if not bool(getattr(series, "collective_return_receipt", True)):
+    if not bool(getattr(series, "collective_return_receipt", False)):
         return None
     row = get_active_collective_z_pz_summary(
         db, tenant_id=int(tenant_id), warehouse_id=wh_id, series=series
@@ -2241,7 +2241,7 @@ def close_active_collective_z_pz_endpoint(
         series = _resolve_z_pz_series(db, int(tenant_id), wh_id)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    if not bool(getattr(series, "collective_return_receipt", True)):
+    if not bool(getattr(series, "collective_return_receipt", False)):
         raise HTTPException(status_code=400, detail="Seria Z-PZ nie jest w trybie zbiorczym.")
     try:
         doc = close_active_collective_z_pz(

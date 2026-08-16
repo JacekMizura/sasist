@@ -30,7 +30,7 @@ from ..services.stock_document_service import (
 from ..services.stock_operation_receipt_service import append_receipt_operation
 from .inventory_damage_trace_service import materialize_damage_trace_on_dock_inventory
 from .inventory_lot_keys import dock_lot_keys_for_pz_line
-from .stock_disposition import stock_disposition_for_document_line
+from .stock_disposition import normalize_stock_disposition, stock_disposition_for_document_line
 from ..utils.product_vat import product_vat_rate_percent
 from .document_number_service import (
     DocumentSeriesOperationalError,
@@ -257,7 +257,7 @@ def _planned_stock_counts_for_line(
     if parsed:
         for x in parsed:
             eid = str(x.get("id") or "").strip()
-            cond = x.get("condition")
+            cond = str(x.get("condition") or "").strip().upper()
             if cond not in ("B", "C"):
                 continue
             try:
@@ -266,8 +266,9 @@ def _planned_stock_counts_for_line(
                 qty = 1
             for i in range(qty):
                 suffix = f"{eid}__{i}" if qty > 1 else eid
-                damaged_pairs.append((suffix, str(cond)))
-    else:
+                damaged_pairs.append((suffix, cond))
+    # Fallback: JSON present but empty/invalid conditions must not drop damaged_b/c qty columns.
+    if not damaged_pairs:
         ib = int(ln.damaged_b_qty or 0)
         ic = int(ln.damaged_c_qty or 0)
         rid = int(ln.id or 0)
@@ -545,7 +546,6 @@ def _append_rmz_lines_to_document(
         receipt_mode_from_settings,
         saleable_fg_qty_for_receipt,
     )
-    from .stock_disposition import STOCK_DISPOSITION_SALEABLE
 
     settings = (
         db.query(WmsSettings)
@@ -602,7 +602,7 @@ def _append_rmz_lines_to_document(
                 add_qty=float(qty),
                 batch_number="",
                 expiry_date=NO_EXPIRY_SENTINEL,
-                stock_disposition=STOCK_DISPOSITION_SALEABLE,
+                stock_disposition=normalize_stock_disposition(disposition),
             )
         else:
             from .wms_putaway_service import sync_dock_inventory_from_document_line
@@ -824,7 +824,8 @@ def ensure_rmz_return_receipt_document(
 
     existing = _find_existing_document_for_rmz(db, rmz)
     series = _resolve_z_pz_series(db, tenant_id, wh_id)
-    collective = bool(getattr(series, "collective_return_receipt", True))
+    # Preferred ops model: one RMZ → one Z-PZ in putaway. Collective is opt-in on the series.
+    collective = bool(getattr(series, "collective_return_receipt", False))
 
     if existing is not None:
         if _rmz_lines_already_posted(db, int(existing.id), rid):

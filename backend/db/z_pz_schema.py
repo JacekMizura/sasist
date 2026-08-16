@@ -144,9 +144,9 @@ def _column_specs() -> tuple[_ColumnSpec, ...]:
             "document_series",
             "collective_return_receipt",
             "ALTER TABLE document_series ADD COLUMN collective_return_receipt "
-            "INTEGER NOT NULL DEFAULT 1",
+            "INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE document_series ADD COLUMN collective_return_receipt "
-            "BOOLEAN NOT NULL DEFAULT TRUE",
+            "BOOLEAN NOT NULL DEFAULT FALSE",
         ),
         _ColumnSpec(
             "wms_settings",
@@ -274,6 +274,48 @@ def _migrate_z_pz_series_padding(engine: Engine) -> None:
         )
 
 
+def _ensure_tenant1_z_pz_per_rmz(engine: Engine) -> None:
+    """
+    Sasist ops tenant=1: one RMZ → one Z-PZ (putaway-ready per return).
+
+    Does NOT flip other tenants — collective_return_receipt stays as stored.
+    New series still use ORM/server default False; collective remains opt-in.
+    """
+    if not has_table(engine, "document_series"):
+        return
+    cols = set(get_table_column_names(engine, "document_series"))
+    if "collective_return_receipt" not in cols or "subtype" not in cols or "tenant_id" not in cols:
+        return
+    with engine.begin() as conn:
+        if _dialect(engine) == "postgresql":
+            result = conn.execute(
+                text(
+                    """
+                    UPDATE document_series
+                    SET collective_return_receipt = FALSE
+                    WHERE tenant_id = 1
+                      AND UPPER(TRIM(COALESCE(subtype, ''))) IN ('Z_PZ', 'PZ_RT', 'ZW', 'RETURN_RECEIPT')
+                      AND collective_return_receipt IS DISTINCT FROM FALSE
+                    """
+                )
+            )
+        else:
+            result = conn.execute(
+                text(
+                    """
+                    UPDATE document_series
+                    SET collective_return_receipt = 0
+                    WHERE tenant_id = 1
+                      AND UPPER(TRIM(COALESCE(subtype, ''))) IN ('Z_PZ', 'PZ_RT', 'ZW', 'RETURN_RECEIPT')
+                      AND IFNULL(collective_return_receipt, 1) != 0
+                    """
+                )
+            )
+        n = int(getattr(result, "rowcount", 0) or 0)
+        if n:
+            logger.info("[z_pz.schema] tenant=1 Z-PZ series set to per-RMZ (rows=%s)", n)
+
+
 def _ensure_collective_z_pz_unique_index(engine: Engine) -> None:
     if not has_table(engine, "stock_documents"):
         return
@@ -369,6 +411,7 @@ def ensure_z_pz_schema(engine: Engine) -> int:
 
     try:
         _migrate_z_pz_series_padding(engine)
+        _ensure_tenant1_z_pz_per_rmz(engine)
         _ensure_collective_z_pz_unique_index(engine)
         _ensure_wms_order_returns_indexes(engine)
         _ensure_complaints_warehouse_indexes(engine)

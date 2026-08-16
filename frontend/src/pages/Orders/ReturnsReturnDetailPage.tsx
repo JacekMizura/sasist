@@ -534,6 +534,10 @@ export default function ReturnsReturnDetailPage() {
   const [lineDrafts, setLineDrafts] = useState<Record<number, WmsReturnFinalizeLineIn>>({});
   const [finalizeSaving, setFinalizeSaving] = useState(false);
   const [finalizeSuccessMsg, setFinalizeSuccessMsg] = useState<string | null>(null);
+  const [finalizeReceiptLink, setFinalizeReceiptLink] = useState<{
+    id: number;
+    label: string;
+  } | null>(null);
   /** Tylko jedna karta może mieć rozwinięty formularz Uszkodzone/Odrzucone. */
   const [expandedDecisionOi, setExpandedDecisionOi] = useState<number | null>(null);
 
@@ -799,10 +803,19 @@ export default function ReturnsReturnDetailPage() {
           whId != null && Number.isFinite(Number(whId)) ? Number(whId) : null,
         );
         setData(updated);
+        const docId =
+          updated.warehouse_document_id != null && Number.isFinite(Number(updated.warehouse_document_id))
+            ? Number(updated.warehouse_document_id)
+            : null;
         const docNo = displayWarehouseDocumentNumber(updated.warehouse_document_number);
-        setFinalizeSuccessMsg(
-          docNo ? `Zwrot zakończony. Utworzono dokument ${docNo}` : "Zwrot zakończony",
-        );
+        if (docId != null) {
+          const label = docNo || `Z-PZ #${docId}`;
+          setFinalizeReceiptLink({ id: docId, label });
+          setFinalizeSuccessMsg(`Zwrot zakończony. Dokument przyjęcia ${label} — rozlokuj w WMS.`);
+        } else {
+          setFinalizeReceiptLink(null);
+          setFinalizeSuccessMsg("Zwrot zakończony");
+        }
         setRefundOpen(false);
       } catch (e: unknown) {
         const msg =
@@ -1006,7 +1019,21 @@ export default function ReturnsReturnDetailPage() {
         ) : null}
         {finalizeSuccessMsg ? (
           <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900">
-            {finalizeSuccessMsg}
+            {finalizeReceiptLink ? (
+              <>
+                Zwrot zakończony. Dokument przyjęcia{" "}
+                <Link
+                  to={WMS_ROUTES.putawayPz(finalizeReceiptLink.id)}
+                  className="inline-flex items-center gap-1 font-bold underline underline-offset-2 hover:text-emerald-950"
+                >
+                  {finalizeReceiptLink.label}
+                  <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                </Link>
+                {" — rozlokuj w WMS."}
+              </>
+            ) : (
+              finalizeSuccessMsg
+            )}
           </div>
         ) : null}
 
@@ -1037,16 +1064,18 @@ export default function ReturnsReturnDetailPage() {
                   #{data.order_id}
                 </Link>
               </span>
-              {data.warehouse_document_id != null && data.warehouse_document_number ? (
+              {data.warehouse_document_id != null ? (
                 <>
                   <span className="text-slate-300" aria-hidden>
                     ·
                   </span>
                   <Link
                     to={WMS_ROUTES.putawayPz(data.warehouse_document_id)}
-                    className="font-medium text-[#41546a] hover:underline"
+                    className="inline-flex items-center gap-1 font-medium text-[#41546a] hover:underline"
                   >
-                    {displayWarehouseDocumentNumber(data.warehouse_document_number)}
+                    {displayWarehouseDocumentNumber(data.warehouse_document_number) ||
+                      `Z-PZ #${data.warehouse_document_id}`}
+                    <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
                   </Link>
                 </>
               ) : null}

@@ -134,7 +134,7 @@ function dtoToWrite(d: DocumentSeriesDto): DocumentSeriesWritePayload {
     is_default: d.is_default ?? false,
     is_active: d.is_active ?? true,
     notes: d.notes,
-    collective_return_receipt: d.collective_return_receipt ?? (d.subtype === "Z_PZ" ? true : false),
+    collective_return_receipt: d.collective_return_receipt ?? false,
     company_name: d.company_name,
     company_street: d.company_street ?? null,
     company_house_number: d.company_house_number ?? null,
@@ -515,14 +515,14 @@ export default function DocumentSeriesEditPage() {
                   <input
                     type="checkbox"
                     className="mt-0.5"
-                    checked={draft.collective_return_receipt ?? true}
+                    checked={draft.collective_return_receipt ?? false}
                     onChange={(e) => setField("collective_return_receipt", e.target.checked)}
                   />
                   <span>
                     <span className="font-medium">Zbiorczy dokument dla zwrotów</span>
                     <span className="mt-0.5 block text-xs text-slate-500">
-                      Wszystkie produkty przyjęte ze zwrotów trafiają do jednego otwartego Z-PZ na magazyn.
-                      Operator zamyka dokument ręcznie, gdy nośnik zwrotów jest pełny — wtedy trafia do rozlokowania.
+                      Opcjonalnie: dopisuj zwroty do jednego otwartego Z-PZ. Wyłączone = jeden zwrot → jeden Z-PZ
+                      (zalecane do rozlokowania). Gdy zbiorczy: zamykasz dokument ręcznie po zapełnieniu nośnika.
                     </span>
                   </span>
                 </label>

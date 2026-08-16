@@ -150,7 +150,7 @@ export function createDefaultDocumentSeriesWrite(): DocumentSeriesWritePayload {
     is_default: false,
     is_active: true,
     notes: null,
-    collective_return_receipt: true,
+    collective_return_receipt: false,
     company_name: null,
     company_street: null,
     company_house_number: null,
