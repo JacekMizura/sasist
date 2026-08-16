@@ -590,7 +590,11 @@ def receive_orders_mo_fg_to_buffer(
     from .cost_service import compute_order_unit_cost
 
     produced_total = float(mo.produced_quantity or 0)
-    unit_cost = compute_order_unit_cost(rw_doc, produced_quantity=max(produced_total, add_qty))
+    unit_cost = compute_order_unit_cost(
+        rw_doc,
+        produced_quantity=max(produced_total, add_qty),
+        planned_quantity=float(getattr(mo, "planned_quantity", None) or 0),
+    )
     item_id: Optional[int] = None
 
     if mo.pw_stock_document_id:

@@ -275,18 +275,26 @@ export function ProductionOrderExecutionPanel({
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{err}</div>
       ) : null}
 
-      {isDone && order.component_total_cost != null ? (
+      {isDone && (order.actual_material_cost != null || order.component_total_cost != null) ? (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm space-y-1">
           <p>
-            <span className="text-slate-500">Koszt komponentów:</span>{" "}
-            <strong>{formatProductionMoney(order.component_total_cost)}</strong>
+            <span className="text-slate-500">Rzeczywisty koszt materiałów:</span>{" "}
+            <strong>
+              {formatProductionMoney(order.actual_material_cost ?? order.component_total_cost)}
+            </strong>
           </p>
+          {order.has_product_cost_fallback ? (
+            <p className="text-xs text-amber-800">
+              Część kosztu obliczono na podstawie ceny z karty produktu z powodu braku kosztu źródłowego
+              przyjęcia.
+            </p>
+          ) : null}
           <p>
             <span className="text-slate-500">Wyprodukowano:</span>{" "}
             <strong>{formatProductionQuantity(order.produced_quantity)} szt.</strong>
           </p>
           <p>
-            <span className="text-slate-500">Koszt jednostkowy:</span>{" "}
+            <span className="text-slate-500">Rzeczywisty koszt / szt.:</span>{" "}
             <strong>{formatProductionMoney(order.calculated_unit_cost)}</strong>
           </p>
         </div>

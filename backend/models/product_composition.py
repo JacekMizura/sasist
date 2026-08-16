@@ -67,6 +67,8 @@ class ProductionBatch(Base):
     status = Column(String(32), nullable=False, default="draft", index=True)
     notes = Column(Text, nullable=True)
     rw_stock_document_id = Column(Integer, ForeignKey("stock_documents.id", ondelete="SET NULL"), nullable=True)
+    #: Frozen actual material cost breakdown after RW (receipt FIFO slices + fallback flags).
+    material_cost_json = Column(Text, nullable=True)
     created_by_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True)
     #: Optional assignee for execution (null = any eligible operator).
     assigned_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True, index=True)

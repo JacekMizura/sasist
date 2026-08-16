@@ -1,3 +1,23 @@
+## 2026-08-16 — Fix multi-LOT collection discrepancy (bez commit/push)
+
+- `append_collection_location_pick`: `system_qty` + write-down scoped do LOT/expiry/SN
+- Partial pick wybranej partii gdy `remaining > system_qty` → brak write-down reszty slice
+- API/FE: `expiry_date`; UI LOT picker przy multi-LOT
+- Testy A–G PASS; RW split bez zmian; gotowe do re-UAT A
+
+## 2026-08-16 — Koszt produkcji = receipt FIFO (+ product fallback)
+
+- Audyt: RW brał katalog `get_product_current_cost`, nie warstwy PZ
+- `material_cost_layers.py` + enrich przy consume; freeze `material_cost_json`; ISSUE `unit_price_net`
+- UI: rzeczywisty koszt materiałów / szt. + hint fallback; §20 TRYB_PRODUKCJI
+- Testy A–J PASS; bez commit/push
+
+## 2026-08-16 — FINAL UAT Produkcja v1 STOP (A)
+
+- STOP: dual-lot pick FAIL — discrepancy w `collection_pick_commit_service.append_collection_location_pick` konsumuje resztę suggested bez LOT
+- RW split (diag one-shot): PASS — `RW/2026/08/27` 2 linie LOT-A/6 + LOT-B/4
+- Scenariusze B–F nie ruszane; PRODUCTION V1 ≠ PASS E2E
+
 ## 2026-08-16 — §26 Produkcja v1 backlog (bez commit/push)
 
 - Cleanup UI: lokalizacja docelowa, terminal_required, path zamienników

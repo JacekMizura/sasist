@@ -226,6 +226,10 @@ class ProductionOrderRead(BaseModel):
     priority: int = 0
     notes: Optional[str] = None
     calculated_unit_cost: Optional[float] = None
+    #: Frozen Σ(slice_qty × unit_cost) after RW — receipt FIFO with product fallback when needed.
+    actual_material_cost: Optional[float] = None
+    has_product_cost_fallback: bool = False
+    estimated_material_cost: Optional[float] = None
     rw_stock_document_id: Optional[int] = None
     pw_stock_document_id: Optional[int] = None
     rw_document_number: Optional[str] = None

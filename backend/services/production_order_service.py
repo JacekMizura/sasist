@@ -477,6 +477,16 @@ def serialize_order(
 
         production_execution_method = resolve_configured_execution_method(db, order)
 
+    from .production_execution.cost_service import material_cost_read_fields
+
+    cost_fields = material_cost_read_fields(order)
+    actual_mat = cost_fields.get("actual_material_cost")
+    component_total = None
+    if actual_mat is not None:
+        component_total = round(float(actual_mat), 4)
+    elif order.calculated_unit_cost is not None and float(order.produced_quantity or 0) > 0:
+        component_total = round(float(order.calculated_unit_cost or 0) * float(order.produced_quantity or 0), 4)
+
     return ProductionOrderRead(
         id=int(order.id),
         tenant_id=int(order.tenant_id),
@@ -492,16 +502,15 @@ def serialize_order(
         priority=int(order.priority or 0),
         notes=order.notes,
         calculated_unit_cost=order.calculated_unit_cost,
+        actual_material_cost=float(actual_mat) if actual_mat is not None else None,
+        has_product_cost_fallback=bool(cost_fields.get("has_product_fallback")),
+        estimated_material_cost=None,
         rw_stock_document_id=order.rw_stock_document_id,
         pw_stock_document_id=order.pw_stock_document_id,
         rw_document_number=_document_number(db, order.rw_stock_document_id),
         pw_document_number=_document_number(db, order.pw_stock_document_id),
         pw_putaway_status=_pw_putaway_status(db, order.pw_stock_document_id),
-        component_total_cost=(
-            round(float(order.calculated_unit_cost or 0) * float(order.produced_quantity or 0), 4)
-            if order.calculated_unit_cost is not None and float(order.produced_quantity or 0) > 0
-            else None
-        ),
+        component_total_cost=component_total,
         operator_name=_operator_name(db, order.created_by_user_id),
         product_name=(p.name if p else None),
         product_sku=((p.sku or p.symbol) if p else None),

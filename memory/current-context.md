@@ -1,3 +1,28 @@
+**Multi-LOT collection pick fix (2026-08-16), bez commit/push — gotowe do re-UAT A.**
+- ROOT: `system_qty` = agregat lokalizacji → suggested za duży → discrepancy write-down bez LOT
+- FIX: `system_qty`/consume/discrepancy scoped do wybranego LOT(+expiry+SN); partial gdy remaining>slice bez write-down
+- FE: picker LOT gdy multi-LOT; suggested z qty partii; `expiry_date` w API
+- Testy A–G `test_production_collection_multi_lot` + multi_location + rw_lot_lines: 19 PASS
+- RW split nietknięty; następny krok: tylko UAT A (LOT-A 6 → LOT-B 4)
+
+**Material cost FIFO receipt layers (2026-08-16), bez commit/push.**
+- Audyt: dotychczas RW stampował `get_product_current_cost` (katalog), nie warstwy przyjęcia
+- Silnik: `material_cost_layers.ReceiptFifoCostLedger` — koszt podąża za fizycznym consume; fallback `purchase_price`
+- Freeze: `material_cost_json` na MO/BAT; ISSUE `unit_price_net`; RW line = weighted slice cost
+- UI: rzeczywisty koszt materiałów + hint fallback; §20 TRYB_PRODUKCJI zaktualizowany
+- Testy A–J: `test_material_cost_fifo` 10 PASS; FG/PW regresja PASS; tsc/build w toku
+
+**FINAL UAT Produkcja v1 — STOP na A (2026-08-16).**
+- Prefight OK: healthz/readyz, origin/main=`a55eda02`, frontend live
+- A dual-pick LOT-A=6 then LOT-B=4 → FAIL: `discrepancy` write-down w `append_collection_location_pick` zjada drugi LOT (suggested=remaining, bez filtra LOT)
+- Diag one-shot pick 10 → RW/2026/08/27 ma 2 linie (LOT-A/6 + LOT-B/4) — model RW OK
+- B–F nie uruchomione; bez auto-fix; leftover: BAT/2026/0022 `in_progress`, BAT/21 cancelled
+
+**§26 fixture fix + commit/push (2026-08-16).**
+- ROOT: stale sqlite fixtures missing `production_fg_outputs` (+ companion tables) after FG delta SSOT
+- Fixed `test_production_packing_handoff` + `test_production_orders_fg_fulfillment` fixtures only
+- Commit `a55eda02` on `main` pushed; backend `/healthz`+`/readyz` OK; frontend `sasist.vercel.app` HTTP 200
+
 **§26 Produkcja v1 backlog — wdrożony (2026-08-16), bez commit/push.**
 - Cleanup: usunięto UI „Lokalizacja docelowa” + martwy `terminal_required` round-trip; usunięto path zamienników
 - RW: linia = PRODUCT×LOT×expiry (MO+BAT); SN tylko audit/ops

@@ -36,6 +36,7 @@ def append_issue_operation(
     performed_by: Optional["AppUser"] = None,
     operator_admin_id: int | None = None,
     metadata: dict | None = None,
+    unit_price_net: float | None = None,
 ) -> tuple[StockOperation, object]:
     """Insert one ISSUE row and record warehouse inventory movement tied to WZ."""
     if qty <= 1e-12:
@@ -51,6 +52,12 @@ def append_issue_operation(
     if op_admin is None and performed_by is not None:
         op_admin = int(getattr(performed_by, "id", 0) or 0) or None
 
+    if unit_price_net is not None:
+        unit = float(unit_price_net)
+    else:
+        line_price = getattr(line, "purchase_price_net", None)
+        unit = float(line_price) if line_price is not None else None
+
     op = StockOperation(
         document_id=int(doc.id),
         document_line_id=int(line.id),
@@ -62,6 +69,7 @@ def append_issue_operation(
         expiry_date=exp_op,
         serial_number=(serial_number or "").strip() or None,
         stock_disposition=stock_disposition_for_document_line(line),
+        unit_price_net=unit,
     )
     db.add(op)
     db.flush()

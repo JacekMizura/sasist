@@ -273,7 +273,11 @@ def create_order_delta_pw_for_putaway(
     )
     from .cost_service import compute_order_unit_cost
 
-    unit_cost = compute_order_unit_cost(rw_doc, produced_quantity=max(float(order.produced_quantity or 0), qty))
+    unit_cost = compute_order_unit_cost(
+        rw_doc,
+        produced_quantity=max(float(order.produced_quantity or 0), qty),
+        planned_quantity=float(order.planned_quantity or 0),
+    )
     pw_doc = _new_pw_header(
         db,
         tenant_id=int(order.tenant_id),
@@ -516,7 +520,11 @@ def create_order_pw_document_for_putaway(
     produced = float(order.produced_quantity or order.planned_quantity)
     from .cost_service import compute_order_unit_cost
 
-    unit_cost = compute_order_unit_cost(rw_doc, produced_quantity=produced)
+    unit_cost = compute_order_unit_cost(
+        rw_doc,
+        produced_quantity=produced,
+        planned_quantity=float(order.planned_quantity or 0),
+    )
     from .production_fg_traceability import (
         assert_fg_traceability_ready,
         lock_fg_traceability_snapshot,

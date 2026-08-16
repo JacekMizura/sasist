@@ -724,16 +724,32 @@ Kolumny / blob `terminal_required` oraz flaga `show_target_location` mogą nadal
 
 ## 20. Koszt produkcji
 
-**[ISTNIEJE]**
+**[ISTNIEJE — receipt FIFO]**
 
-| Element | Opis |
+Koszt produkcji opiera się na rzeczywistym koszcie zużytych komponentów.
+
+Dla każdej zużytej ilości Sasist w pierwszej kolejności pobiera koszt jednostkowy z dokumentu przyjęcia, z którego pochodzi dany zapas. Koszt podąża za faktycznie zużytą warstwą magazynową (ta sama kolejność co fizyczny consume FIFO/FEFO — bez osobnego sortowania tylko dla kosztu).
+
+Jeżeli komponent został pobrany z kilku dostaw, koszt wyliczany jest osobno dla każdej części.
+
+Przykład:
+100 szt. z dostawy po 10 zł
++ 50 szt. z kolejnej dostawy po 12 zł
+= 1600 zł kosztu materiałowego.
+
+Jeżeli dla danej ilości nie można ustalić kosztu z dokumentu przyjęcia (brak RECEIPT z ceną, legacy stock bez provenance, ręczny stan bez kosztu), system wykorzystuje jako fallback cenę zakupu netto z karty produktu (`purchase_price`). Fallback jest jawny (`cost_source = RECEIPT | PRODUCT_FALLBACK`).
+
+| Pojęcie | Opis |
 |---|---|
-| Koszt komponentu | Cena zakupu netto z karty produktu |
-| Szacunek receptury | Σ (cena × ilość na jednostkę) |
-| Koszt po produkcji | Na podstawie zużycia RW / wyprodukowanej ilości → koszt jednostkowy zlecenia/linii |
-| Ekrany | Receptury, karta produktu, tworzenie zlecenia/partii, historia, Analiza kosztów |
+| Szacowany koszt receptury | Orientacyjny: Σ (cena z karty / bieżący koszt katalogowy × qty BOM) — przed produkcją |
+| Rzeczywisty koszt materiałów | Po RW: `Σ (slice_qty × source_unit_cost)` — zamrożony w `material_cost_json` na MO/BAT |
+| Rzeczywisty koszt / szt. | `actual_material_cost / produced_qty` (przy partial: mianownik = planned aż do domknięcia) |
 
-**Nie jest** to pełny controlling ABC / rachunek kosztów rzeczywistych z narzutami — to koszt materiałowy oparty o ceny zakupu.
+RW: linie PRODUCT×LOT×expiry mają `purchase_price_net` jako średnią ważoną slice’ów; ISSUE `unit_price_net` niesie koszt per slice + metadane źródła receipt.
+
+Koszt historyczny nie zmienia się po późniejszej zmianie ceny produktu.
+
+**Nie jest** to pełny controlling ABC / rachunek kosztów z narzutami — to koszt materiałowy oparty o przyjęcia + fallback karty.
 
 ---
 

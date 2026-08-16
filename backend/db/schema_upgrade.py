@@ -4043,6 +4043,24 @@ def ensure_fg_traceability_columns(engine: Engine) -> None:
             cols = _table_column_names(conn, table)
             if "fg_traceability_json" not in cols:
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN fg_traceability_json TEXT"))
+        for table in ("production_orders", "production_batches"):
+            if not _table_exists(conn, table):
+                continue
+            cols = _table_column_names(conn, table)
+            if "material_cost_json" not in cols:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN material_cost_json TEXT"))
+        conn.commit()
+
+
+def ensure_material_cost_json_columns(engine: Engine) -> None:
+    """Frozen receipt-FIFO material cost snapshot on MO/BAT after RW."""
+    with engine.connect() as conn:
+        for table in ("production_orders", "production_batches"):
+            if not _table_exists(conn, table):
+                continue
+            cols = _table_column_names(conn, table)
+            if "material_cost_json" not in cols:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN material_cost_json TEXT"))
         conn.commit()
 
 

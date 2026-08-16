@@ -81,6 +81,8 @@ type MonitoringSource = {
   created_at?: string | null;
   calculated_unit_cost?: number | null;
   display_unit_cost?: number | null;
+  actual_material_cost?: number | null;
+  has_product_cost_fallback?: boolean;
   rw_stock_document_id?: number | null;
   pw_stock_document_id?: number | null;
   rw_document_number?: string | null;
@@ -319,7 +321,23 @@ export function ProductionMonitoringPanel({
             <InfoRow label="Koniec produkcji" value={formatTs(source.production_completed_at)} />
           ) : null}
           {unitCost != null ? (
-            <InfoRow label="Koszt jednostkowy" value={formatProductionMoney(unitCost)} />
+            <InfoRow
+              label={
+                source.actual_material_cost != null ? "Rzeczywisty koszt / szt." : "Koszt jednostkowy"
+              }
+              value={formatProductionMoney(unitCost)}
+            />
+          ) : null}
+          {source.actual_material_cost != null ? (
+            <InfoRow
+              label="Rzeczywisty koszt materiałów"
+              value={formatProductionMoney(source.actual_material_cost)}
+            />
+          ) : null}
+          {source.has_product_cost_fallback ? (
+            <p className="text-xs text-amber-800">
+              Część kosztu z ceny karty produktu (brak kosztu źródłowego przyjęcia).
+            </p>
           ) : null}
         </dl>
       </Card>
@@ -423,6 +441,8 @@ export function orderMonitoringSource(order: ProductionOrderRead): MonitoringSou
     completed_at: order.completed_at,
     created_at: order.created_at,
     calculated_unit_cost: order.calculated_unit_cost,
+    actual_material_cost: order.actual_material_cost,
+    has_product_cost_fallback: order.has_product_cost_fallback,
     rw_stock_document_id: order.rw_stock_document_id,
     pw_stock_document_id: order.pw_stock_document_id,
     rw_document_number: order.rw_document_number,
@@ -454,6 +474,8 @@ export function batchMonitoringSource(batch: ProductionBatchRead): MonitoringSou
     completed_at: batch.completed_at,
     created_at: batch.created_at,
     display_unit_cost: batch.display_unit_cost,
+    actual_material_cost: batch.actual_material_cost,
+    has_product_cost_fallback: batch.has_product_cost_fallback,
     rw_stock_document_id: batch.rw_stock_document_id,
     rw_document_number: batch.rw_document_number,
     pw_document_rows: pwRows,

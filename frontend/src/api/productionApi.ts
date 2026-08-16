@@ -153,6 +153,10 @@ export type ProductionOrderRead = {
   priority: number;
   notes?: string | null;
   calculated_unit_cost?: number | null;
+  /** Frozen Σ(slice × receipt/product unit) after RW. */
+  actual_material_cost?: number | null;
+  has_product_cost_fallback?: boolean;
+  estimated_material_cost?: number | null;
   rw_stock_document_id?: number | null;
   pw_stock_document_id?: number | null;
   rw_document_number?: string | null;
@@ -635,6 +639,8 @@ export type ProductionBatchRead = {
   created_at?: string | null;
   updated_at?: string | null;
   display_unit_cost?: number | null;
+  actual_material_cost?: number | null;
+  has_product_cost_fallback?: boolean;
 };
 
 export type ProductionBatchLineWrite = {

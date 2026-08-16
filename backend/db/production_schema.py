@@ -486,6 +486,19 @@ def _migration_fg_traceability_columns(engine: Engine) -> int:
     return added
 
 
+def _migration_material_cost_json(engine: Engine) -> int:
+    from ..models.product_composition import ProductionBatch
+    from ..models.production import ProductionOrder
+
+    added = ensure_model_schema_sync(
+        engine, ProductionOrder, log_prefix="production.schema.material_cost"
+    )
+    added += ensure_model_schema_sync(
+        engine, ProductionBatch, log_prefix="production.schema.material_cost"
+    )
+    return added
+
+
 def _migration_production_fg_outputs(engine: Engine) -> int:
     from ..models.production_fg_output import ProductionFgOutput
 
@@ -526,6 +539,11 @@ PRODUCTION_SCHEMA_MIGRATIONS: list[ProductionSchemaMigration] = [
         "2026.08.16.1",
         "production_fg_outputs",
         _migration_production_fg_outputs,
+    ),
+    ProductionSchemaMigration(
+        "2026.08.16.2",
+        "material_cost_json",
+        _migration_material_cost_json,
     ),
 ]
 

@@ -115,6 +115,8 @@ class ProductionOrder(Base):
     priority = Column(Integer, nullable=False, default=0)
     notes = Column(Text, nullable=True)
     calculated_unit_cost = Column(Float, nullable=True)
+    #: Frozen actual material cost breakdown after RW (receipt FIFO slices + fallback flags).
+    material_cost_json = Column(Text, nullable=True)
     rw_stock_document_id = Column(Integer, ForeignKey("stock_documents.id", ondelete="SET NULL"), nullable=True)
     pw_stock_document_id = Column(Integer, ForeignKey("stock_documents.id", ondelete="SET NULL"), nullable=True)
     created_by_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True)
