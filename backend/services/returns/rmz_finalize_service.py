@@ -160,6 +160,26 @@ def finalize_rmz_return(
     rmz_lines = list(lines_by_oi.values())
     validate_rmz_lines_ready_for_finalize(rmz_lines, require_photos=bool(settings.require_photos))
 
+    # Activity Log narrative first (decision → intake → recovery), then Z-PZ receipt emit.
+    # Inventory / Z-PZ posting still happens in ensure_* below — only journal order changes.
+    try:
+        from .return_domain_activity import (
+            emit_component_recoveries_from_line_state,
+            emit_return_line_decision,
+            emit_return_stock_intake_selected,
+        )
+
+        for ln in rmz_lines:
+            if getattr(ln, "decision", None):
+                emit_return_line_decision(db, rmz=row, line=ln, actor_user_id=actor_user_id)
+            if getattr(ln, "stock_intake_mode", None):
+                emit_return_stock_intake_selected(db, rmz=row, line=ln, actor_user_id=actor_user_id)
+            emit_component_recoveries_from_line_state(
+                db, rmz=row, line=ln, actor_user_id=actor_user_id
+            )
+    except Exception:
+        logger.exception("return domain activity (line narrative) failed rmz_id=%s", row.id)
+
     try:
         pz_doc = ensure_required_rmz_return_receipt_document(db, row, actor_user_id=actor_user_id)
     except ValueError as exc:
@@ -195,20 +215,6 @@ def finalize_rmz_return(
     try:
         from .return_domain_activity import emit_return_finalized
 
-        for ln in rmz_lines:
-            from .return_domain_activity import (
-                emit_return_line_decision,
-                emit_return_stock_intake_selected,
-                emit_component_recoveries_from_line_state,
-            )
-
-            if getattr(ln, "decision", None):
-                emit_return_line_decision(db, rmz=row, line=ln, actor_user_id=actor_user_id)
-            if getattr(ln, "stock_intake_mode", None):
-                emit_return_stock_intake_selected(db, rmz=row, line=ln, actor_user_id=actor_user_id)
-            emit_component_recoveries_from_line_state(
-                db, rmz=row, line=ln, actor_user_id=actor_user_id
-            )
         emit_return_finalized(
             db,
             rmz=row,

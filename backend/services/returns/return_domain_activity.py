@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -13,9 +13,7 @@ from ...models.wms_order_return import WmsOrderReturn
 from ...models.wms_rmz_line import RMZLine
 from ..activity_log.domain_activity import record_domain_activity
 from ..activity_log.domain_event_codes import (
-    INTAKE_LABEL_PL,
     RETURN_COMPONENT_RECOVERY,
-    RETURN_COMPONENT_SCRAP,
     RETURN_CREATED,
     RETURN_FINALIZED,
     RETURN_LINE_DECISION,
@@ -44,6 +42,21 @@ def _product_snap(db: Session, product_id: Optional[int]) -> tuple[Optional[str]
     return (getattr(p, "name", None), getattr(p, "sku", None))
 
 
+def _format_product_label(name: Optional[str], sku: Optional[str]) -> str:
+    n = str(name or "").strip()
+    s = str(sku or "").strip()
+    if n and s:
+        return f"{n} ({s})"
+    return n or s or "—"
+
+
+def _qty_txt(n: float | int | None) -> str:
+    q = float(n or 0)
+    if abs(q - round(q)) < 1e-9:
+        return str(int(round(q)))
+    return f"{q:g}"
+
+
 def _decision_label(decision: Optional[str]) -> str:
     d = str(decision or "").strip().upper()
     return {
@@ -52,6 +65,61 @@ def _decision_label(decision: Optional[str]) -> str:
         "REJECTED": "odrzucony",
         "SCRAP": "scrap",
     }.get(d, d or "—")
+
+
+def _line_is_bundle(db: Session, line: RMZLine) -> bool:
+    try:
+        from ..bundles.bundle_return_service import is_bundle_parent_rmz_line
+
+        return bool(is_bundle_parent_rmz_line(db, line))
+    except Exception:
+        return False
+
+
+def _parent_label(db: Session, line: RMZLine, *, is_bundle: bool) -> str:
+    """Display name for the returned parent (manufactured FG or bundle)."""
+    if is_bundle:
+        try:
+            from ...models.order_item import OrderItem
+
+            oi = (
+                db.query(OrderItem)
+                .filter(OrderItem.id == int(getattr(line, "order_item_id", 0) or 0))
+                .first()
+            )
+            bid = int(getattr(oi, "source_bundle_id", 0) or 0) if oi is not None else 0
+            if bid > 0:
+                from ...models.bundle import Bundle
+
+                b = db.query(Bundle).filter(Bundle.id == bid).first()
+                bname = str(getattr(b, "name", None) or "").strip() if b is not None else ""
+                if bname:
+                    return bname
+        except Exception:
+            pass
+    name, sku = _product_snap(db, int(line.product_id) if getattr(line, "product_id", None) else None)
+    return _format_product_label(name, sku)
+
+
+def _intake_effect(*, parent_label: str, mode: str, fg: int, dq: int, is_bundle: bool) -> str:
+    if mode == "DISASSEMBLE":
+        if is_bundle:
+            return f"{parent_label} — rozmontowano {_qty_txt(dq)} zest."
+        return f"{parent_label} — rozmontowano {_qty_txt(dq)} szt."
+    if mode == "MIXED":
+        if is_bundle:
+            return (
+                f"{parent_label} — przyjęto jako zestaw: {_qty_txt(fg)} szt. · "
+                f"rozmontowano: {_qty_txt(dq)} szt."
+            )
+        return (
+            f"{parent_label} — przyjęto jako gotowy wyrób: {_qty_txt(fg)} szt. · "
+            f"rozmontowano: {_qty_txt(dq)} szt."
+        )
+    # FG-only
+    if is_bundle:
+        return f"{parent_label} — przyjęto jako zestaw: {_qty_txt(fg)} szt."
+    return f"{parent_label} — przyjęto jako gotowy wyrób: {_qty_txt(fg)} szt."
 
 
 def emit_return_created(
@@ -101,10 +169,8 @@ def emit_return_line_decision(
     rmz_no = str(getattr(rmz, "rmz_number", None) or f"RMZ-{rid}")
     order_no = _order_number(db, int(rmz.order_id) if rmz.order_id else None)
     decision = getattr(line, "decision", None)
-    desc = (
-        f"Decyzja pozycji: {_decision_label(decision)}"
-        + (f" — {name or sku or f'#{pid}'}" if pid else "")
-    )
+    label = _format_product_label(name, sku) if pid else ""
+    desc = f"Decyzja pozycji: {_decision_label(decision)}" + (f" — {label}" if label else "")
     record_domain_activity(
         db,
         tenant_id=int(rmz.tenant_id),
@@ -149,7 +215,9 @@ def emit_return_stock_intake_selected(
     lid = int(line.id)
     fg = int(getattr(line, "fg_intake_qty", None) or 0)
     dq = int(getattr(line, "disassembly_qty", None) or 0)
-    label = INTAKE_LABEL_PL.get(mode, mode)
+    is_bundle = _line_is_bundle(db, line)
+    parent_label = _parent_label(db, line, is_bundle=is_bundle)
+    effect = _intake_effect(parent_label=parent_label, mode=mode, fg=fg, dq=dq, is_bundle=is_bundle)
     rmz_no = str(getattr(rmz, "rmz_number", None) or f"RMZ-{rid}")
     order_no = _order_number(db, int(rmz.order_id) if rmz.order_id else None)
     record_domain_activity(
@@ -157,7 +225,7 @@ def emit_return_stock_intake_selected(
         tenant_id=int(rmz.tenant_id),
         warehouse_id=int(rmz.warehouse_id) if getattr(rmz, "warehouse_id", None) else None,
         event_type=RETURN_STOCK_INTAKE_SELECTED,
-        description=f"Wybrano sposób przyjęcia: {label} (FG={fg}, rozbiór={dq})",
+        description=effect,
         actor_user_id=actor_user_id,
         order_id=int(rmz.order_id) if rmz.order_id else None,
         rmz_id=rid,
@@ -173,6 +241,10 @@ def emit_return_stock_intake_selected(
             "stock_intake_mode": mode,
             "fg_intake_qty": fg,
             "disassembly_qty": dq,
+            "is_bundle": is_bundle,
+            "source": "bundle" if is_bundle else "manufacturing",
+            "parent_name": parent_label,
+            "product_name": parent_label,
         },
     )
 
@@ -190,74 +262,57 @@ def emit_return_component_recovery(
     source: str = "bundle",
     actor_user_id: Optional[int] = None,
 ) -> None:
+    """
+    One Activity Log row per component: recovered + rejected in a single effect.
+
+    Does NOT emit RETURN_COMPONENT_SCRAP (avoids UI duplication). Technical scrap
+    audit remains in manufactured_component_recovery_service.audit_component_scrap.
+    """
     rid = int(rmz.id)
     lid = int(line.id)
     pid = int(component_product_id)
     name, sku = _product_snap(db, pid)
-    label = sku or name or f"#{pid}"
+    label = _format_product_label(name, sku)
     rmz_no = str(getattr(rmz, "rmz_number", None) or f"RMZ-{rid}")
     order_no = _order_number(db, int(rmz.order_id) if rmz.order_id else None)
     corr_suffix = str(source_row_id or f"{pid}:{accepted_qty}:{scrap_qty}")
-    if float(accepted_qty or 0) > 1e-9:
-        record_domain_activity(
-            db,
-            tenant_id=int(rmz.tenant_id),
-            warehouse_id=int(rmz.warehouse_id) if getattr(rmz, "warehouse_id", None) else None,
-            event_type=RETURN_COMPONENT_RECOVERY,
-            description=f"Odzyskano {label}: {accepted_qty:g} szt."
-            + (f"; odrzut: {scrap_qty:g} szt." if float(scrap_qty or 0) > 1e-9 else ""),
-            actor_user_id=actor_user_id,
-            order_id=int(rmz.order_id) if rmz.order_id else None,
-            rmz_id=rid,
-            product_id=pid,
-            correlation_id=f"return:{rid}:line:{lid}:recovery-posted:{corr_suffix}",
-            source_module="returns",
-            category="status",
-            severity="SUCCESS",
-            rmz_label=rmz_no,
-            order_label=f"#{order_no}" if order_no else None,
-            product_label=label,
-            metadata={
-                "rmz_number": rmz_no,
-                "order_number": order_no,
-                "product_name": name,
-                "product_sku": sku,
-                "expected_qty": float(expected_qty),
-                "accepted_qty": float(accepted_qty),
-                "scrap_qty": float(scrap_qty),
-                "source": source,
-            },
-        )
-    if float(scrap_qty or 0) > 1e-9:
-        record_domain_activity(
-            db,
-            tenant_id=int(rmz.tenant_id),
-            warehouse_id=int(rmz.warehouse_id) if getattr(rmz, "warehouse_id", None) else None,
-            event_type=RETURN_COMPONENT_SCRAP,
-            description=f"Scrap {label}: {scrap_qty:g} szt. (bez stocku)",
-            actor_user_id=actor_user_id,
-            order_id=int(rmz.order_id) if rmz.order_id else None,
-            rmz_id=rid,
-            product_id=pid,
-            correlation_id=f"return:{rid}:component:{pid}:scrap:{corr_suffix}",
-            source_module="returns",
-            category="status",
-            severity="WARNING",
-            rmz_label=rmz_no,
-            order_label=f"#{order_no}" if order_no else None,
-            product_label=label,
-            metadata={
-                "rmz_number": rmz_no,
-                "order_number": order_no,
-                "product_name": name,
-                "product_sku": sku,
-                "scrap_qty": float(scrap_qty),
-                "expected_qty": float(expected_qty),
-                "accepted_qty": float(accepted_qty),
-                "source": source,
-                "reason": "return_component_scrap",
-            },
-        )
+    acc = float(accepted_qty or 0)
+    scrap = float(scrap_qty or 0)
+    if acc <= 1e-9 and scrap <= 1e-9:
+        return
+    is_bundle = str(source or "").strip().lower() == "bundle"
+    effect = (
+        f"{label} — Odzyskano: {_qty_txt(acc)} szt. · Odrzucono: {_qty_txt(scrap)} szt."
+    )
+    record_domain_activity(
+        db,
+        tenant_id=int(rmz.tenant_id),
+        warehouse_id=int(rmz.warehouse_id) if getattr(rmz, "warehouse_id", None) else None,
+        event_type=RETURN_COMPONENT_RECOVERY,
+        description=effect,
+        actor_user_id=actor_user_id,
+        order_id=int(rmz.order_id) if rmz.order_id else None,
+        rmz_id=rid,
+        product_id=pid,
+        correlation_id=f"return:{rid}:line:{lid}:recovery-posted:{corr_suffix}",
+        source_module="returns",
+        category="status",
+        severity="SUCCESS" if acc > 1e-9 else "WARNING",
+        rmz_label=rmz_no,
+        order_label=f"#{order_no}" if order_no else None,
+        product_label=label,
+        metadata={
+            "rmz_number": rmz_no,
+            "order_number": order_no,
+            "product_name": name,
+            "product_sku": sku,
+            "expected_qty": float(expected_qty),
+            "accepted_qty": acc,
+            "scrap_qty": scrap,
+            "source": "bundle" if is_bundle else "manufacturing",
+            "is_bundle": is_bundle,
+        },
+    )
 
 
 def emit_return_receipt_created(
@@ -319,7 +374,6 @@ def emit_return_putaway_completed(
     rmz_no = str(getattr(rmz, "rmz_number", None) or f"RMZ-{rid}") if rmz else f"RMZ-{rid}"
     oid = int(order_id) if order_id else (int(rmz.order_id) if rmz and rmz.order_id else None)
     order_no = _order_number(db, oid)
-    # one event; first product linked when single; multi in metadata
     first_pid = product_ids[0] if product_ids else None
     record_domain_activity(
         db,
@@ -391,7 +445,7 @@ def emit_component_recoveries_from_line_state(
     line: RMZLine,
     actor_user_id: Optional[int] = None,
 ) -> None:
-    """Emit recovery/scrap from ReturnLineBundleComponent and RmzLineComponentRecovery rows."""
+    """Emit recovery from ReturnLineBundleComponent and RmzLineComponentRecovery rows."""
     from ...models.return_line_bundle_component import ReturnLineBundleComponent
     from ...models.rmz_line_component_recovery import RmzLineComponentRecovery
 
@@ -406,7 +460,6 @@ def emit_component_recoveries_from_line_state(
         if accepted <= 1e-9 and scrap <= 1e-9:
             continue
         snap = getattr(cr, "order_line_bundle_component_id", None)
-        # resolve product via snapshot if possible
         pid = None
         if snap:
             from ...models.order_line_bundle_component import OrderLineBundleComponent

@@ -35,12 +35,14 @@ _DETAIL_KEY_LABELS: dict[str, str] = {
     "document_number": "Dokument",
     "mo_number": "Zlecenie MO",
     "batch_number": "Partia",
-    "stock_intake_mode": "Przyjęcie",
-    "fg_intake_qty": "Ilość FG",
-    "disassembly_qty": "Ilość rozbiór",
-    "accepted_qty": "Przyjęto",
-    "scrap_qty": "Scrap",
+    "stock_intake_mode": "Sposób przyjęcia",
+    "fg_intake_qty": "Przyjęto jako wyrób/zestaw",
+    "disassembly_qty": "Rozmontowano",
+    "accepted_qty": "Odzyskano",
+    "scrap_qty": "Odrzucono",
     "expected_qty": "Oczekiwane",
+    "parent_name": "Produkt / zestaw",
+    "is_bundle": "Zestaw",
     "orders_count": "Liczba zamówień",
     "orders_detached": "Liczba zamówień",
     "remaining_orders": "Pozostało na wózku",
@@ -211,6 +213,7 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
         build_production_detail_rows,
         format_production_activity_message,
     )
+    from backend.services.activity_log.return_activity_presentation import resolve_return_event_title
     from backend.services.cart_lifecycle_event_catalog import (
         compose_informative_message,
         title_pl,
@@ -266,7 +269,7 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
         )
         # Default: no expandable metadata dump (raw keys). Picking-entry uses structured rows.
         details = []
-    event_display_label = title_pl(event_code)
+    event_display_label = resolve_return_event_title(event_code, meta) or title_pl(event_code)
     # Order # list only when writer opted in (assign / detach) — never for start/stop session noise.
     show_nums = bool(meta.get("show_order_numbers"))
     order_nums = order_numbers_from_meta(meta) if show_nums else []

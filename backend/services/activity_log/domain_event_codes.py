@@ -61,9 +61,9 @@ PICKING_ENTRY_AVAILABILITY_SOURCE_DETACHED_STARTED_MO = (
 DOMAIN_EVENT_TITLES_PL: dict[str, str] = {
     RETURN_CREATED: "Utworzono zwrot",
     RETURN_LINE_DECISION: "Zapisano decyzję pozycji zwrotu",
-    RETURN_STOCK_INTAKE_SELECTED: "Wybrano sposób przyjęcia magazynowego",
-    RETURN_COMPONENT_RECOVERY: "Odzyskano komponent ze zwrotu",
-    RETURN_COMPONENT_SCRAP: "Odrzucono komponent jako scrap",
+    RETURN_STOCK_INTAKE_SELECTED: "Sposób przyjęcia magazynowego",
+    RETURN_COMPONENT_RECOVERY: "Rozliczono komponent",
+    RETURN_COMPONENT_SCRAP: "Rozliczono komponent",
     RETURN_RECEIPT_CREATED: "Utworzono dokument Z-PZ",
     RETURN_PUTAWAY_COMPLETED: "Rozlokowano przyjęcie zwrotu",
     RETURN_FINALIZED: "Zwrot zakończony",
@@ -113,5 +113,5 @@ DOMAIN_EVENT_TITLES_PL: dict[str, str] = {
 INTAKE_LABEL_PL: dict[str, str] = {
     "FG": "gotowy produkt",
     "DISASSEMBLE": "rozmontowanie",
-    "MIXED": "mixed (gotowy + rozmontowanie)",
+    "MIXED": "częściowo (gotowy + rozmontowanie)",
 }
