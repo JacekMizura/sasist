@@ -44,6 +44,7 @@ import {
   getWmsPickingTerminalSettings,
   type WmsPickingListDisplayApi,
 } from "../../api/wmsPickingTerminalSettingsApi";
+import { pickingListCardVisibilityFromApi } from "../../modules/wmsSettings/picking/pickingListDisplay";
 import {
   DEFAULT_PICKING_TERMINAL_SCAN_POLICY,
   productHasScannableCode,
@@ -1922,14 +1923,7 @@ export default function WmsPickingProductsPage() {
                   shortageLabel={miss > 1e-9 ? fmtQty(miss) : null}
                   status={status}
                   disabled={rowBlocked}
-                  visibility={{
-                    showProductImage: listDisplay.show_product_image,
-                    showEAN: listDisplay.show_ean,
-                    showSKU: listDisplay.show_sku,
-                    showCatalogNumber: listDisplay.show_catalog_number,
-                    showLocation: listDisplay.show_location,
-                    showWarehouseStock: listDisplay.show_stock,
-                  }}
+                  visibility={pickingListCardVisibilityFromApi(listDisplay)}
                   onClick={() =>
                     goDetail(r.product_id, {
                       source: "click",

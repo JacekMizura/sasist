@@ -77,6 +77,12 @@ import {
 } from "./pickingConfigStatusEligibility";
 import { PICKING_TERMINAL_SETTING_HINTS } from "./pickingTerminalScanPolicy";
 import {
+  applyListDisplayToExtendedUi,
+  listDisplayForTerminalSave,
+  PICKING_LIST_DISPLAY_HINTS,
+  PICKING_LIST_DISPLAY_SECTION_HELP,
+} from "./pickingListDisplay";
+import {
   BY_PRODUCTS_ALL_CONTAINER_OPTIONS,
   BY_PRODUCTS_MULTI_CONTAINER_OPTIONS,
   BY_PRODUCTS_SINGLE_CONTAINER_OPTIONS,
@@ -191,14 +197,16 @@ function SectionCardPicking({
 function SubsectionPicking({
   title,
   description,
+  info,
   children,
 }: {
   title: string;
   description?: ReactNode;
+  info?: ReactNode;
   children?: ReactNode;
 }) {
   return (
-    <SettingsSubsection title={title} description={description}>
+    <SettingsSubsection title={title} description={description} info={info}>
       {children}
     </SettingsSubsection>
   );
@@ -1931,6 +1939,8 @@ export function WmsPickingSettingsSections({
   const [extended, setExtended] = useState<WmsPickingExtendedUiSettings>(() => ({ ...DEFAULT_WMS_PICKING_EXTENDED_UI }));
   const [baselineExtended, setBaselineExtended] = useState<string | null>(null);
   const [extendedOk, setExtendedOk] = useState<string | null>(null);
+  const [listDisplayHydrated, setListDisplayHydrated] = useState(false);
+  const [listDisplayLoadErr, setListDisplayLoadErr] = useState<string | null>(null);
 
   const [orderUiSummary, setOrderUiSummary] = useState<OrderUiStatusPanelSummary | null>(null);
   const [panelSubgroups, setPanelSubgroups] = useState<OrderUiPanelSubgroupRead[]>([]);
@@ -1982,39 +1992,43 @@ export function WmsPickingSettingsSections({
     if (warehouseId == null) {
       setExtended({ ...DEFAULT_WMS_PICKING_EXTENDED_UI });
       setBaselineExtended(null);
+      setListDisplayHydrated(false);
+      setListDisplayLoadErr(null);
       return;
     }
     let cancelled = false;
+    setListDisplayHydrated(false);
+    setListDisplayLoadErr(null);
     const local = { ...loadWmsPickingExtendedUi(warehouseId) };
     setExtended(local);
     setBaselineExtended(stableStringifyPicking(local));
     void getWmsPickingTerminalSettings(DAMAGE_TENANT_ID, warehouseId)
       .then((t) => {
         if (cancelled) return;
-        const ld = t.list_display;
         setExtended((prev) => {
-          const next = {
-            ...prev,
-            requireProductScanAtLeastOnce: Boolean(t.require_product_scan_at_least_once),
-            requireLocationScan: Boolean(t.require_location_scan),
-            disableForceLocationScanWhenManyLocations: Boolean(
-              t.disable_force_location_scan_when_many_locations,
-            ),
-            allowReserveLocationPicking: Boolean(t.allow_reserve_location_picking),
-            allowProductsWithoutEan: Boolean(t.allow_products_without_ean),
-            showProductImage: Boolean(ld.show_product_image),
-            showEAN: Boolean(ld.show_ean),
-            showSKU: Boolean(ld.show_sku),
-            showCatalogNumber: Boolean(ld.show_catalog_number),
-            showStock: Boolean(ld.show_stock),
-            showLocation: Boolean(ld.show_location),
-          };
+          const next = applyListDisplayToExtendedUi(
+            {
+              ...prev,
+              requireProductScanAtLeastOnce: Boolean(t.require_product_scan_at_least_once),
+              requireLocationScan: Boolean(t.require_location_scan),
+              disableForceLocationScanWhenManyLocations: Boolean(
+                t.disable_force_location_scan_when_many_locations,
+              ),
+              allowReserveLocationPicking: Boolean(t.allow_reserve_location_picking),
+              allowProductsWithoutEan: Boolean(t.allow_products_without_ean),
+            },
+            t.list_display,
+          );
           setBaselineExtended(stableStringifyPicking(next));
           return next;
         });
+        setListDisplayHydrated(true);
+        setListDisplayLoadErr(null);
       })
       .catch(() => {
-        /* keep local defaults when API unavailable */
+        if (cancelled) return;
+        setListDisplayHydrated(false);
+        setListDisplayLoadErr("Nie udało się wczytać ustawień listy zbierania.");
       });
     return () => {
       cancelled = true;
@@ -2042,16 +2056,12 @@ export function WmsPickingSettingsSections({
       ),
       allow_reserve_location_picking: Boolean(extended.allowReserveLocationPicking),
       allow_products_without_ean: Boolean(extended.allowProductsWithoutEan),
-      list_display: {
-        show_product_image: Boolean(extended.showProductImage),
-        show_ean: Boolean(extended.showEAN),
-        show_sku: Boolean(extended.showSKU),
-        show_catalog_number: Boolean(extended.showCatalogNumber),
-        show_stock: Boolean(extended.showStock),
-        show_location: Boolean(extended.showLocation),
-      },
+      list_display: listDisplayForTerminalSave({
+        hydratedFromApi: listDisplayHydrated,
+        extended,
+      }),
     });
-  }, [warehouseId, extended]);
+  }, [warehouseId, extended, listDisplayHydrated]);
 
   const saveExtendedOnly = useCallback(async () => {
     if (warehouseId == null) return;
@@ -2479,24 +2489,27 @@ export function WmsPickingSettingsSections({
       discardUnsaved: async () => {
         if (shortageRef.current) await shortageRef.current.discard();
         if (warehouseId != null) {
-          const e = { ...loadWmsPickingExtendedUi(warehouseId) };
+          let e = { ...loadWmsPickingExtendedUi(warehouseId) };
           try {
             const t = await getWmsPickingTerminalSettings(DAMAGE_TENANT_ID, warehouseId);
-            e.requireProductScanAtLeastOnce = Boolean(t.require_product_scan_at_least_once);
-            e.requireLocationScan = Boolean(t.require_location_scan);
-            e.disableForceLocationScanWhenManyLocations = Boolean(
-              t.disable_force_location_scan_when_many_locations,
+            e = applyListDisplayToExtendedUi(
+              {
+                ...e,
+                requireProductScanAtLeastOnce: Boolean(t.require_product_scan_at_least_once),
+                requireLocationScan: Boolean(t.require_location_scan),
+                disableForceLocationScanWhenManyLocations: Boolean(
+                  t.disable_force_location_scan_when_many_locations,
+                ),
+                allowReserveLocationPicking: Boolean(t.allow_reserve_location_picking),
+                allowProductsWithoutEan: Boolean(t.allow_products_without_ean),
+              },
+              t.list_display,
             );
-            e.allowReserveLocationPicking = Boolean(t.allow_reserve_location_picking);
-            e.allowProductsWithoutEan = Boolean(t.allow_products_without_ean);
-            e.showProductImage = Boolean(t.list_display.show_product_image);
-            e.showEAN = Boolean(t.list_display.show_ean);
-            e.showSKU = Boolean(t.list_display.show_sku);
-            e.showCatalogNumber = Boolean(t.list_display.show_catalog_number);
-            e.showStock = Boolean(t.list_display.show_stock);
-            e.showLocation = Boolean(t.list_display.show_location);
+            setListDisplayHydrated(true);
+            setListDisplayLoadErr(null);
           } catch {
-            /* keep local UI defaults for terminal flags */
+            setListDisplayHydrated(false);
+            setListDisplayLoadErr("Nie udało się wczytać ustawień listy zbierania.");
           }
           setExtended(e);
           setBaselineExtended(stableStringifyPicking(e));
@@ -2664,15 +2677,10 @@ export function WmsPickingSettingsSections({
                 ),
                 allow_reserve_location_picking: Boolean(e.allowReserveLocationPicking),
                 allow_products_without_ean: Boolean(e.allowProductsWithoutEan),
-                list_display: {
-                  show_product_image: Boolean(e.showProductImage),
-                  show_ean: Boolean(e.showEAN),
-                  show_sku: Boolean(e.showSKU),
-                  show_catalog_number: Boolean(e.showCatalogNumber),
-                  show_stock: Boolean(e.showStock),
-                  show_location: Boolean(e.showLocation),
-                },
+                list_display: listDisplayForTerminalSave({ hydratedFromApi: true, extended: e }),
               });
+              setListDisplayHydrated(true);
+              setListDisplayLoadErr(null);
             } catch {
               toast.error("Nie udało się zapisać domyślnych ustawień terminala zbierania.");
             }
@@ -2688,6 +2696,12 @@ export function WmsPickingSettingsSections({
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
             <span className="font-medium">Ostrzeżenie: </span>
             {pickingConfigsLoadErr} Możesz kontynuować edycję; pełny zapis po odzyskaniu połączenia wykonasz z paska na dole strony.
+          </p>
+        ) : null}
+        {listDisplayLoadErr ? (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            <span className="font-medium">Ostrzeżenie: </span>
+            {listDisplayLoadErr} Pola listy zbierania są zablokowane, aby zapis nie nadpisał konfiguracji na serwerze.
           </p>
         ) : null}
         {extendedOk ? (
@@ -3027,14 +3041,64 @@ export function WmsPickingSettingsSections({
         </SectionCardPicking>
 
         <SectionCardPicking id="wms-pick-view" title="Widok">
-          <SubsectionPicking title="Lista zbierania">
+          <SubsectionPicking
+            title="Lista zbierania"
+            info={
+              <SettingInfoButton
+                title={PICKING_LIST_DISPLAY_SECTION_HELP.title}
+                description={PICKING_LIST_DISPLAY_SECTION_HELP.description}
+              />
+            }
+          >
             <FieldGridPicking>
-              <CustomCheckbox label="Zdjęcie produktu" checked={extended.showProductImage} onChange={(v) => patchExtended("showProductImage", v)} />
-              <CustomCheckbox label="EAN" checked={extended.showEAN} onChange={(v) => patchExtended("showEAN", v)} />
-              <CustomCheckbox label="SKU" checked={extended.showSKU} onChange={(v) => patchExtended("showSKU", v)} />
-              <CustomCheckbox label="Numer katalogowy" checked={extended.showCatalogNumber} onChange={(v) => patchExtended("showCatalogNumber", v)} />
-              <CustomCheckbox label="Stan magazynowy" checked={extended.showStock} onChange={(v) => patchExtended("showStock", v)} />
-              <CustomCheckbox label="Lokalizacja" checked={extended.showLocation} onChange={(v) => patchExtended("showLocation", v)} />
+              <CustomCheckbox
+                settingId="picking.list_display.show_product_image"
+                label="Zdjęcie produktu"
+                hint={PICKING_LIST_DISPLAY_HINTS.showProductImage}
+                checked={extended.showProductImage}
+                disabled={!listDisplayHydrated}
+                onChange={(v) => patchExtended("showProductImage", v)}
+              />
+              <CustomCheckbox
+                settingId="picking.list_display.show_ean"
+                label="EAN"
+                hint={PICKING_LIST_DISPLAY_HINTS.showEAN}
+                checked={extended.showEAN}
+                disabled={!listDisplayHydrated}
+                onChange={(v) => patchExtended("showEAN", v)}
+              />
+              <CustomCheckbox
+                settingId="picking.list_display.show_sku"
+                label="SKU"
+                hint={PICKING_LIST_DISPLAY_HINTS.showSKU}
+                checked={extended.showSKU}
+                disabled={!listDisplayHydrated}
+                onChange={(v) => patchExtended("showSKU", v)}
+              />
+              <CustomCheckbox
+                settingId="picking.list_display.show_catalog_number"
+                label="Numer katalogowy"
+                hint={PICKING_LIST_DISPLAY_HINTS.showCatalogNumber}
+                checked={extended.showCatalogNumber}
+                disabled={!listDisplayHydrated}
+                onChange={(v) => patchExtended("showCatalogNumber", v)}
+              />
+              <CustomCheckbox
+                settingId="picking.list_display.show_stock"
+                label="Stan magazynowy"
+                hint={PICKING_LIST_DISPLAY_HINTS.showStock}
+                checked={extended.showStock}
+                disabled={!listDisplayHydrated}
+                onChange={(v) => patchExtended("showStock", v)}
+              />
+              <CustomCheckbox
+                settingId="picking.list_display.show_location"
+                label="Lokalizacja"
+                hint={PICKING_LIST_DISPLAY_HINTS.showLocation}
+                checked={extended.showLocation}
+                disabled={!listDisplayHydrated}
+                onChange={(v) => patchExtended("showLocation", v)}
+              />
             </FieldGridPicking>
           </SubsectionPicking>
         </SectionCardPicking>

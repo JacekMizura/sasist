@@ -1,7 +1,21 @@
-**OMS returns intake UX tiles (2026-08-16) — NO commit/push.**
-- Shared `StockIntakeModeTiles` + `DisassemblyPreviewTable` + `IntakeStructureInfoPanel`
-- Manufactured + Bundle panels match reference (3 tiles FG/DISASSEMBLE/MIXED); quality decision unchanged
-- Payload SSOT unchanged (`stock_intake_mode` / fg / dq / recoveries); available-on-hand column = "—" (not in bom_preview)
+**WMS picking list_display SSOT (2026-08-17).**
+- `list_display` (6 flags) SSOT = GET/POST `/wms/settings/picking-terminal` only
+- localStorage `wms-picking-extended-ui:v1:{warehouseId}` no longer seeds/overrides/POSTs those fields
+- Help: `SettingInfoButton` on Widok → Lista zbierania; per-option `hint` → shared `(i)`
+- Flags still apply only to `WmsPickingProductsPage` → `PickingProductListCard` (not detail / qty panel)
+- GET fail: list checkboxes locked, no automatic POST of cache
+
+**Returns journal Activity Log copy (2026-08-17) — NO commit/push.**
+- Business titles/effects for intake + component recovery; no FG=/rozbiór/bez stocku in UI
+- No RETURN_COMPONENT_SCRAP in Activity Log (merged into recovery); `audit_component_scrap` kept
+- Finalize journal order: decision → intake → recovery → Z-PZ → finalized
+- Files: `return_domain_activity.py`, `return_activity_presentation.py`, `presentation.py`, `rmz_finalize_service.py`, domain_event_codes, tests
+- Tests: domain activity 17 + recovery/Z-PZ 63 + rmz_finalize PASS
+
+**OMS returns intake UX compact (2026-08-16) — on main `37dc405a`.**
+- Shared `ReturnStockIntakeSection` + `IntakeComponentRows` (segmented, badge, compact list, readonly summary)
+- Polish: equal-height soft orange segments; MIXED one-row + Razem; denser rows; readonly Odzyskano/Odrzut
+- Payload SSOT unchanged; Visual QA A–F in `frontend/tmp-visual-qa/intake-compact-qa-*.png`
 
 **ETAP 2 A/B/C — regression PASS path (2026-08-16).**
 - Model locked: A=SALEABLE B=OUTLET_B C=SERVICE_C; legacy on_hand/available = physical A+B+C

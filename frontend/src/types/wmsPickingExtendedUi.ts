@@ -1,8 +1,8 @@
 /**
  * Rozszerzone ustawienia UI zbierania WMS.
- * Pola listy zbierania (showProductImage / showEAN / …) są SSOT w API
- * ``wms/settings/picking-terminal`` → ``list_display`` (per tenant+magazyn);
- * localStorage pełni rolę cache / pozostałych preferencji UI.
+ * Pola listy zbierania (showProductImage / showEAN / …) są SSOT wyłącznie w API
+ * ``wms/settings/picking-terminal`` → ``list_display``. localStorage trzyma tylko
+ * pozostałe preferencje UI — nigdy nie seeduje ani nie nadpisuje tych sześciu pól.
  */
 
 export type AfterBatchCompleteAction = "assign_new_batch" | "back_to_list" | "stay_here";
@@ -129,6 +129,25 @@ export function storageKeyWmsPickingExtendedUi(warehouseId: number): string {
   return `wms-picking-extended-ui:v1:${warehouseId}`;
 }
 
+const LIST_DISPLAY_CACHE_KEYS = [
+  "showProductImage",
+  "showEAN",
+  "showSKU",
+  "showCatalogNumber",
+  "showStock",
+  "showLocation",
+] as const;
+
+function omitListDisplayCacheFields(
+  data: Partial<WmsPickingExtendedUiSettings>,
+): Partial<WmsPickingExtendedUiSettings> {
+  const next: Partial<WmsPickingExtendedUiSettings> = { ...data };
+  for (const key of LIST_DISPLAY_CACHE_KEYS) {
+    delete next[key];
+  }
+  return next;
+}
+
 export function loadWmsPickingExtendedUi(warehouseId: number): WmsPickingExtendedUiSettings {
   try {
     const raw = localStorage.getItem(storageKeyWmsPickingExtendedUi(warehouseId));
@@ -136,7 +155,7 @@ export function loadWmsPickingExtendedUi(warehouseId: number): WmsPickingExtende
     const parsed = JSON.parse(raw) as Partial<WmsPickingExtendedUiSettings> & {
       allowProductsWithoutLabelsToBaskets?: boolean;
     };
-    const migrated: Partial<WmsPickingExtendedUiSettings> = { ...parsed };
+    const migrated: Partial<WmsPickingExtendedUiSettings> = omitListDisplayCacheFields(parsed);
     if (migrated.allowProductsWithoutEan == null && parsed.allowProductsWithoutLabelsToBaskets != null) {
       migrated.allowProductsWithoutEan = Boolean(parsed.allowProductsWithoutLabelsToBaskets);
     }
@@ -149,7 +168,8 @@ export function loadWmsPickingExtendedUi(warehouseId: number): WmsPickingExtende
 
 export function saveWmsPickingExtendedUi(warehouseId: number, data: WmsPickingExtendedUiSettings): void {
   try {
-    localStorage.setItem(storageKeyWmsPickingExtendedUi(warehouseId), JSON.stringify(data));
+    const persisted = omitListDisplayCacheFields(data);
+    localStorage.setItem(storageKeyWmsPickingExtendedUi(warehouseId), JSON.stringify(persisted));
   } catch {
     /* ignore */
   }

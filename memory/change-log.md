@@ -1,3 +1,10 @@
+## 2026-08-17 — WMS Lista zbierania: help + API SSOT for list_display
+
+- Help: `SettingInfoButton` on Widok → Lista zbierania; 6 option hints via shared `hint` → `(i)`
+- API/DB is SSOT for 6 `list_display` flags; localStorage no longer seeds, overrides, or POSTs them
+- GET fail: checkboxes locked, no automatic POST of stale cache
+- Consumer unchanged: list cards only (`PickingProductListCard`); detail/qty panel not wired
+
 ## 2026-08-16 — ETAP 2 regression + SALEABLE ATP hardening
 
 - Commits: `82c21dd3` purchasing/picking SALEABLE; `dee4ea27` product_id+OUTLET_B; `23714d28` SERVICE_C→422; `273811df` Magazyn A|B|C matrix
