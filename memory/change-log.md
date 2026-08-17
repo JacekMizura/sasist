@@ -1,3 +1,12 @@
+## 2026-08-17 — WMS Lista zleceń: dead cache cleanup + after_batch_complete_action
+
+- Removed dead Lista zleceń fields from `WmsPickingExtendedUi` / localStorage / form
+- SSOT batches: `picking_config` + `Cart.capacity_*` (not duplicated in Lista zleceń)
+- `after_batch_complete_action` on picking-terminal (tenant+warehouse); default `back_to_list`
+- Finalize: back_to_list → order-type; stay_here → success screen; assign_new_batch → reuse start flow
+- Shortages: after-action only after modal OK; recovery still → Braki
+- Sort SSOT: `resolve_order_sort_for_flow` (cartless / start_picking / product list)
+
 ## 2026-08-17 — WMS Lista zbierania: help + API SSOT for list_display
 
 - Help: `SettingInfoButton` on Widok → Lista zbierania; 6 option hints via shared `hint` → `(i)`

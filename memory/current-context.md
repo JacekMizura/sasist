@@ -1,3 +1,10 @@
+**WMS Lista zleceń cleanup + after_batch_complete_action (2026-08-17) — NO commit/push.**
+- Removed dead localStorage duplicates from Zbieranie → Lista zleceń (batch counts/volume/management/sort-by-age)
+- Real batch SSOT remains `picking_config` max_* / modes / order_sort + `Cart.capacity_*`
+- New terminal setting `after_batch_complete_action` (tenant+warehouse): assign_new_batch | back_to_list | stay_here; default back_to_list
+- Sort resolver public name: `resolve_order_sort_for_flow` (no alias to for_tour)
+- GAP (not implemented): order_sort=location sorts by id; courier falls back to date
+
 **WMS picking list_display SSOT (2026-08-17).**
 - `list_display` (6 flags) SSOT = GET/POST `/wms/settings/picking-terminal` only
 - localStorage `wms-picking-extended-ui:v1:{warehouseId}` no longer seeds/overrides/POSTs those fields

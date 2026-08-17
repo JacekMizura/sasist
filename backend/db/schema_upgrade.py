@@ -4957,6 +4957,13 @@ def ensure_wms_picking_terminal_settings_table(engine: Engine) -> None:
                     "ADD COLUMN allow_products_without_ean BOOLEAN NOT NULL DEFAULT false"
                 )
             )
+        if "after_batch_complete_action" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE wms_picking_terminal_settings "
+                    "ADD COLUMN after_batch_complete_action VARCHAR(32) NOT NULL DEFAULT 'back_to_list'"
+                )
+            )
 
 
 def ensure_wms_general_settings_table(engine: Engine) -> None:

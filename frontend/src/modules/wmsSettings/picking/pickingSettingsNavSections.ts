@@ -36,7 +36,7 @@ export const WMS_PICKING_SETTINGS_NAV_SECTIONS: WmsSettingsSectionConfig[] = [
     label: "Lista zleceń",
     icon: ListOrdered,
     iconClassName: "bg-violet-50 text-violet-600",
-    searchText: "zbiory kolejka objętość",
+    searchText: "akcja po zebraniu zbiór wybór typu kurierzy",
   },
   {
     id: "wms-pick-scan",

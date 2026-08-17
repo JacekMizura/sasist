@@ -301,14 +301,14 @@ export const WMS_SETTINGS_SEARCH_CATALOG: WmsSettingsSearchEntry[] = [
 
   // Picking
   e({
-    id: "picking.batch_management_mode",
-    label: "Zarządzanie zbiorami",
-    description: "Tryb kompletacji / zbiorów",
+    id: "picking.after_batch_complete_action",
+    label: "Akcja po zebraniu zbioru zamówień",
+    description: "Co zrobić po prawidłowym zakończeniu zbioru",
     tabId: "picking",
     sectionId: "wms-pick-queue",
     sectionLabel: "Lista zleceń",
-    groupLabel: "Zarządzanie zbiorami",
-    keywords: ["tryb", "kompletacja", "zbiór"],
+    groupLabel: "Akcja po zebraniu zbioru zamówień",
+    keywords: ["zbiór", "przydziel", "wybór typu", "zostań"],
   }),
   e({
     id: "picking.require_product_scan",

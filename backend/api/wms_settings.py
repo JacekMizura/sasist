@@ -53,6 +53,7 @@ from ..services.wms_picking_shortage_settings_service import (
 )
 from ..services.wms_picking_terminal_settings_service import (
     get_or_create_wms_picking_terminal_settings,
+    normalize_after_batch_complete_action,
     touch_wms_picking_terminal_settings_row,
 )
 from ..services.wms_general_settings_service import (
@@ -662,6 +663,9 @@ def _terminal_settings_row_to_read(row) -> WmsPickingTerminalSettingsRead:
         allow_reserve_location_picking=bool(row.allow_reserve_location_picking),
         allow_products_without_ean=bool(getattr(row, "allow_products_without_ean", False)),
         list_display=_parse_picking_list_display(getattr(row, "list_display_json", None)),
+        after_batch_complete_action=normalize_after_batch_complete_action(
+            getattr(row, "after_batch_complete_action", None)
+        ),
     )
 
 
@@ -709,6 +713,10 @@ def save_wms_picking_terminal_settings(
     row.allow_products_without_ean = bool(body.allow_products_without_ean)
     if body.list_display is not None:
         row.list_display_json = json.dumps(body.list_display.model_dump(), ensure_ascii=False)
+    if body.after_batch_complete_action is not None:
+        row.after_batch_complete_action = normalize_after_batch_complete_action(
+            body.after_batch_complete_action
+        )
     touch_wms_picking_terminal_settings_row(row)
     db.commit()
     db.refresh(row)

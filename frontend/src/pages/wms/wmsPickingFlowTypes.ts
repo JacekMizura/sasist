@@ -64,6 +64,8 @@ export type WmsPickingLocationNavState = {
 /** Router state dla `/wms/picking/cart`. */
 export type WmsPickingCartNavState = {
   pickingSession: WmsPickingSessionState;
+  /** Start kolejnego zbioru po finalize (assign_new_batch). */
+  afterBatchAssign?: boolean;
 };
 
 /** Router state dla `/wms/picking/order-type`. */
@@ -110,6 +112,10 @@ export type WmsPickingProductsNavState = {
   } | null;
   /** Highlight draft Pick after finalize PICK_LOCATION_STOCK_MISMATCH recovery CTA. */
   highlightPickId?: number | null;
+  /** Start kolejnego zbioru po finalize (assign_new_batch). */
+  afterBatchAssign?: boolean;
+  /** Ekran sukcesu po finalize (stay_here) — bez replay finalize / start. */
+  stayHereComplete?: boolean;
 };
 
 /** Router state dla `/wms/product-preview/:productId` (podgląd operacyjny WMS). */

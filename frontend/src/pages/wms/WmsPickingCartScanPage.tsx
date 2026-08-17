@@ -14,6 +14,10 @@ import { playScanBeep } from "../../utils/playScanBeep";
 import { normalizeScanEan } from "../../utils/wmsScanNormalize";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import type { WmsPickingCartNavState } from "./wmsPickingFlowTypes";
+import {
+  AFTER_BATCH_NO_ORDERS_MESSAGE,
+  orderTypeAfterBatchState,
+} from "./wmsPickingFlowResolve";
 import { computeWmsPickingProductLineSessionStats, wmsPickingDisplayPickedQuantity } from "./wmsPickingUiGates";
 import { WMS_ROUTES } from "./wmsRoutes";
 import { Loader2 } from "lucide-react";
@@ -55,7 +59,9 @@ export default function WmsPickingCartScanPage() {
     showScannerToast,
   } = useWmsScanner();
 
-  const session = (routerLocation.state as WmsPickingCartNavState | null)?.pickingSession;
+  const cartNav = routerLocation.state as WmsPickingCartNavState | null;
+  const session = cartNav?.pickingSession;
+  const afterBatchAssign = Boolean(cartNav?.afterBatchAssign);
 
   const [resolving, setResolving] = useState(false);
 
@@ -122,13 +128,36 @@ export default function WmsPickingCartScanPage() {
           expectedCartType: session.cartType ?? null,
           sourceStatusId: session.orderUiStatusId,
         });
-        const startResult = await postWmsPickingStart(
-          DAMAGE_TENANT_ID,
-          warehouseId,
-          r.cart_id,
-          session.orderUiStatusId,
-          session.orderTypeChoice ?? "all",
-        );
+        let startResult;
+        try {
+          startResult = await postWmsPickingStart(
+            DAMAGE_TENANT_ID,
+            warehouseId,
+            r.cart_id,
+            session.orderUiStatusId,
+            session.orderTypeChoice ?? "all",
+          );
+        } catch (startErr) {
+          if (afterBatchAssign) {
+            const parsedStart = parseApiDetail(startErr);
+            navigate(WMS_ROUTES.pickingOrderType, {
+              replace: true,
+              state: orderTypeAfterBatchState(
+                session,
+                parsedStart.message || "Nie udało się przydzielić kolejnego zbioru.",
+              ),
+            });
+            return;
+          }
+          throw startErr;
+        }
+        if (afterBatchAssign && (startResult.session_id == null || startResult.session_id < 1)) {
+          navigate(WMS_ROUTES.pickingOrderType, {
+            replace: true,
+            state: orderTypeAfterBatchState(session, AFTER_BATCH_NO_ORDERS_MESSAGE),
+          });
+          return;
+        }
         if (startResult.operator_message) {
           showWmsMessage({
             code: "PICK_NO_ASSIGNABLE_AFTER_VALIDATION",
@@ -268,6 +297,7 @@ export default function WmsPickingCartScanPage() {
       showScannerToast,
       refocusScannerInput,
       showScanFeedbackFromCode,
+      afterBatchAssign,
     ],
   );
 

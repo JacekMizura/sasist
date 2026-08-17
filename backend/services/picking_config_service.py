@@ -199,7 +199,8 @@ def effective_all_order_sort(row: PickingConfig | None) -> str:
     return "date"
 
 
-def resolve_order_sort_for_tour(pc: PickingConfig | None, order_type: str) -> str:
+def resolve_order_sort_for_flow(pc: PickingConfig | None, order_type: str) -> str:
+    """SSOT kolejności doboru zbioru (cartless / start_picking / product-list assign)."""
     ot = (order_type or "all").strip().lower()
     if ot == "all":
         return effective_all_order_sort(pc)

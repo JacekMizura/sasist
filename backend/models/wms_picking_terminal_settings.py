@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 
 from ..database import Base
 
@@ -29,6 +29,8 @@ class WmsPickingTerminalSettings(Base):
     allow_products_without_ean = Column(Boolean, nullable=False, default=False)
     #: Lista zbierania — widoczność pól na kafelkach (JSON: show_product_image, show_ean, …).
     list_display_json = Column(Text, nullable=False, default="{}")
+    #: Po prawidłowym finalize zbioru: ``assign_new_batch`` | ``back_to_list`` | ``stay_here``.
+    after_batch_complete_action = Column(String(32), nullable=False, default="back_to_list")
 
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=True, default=datetime.utcnow, onupdate=datetime.utcnow)

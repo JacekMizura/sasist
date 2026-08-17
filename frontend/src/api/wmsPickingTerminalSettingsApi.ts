@@ -23,6 +23,17 @@ export const DEFAULT_WMS_PICKING_LIST_DISPLAY: WmsPickingListDisplayApi = {
   show_location: true,
 };
 
+export type AfterBatchCompleteActionApi = "assign_new_batch" | "back_to_list" | "stay_here";
+
+export const DEFAULT_AFTER_BATCH_COMPLETE_ACTION: AfterBatchCompleteActionApi = "back_to_list";
+
+export function normalizeAfterBatchCompleteAction(
+  raw: string | null | undefined,
+): AfterBatchCompleteActionApi {
+  if (raw === "assign_new_batch" || raw === "stay_here" || raw === "back_to_list") return raw;
+  return DEFAULT_AFTER_BATCH_COMPLETE_ACTION;
+}
+
 export type WmsPickingTerminalSettingsApi = {
   tenant_id: number;
   warehouse_id: number;
@@ -32,6 +43,7 @@ export type WmsPickingTerminalSettingsApi = {
   allow_reserve_location_picking: boolean;
   allow_products_without_ean: boolean;
   list_display: WmsPickingListDisplayApi;
+  after_batch_complete_action: AfterBatchCompleteActionApi;
 };
 
 export type WmsPickingTerminalSettingsSaveApi = {
@@ -43,6 +55,7 @@ export type WmsPickingTerminalSettingsSaveApi = {
   allow_reserve_location_picking: boolean;
   allow_products_without_ean: boolean;
   list_display?: WmsPickingListDisplayApi | null;
+  after_batch_complete_action?: AfterBatchCompleteActionApi | null;
 };
 
 export function normalizeWmsPickingListDisplay(
@@ -60,6 +73,18 @@ export function normalizeWmsPickingListDisplay(
   };
 }
 
+function normalizeTerminalSettingsPayload(
+  data: WmsPickingTerminalSettingsApi | undefined,
+): WmsPickingTerminalSettingsApi {
+  return {
+    ...(data as WmsPickingTerminalSettingsApi),
+    list_display: normalizeWmsPickingListDisplay(data?.list_display),
+    after_batch_complete_action: normalizeAfterBatchCompleteAction(
+      data?.after_batch_complete_action,
+    ),
+  };
+}
+
 export async function getWmsPickingTerminalSettings(
   tenantId: number,
   warehouseId: number,
@@ -68,10 +93,7 @@ export async function getWmsPickingTerminalSettings(
   const res = await api.get<WmsPickingTerminalSettingsApi>("wms/settings/picking-terminal", {
     params: { tenant_id: tenantId, warehouse_id: warehouseId },
   });
-  return {
-    ...res.data,
-    list_display: normalizeWmsPickingListDisplay(res.data?.list_display),
-  };
+  return normalizeTerminalSettingsPayload(res.data);
 }
 
 export async function saveWmsPickingTerminalSettings(
@@ -83,8 +105,5 @@ export async function saveWmsPickingTerminalSettings(
         ? { warehouse_id: body.warehouse_id }
         : undefined,
   });
-  return {
-    ...res.data,
-    list_display: normalizeWmsPickingListDisplay(res.data?.list_display),
-  };
+  return normalizeTerminalSettingsPayload(res.data);
 }

@@ -4,6 +4,7 @@ import { PICKING_LIST_DISPLAY_UI_KEYS } from "../modules/wmsSettings/picking/pic
 import {
   DEFAULT_WMS_PICKING_EXTENDED_UI,
   loadWmsPickingExtendedUi,
+  PICKING_DEAD_QUEUE_CACHE_KEYS,
   saveWmsPickingExtendedUi,
   storageKeyWmsPickingExtendedUi,
 } from "./wmsPickingExtendedUi";
@@ -79,5 +80,40 @@ describe("wms-picking-extended-ui localStorage vs list_display", () => {
       expect(raw).not.toHaveProperty(key);
     }
     expect(raw.debugMode).toBe(true);
+  });
+
+  it("strips dead Lista zleceń queue keys from cache and defaults", () => {
+    localStorage.setItem(
+      storageKeyWmsPickingExtendedUi(WH),
+      JSON.stringify({
+        ...DEFAULT_WMS_PICKING_EXTENDED_UI,
+        afterBatchCompleteAction: "stay_here",
+        multiItemBatchOrdersCount: 12,
+        singleItemBatchOrdersCount: 8,
+        singleItemVolumeLimit: 40,
+        batchManagementMode: "full_auto",
+        sortOrdersByAge: true,
+        autoOpenScanner: false,
+      }),
+    );
+    const loaded = loadWmsPickingExtendedUi(WH);
+    expect(loaded).not.toHaveProperty("afterBatchCompleteAction");
+    expect(loaded).not.toHaveProperty("multiItemBatchOrdersCount");
+    expect(loaded).not.toHaveProperty("singleItemBatchOrdersCount");
+    expect(loaded).not.toHaveProperty("singleItemVolumeLimit");
+    expect(loaded).not.toHaveProperty("batchManagementMode");
+    expect(loaded).not.toHaveProperty("sortOrdersByAge");
+    expect(loaded.autoOpenScanner).toBe(false);
+
+    saveWmsPickingExtendedUi(WH, loaded);
+    const raw = JSON.parse(localStorage.getItem(storageKeyWmsPickingExtendedUi(WH)) ?? "{}") as Record<
+      string,
+      unknown
+    >;
+    for (const key of PICKING_DEAD_QUEUE_CACHE_KEYS) {
+      expect(raw).not.toHaveProperty(key);
+    }
+    expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("afterBatchCompleteAction");
+    expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("multiItemBatchOrdersCount");
   });
 });

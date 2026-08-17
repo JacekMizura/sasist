@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
+
+AfterBatchCompleteAction = Literal["assign_new_batch", "back_to_list", "stay_here"]
+DEFAULT_AFTER_BATCH_COMPLETE_ACTION: AfterBatchCompleteAction = "back_to_list"
 
 
 class WmsPickingListDisplay(BaseModel):
@@ -27,6 +30,7 @@ class WmsPickingTerminalSettingsRead(BaseModel):
     allow_reserve_location_picking: bool = False
     allow_products_without_ean: bool = False
     list_display: WmsPickingListDisplay = Field(default_factory=WmsPickingListDisplay)
+    after_batch_complete_action: AfterBatchCompleteAction = DEFAULT_AFTER_BATCH_COMPLETE_ACTION
 
 
 class WmsPickingTerminalSettingsSave(BaseModel):
@@ -39,3 +43,4 @@ class WmsPickingTerminalSettingsSave(BaseModel):
     allow_products_without_ean: bool = False
     #: Opcjonalne w PATCH — brak = zachowaj istniejące w DB.
     list_display: Optional[WmsPickingListDisplay] = None
+    after_batch_complete_action: Optional[AfterBatchCompleteAction] = None

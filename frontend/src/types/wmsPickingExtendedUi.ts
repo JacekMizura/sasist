@@ -1,12 +1,9 @@
 /**
  * Rozszerzone ustawienia UI zbierania WMS.
- * Pola listy zbierania (showProductImage / showEAN / …) są SSOT wyłącznie w API
- * ``wms/settings/picking-terminal`` → ``list_display``. localStorage trzyma tylko
- * pozostałe preferencje UI — nigdy nie seeduje ani nie nadpisuje tych sześciu pól.
+ * Pola listy zbierania (showProductImage / showEAN / …) i akcja po zbiorze są SSOT w API
+ * ``wms/settings/picking-terminal``. localStorage trzyma tylko pozostałe preferencje UI.
  */
 
-export type AfterBatchCompleteAction = "assign_new_batch" | "back_to_list" | "stay_here";
-export type BatchManagementMode = "manual" | "auto_assign_picker" | "full_auto";
 export type DefaultPickingContainerType = "cart" | "cart_with_baskets" | "basket";
 
 export type WmsPickingExtendedUiSettings = {
@@ -19,7 +16,6 @@ export type WmsPickingExtendedUiSettings = {
   showCourierBadge: boolean;
 
   shortageOrderStatusId: number | null;
-  afterBatchCompleteAction: AfterBatchCompleteAction;
   separateDirectSalesOrders: boolean;
   allowPickInsidePackingMode: boolean;
 
@@ -30,12 +26,7 @@ export type WmsPickingExtendedUiSettings = {
   allowProductsWithoutEan: boolean;
   disableAutoDetachMissingOrdersFromCarts: boolean;
 
-  multiItemBatchOrdersCount: number;
-  singleItemBatchOrdersCount: number;
-  singleItemVolumeLimit: number;
-  batchManagementMode: BatchManagementMode;
   sortOrdersByCourier: boolean;
-  sortOrdersByAge: boolean;
   prioritizeExpressOrders: boolean;
 
   defaultPickingContainerType: DefaultPickingContainerType;
@@ -77,7 +68,6 @@ export const DEFAULT_WMS_PICKING_EXTENDED_UI: WmsPickingExtendedUiSettings = {
   showCourierBadge: true,
 
   shortageOrderStatusId: null,
-  afterBatchCompleteAction: "stay_here",
   separateDirectSalesOrders: false,
   allowPickInsidePackingMode: false,
 
@@ -88,12 +78,7 @@ export const DEFAULT_WMS_PICKING_EXTENDED_UI: WmsPickingExtendedUiSettings = {
   allowProductsWithoutEan: false,
   disableAutoDetachMissingOrdersFromCarts: false,
 
-  multiItemBatchOrdersCount: 10,
-  singleItemBatchOrdersCount: 15,
-  singleItemVolumeLimit: 0,
-  batchManagementMode: "manual",
   sortOrdersByCourier: false,
-  sortOrdersByAge: true,
   prioritizeExpressOrders: true,
 
   defaultPickingContainerType: "cart_with_baskets",
@@ -138,15 +123,30 @@ const LIST_DISPLAY_CACHE_KEYS = [
   "showLocation",
 ] as const;
 
-function omitListDisplayCacheFields(
-  data: Partial<WmsPickingExtendedUiSettings>,
+/** Process settings that must never live in localStorage (API/DB is SSOT). */
+const DEAD_QUEUE_CACHE_KEYS = [
+  "afterBatchCompleteAction",
+  "multiItemBatchOrdersCount",
+  "singleItemBatchOrdersCount",
+  "singleItemVolumeLimit",
+  "batchManagementMode",
+  "sortOrdersByAge",
+] as const;
+
+function omitNonUiCacheFields(
+  data: Partial<WmsPickingExtendedUiSettings> & Record<string, unknown>,
 ): Partial<WmsPickingExtendedUiSettings> {
-  const next: Partial<WmsPickingExtendedUiSettings> = { ...data };
+  const next: Record<string, unknown> = { ...data };
   for (const key of LIST_DISPLAY_CACHE_KEYS) {
+    delete next[key];
+  }
+  for (const key of DEAD_QUEUE_CACHE_KEYS) {
     delete next[key];
   }
   return next;
 }
+
+export const PICKING_DEAD_QUEUE_CACHE_KEYS = DEAD_QUEUE_CACHE_KEYS;
 
 export function loadWmsPickingExtendedUi(warehouseId: number): WmsPickingExtendedUiSettings {
   try {
@@ -155,7 +155,7 @@ export function loadWmsPickingExtendedUi(warehouseId: number): WmsPickingExtende
     const parsed = JSON.parse(raw) as Partial<WmsPickingExtendedUiSettings> & {
       allowProductsWithoutLabelsToBaskets?: boolean;
     };
-    const migrated: Partial<WmsPickingExtendedUiSettings> = omitListDisplayCacheFields(parsed);
+    const migrated: Partial<WmsPickingExtendedUiSettings> = omitNonUiCacheFields(parsed);
     if (migrated.allowProductsWithoutEan == null && parsed.allowProductsWithoutLabelsToBaskets != null) {
       migrated.allowProductsWithoutEan = Boolean(parsed.allowProductsWithoutLabelsToBaskets);
     }
@@ -168,7 +168,7 @@ export function loadWmsPickingExtendedUi(warehouseId: number): WmsPickingExtende
 
 export function saveWmsPickingExtendedUi(warehouseId: number, data: WmsPickingExtendedUiSettings): void {
   try {
-    const persisted = omitListDisplayCacheFields(data);
+    const persisted = omitNonUiCacheFields(data);
     localStorage.setItem(storageKeyWmsPickingExtendedUi(warehouseId), JSON.stringify(persisted));
   } catch {
     /* ignore */

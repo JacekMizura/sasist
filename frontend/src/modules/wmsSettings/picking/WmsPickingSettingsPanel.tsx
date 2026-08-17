@@ -37,8 +37,10 @@ import {
   type WmsShortageResolvePriorityApi,
 } from "../../../api/wmsPickingShortageSettingsApi";
 import {
+  DEFAULT_AFTER_BATCH_COMPLETE_ACTION,
   getWmsPickingTerminalSettings,
   saveWmsPickingTerminalSettings,
+  type AfterBatchCompleteActionApi,
 } from "../../../api/wmsPickingTerminalSettingsApi";
 import { getWmsPackingSettings } from "../../../api/wmsPackingSettingsApi";
 import type { WmsPickingExtendedUiSettings } from "../../../types/wmsPickingExtendedUi";
@@ -82,6 +84,7 @@ import {
   PICKING_LIST_DISPLAY_HINTS,
   PICKING_LIST_DISPLAY_SECTION_HELP,
 } from "./pickingListDisplay";
+import { PICKING_AFTER_BATCH_SECTION_HELP } from "./pickingAfterBatchHelp";
 import {
   BY_PRODUCTS_ALL_CONTAINER_OPTIONS,
   BY_PRODUCTS_MULTI_CONTAINER_OPTIONS,
@@ -1941,6 +1944,10 @@ export function WmsPickingSettingsSections({
   const [extendedOk, setExtendedOk] = useState<string | null>(null);
   const [listDisplayHydrated, setListDisplayHydrated] = useState(false);
   const [listDisplayLoadErr, setListDisplayLoadErr] = useState<string | null>(null);
+  const [afterBatchAction, setAfterBatchAction] = useState<AfterBatchCompleteActionApi>(
+    DEFAULT_AFTER_BATCH_COMPLETE_ACTION,
+  );
+  const [baselineAfterBatch, setBaselineAfterBatch] = useState<AfterBatchCompleteActionApi | null>(null);
 
   const [orderUiSummary, setOrderUiSummary] = useState<OrderUiStatusPanelSummary | null>(null);
   const [panelSubgroups, setPanelSubgroups] = useState<OrderUiPanelSubgroupRead[]>([]);
@@ -1992,6 +1999,8 @@ export function WmsPickingSettingsSections({
     if (warehouseId == null) {
       setExtended({ ...DEFAULT_WMS_PICKING_EXTENDED_UI });
       setBaselineExtended(null);
+      setAfterBatchAction(DEFAULT_AFTER_BATCH_COMPLETE_ACTION);
+      setBaselineAfterBatch(null);
       setListDisplayHydrated(false);
       setListDisplayLoadErr(null);
       return;
@@ -1999,12 +2008,17 @@ export function WmsPickingSettingsSections({
     let cancelled = false;
     setListDisplayHydrated(false);
     setListDisplayLoadErr(null);
+    setAfterBatchAction(DEFAULT_AFTER_BATCH_COMPLETE_ACTION);
+    setBaselineAfterBatch(DEFAULT_AFTER_BATCH_COMPLETE_ACTION);
     const local = { ...loadWmsPickingExtendedUi(warehouseId) };
     setExtended(local);
     setBaselineExtended(stableStringifyPicking(local));
     void getWmsPickingTerminalSettings(DAMAGE_TENANT_ID, warehouseId)
       .then((t) => {
         if (cancelled) return;
+        const after = t.after_batch_complete_action;
+        setAfterBatchAction(after);
+        setBaselineAfterBatch(after);
         setExtended((prev) => {
           const next = applyListDisplayToExtendedUi(
             {
@@ -2028,7 +2042,9 @@ export function WmsPickingSettingsSections({
       .catch(() => {
         if (cancelled) return;
         setListDisplayHydrated(false);
-        setListDisplayLoadErr("Nie udało się wczytać ustawień listy zbierania.");
+        setAfterBatchAction(DEFAULT_AFTER_BATCH_COMPLETE_ACTION);
+        setBaselineAfterBatch(DEFAULT_AFTER_BATCH_COMPLETE_ACTION);
+        setListDisplayLoadErr("Nie udało się wczytać ustawień listy zbierania i akcji po zebraniu.");
       });
     return () => {
       cancelled = true;
@@ -2060,8 +2076,9 @@ export function WmsPickingSettingsSections({
         hydratedFromApi: listDisplayHydrated,
         extended,
       }),
+      after_batch_complete_action: listDisplayHydrated ? afterBatchAction : undefined,
     });
-  }, [warehouseId, extended, listDisplayHydrated]);
+  }, [warehouseId, extended, listDisplayHydrated, afterBatchAction]);
 
   const saveExtendedOnly = useCallback(async () => {
     if (warehouseId == null) return;
@@ -2073,9 +2090,10 @@ export function WmsPickingSettingsSections({
       throw new Error("terminal_settings_save_failed");
     }
     setBaselineExtended(stableStringifyPicking(extended));
+    setBaselineAfterBatch(afterBatchAction);
     setExtendedOk("Zapisano preferencje widoku zbierania.");
     window.setTimeout(() => setExtendedOk(null), 4000);
-  }, [warehouseId, extended, persistTerminalSettings]);
+  }, [warehouseId, extended, afterBatchAction, persistTerminalSettings]);
 
   const loadOrderUiStatuses = useCallback(async () => {
     if (warehouseId == null) {
@@ -2135,9 +2153,11 @@ export function WmsPickingSettingsSections({
     baselineConfigsFp != null &&
     fingerprintPickingConfigsWarehouseState(savedConfigs, globalBulkSingle, globalBulkMulti, globalBulkAll) !== baselineConfigsFp;
 
+  const afterBatchDirty = baselineAfterBatch != null && afterBatchAction !== baselineAfterBatch;
+
   const pickingDirty =
     warehouseId != null &&
-    (extendedDirty || configsBulkDirty || shortagePanelDirty || draftDirty);
+    (extendedDirty || afterBatchDirty || configsBulkDirty || shortagePanelDirty || draftDirty);
 
   useEffect(() => {
     onDirtyChange?.(pickingDirty);
@@ -2482,7 +2502,7 @@ export function WmsPickingSettingsSections({
           const result = await persistPickingConfigList(configsToPersist);
           if (!result.ok) throw new Error(result.message);
         }
-        if (extendedDirty) {
+        if (extendedDirty || afterBatchDirty) {
           await saveExtendedOnly();
         }
       },
@@ -2505,11 +2525,15 @@ export function WmsPickingSettingsSections({
               },
               t.list_display,
             );
+            setAfterBatchAction(t.after_batch_complete_action);
+            setBaselineAfterBatch(t.after_batch_complete_action);
             setListDisplayHydrated(true);
             setListDisplayLoadErr(null);
           } catch {
             setListDisplayHydrated(false);
-            setListDisplayLoadErr("Nie udało się wczytać ustawień listy zbierania.");
+            setAfterBatchAction(DEFAULT_AFTER_BATCH_COMPLETE_ACTION);
+            setBaselineAfterBatch(DEFAULT_AFTER_BATCH_COMPLETE_ACTION);
+            setListDisplayLoadErr("Nie udało się wczytać ustawień listy zbierania i akcji po zebraniu.");
           }
           setExtended(e);
           setBaselineExtended(stableStringifyPicking(e));
@@ -2531,6 +2555,7 @@ export function WmsPickingSettingsSections({
     globalBulkMulti,
     baselineConfigsFp,
     extendedDirty,
+    afterBatchDirty,
     buildCommittedConfigList,
     persistPickingConfigList,
     saveExtendedOnly,
@@ -2654,7 +2679,7 @@ export function WmsPickingSettingsSections({
               const result = await persistPickingConfigList(configsToPersist);
               if (!result.ok) throw new Error(result.message);
             }
-            if (extendedDirty) {
+            if (extendedDirty || afterBatchDirty) {
               await saveExtendedOnly();
             }
           })()
@@ -2665,6 +2690,8 @@ export function WmsPickingSettingsSections({
             const e = { ...DEFAULT_WMS_PICKING_EXTENDED_UI };
             setExtended(e);
             setBaselineExtended(stableStringifyPicking(e));
+            setAfterBatchAction(DEFAULT_AFTER_BATCH_COMPLETE_ACTION);
+            setBaselineAfterBatch(DEFAULT_AFTER_BATCH_COMPLETE_ACTION);
             saveWmsPickingExtendedUi(warehouseId, e);
             try {
               await saveWmsPickingTerminalSettings({
@@ -2678,6 +2705,7 @@ export function WmsPickingSettingsSections({
                 allow_reserve_location_picking: Boolean(e.allowReserveLocationPicking),
                 allow_products_without_ean: Boolean(e.allowProductsWithoutEan),
                 list_display: listDisplayForTerminalSave({ hydratedFromApi: true, extended: e }),
+                after_batch_complete_action: DEFAULT_AFTER_BATCH_COMPLETE_ACTION,
               });
               setListDisplayHydrated(true);
               setListDisplayLoadErr(null);
@@ -2701,7 +2729,7 @@ export function WmsPickingSettingsSections({
         {listDisplayLoadErr ? (
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
             <span className="font-medium">Ostrzeżenie: </span>
-            {listDisplayLoadErr} Pola listy zbierania są zablokowane, aby zapis nie nadpisał konfiguracji na serwerze.
+            {listDisplayLoadErr} Pola listy zbierania i akcji po zebraniu są zablokowane, aby zapis nie nadpisał konfiguracji na serwerze.
           </p>
         ) : null}
         {extendedOk ? (
@@ -2734,89 +2762,37 @@ export function WmsPickingSettingsSections({
           />
         </SectionCardPicking>
 
-        <SectionCardPicking id="wms-pick-queue" title="Lista zleceń" summary="Zbiory, objętość, kurierzy i akcja po zebraniu.">
-          <SubsectionPicking title="Zarządzanie zbiorami">
-            <FieldGridPicking>
-              <WmsControlSettingRow asLabel label="Liczba zamówień w zbiorze wieloelementowych zamówień">
-                <input
-                  type="number"
-                  min={1}
-                  max={200}
-                  className={numberInputClass}
-                  value={extended.multiItemBatchOrdersCount}
-                  onChange={(e) =>
-                    patchExtended("multiItemBatchOrdersCount", Math.max(1, Math.min(200, Math.floor(Number(e.target.value) || 1))))
-                  }
-                />
-              </WmsControlSettingRow>
-              <WmsControlSettingRow asLabel label="Liczba zamówień w zbiorze jednoelementowych zamówień">
-                <input
-                  type="number"
-                  min={1}
-                  max={200}
-                  className={numberInputClass}
-                  value={extended.singleItemBatchOrdersCount}
-                  onChange={(e) =>
-                    patchExtended("singleItemBatchOrdersCount", Math.max(1, Math.min(200, Math.floor(Number(e.target.value) || 1))))
-                  }
-                />
-              </WmsControlSettingRow>
-              <WmsControlSettingRow
-                asLabel
-                label="Objętość zamówień jednoelementowych"
-                hint="0 = bez limitu objętości"
-              >
-                <input
-                  type="number"
-                  min={0}
-                  max={999999}
-                  className={numberInputClass}
-                  value={extended.singleItemVolumeLimit}
-                  onChange={(e) => patchExtended("singleItemVolumeLimit", Math.max(0, Math.floor(Number(e.target.value) || 0)))}
-                />
-              </WmsControlSettingRow>
-              <WmsControlSettingRow
-                asLabel
-                settingId="picking.batch_management_mode"
-                label="Zarządzanie zbiorami"
-              >
-                <select
-                  className={selectClass}
-                  value={extended.batchManagementMode}
-                  onChange={(e) =>
-                    patchExtended("batchManagementMode", e.target.value as WmsPickingExtendedUiSettings["batchManagementMode"])
-                  }
-                >
-                  <option value="manual">Ręczny</option>
-                  <option value="auto_assign_picker">Auto przypisanie zbierającego</option>
-                  <option value="full_auto">Pełna automatyzacja</option>
-                </select>
-              </WmsControlSettingRow>
-            </FieldGridPicking>
-            <div className="mt-6 border-t border-slate-200/50 pt-4">
-              <CustomCheckbox label="Sortuj po wieku zamówienia" checked={extended.sortOrdersByAge} onChange={(v) => patchExtended("sortOrdersByAge", v)} />
-            </div>
-          </SubsectionPicking>
-
-          <SubsectionPicking title="Akcja po zebraniu zbioru zamówień">
+        <SectionCardPicking id="wms-pick-queue" title="Lista zleceń" summary="Akcja po zebraniu, reguły procesu i kurierzy.">
+          <SubsectionPicking
+            title="Akcja po zebraniu zbioru zamówień"
+            info={
+              <SettingInfoButton
+                title={PICKING_AFTER_BATCH_SECTION_HELP.title}
+                description={PICKING_AFTER_BATCH_SECTION_HELP.description}
+              />
+            }
+          >
             <div className="mt-2 flex flex-col gap-3">
               {(
                 [
                   ["assign_new_batch", "Przydziel nowy zbiór"],
-                  ["back_to_list", "Powrót na listę"],
+                  ["back_to_list", "Powrót do wyboru typu"],
                   ["stay_here", "Zostań na ekranie"],
                 ] as const
               ).map(([value, label]) => (
                 <label
                   key={value}
-                  className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200/80 bg-white px-4 py-3 text-sm font-medium transition-colors hover:border-slate-300"
+                  className={`flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white px-4 py-3 text-sm font-medium transition-colors ${
+                    listDisplayHydrated ? "cursor-pointer hover:border-slate-300" : "cursor-not-allowed opacity-60"
+                  }`}
                 >
                   <input
                     type="radio"
                     name="after-batch-picking"
                     className={radioInputClass}
-                    checked={extended.afterBatchCompleteAction === value}
-                    onChange={() => patchExtended("afterBatchCompleteAction", value)}
+                    disabled={!listDisplayHydrated}
+                    checked={afterBatchAction === value}
+                    onChange={() => setAfterBatchAction(value)}
                   />
                   {label}
                 </label>

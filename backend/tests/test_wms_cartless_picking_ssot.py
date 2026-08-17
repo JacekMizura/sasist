@@ -282,6 +282,7 @@ def test_case4_multi_operator_isolation(db):
     pc = db.query(PickingConfig).filter(PickingConfig.warehouse_id == 1).one()
     pc.max_single_orders = 2
     pc.max_multi_orders = 2
+    pc.max_all_orders = 2
     db.add(pc)
     for i in range(4):
         _order(db, number=f"MO-{i}")

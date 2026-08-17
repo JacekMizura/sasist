@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  AFTER_BATCH_NO_ORDERS_MESSAGE,
   canOfferAllOrderTypes,
   canResumePickingSession,
   cartTypeHintForOrderTypeChoice,
   modeRequiresCartScan,
   needsCartAfterOrderTypeChoice,
+  resolveAfterBatchComplete,
   resolveAfterOrderTypeChoice,
   resolveAfterStatusWithConfig,
   visibleOrderTypeChoices,
@@ -161,5 +163,86 @@ describe("resolveAfterOrderTypeChoice", () => {
     expect(t.path).toBe(WMS_ROUTES.pickingCart);
     expect(t.state.pickingSession.cartType).toBe("BASKETS");
     expect(t.state.pickingSession.orderTypeChoice).toBe("multi");
+  });
+});
+
+describe("resolveAfterBatchComplete", () => {
+  it("B) missing action defaults to back_to_list → order-type", () => {
+    const t = resolveAfterBatchComplete({
+      action: undefined,
+      session: baseSession(),
+      orderType: "single",
+    });
+    expect(t).toEqual({
+      kind: "navigate",
+      path: WMS_ROUTES.pickingOrderType,
+      state: expect.objectContaining({
+        pickingSession: expect.objectContaining({ orderTypeChoice: undefined }),
+        postTourMessage: null,
+      }),
+    });
+  });
+
+  it("C) back_to_list → /wms/picking/order-type", () => {
+    const t = resolveAfterBatchComplete({
+      action: "back_to_list",
+      session: baseSession(),
+      orderType: "multi",
+      postTourMessage: "Oznaczono część zamówień jako zebrane.",
+    });
+    expect(t.kind).toBe("navigate");
+    if (t.kind !== "navigate") return;
+    expect(t.path).toBe(WMS_ROUTES.pickingOrderType);
+    expect(t.state.afterBatchAssign).toBeUndefined();
+    expect(t.state.stayHereComplete).toBeUndefined();
+    expect(t.state.postTourMessage).toBe("Oznaczono część zamówień jako zebrane.");
+  });
+
+  it("D) stay_here → success kind, no navigate", () => {
+    const t = resolveAfterBatchComplete({
+      action: "stay_here",
+      session: baseSession(),
+      orderType: "all",
+    });
+    expect(t).toEqual({ kind: "stay_here" });
+  });
+
+  it("E) assign_new_batch cart_no_scan → products + afterBatchAssign", () => {
+    const s = baseSession();
+    s.singleMode = "cart_no_scan";
+    s.multiMode = "cart_no_scan";
+    s.allMode = "cart_no_scan";
+    const t = resolveAfterBatchComplete({
+      action: "assign_new_batch",
+      session: s,
+      orderType: "single",
+    });
+    expect(t.kind).toBe("navigate");
+    if (t.kind !== "navigate") return;
+    expect(t.path).toBe(WMS_ROUTES.pickingProducts);
+    expect(t.state.afterBatchAssign).toBe(true);
+    expect(t.state.pickingSession.orderTypeChoice).toBe("single");
+    expect(t.state.pickingSession.pickingSessionId).toBeNull();
+    expect(t.state.pickingSession.cartless).toBe(true);
+  });
+
+  it("E2) assign_new_batch cart_scan → cart + afterBatchAssign", () => {
+    const s = baseSession();
+    s.singleMode = "cart_scan";
+    s.multiMode = "baskets";
+    const t = resolveAfterBatchComplete({
+      action: "assign_new_batch",
+      session: s,
+      orderType: "single",
+    });
+    expect(t.kind).toBe("navigate");
+    if (t.kind !== "navigate") return;
+    expect(t.path).toBe(WMS_ROUTES.pickingCart);
+    expect(t.state.afterBatchAssign).toBe(true);
+    expect(t.state.pickingSession.requireCart).toBe(true);
+  });
+
+  it("keeps the no-orders operator copy", () => {
+    expect(AFTER_BATCH_NO_ORDERS_MESSAGE).toBe("Brak kolejnych zamówień do zebrania.");
   });
 });

@@ -9,7 +9,22 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from ..models.wms_picking_terminal_settings import WmsPickingTerminalSettings
+from ..schemas.wms_picking_terminal_settings import (
+    DEFAULT_AFTER_BATCH_COMPLETE_ACTION,
+    AfterBatchCompleteAction,
+)
 from .tenant_default_warehouse import assert_tenant_warehouse_scope
+
+_AFTER_BATCH_COMPLETE_ACTIONS = frozenset(
+    {"assign_new_batch", "back_to_list", "stay_here"}
+)
+
+
+def normalize_after_batch_complete_action(raw: object | None) -> AfterBatchCompleteAction:
+    s = str(raw or "").strip().lower()
+    if s in _AFTER_BATCH_COMPLETE_ACTIONS:
+        return s  # type: ignore[return-value]
+    return DEFAULT_AFTER_BATCH_COMPLETE_ACTION
 
 
 def get_or_create_wms_picking_terminal_settings(
@@ -30,6 +45,7 @@ def get_or_create_wms_picking_terminal_settings(
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
         list_display_json="{}",
+        after_batch_complete_action=DEFAULT_AFTER_BATCH_COMPLETE_ACTION,
     )
     db.add(row)
     db.flush()

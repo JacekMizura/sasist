@@ -4,6 +4,7 @@
  */
 
 import type { PickingFlowMode, WmsPickingFlowConfig } from "../../api/wmsPickingEntryApi";
+import type { AfterBatchCompleteActionApi } from "../../api/wmsPickingTerminalSettingsApi";
 import type { WmsPickingOrderTypeChoice, WmsPickingSessionState } from "./wmsPickingFlowTypes";
 import { WMS_ROUTES } from "./wmsRoutes";
 
@@ -265,5 +266,57 @@ export function resolveAfterOrderTypeChoice(
   return {
     path: WMS_ROUTES.pickingProducts,
     state: { pickingSession: { ...next, cartless: true } },
+  };
+}
+
+export const AFTER_BATCH_NO_ORDERS_MESSAGE = "Brak kolejnych zamówień do zebrania.";
+
+export type AfterBatchCompleteNavigateState = {
+  pickingSession: WmsPickingSessionState;
+  afterBatchAssign?: boolean;
+  stayHereComplete?: boolean;
+  postTourMessage?: string | null;
+};
+
+export type AfterBatchCompleteTarget =
+  | { kind: "stay_here" }
+  | { kind: "navigate"; path: string; state: AfterBatchCompleteNavigateState };
+
+export function orderTypeAfterBatchState(
+  session: WmsPickingSessionState,
+  postTourMessage?: string | null,
+): AfterBatchCompleteNavigateState {
+  return {
+    pickingSession: {
+      ...clearPickingSessionExecution(session),
+      preCartBack: "order-type",
+    },
+    postTourMessage: postTourMessage ?? null,
+  };
+}
+
+/** Po prawidłowym finalize zbioru — nie dotyczy dogrywki recovery. */
+export function resolveAfterBatchComplete(opts: {
+  action: AfterBatchCompleteActionApi | null | undefined;
+  session: WmsPickingSessionState;
+  orderType: WmsPickingOrderTypeChoice;
+  postTourMessage?: string | null;
+}): AfterBatchCompleteTarget {
+  if (opts.action === "stay_here") return { kind: "stay_here" };
+  if (opts.action === "assign_new_batch") {
+    const t = resolveAfterOrderTypeChoice(opts.session, opts.orderType);
+    return {
+      kind: "navigate",
+      path: t.path,
+      state: {
+        pickingSession: t.state.pickingSession,
+        afterBatchAssign: true,
+      },
+    };
+  }
+  return {
+    kind: "navigate",
+    path: WMS_ROUTES.pickingOrderType,
+    state: orderTypeAfterBatchState(opts.session, opts.postTourMessage),
   };
 }
