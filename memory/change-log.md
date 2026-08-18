@@ -1,3 +1,13 @@
+## 2026-08-18 — WMS Zbieranie → Zaawansowane: drop dead localStorage section
+
+- Removed section + keys: supplierAvailabilityCheck, legacyMode, debugMode, advancedRoutingMode
+- No runtime/API/DB change; graph/ATP/CartLifecycle/legacy_assign_forbidden stay SSOT
+
+## 2026-08-18 — Audit: WMS Zbieranie → Zaawansowane (no code)
+
+- 4 checkboxes localStorage-only; no runtime readers; graph/ATP/CartLifecycle unchanged
+- Recommend delete entire Zaawansowane section
+
 ## 2026-08-18 — Fix: FastAPI 0.141 global routing diagnostics
 
 - Shared `is_route_registered` / `url_path_for` + OpenAPI; removed flat `app.routes.path` and `_WMS_SETTINGS_PATHS` duplicate

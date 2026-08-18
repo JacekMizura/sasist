@@ -22,7 +22,6 @@ const ICONS: Record<string, LucideIcon> = {
   "wms-pick-scan": ScanLine,
   "wms-pick-shortage": AlertTriangle,
   "wms-pick-view": Boxes,
-  "wms-pick-advanced": Settings2,
 };
 
 type Props = {

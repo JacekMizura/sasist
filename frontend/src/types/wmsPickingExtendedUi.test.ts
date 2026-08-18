@@ -5,6 +5,7 @@ import {
   DEFAULT_WMS_PICKING_EXTENDED_UI,
   loadWmsPickingExtendedUi,
   PICKING_DEAD_AUTOMATION_CACHE_KEYS,
+  PICKING_DEAD_ADVANCED_CACHE_KEYS,
   PICKING_DEAD_METHODS_CACHE_KEYS,
   PICKING_DEAD_QUEUE_CACHE_KEYS,
   PICKING_DEAD_SHORTAGE_UI_CACHE_KEYS,
@@ -52,7 +53,7 @@ describe("wms-picking-extended-ui localStorage vs list_display", () => {
         showCatalogNumber: false,
         showStock: false,
         showLocation: false,
-        debugMode: true,
+        showCourierBadge: true,
       }),
     );
     const loaded = loadWmsPickingExtendedUi(WH);
@@ -62,7 +63,7 @@ describe("wms-picking-extended-ui localStorage vs list_display", () => {
     expect(loaded.showCatalogNumber).toBe(DEFAULT_WMS_PICKING_LIST_DISPLAY.show_catalog_number);
     expect(loaded.showStock).toBe(DEFAULT_WMS_PICKING_LIST_DISPLAY.show_stock);
     expect(loaded.showLocation).toBe(DEFAULT_WMS_PICKING_LIST_DISPLAY.show_location);
-    expect(loaded.debugMode).toBe(true);
+    expect(loaded.showCourierBadge).toBe(true);
   });
 
   it("does not persist the six list_display fields", () => {
@@ -74,7 +75,7 @@ describe("wms-picking-extended-ui localStorage vs list_display", () => {
       showCatalogNumber: true,
       showStock: false,
       showLocation: false,
-      debugMode: true,
+      showCourierBadge: true,
     });
     const raw = JSON.parse(localStorage.getItem(storageKeyWmsPickingExtendedUi(WH)) ?? "{}") as Record<
       string,
@@ -83,7 +84,8 @@ describe("wms-picking-extended-ui localStorage vs list_display", () => {
     for (const key of PICKING_LIST_DISPLAY_UI_KEYS) {
       expect(raw).not.toHaveProperty(key);
     }
-    expect(raw.debugMode).toBe(true);
+    expect(raw.debugMode).toBeUndefined();
+    expect(raw.showCourierBadge).toBe(true);
   });
 
   it("strips dead Lista zleceń queue keys from cache and defaults", () => {
@@ -97,7 +99,7 @@ describe("wms-picking-extended-ui localStorage vs list_display", () => {
         singleItemVolumeLimit: 40,
         batchManagementMode: "full_auto",
         sortOrdersByAge: true,
-        debugMode: true,
+        showCourierBadge: true,
       }),
     );
     const loaded = loadWmsPickingExtendedUi(WH);
@@ -107,7 +109,7 @@ describe("wms-picking-extended-ui localStorage vs list_display", () => {
     expect(loaded).not.toHaveProperty("singleItemVolumeLimit");
     expect(loaded).not.toHaveProperty("batchManagementMode");
     expect(loaded).not.toHaveProperty("sortOrdersByAge");
-    expect(loaded.debugMode).toBe(true);
+    expect(loaded.showCourierBadge).toBe(true);
 
     saveWmsPickingExtendedUi(WH, loaded);
     const raw = JSON.parse(localStorage.getItem(storageKeyWmsPickingExtendedUi(WH)) ?? "{}") as Record<
@@ -131,14 +133,14 @@ describe("wms-picking-extended-ui localStorage vs list_display", () => {
         requireBasketScanStart: true,
         autoSuggestCart: false,
         autoSuggestRoute: true,
-        debugMode: true,
+        showCourierBadge: true,
       }),
     );
     const loaded = loadWmsPickingExtendedUi(WH);
     for (const key of PICKING_DEAD_METHODS_CACHE_KEYS) {
       expect(loaded).not.toHaveProperty(key);
     }
-    expect(loaded.debugMode).toBe(true);
+    expect(loaded.showCourierBadge).toBe(true);
 
     saveWmsPickingExtendedUi(WH, loaded);
     const raw = JSON.parse(localStorage.getItem(storageKeyWmsPickingExtendedUi(WH)) ?? "{}") as Record<
@@ -166,14 +168,14 @@ describe("wms-picking-extended-ui localStorage vs list_display", () => {
         notesPopup: true,
         showWarnings: false,
         showMissingProductsHints: false,
-        debugMode: true,
+        showCourierBadge: true,
       }),
     );
     const loaded = loadWmsPickingExtendedUi(WH);
     for (const key of PICKING_DEAD_SHORTAGE_UI_CACHE_KEYS) {
       expect(loaded).not.toHaveProperty(key);
     }
-    expect(loaded.debugMode).toBe(true);
+    expect(loaded.showCourierBadge).toBe(true);
 
     saveWmsPickingExtendedUi(WH, loaded);
     const raw = JSON.parse(localStorage.getItem(storageKeyWmsPickingExtendedUi(WH)) ?? "{}") as Record<
@@ -200,14 +202,14 @@ describe("wms-picking-extended-ui localStorage vs list_display", () => {
         zonePickingEnabled: true,
         mainPickingWarehouse: "WH-1",
         fallbackWarehouse: "WH-2",
-        debugMode: true,
+        showCourierBadge: true,
       }),
     );
     const loaded = loadWmsPickingExtendedUi(WH);
     for (const key of PICKING_DEAD_WAREHOUSES_CACHE_KEYS) {
       expect(loaded).not.toHaveProperty(key);
     }
-    expect(loaded.debugMode).toBe(true);
+    expect(loaded.showCourierBadge).toBe(true);
 
     saveWmsPickingExtendedUi(WH, loaded);
     const raw = JSON.parse(localStorage.getItem(storageKeyWmsPickingExtendedUi(WH)) ?? "{}") as Record<
@@ -234,14 +236,14 @@ describe("wms-picking-extended-ui localStorage vs list_display", () => {
         autoMarkPickedLines: true,
         autoMoveToPackingStatus: true,
         autoPrintTransferLabels: true,
-        debugMode: true,
+        showCourierBadge: true,
       }),
     );
     const loaded = loadWmsPickingExtendedUi(WH);
     for (const key of PICKING_DEAD_AUTOMATION_CACHE_KEYS) {
       expect(loaded).not.toHaveProperty(key);
     }
-    expect(loaded.debugMode).toBe(true);
+    expect(loaded.showCourierBadge).toBe(true);
 
     saveWmsPickingExtendedUi(WH, loaded);
     const raw = JSON.parse(localStorage.getItem(storageKeyWmsPickingExtendedUi(WH)) ?? "{}") as Record<
@@ -256,5 +258,37 @@ describe("wms-picking-extended-ui localStorage vs list_display", () => {
     expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("autoMarkPickedLines");
     expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("autoMoveToPackingStatus");
     expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("autoPrintTransferLabels");
+  });
+
+  it("strips dead Zaawansowane keys from cache and defaults", () => {
+    localStorage.setItem(
+      storageKeyWmsPickingExtendedUi(WH),
+      JSON.stringify({
+        ...DEFAULT_WMS_PICKING_EXTENDED_UI,
+        supplierAvailabilityCheck: true,
+        legacyMode: true,
+        debugMode: true,
+        advancedRoutingMode: true,
+        showCourierBadge: true,
+      }),
+    );
+    const loaded = loadWmsPickingExtendedUi(WH);
+    for (const key of PICKING_DEAD_ADVANCED_CACHE_KEYS) {
+      expect(loaded).not.toHaveProperty(key);
+    }
+    expect(loaded.showCourierBadge).toBe(true);
+
+    saveWmsPickingExtendedUi(WH, loaded);
+    const raw = JSON.parse(localStorage.getItem(storageKeyWmsPickingExtendedUi(WH)) ?? "{}") as Record<
+      string,
+      unknown
+    >;
+    for (const key of PICKING_DEAD_ADVANCED_CACHE_KEYS) {
+      expect(raw).not.toHaveProperty(key);
+    }
+    expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("supplierAvailabilityCheck");
+    expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("legacyMode");
+    expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("debugMode");
+    expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("advancedRoutingMode");
   });
 });

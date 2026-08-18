@@ -1,3 +1,8 @@
+**WMS Zbieranie → Zaawansowane cleanup (2026-08-18) — NO commit/push.**
+- Removed entire nav/section + 4 localStorage keys (`supplierAvailabilityCheck`, `legacyMode`, `debugMode`, `advancedRoutingMode`); strip on load/save
+- Runtime unchanged: Inventory ATP, CartLifecycle, graph route_sort_key, picking-terminal, picking_config
+- GAP (not this task): `PickingOrchestrator` still calls forbidden assign; wave/simulation already 409 `legacy_sim_assign_forbidden`
+
 **Global FastAPI 0.141 routing diagnostics FIX (2026-08-18).**
 - Shared `backend/routing_diagnostics.py`: `url_path_for` + OpenAPI; no `app.routes.path`
 - False CRITICAL for WMS settings + production planning gone; inventory-count dump replaced

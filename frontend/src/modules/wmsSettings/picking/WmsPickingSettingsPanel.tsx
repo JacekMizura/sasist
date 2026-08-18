@@ -2642,19 +2642,6 @@ export function WmsPickingSettingsSections({
             </FieldGridPicking>
           </SubsectionPicking>
         </SectionCardPicking>
-
-        <SectionCardPicking id="wms-pick-advanced" title="Zaawansowane" summary="Diagnostyka, legacy i routing.">
-          <FieldGridPicking>
-            <CustomCheckbox
-              label="[BETA] Korzystaj z dostępności produktów u dostawców"
-              checked={extended.supplierAvailabilityCheck}
-              onChange={(v) => patchExtended("supplierAvailabilityCheck", v)}
-            />
-            <CustomCheckbox label="Tryb legacy" checked={extended.legacyMode} onChange={(v) => patchExtended("legacyMode", v)} />
-            <CustomCheckbox label="Tryb debug" hint="Logi diagnostyczne" checked={extended.debugMode} onChange={(v) => patchExtended("debugMode", v)} />
-            <CustomCheckbox label="Zaawansowany routing" hint="Algorytm tras" checked={extended.advancedRoutingMode} onChange={(v) => patchExtended("advancedRoutingMode", v)} />
-          </FieldGridPicking>
-        </SectionCardPicking>
       </WmsSettingsTabFrame>
       </PickingShortageSettingsProvider>
 

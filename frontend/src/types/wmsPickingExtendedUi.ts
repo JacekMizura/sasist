@@ -24,11 +24,6 @@ export type WmsPickingExtendedUiSettings = {
 
   sortOrdersByCourier: boolean;
   prioritizeExpressOrders: boolean;
-
-  supplierAvailabilityCheck: boolean;
-  legacyMode: boolean;
-  debugMode: boolean;
-  advancedRoutingMode: boolean;
 };
 
 export const DEFAULT_WMS_PICKING_EXTENDED_UI: WmsPickingExtendedUiSettings = {
@@ -51,11 +46,6 @@ export const DEFAULT_WMS_PICKING_EXTENDED_UI: WmsPickingExtendedUiSettings = {
 
   sortOrdersByCourier: false,
   prioritizeExpressOrders: true,
-
-  supplierAvailabilityCheck: false,
-  legacyMode: false,
-  debugMode: false,
-  advancedRoutingMode: false,
 };
 
 export function storageKeyWmsPickingExtendedUi(warehouseId: number): string {
@@ -118,6 +108,14 @@ const DEAD_AUTOMATION_CACHE_KEYS = [
   "autoPrintTransferLabels",
 ] as const;
 
+/** Dead „Zaawansowane” keys — never localStorage; graph/ATP/CartLifecycle stay SSOT. */
+const DEAD_ADVANCED_CACHE_KEYS = [
+  "supplierAvailabilityCheck",
+  "legacyMode",
+  "debugMode",
+  "advancedRoutingMode",
+] as const;
+
 function omitNonUiCacheFields(
   data: Partial<WmsPickingExtendedUiSettings> & Record<string, unknown>,
 ): Partial<WmsPickingExtendedUiSettings> {
@@ -140,6 +138,9 @@ function omitNonUiCacheFields(
   for (const key of DEAD_AUTOMATION_CACHE_KEYS) {
     delete next[key];
   }
+  for (const key of DEAD_ADVANCED_CACHE_KEYS) {
+    delete next[key];
+  }
   return next;
 }
 
@@ -148,6 +149,7 @@ export const PICKING_DEAD_METHODS_CACHE_KEYS = DEAD_METHODS_CACHE_KEYS;
 export const PICKING_DEAD_SHORTAGE_UI_CACHE_KEYS = DEAD_SHORTAGE_UI_CACHE_KEYS;
 export const PICKING_DEAD_WAREHOUSES_CACHE_KEYS = DEAD_WAREHOUSES_CACHE_KEYS;
 export const PICKING_DEAD_AUTOMATION_CACHE_KEYS = DEAD_AUTOMATION_CACHE_KEYS;
+export const PICKING_DEAD_ADVANCED_CACHE_KEYS = DEAD_ADVANCED_CACHE_KEYS;
 
 export function loadWmsPickingExtendedUi(warehouseId: number): WmsPickingExtendedUiSettings {
   try {

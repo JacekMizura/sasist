@@ -151,9 +151,9 @@ describe("picking list_display SSOT", () => {
   it("stripListDisplayFromExtendedUi drops only the six API fields", () => {
     const stripped = stripListDisplayFromExtendedUi({
       ...DEFAULT_WMS_PICKING_EXTENDED_UI,
-      debugMode: true,
+      showCourierBadge: true,
     });
     expect(stripped).not.toHaveProperty("showProductImage");
-    expect(stripped.debugMode).toBe(true);
+    expect(stripped.showCourierBadge).toBe(true);
   });
 });

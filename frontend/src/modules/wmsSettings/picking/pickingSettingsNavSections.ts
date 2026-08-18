@@ -3,7 +3,6 @@ import {
   ListOrdered,
   ScanLine,
   Settings2,
-  Tablet,
   TriangleAlert,
 } from "lucide-react";
 
@@ -48,11 +47,5 @@ export const WMS_PICKING_SETTINGS_NAV_SECTIONS: WmsSettingsSectionConfig[] = [
     icon: TriangleAlert,
     iconClassName: "bg-rose-50 text-rose-600",
     searchText: "braki status wózek",
-  },
-  {
-    id: "wms-pick-advanced",
-    label: "Zaawansowane",
-    icon: Tablet,
-    iconClassName: "bg-indigo-50 text-indigo-600",
   },
 ];

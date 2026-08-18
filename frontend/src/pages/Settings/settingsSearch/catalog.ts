@@ -352,14 +352,6 @@ export const WMS_SETTINGS_SEARCH_CATALOG: WmsSettingsSearchEntry[] = [
     sectionId: "wms-pick-shortage",
     sectionLabel: "Braki",
   }),
-  e({
-    id: "picking.debug_mode",
-    label: "Tryb debug",
-    tabId: "picking",
-    sectionId: "wms-pick-advanced",
-    sectionLabel: "Zaawansowane",
-    keywords: ["tryb"],
-  }),
 
   // Direct sales
   e({
