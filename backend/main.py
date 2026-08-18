@@ -284,6 +284,7 @@ from .api.wms_returns import WMS_RETURNS_ROUTING_VERSION
 from .api.wms_returns import lookup_router as wms_returns_lookup_router
 from .api.wms_returns import returns_id_router as wms_returns_id_router
 from .api.wms_returns import router as wms_returns_router
+from .routing_diagnostics import log_critical_routes
 from .wms_returns_routing_diagnostics import log_wms_returns_mount
 from .api.order import router as order_router
 from .api.order_custom_fields import router as order_custom_fields_router
@@ -2330,9 +2331,8 @@ for _r in _API_ROUTERS:
 
 
 def _log_registered_api_routers() -> None:
-    """Startup diagnostics — every API router prefix and critical route presence."""
-    app_paths = {getattr(r, "path", None) for r in app.routes}
-    print(f"[routes] api_routers={len(_API_ROUTERS)} app_route_entries={len(app.routes)}", flush=True)
+    """Startup diagnostics — router prefixes + public route-presence checks (no app.routes.path)."""
+    print(f"[routes] api_routers={len(_API_ROUTERS)} route_nodes={len(app.routes)}", flush=True)
     for router in _API_ROUTERS:
         rprefix = getattr(router, "prefix", "") or ""
         tags = getattr(router, "tags", None) or []
@@ -2342,29 +2342,7 @@ def _log_registered_api_routers() -> None:
             f"route_handlers={len(router.routes)}",
             flush=True,
         )
-    _critical_paths = (
-        f"{API_PREFIX}/wms/settings/product-validation",
-        f"{API_PREFIX}/wms/settings/production",
-        f"{API_PREFIX}/production/planning/demand",
-    )
-    for path in _critical_paths:
-        mounted = path in app_paths
-        print(f"[routes] critical {path} mounted={mounted}", flush=True)
-        if not mounted:
-            print(f"[routes] CRITICAL MISSING {path}", flush=True)
-
-
-_log_registered_api_routers()
-
-_WMS_SETTINGS_PATHS = (
-    f"{API_PREFIX}/wms/settings/product-validation",
-    f"{API_PREFIX}/wms/settings/production",
-)
-for _settings_path in _WMS_SETTINGS_PATHS:
-    _mounted = any(getattr(r, "path", None) == _settings_path for r in app.routes)
-    print(f"[routes] wms_settings {_settings_path} mounted={_mounted}", flush=True)
-    if not _mounted:
-        print(f"[routes] MISSING {_settings_path}", flush=True)
+    log_critical_routes(app)
 
 
 _MSG_ADMIN = f"{API_PREFIX}/admin/message-templates"
@@ -2390,6 +2368,8 @@ app.include_router(supplier_product_router, prefix=API_PREFIX)
 
 # WMS phone QR upload: mounted at /wms/photo-upload (not under /api) so same-origin dev proxy + phones work.
 app.include_router(wms_photo_upload_router)
+
+_log_registered_api_routers()
 
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
@@ -2422,7 +2402,7 @@ async def _log_backend_startup() -> None:
         flush=True,
     )
     print(
-        f"[startup] app ready routes={len(app.routes)} "
+        f"[startup] app ready route_nodes={len(app.routes)} "
         f"bind_host={UVICORN_HOST} PORT env={os.getenv('PORT')!r}",
         flush=True,
     )
@@ -2445,11 +2425,6 @@ async def _log_backend_startup() -> None:
             db.close()
     except Exception as exc:
         log_unhandled_exception("startup warehouse ownership audit", exc)
-    for r in app.routes:
-        path = getattr(r, "path", None)
-        if path and "/wms/inventory-count/" in str(path):
-            methods = sorted(getattr(r, "methods", None) or [])
-            print(f"[ROUTE] {path} {methods}", flush=True)
     print("Backend started OK", flush=True)
 
 

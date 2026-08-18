@@ -1,3 +1,19 @@
+## 2026-08-18 — Fix: FastAPI 0.141 global routing diagnostics
+
+- Shared `is_route_registered` / `url_path_for` + OpenAPI; removed flat `app.routes.path` and `_WMS_SETTINGS_PATHS` duplicate
+- Startup: `route_nodes`, inventory-count via helper; no remount; Returns diagnostic unchanged
+
+## 2026-08-18 — Audit: FastAPI 0.141 global routing diagnostics (no code)
+
+- Same root cause as Returns: top-level `app.routes` is `_IncludedRouter` tree, not flat `APIRoute.path`
+- False CRITICAL still printed for WMS settings + production/planning/demand; HTTP/OpenAPI prove mounted
+- No runtime remount left; only log-only helpers in `backend/main.py` to fix later
+
+## 2026-08-18 — WMS Automatyzacja: drop dead localStorage section
+
+- Removed section Automatyzacja + keys: autoStartNextOrder, autoOpenScanner, autoMarkPickedLines, autoMoveToPackingStatus, autoPrintTransferLabels
+- No runtime/API/DB change; next batch / scan / line close / packing status / print stay on existing SSOT
+
 ## 2026-08-18 — WMS Returns routing diagnostic (FastAPI 0.141)
 
 - Replaced flat `app.routes.path` check / REMOUNT / promote with read-only `url_path_for`

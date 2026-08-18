@@ -1,3 +1,8 @@
+**Global FastAPI 0.141 routing diagnostics FIX (2026-08-18).**
+- Shared `backend/routing_diagnostics.py`: `url_path_for` + OpenAPI; no `app.routes.path`
+- False CRITICAL for WMS settings + production planning gone; inventory-count dump replaced
+- Returns `22f0dcab` unchanged; pin `fastapi>=0.141.0,<0.142.0`; no remount
+
 **WMS Returns routing diagnostic (2026-08-18) — FastAPI 0.141, no remount.**
 - Diagnostic uses `url_path_for` (not flat `app.routes.path`); lookup/static/id mounted once
 - Pin: `fastapi>=0.141.0,<0.142.0`; tests on `backend.main:app` PASS
