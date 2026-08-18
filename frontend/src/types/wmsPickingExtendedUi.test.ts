@@ -4,6 +4,7 @@ import { PICKING_LIST_DISPLAY_UI_KEYS } from "../modules/wmsSettings/picking/pic
 import {
   DEFAULT_WMS_PICKING_EXTENDED_UI,
   loadWmsPickingExtendedUi,
+  PICKING_DEAD_METHODS_CACHE_KEYS,
   PICKING_DEAD_QUEUE_CACHE_KEYS,
   saveWmsPickingExtendedUi,
   storageKeyWmsPickingExtendedUi,
@@ -115,5 +116,39 @@ describe("wms-picking-extended-ui localStorage vs list_display", () => {
     }
     expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("afterBatchCompleteAction");
     expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("multiItemBatchOrdersCount");
+  });
+
+  it("strips dead Metody zbierania keys from cache and defaults", () => {
+    localStorage.setItem(
+      storageKeyWmsPickingExtendedUi(WH),
+      JSON.stringify({
+        ...DEFAULT_WMS_PICKING_EXTENDED_UI,
+        defaultPickingContainerType: "cart",
+        requireCartScanStart: true,
+        requireBasketScanStart: true,
+        autoSuggestCart: false,
+        autoSuggestRoute: true,
+        autoOpenScanner: false,
+      }),
+    );
+    const loaded = loadWmsPickingExtendedUi(WH);
+    for (const key of PICKING_DEAD_METHODS_CACHE_KEYS) {
+      expect(loaded).not.toHaveProperty(key);
+    }
+    expect(loaded.autoOpenScanner).toBe(false);
+
+    saveWmsPickingExtendedUi(WH, loaded);
+    const raw = JSON.parse(localStorage.getItem(storageKeyWmsPickingExtendedUi(WH)) ?? "{}") as Record<
+      string,
+      unknown
+    >;
+    for (const key of PICKING_DEAD_METHODS_CACHE_KEYS) {
+      expect(raw).not.toHaveProperty(key);
+    }
+    expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("defaultPickingContainerType");
+    expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("autoSuggestCart");
+    expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("autoSuggestRoute");
+    expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("requireCartScanStart");
+    expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("requireBasketScanStart");
   });
 });

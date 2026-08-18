@@ -7,7 +7,6 @@ import {
   MapPin,
   ScanLine,
   Settings2,
-  ShoppingCart,
   Sparkles,
 } from "lucide-react";
 
@@ -23,7 +22,6 @@ const ICONS: Record<string, LucideIcon> = {
   "wms-pick-modes": Layers,
   "wms-pick-queue": ClipboardList,
   "wms-pick-scan": ScanLine,
-  "wms-pick-carts": ShoppingCart,
   "wms-pick-shortage": AlertTriangle,
   "wms-pick-warehouses": MapPin,
   "wms-pick-automation": Sparkles,

@@ -332,13 +332,6 @@ export const WMS_SETTINGS_SEARCH_CATALOG: WmsSettingsSearchEntry[] = [
     sectionLabel: "Walidacja zbierania",
   }),
   e({
-    id: "picking.default_container_type",
-    label: "Domyślny typ kontenera",
-    tabId: "picking",
-    sectionId: "wms-pick-carts",
-    sectionLabel: "Metody zbierania",
-  }),
-  e({
     id: "picking.show_in_braki_after_shortage",
     label: "Pokaż zamówienie w zakładce Braki po zgłoszeniu braku",
     tabId: "picking",

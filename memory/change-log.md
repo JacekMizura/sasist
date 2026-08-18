@@ -1,3 +1,9 @@
+## 2026-08-18 — WMS Metody zbierania: remove dead extended-UI cache
+
+- Removed section + localStorage keys: defaultPickingContainerType, requireCartScanStart, requireBasketScanStart, autoSuggestCart, autoSuggestRoute
+- No runtime/API/DB change; picking_config modes remain SSOT
+- default-cart leftover left as GAP
+
 ## 2026-08-17 — WMS Lista zleceń: dead cache cleanup + after_batch_complete_action
 
 - Removed dead Lista zleceń fields from `WmsPickingExtendedUi` / localStorage / form

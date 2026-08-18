@@ -1,5 +1,4 @@
 import {
-  Boxes,
   LayoutTemplate,
   ListOrdered,
   ScanLine,
@@ -44,13 +43,6 @@ export const WMS_PICKING_SETTINGS_NAV_SECTIONS: WmsSettingsSectionConfig[] = [
     icon: ScanLine,
     iconClassName: "bg-cyan-50 text-cyan-700",
     searchText: "skan walidacja ean lokalizacja",
-  },
-  {
-    id: "wms-pick-carts",
-    label: "Metody zbierania",
-    icon: Boxes,
-    iconClassName: "bg-amber-50 text-amber-600",
-    searchText: "kontener wózek",
   },
   {
     id: "wms-pick-shortage",

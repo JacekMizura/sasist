@@ -4,8 +4,6 @@
  * ``wms/settings/picking-terminal``. localStorage trzyma tylko pozostałe preferencje UI.
  */
 
-export type DefaultPickingContainerType = "cart" | "cart_with_baskets" | "basket";
-
 export type WmsPickingExtendedUiSettings = {
   showProductImage: boolean;
   showEAN: boolean;
@@ -28,12 +26,6 @@ export type WmsPickingExtendedUiSettings = {
 
   sortOrdersByCourier: boolean;
   prioritizeExpressOrders: boolean;
-
-  defaultPickingContainerType: DefaultPickingContainerType;
-  autoSuggestCart: boolean;
-  autoSuggestRoute: boolean;
-  requireCartScanStart: boolean;
-  requireBasketScanStart: boolean;
 
   splitWorkBetweenWarehouses: boolean;
   ignoreLocationStockLevels: boolean;
@@ -81,12 +73,6 @@ export const DEFAULT_WMS_PICKING_EXTENDED_UI: WmsPickingExtendedUiSettings = {
   sortOrdersByCourier: false,
   prioritizeExpressOrders: true,
 
-  defaultPickingContainerType: "cart_with_baskets",
-  autoSuggestCart: true,
-  autoSuggestRoute: false,
-  requireCartScanStart: false,
-  requireBasketScanStart: false,
-
   splitWorkBetweenWarehouses: false,
   ignoreLocationStockLevels: false,
   mainPickingWarehouse: "",
@@ -133,6 +119,15 @@ const DEAD_QUEUE_CACHE_KEYS = [
   "sortOrdersByAge",
 ] as const;
 
+/** Dead „Metody zbierania” keys — SSOT is picking_config, never localStorage. */
+const DEAD_METHODS_CACHE_KEYS = [
+  "defaultPickingContainerType",
+  "requireCartScanStart",
+  "requireBasketScanStart",
+  "autoSuggestCart",
+  "autoSuggestRoute",
+] as const;
+
 function omitNonUiCacheFields(
   data: Partial<WmsPickingExtendedUiSettings> & Record<string, unknown>,
 ): Partial<WmsPickingExtendedUiSettings> {
@@ -143,10 +138,14 @@ function omitNonUiCacheFields(
   for (const key of DEAD_QUEUE_CACHE_KEYS) {
     delete next[key];
   }
+  for (const key of DEAD_METHODS_CACHE_KEYS) {
+    delete next[key];
+  }
   return next;
 }
 
 export const PICKING_DEAD_QUEUE_CACHE_KEYS = DEAD_QUEUE_CACHE_KEYS;
+export const PICKING_DEAD_METHODS_CACHE_KEYS = DEAD_METHODS_CACHE_KEYS;
 
 export function loadWmsPickingExtendedUi(warehouseId: number): WmsPickingExtendedUiSettings {
   try {

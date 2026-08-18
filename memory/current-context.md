@@ -1,3 +1,7 @@
+**WMS Metody zbierania cleanup (2026-08-18) — NO commit/push.**
+- Removed dead section + 5 localStorage keys (container type, start scans, auto-suggest cart/route)
+- SSOT remains picking_config modes + Cart.capacity_*; default-cart leftover untouched (GAP)
+
 **WMS Lista zleceń cleanup + after_batch_complete_action (2026-08-17) — NO commit/push.**
 - Removed dead localStorage duplicates from Zbieranie → Lista zleceń (batch counts/volume/management/sort-by-age)
 - Real batch SSOT remains `picking_config` max_* / modes / order_sort + `Cart.capacity_*`

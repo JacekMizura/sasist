@@ -148,7 +148,6 @@ function parseBulkOrderLimitInput(
   return { ok: true, value: n };
 }
 
-const selectClass = wmsSettingControlSelectClass;
 const radioLabelClass =
   "flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-3 py-2 hover:bg-slate-50 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-500/30";
 const radioInputClass = "h-4 w-4 shrink-0 border-slate-300 text-blue-600 focus:ring-blue-500 bg-white cursor-pointer";
@@ -2910,31 +2909,6 @@ export function WmsPickingSettingsSections({
               checked={extended.allowProductsWithoutEan}
               onChange={(v) => patchExtended("allowProductsWithoutEan", v)}
             />
-          </FieldGridPicking>
-        </SectionCardPicking>
-
-        <SectionCardPicking id="wms-pick-carts" title="Metody zbierania" summary="Typ kontenera, skany startowe i auto-sugestie.">
-          <FieldGridPicking>
-            <WmsControlSettingRow asLabel label="Domyślny typ kontenera">
-              <select
-                className={selectClass}
-                value={extended.defaultPickingContainerType}
-                onChange={(e) =>
-                  patchExtended(
-                    "defaultPickingContainerType",
-                    e.target.value as WmsPickingExtendedUiSettings["defaultPickingContainerType"],
-                  )
-                }
-              >
-                <option value="cart">Wózek</option>
-                <option value="cart_with_baskets">Wózek z koszykami</option>
-                <option value="basket">Koszyk</option>
-              </select>
-            </WmsControlSettingRow>
-            <CustomCheckbox label="Wymagaj skanu wózka na start" checked={extended.requireCartScanStart} onChange={(v) => patchExtended("requireCartScanStart", v)} />
-            <CustomCheckbox label="Wymagaj skanu koszyka na start" checked={extended.requireBasketScanStart} onChange={(v) => patchExtended("requireBasketScanStart", v)} />
-            <CustomCheckbox label="Auto-sugestia wózka" checked={extended.autoSuggestCart} onChange={(v) => patchExtended("autoSuggestCart", v)} />
-            <CustomCheckbox label="Auto-sugestia trasy" checked={extended.autoSuggestRoute} onChange={(v) => patchExtended("autoSuggestRoute", v)} />
           </FieldGridPicking>
         </SectionCardPicking>
 
