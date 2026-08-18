@@ -6,7 +6,6 @@ import {
   Layers,
   ScanLine,
   Settings2,
-  Sparkles,
 } from "lucide-react";
 
 import {
@@ -22,7 +21,6 @@ const ICONS: Record<string, LucideIcon> = {
   "wms-pick-queue": ClipboardList,
   "wms-pick-scan": ScanLine,
   "wms-pick-shortage": AlertTriangle,
-  "wms-pick-automation": Sparkles,
   "wms-pick-view": Boxes,
   "wms-pick-advanced": Settings2,
 };

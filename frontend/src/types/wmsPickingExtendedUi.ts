@@ -25,12 +25,6 @@ export type WmsPickingExtendedUiSettings = {
   sortOrdersByCourier: boolean;
   prioritizeExpressOrders: boolean;
 
-  autoStartNextOrder: boolean;
-  autoOpenScanner: boolean;
-  autoMarkPickedLines: boolean;
-  autoMoveToPackingStatus: boolean;
-  autoPrintTransferLabels: boolean;
-
   supplierAvailabilityCheck: boolean;
   legacyMode: boolean;
   debugMode: boolean;
@@ -57,12 +51,6 @@ export const DEFAULT_WMS_PICKING_EXTENDED_UI: WmsPickingExtendedUiSettings = {
 
   sortOrdersByCourier: false,
   prioritizeExpressOrders: true,
-
-  autoStartNextOrder: false,
-  autoOpenScanner: true,
-  autoMarkPickedLines: false,
-  autoMoveToPackingStatus: false,
-  autoPrintTransferLabels: false,
 
   supplierAvailabilityCheck: false,
   legacyMode: false,
@@ -121,6 +109,15 @@ const DEAD_WAREHOUSES_CACHE_KEYS = [
   "fallbackWarehouse",
 ] as const;
 
+/** Dead „Automatyzacja” keys — real SSOT is picking-terminal / picking_config / qty, not localStorage. */
+const DEAD_AUTOMATION_CACHE_KEYS = [
+  "autoStartNextOrder",
+  "autoOpenScanner",
+  "autoMarkPickedLines",
+  "autoMoveToPackingStatus",
+  "autoPrintTransferLabels",
+] as const;
+
 function omitNonUiCacheFields(
   data: Partial<WmsPickingExtendedUiSettings> & Record<string, unknown>,
 ): Partial<WmsPickingExtendedUiSettings> {
@@ -140,6 +137,9 @@ function omitNonUiCacheFields(
   for (const key of DEAD_WAREHOUSES_CACHE_KEYS) {
     delete next[key];
   }
+  for (const key of DEAD_AUTOMATION_CACHE_KEYS) {
+    delete next[key];
+  }
   return next;
 }
 
@@ -147,6 +147,7 @@ export const PICKING_DEAD_QUEUE_CACHE_KEYS = DEAD_QUEUE_CACHE_KEYS;
 export const PICKING_DEAD_METHODS_CACHE_KEYS = DEAD_METHODS_CACHE_KEYS;
 export const PICKING_DEAD_SHORTAGE_UI_CACHE_KEYS = DEAD_SHORTAGE_UI_CACHE_KEYS;
 export const PICKING_DEAD_WAREHOUSES_CACHE_KEYS = DEAD_WAREHOUSES_CACHE_KEYS;
+export const PICKING_DEAD_AUTOMATION_CACHE_KEYS = DEAD_AUTOMATION_CACHE_KEYS;
 
 export function loadWmsPickingExtendedUi(warehouseId: number): WmsPickingExtendedUiSettings {
   try {

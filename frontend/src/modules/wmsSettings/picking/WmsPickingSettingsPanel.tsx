@@ -2580,16 +2580,6 @@ export function WmsPickingSettingsSections({
           )}
         </SectionCardPicking>
 
-        <SectionCardPicking id="wms-pick-automation" title="Automatyzacja" summary="Automatyczne akcje podczas i po zbieraniu.">
-          <FieldGridPicking>
-            <CustomCheckbox label="Auto: następne zamówienie" checked={extended.autoStartNextOrder} onChange={(v) => patchExtended("autoStartNextOrder", v)} />
-            <CustomCheckbox label="Auto: otwórz skaner" checked={extended.autoOpenScanner} onChange={(v) => patchExtended("autoOpenScanner", v)} />
-            <CustomCheckbox label="Auto: oznaczaj zebrane linie" checked={extended.autoMarkPickedLines} onChange={(v) => patchExtended("autoMarkPickedLines", v)} />
-            <CustomCheckbox label="Auto: przejdź do statusu pakowania" checked={extended.autoMoveToPackingStatus} onChange={(v) => patchExtended("autoMoveToPackingStatus", v)} />
-            <CustomCheckbox label="Auto: druk etykiet przesunięć" checked={extended.autoPrintTransferLabels} onChange={(v) => patchExtended("autoPrintTransferLabels", v)} />
-          </FieldGridPicking>
-        </SectionCardPicking>
-
         <SectionCardPicking id="wms-pick-view" title="Widok">
           <SubsectionPicking
             title="Lista zbierania"

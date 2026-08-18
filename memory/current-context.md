@@ -1,7 +1,11 @@
 **WMS Returns routing diagnostic (2026-08-18) — FastAPI 0.141, no remount.**
 - Diagnostic uses `url_path_for` (not flat `app.routes.path`); lookup/static/id mounted once
 - Pin: `fastapi>=0.141.0,<0.142.0`; tests on `backend.main:app` PASS
-- Returns business logic/endpoints unchanged
+- Returns business logic/endpoints unchanged; commit `22f0dcab`
+
+**WMS Automatyzacja przy zbieraniu cleanup (2026-08-18).**
+- Removed entire Automatyzacja section + 5 dead localStorage keys
+- SSOT unchanged: after_batch_complete_action, picking-terminal scan policy, qty/remaining, target_status_id
 
 **WMS Metody zbierania cleanup (2026-08-18) — NO commit/push.**
 - Removed dead section + 5 localStorage keys (container type, start scans, auto-suggest cart/route)

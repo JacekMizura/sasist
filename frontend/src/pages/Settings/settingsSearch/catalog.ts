@@ -353,13 +353,6 @@ export const WMS_SETTINGS_SEARCH_CATALOG: WmsSettingsSearchEntry[] = [
     sectionLabel: "Braki",
   }),
   e({
-    id: "picking.auto_start_next_order",
-    label: "Auto: następne zamówienie",
-    tabId: "picking",
-    sectionId: "wms-pick-automation",
-    sectionLabel: "Automatyzacja",
-  }),
-  e({
     id: "picking.debug_mode",
     label: "Tryb debug",
     tabId: "picking",
