@@ -284,6 +284,7 @@ from .api.wms_returns import WMS_RETURNS_ROUTING_VERSION
 from .api.wms_returns import lookup_router as wms_returns_lookup_router
 from .api.wms_returns import returns_id_router as wms_returns_id_router
 from .api.wms_returns import router as wms_returns_router
+from .wms_returns_routing_diagnostics import log_wms_returns_mount
 from .api.order import router as order_router
 from .api.order_custom_fields import router as order_custom_fields_router
 from .api.returns_bulk import router as returns_bulk_router
@@ -2169,33 +2170,9 @@ _bootstrap_tier0_platform_schema(phase="import")
 
 API_PREFIX = "/api"
 WMS_RETURNS_MOUNT_PREFIX = f"{API_PREFIX}/wms/returns"
-WMS_RETURNS_LOOKUP_PATHS = (
-    f"{WMS_RETURNS_MOUNT_PREFIX}/orders/lookup",
-    f"{WMS_RETURNS_MOUNT_PREFIX}/orders/advanced-lookup",
-    f"{WMS_RETURNS_MOUNT_PREFIX}/lookup",
-)
-
-def _promote_wms_returns_lookup_routes_on_app() -> None:
-    """Hoist /orders/lookup to the front of app.routes (Starlette first-match wins)."""
-    lookup_paths = set(WMS_RETURNS_LOOKUP_PATHS)
-    promoted: list = []
-    rest: list = []
-    for route in app.routes:
-        path = getattr(route, "path", None)
-        if path in lookup_paths:
-            promoted.append(route)
-        else:
-            rest.append(route)
-    if promoted:
-        app.router.routes = promoted + rest
-        print(
-            f"[routes] promoted wms lookup routes={len(promoted)} "
-            f"paths={[getattr(r, 'path', None) for r in promoted]}",
-            flush=True,
-        )
-
 
 # WMS returns: lookup router MUST be registered before static/id routers (route match order).
+# Mount once — FastAPI >= 0.137 stores includes as a tree; remount duplicates the tree.
 app.include_router(wms_returns_lookup_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
 app.include_router(wms_returns_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
 app.include_router(wms_returns_id_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
@@ -2204,6 +2181,7 @@ print(
     f"version={WMS_RETURNS_ROUTING_VERSION}",
     flush=True,
 )
+log_wms_returns_mount(app)
 
 _API_ROUTERS = (
     auth_router,
@@ -2350,51 +2328,6 @@ _API_ROUTERS = (
 for _r in _API_ROUTERS:
     app.include_router(_r, prefix=API_PREFIX)
 
-_promote_wms_returns_lookup_routes_on_app()
-
-
-def _log_returns_route_table() -> None:
-    for r in app.routes:
-        path = getattr(r, "path", None)
-        if path and WMS_RETURNS_MOUNT_PREFIX in str(path):
-            print("[ROUTE]", path, flush=True)
-
-
-def _ensure_wms_returns_router_mounted() -> None:
-    """Guarantee /api/wms/returns/* exists on the app (Railway startup verification)."""
-    app_paths = [
-        getattr(r, "path", None)
-        for r in app.routes
-        if getattr(r, "path", None) and str(getattr(r, "path")).startswith(WMS_RETURNS_MOUNT_PREFIX)
-    ]
-    if f"{WMS_RETURNS_MOUNT_PREFIX}/queue-counts" not in app_paths:
-        print("[routes] wms_returns REMOUNT", flush=True)
-        app.include_router(wms_returns_lookup_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
-        app.include_router(wms_returns_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
-        app.include_router(wms_returns_id_router, prefix=WMS_RETURNS_MOUNT_PREFIX)
-        _promote_wms_returns_lookup_routes_on_app()
-        app_paths = [
-            getattr(r, "path", None)
-            for r in app.routes
-            if getattr(r, "path", None) and str(getattr(r, "path")).startswith(WMS_RETURNS_MOUNT_PREFIX)
-        ]
-    print(
-        f"[routes] wms_returns lookup_routes={len(wms_returns_lookup_router.routes)} "
-        f"static_routes={len(wms_returns_router.routes)} "
-        f"id_routes={len(wms_returns_id_router.routes)} app_paths={len(app_paths)}",
-        flush=True,
-    )
-    for _lookup_path in WMS_RETURNS_LOOKUP_PATHS:
-        if _lookup_path not in app_paths:
-            print("[routes] MISSING", _lookup_path, flush=True)
-    if not app_paths:
-        print("[routes] CRITICAL: no /api/wms/returns/* mounted", flush=True)
-    _promote_wms_returns_lookup_routes_on_app()
-    _log_returns_route_table()
-
-
-_ensure_wms_returns_router_mounted()
-
 
 def _log_registered_api_routers() -> None:
     """Startup diagnostics — every API router prefix and critical route presence."""
@@ -2494,9 +2427,9 @@ async def _log_backend_startup() -> None:
         flush=True,
     )
     try:
-        _ensure_wms_returns_router_mounted()
+        log_wms_returns_mount(app)
     except Exception as exc:
-        log_unhandled_exception("startup _ensure_wms_returns_router_mounted", exc)
+        log_unhandled_exception("startup log_wms_returns_mount", exc)
     try:
         _log_registered_api_routers()
     except Exception as exc:

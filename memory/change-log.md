@@ -1,3 +1,9 @@
+## 2026-08-18 — WMS Returns routing diagnostic (FastAPI 0.141)
+
+- Replaced flat `app.routes.path` check / REMOUNT / promote with read-only `url_path_for`
+- Pin `fastapi>=0.141.0,<0.142.0`; lookup/static/id still mounted once in that order
+- No returns business-logic change
+
 ## 2026-08-18 — WMS Metody zbierania: remove dead extended-UI cache
 
 - Removed section + localStorage keys: defaultPickingContainerType, requireCartScanStart, requireBasketScanStart, autoSuggestCart, autoSuggestRoute

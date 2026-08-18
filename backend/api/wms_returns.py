@@ -106,7 +106,7 @@ WMS_RETURNS_ROUTING_VERSION = "2026-06-04-lookup-route-order-v19"
 lookup_router = APIRouter(tags=["WMS Returns"])
 
 
-@lookup_router.get("/orders/lookup-test")
+@lookup_router.get("/orders/lookup-test", name="wms_returns_orders_lookup_test")
 def lookup_test():
     print("[LOOKUP TEST HIT]")
     return [{"ok": True}]
@@ -2266,7 +2266,11 @@ def close_active_collective_z_pz_endpoint(
     )
 
 
-@router.get("/queue-counts", response_model=WmsReturnQueueCountsRead)
+@router.get(
+    "/queue-counts",
+    response_model=WmsReturnQueueCountsRead,
+    name="wms_returns_queue_counts",
+)
 def get_wms_return_queue_counts(
     tenant_id: int = Query(...),
     warehouse_id: Optional[int] = Query(
