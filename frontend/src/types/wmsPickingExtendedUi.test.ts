@@ -6,6 +6,7 @@ import {
   loadWmsPickingExtendedUi,
   PICKING_DEAD_METHODS_CACHE_KEYS,
   PICKING_DEAD_QUEUE_CACHE_KEYS,
+  PICKING_DEAD_SHORTAGE_UI_CACHE_KEYS,
   saveWmsPickingExtendedUi,
   storageKeyWmsPickingExtendedUi,
 } from "./wmsPickingExtendedUi";
@@ -150,5 +151,40 @@ describe("wms-picking-extended-ui localStorage vs list_display", () => {
     expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("autoSuggestRoute");
     expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("requireCartScanStart");
     expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("requireBasketScanStart");
+  });
+
+  it("strips dead Braki / notes keys from cache and defaults", () => {
+    localStorage.setItem(
+      storageKeyWmsPickingExtendedUi(WH),
+      JSON.stringify({
+        ...DEFAULT_WMS_PICKING_EXTENDED_UI,
+        shortageOrderStatusId: 44,
+        disableAutoDetachMissingOrdersFromCarts: true,
+        showAllNotes: false,
+        notesPopup: true,
+        showWarnings: false,
+        showMissingProductsHints: false,
+        autoOpenScanner: false,
+      }),
+    );
+    const loaded = loadWmsPickingExtendedUi(WH);
+    for (const key of PICKING_DEAD_SHORTAGE_UI_CACHE_KEYS) {
+      expect(loaded).not.toHaveProperty(key);
+    }
+    expect(loaded.autoOpenScanner).toBe(false);
+
+    saveWmsPickingExtendedUi(WH, loaded);
+    const raw = JSON.parse(localStorage.getItem(storageKeyWmsPickingExtendedUi(WH)) ?? "{}") as Record<
+      string,
+      unknown
+    >;
+    for (const key of PICKING_DEAD_SHORTAGE_UI_CACHE_KEYS) {
+      expect(raw).not.toHaveProperty(key);
+    }
+    expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("shortageOrderStatusId");
+    expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("showAllNotes");
+    expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("notesPopup");
+    expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("showWarnings");
+    expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("showMissingProductsHints");
   });
 });

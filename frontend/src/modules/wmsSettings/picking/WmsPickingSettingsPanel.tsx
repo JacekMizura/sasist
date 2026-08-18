@@ -32,11 +32,6 @@ import type {
 import { DAMAGE_TENANT_ID } from "../../../pages/damage/damageShared";
 import toast from "react-hot-toast";
 import {
-  getWmsPickingShortageSettings,
-  saveWmsPickingShortageSettings,
-  type WmsShortageResolvePriorityApi,
-} from "../../../api/wmsPickingShortageSettingsApi";
-import {
   DEFAULT_AFTER_BATCH_COMPLETE_ACTION,
   getWmsPickingTerminalSettings,
   saveWmsPickingTerminalSettings,
@@ -85,6 +80,12 @@ import {
   PICKING_LIST_DISPLAY_SECTION_HELP,
 } from "./pickingListDisplay";
 import { PICKING_AFTER_BATCH_SECTION_HELP } from "./pickingAfterBatchHelp";
+import {
+  PickingPreAssignValidationFields,
+  PickingShortageSettingsFields,
+  PickingShortageSettingsProvider,
+  type PickingShortageSettingsHandle,
+} from "./pickingShortageSettings";
 import {
   BY_PRODUCTS_ALL_CONTAINER_OPTIONS,
   BY_PRODUCTS_MULTI_CONTAINER_OPTIONS,
@@ -265,373 +266,6 @@ function CustomCheckbox({
   );
 }
 
-const PRIORITY_OPTIONS: Array<{ value: WmsShortageResolvePriorityApi; label: string }> = [
-  { value: "normal", label: "Normalna" },
-  { value: "high", label: "Wysoka" },
-  { value: "immediate_picking", label: "Natychmiast wróć do zbierania" },
-];
-
-function shortageUiFingerprint(params: {
-  reportedStatus: string;
-  recoveryStatus: string;
-  validationFailedStatus: string;
-  autoBraki: boolean;
-  allowContinue: boolean;
-  priority: WmsShortageResolvePriorityApi;
-  autoReopen: boolean;
-  disableAutoDetach: boolean;
-}): string {
-  return stableStringifyPicking(params);
-}
-
-export type PickingShortageSettingsHandle = {
-  save: () => Promise<boolean>;
-  discard: () => Promise<void>;
-};
-
-const PickingShortageSettingsPanel = forwardRef<
-  PickingShortageSettingsHandle,
-  {
-    tenantId: number;
-    warehouseId: number | null;
-    statusOptionsFlat: Array<{ id: number; name: string }>;
-    orderUiSummary: OrderUiStatusPanelSummary | null;
-    panelSubgroups: OrderUiPanelSubgroupRead[];
-    orderUiLoading: boolean;
-    orderUiErr: string | null;
-    onDirtyChange?: (dirty: boolean) => void;
-  }
->(function PickingShortageSettingsPanel(
-  {
-    tenantId,
-    warehouseId,
-    statusOptionsFlat,
-    orderUiSummary,
-    panelSubgroups,
-    orderUiLoading,
-    orderUiErr,
-    onDirtyChange,
-  },
-  ref,
-) {
-  const settingsLoadedOkRef = useRef(false);
-  const [fatalLoadErr, setFatalLoadErr] = useState<string | null>(null);
-  const [saveErr, setSaveErr] = useState<string | null>(null);
-  const [saveOk, setSaveOk] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  const [reportedStatus, setReportedStatus] = useState<string>("");
-  const [recoveryStatus, setRecoveryStatus] = useState<string>("");
-  const [validationFailedStatus, setValidationFailedStatus] = useState<string>("");
-  const [autoBraki, setAutoBraki] = useState(true);
-  const [allowContinue, setAllowContinue] = useState(true);
-  const [priority, setPriority] = useState<WmsShortageResolvePriorityApi>("high");
-  const [autoReopen, setAutoReopen] = useState(true);
-  const [disableAutoDetach, setDisableAutoDetach] = useState(false);
-  const [baselineShortageFp, setBaselineShortageFp] = useState<string | null>(null);
-
-  useEffect(() => {
-    settingsLoadedOkRef.current = false;
-  }, [warehouseId]);
-
-  useEffect(() => {
-    if (warehouseId == null) setBaselineShortageFp(null);
-  }, [warehouseId]);
-
-  const load = useCallback(async () => {
-    if (warehouseId == null) {
-      return;
-    }
-    setLoading(true);
-    setFatalLoadErr(null);
-    try {
-      const rPromise = getWmsPickingShortageSettings(tenantId, warehouseId);
-      const packingPromise = getWmsPackingSettings(tenantId, warehouseId).catch(() => null);
-      const r = await rPromise;
-      const packing = await packingPromise;
-      const packingStartId =
-        packing?.start_status_id != null && Number.isFinite(packing.start_status_id) && packing.start_status_id > 0
-          ? packing.start_status_id
-          : null;
-      const statusIdSelectable = (id: number) => statusOptionsFlat.some((s) => s.id === id);
-
-      settingsLoadedOkRef.current = true;
-      const reported =
-        r.shortage_reported_order_ui_status_id != null ? String(r.shortage_reported_order_ui_status_id) : "";
-      let recoveryResolved = "";
-      if (r.recovery_completed_order_ui_status_id != null) {
-        recoveryResolved = String(r.recovery_completed_order_ui_status_id);
-      } else if (packingStartId != null && statusIdSelectable(packingStartId)) {
-        recoveryResolved = String(packingStartId);
-      } else {
-        recoveryResolved = "";
-      }
-      setReportedStatus(reported);
-      setRecoveryStatus(recoveryResolved);
-      const validationFailed =
-        r.wms_validation_failed_order_ui_status_id != null
-          ? String(r.wms_validation_failed_order_ui_status_id)
-          : "";
-      setValidationFailedStatus(validationFailed);
-      setAutoBraki(r.auto_enqueue_braki);
-      setAllowContinue(r.allow_continue_other_lines_after_shortage);
-      setPriority(r.priority_after_shortage_resolved ?? "high");
-      setAutoReopen(r.auto_reopen_picking_after_shortage_resolved);
-      setDisableAutoDetach(Boolean(r.disable_auto_detach_missing_orders_from_carts));
-      setBaselineShortageFp(
-        shortageUiFingerprint({
-          reportedStatus: reported,
-          recoveryStatus: recoveryResolved,
-          validationFailedStatus: validationFailed,
-          autoBraki: r.auto_enqueue_braki,
-          allowContinue: r.allow_continue_other_lines_after_shortage,
-          priority: r.priority_after_shortage_resolved ?? "high",
-          autoReopen: r.auto_reopen_picking_after_shortage_resolved,
-          disableAutoDetach: Boolean(r.disable_auto_detach_missing_orders_from_carts),
-        }),
-      );
-    } catch {
-      if (!settingsLoadedOkRef.current) {
-        setFatalLoadErr("Nie udało się wczytać ustawień obsługi braków.");
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [tenantId, warehouseId, statusOptionsFlat]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const onSave = useCallback(async (): Promise<boolean> => {
-    if (warehouseId == null) return false;
-    setSaving(true);
-    setSaveErr(null);
-    setSaveOk(null);
-    try {
-      const rs = reportedStatus.trim() === "" ? null : Number(reportedStatus);
-      const rc = recoveryStatus.trim() === "" ? null : Number(recoveryStatus);
-      const vf = validationFailedStatus.trim() === "" ? null : Number(validationFailedStatus);
-      await saveWmsPickingShortageSettings({
-        tenant_id: tenantId,
-        warehouse_id: warehouseId,
-        shortage_reported_order_ui_status_id: rs != null && Number.isFinite(rs) && rs > 0 ? rs : null,
-        auto_enqueue_braki: autoBraki,
-        allow_continue_other_lines_after_shortage: allowContinue,
-        priority_after_shortage_resolved: priority,
-        auto_reopen_picking_after_shortage_resolved: autoReopen,
-        recovery_completed_order_ui_status_id: rc != null && Number.isFinite(rc) && rc > 0 ? rc : null,
-        wms_validation_failed_order_ui_status_id: vf != null && Number.isFinite(vf) && vf > 0 ? vf : null,
-        disable_auto_detach_missing_orders_from_carts: disableAutoDetach,
-      });
-      setBaselineShortageFp(
-        shortageUiFingerprint({
-          reportedStatus,
-          recoveryStatus,
-          validationFailedStatus,
-          autoBraki,
-          allowContinue,
-          priority,
-          autoReopen,
-          disableAutoDetach,
-        }),
-      );
-      setSaveOk("Zapisano.");
-      window.setTimeout(() => setSaveOk(null), 3500);
-      return true;
-    } catch {
-      setSaveErr("Zapis nie powiódł się.");
-      return false;
-    } finally {
-      setSaving(false);
-    }
-  }, [
-    warehouseId,
-    tenantId,
-    reportedStatus,
-    recoveryStatus,
-    validationFailedStatus,
-    autoBraki,
-    allowContinue,
-    priority,
-    autoReopen,
-    disableAutoDetach,
-  ]);
-
-  const shortageCurrentFp = useMemo(
-    () =>
-      shortageUiFingerprint({
-        reportedStatus,
-        recoveryStatus,
-        validationFailedStatus,
-        autoBraki,
-        allowContinue,
-        priority,
-        autoReopen,
-        disableAutoDetach,
-      }),
-    [
-      reportedStatus,
-      recoveryStatus,
-      validationFailedStatus,
-      autoBraki,
-      allowContinue,
-      priority,
-      autoReopen,
-      disableAutoDetach,
-    ],
-  );
-
-  const shortageDirty =
-    baselineShortageFp != null && !fatalLoadErr && shortageCurrentFp !== baselineShortageFp;
-
-  useEffect(() => {
-    onDirtyChange?.(shortageDirty);
-  }, [shortageDirty, onDirtyChange]);
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      save: () => onSave(),
-      discard: async () => {
-        await load();
-      },
-    }),
-    [onSave, load],
-  );
-
-  if (warehouseId == null) {
-    return <p className="mt-4 text-sm text-slate-500">Wybierz magazyn w pasku u góry.</p>;
-  }
-
-  return (
-    <div className="space-y-6">
-      {orderUiErr ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">{orderUiErr}</p>
-      ) : null}
-      {fatalLoadErr ? (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-900">{fatalLoadErr}</p>
-      ) : null}
-      {saveErr ? (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-900">{saveErr}</p>
-      ) : null}
-      {saveOk ? (
-        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900" role="status">
-          {saveOk}
-        </p>
-      ) : null}
-
-      {loading || orderUiLoading ? (
-        <p className="text-sm font-medium text-slate-500">Wczytywanie…</p>
-      ) : (
-        <div className={wmsSettingsRowsStackClass}>
-          <WmsControlSettingRow label="Status zamówienia z brakującymi produktami">
-            <OrderUiStatusField
-              panelSummary={orderUiSummary}
-              panelSubgroups={panelSubgroups}
-              selectedStatusId={statusIdFromSettingValue(reportedStatus)}
-              onPick={(id) => setReportedStatus(id != null ? String(id) : "")}
-              allowClear
-              clearLabel="— Bez zmiany statusu"
-              disabled={saving}
-            />
-          </WmsControlSettingRow>
-
-          <CustomCheckbox
-            label="Pokaż zamówienie w zakładce Braki po zgłoszeniu braku"
-            hint="Zamówienie trafi na listę do decyzji / uzupełnienia braków."
-            checked={autoBraki}
-            onChange={setAutoBraki}
-            disabled={saving}
-          />
-
-          <CustomCheckbox
-            label="Pozwól magazynierowi zbierać pozostałe produkty po zgłoszeniu braku"
-            hint="Po zgłoszeniu braku można dalej zbierać inne pozycje z tego zamówienia."
-            checked={allowContinue}
-            onChange={setAllowContinue}
-            disabled={saving}
-          />
-
-          <CustomCheckbox
-            label="Wyłącz auto-odpinanie zamówień z brakami z wózków"
-            hint="Odznaczone = po zakończeniu zbierania zamówienia z brakami są odpinane z wózka. Zaznaczone = zostają na wózku."
-            checked={disableAutoDetach}
-            onChange={setDisableAutoDetach}
-            disabled={saving}
-          />
-
-          <WmsControlSettingRow
-            label="Priorytet po rozwiązaniu problemu"
-            hint="Określa jak szybko zamówienie wróci do realizacji."
-          >
-            <div className="space-y-1">
-              {PRIORITY_OPTIONS.map((o) => (
-                <label key={o.value} className={radioLabelClass}>
-                  <input
-                    type="radio"
-                    className={radioInputClass}
-                    name="shortage-priority"
-                    value={o.value}
-                    checked={priority === o.value}
-                    onChange={() => setPriority(o.value)}
-                    disabled={saving}
-                  />
-                  <span className="text-sm text-slate-800">{o.label}</span>
-                </label>
-              ))}
-            </div>
-          </WmsControlSettingRow>
-
-          <CustomCheckbox
-            label="Po rozwiązaniu problemu pokaż zamówienie ponownie w Zbieraniu"
-            hint="Po podmianie produktu lub cofnięciu braku zamówienie wróci na listę zbierania."
-            checked={autoReopen}
-            onChange={setAutoReopen}
-            disabled={saving}
-          />
-
-          <WmsControlSettingRow
-            label="Status po zebraniu brakujących produktów"
-            hint="Status ustawiany po zebraniu brakujących pozycji."
-          >
-            <OrderUiStatusField
-              panelSummary={orderUiSummary}
-              panelSubgroups={panelSubgroups}
-              selectedStatusId={statusIdFromSettingValue(recoveryStatus)}
-              onPick={(id) => setRecoveryStatus(id != null ? String(id) : "")}
-              allowClear
-              clearLabel="— Jak w ustawieniach Pakowanie (status startu)"
-              disabled={saving}
-            />
-          </WmsControlSettingRow>
-
-          <div className="rounded-xl border border-amber-200/80 bg-amber-50/50 p-4 space-y-2">
-            <h4 className="text-sm font-black uppercase tracking-widest text-amber-950">Walidacja WMS</h4>
-            <p className={fieldHintClass}>
-              Zamówienie, którego nie da się skompletować (brak lokalizacji / stock / blokada), nie wejdzie do Capacity.
-              Bez wybranego statusu — gate działa, ale status panelu nie jest zmieniany.
-            </p>
-            <WmsControlSettingRow label="Status po błędzie walidacji">
-              <OrderUiStatusField
-                panelSummary={orderUiSummary}
-                panelSubgroups={panelSubgroups}
-                selectedStatusId={statusIdFromSettingValue(validationFailedStatus)}
-                onPick={(id) => setValidationFailedStatus(id != null ? String(id) : "")}
-                allowClear
-                clearLabel="— Bez zmiany statusu (tylko gate)"
-                disabled={saving}
-              />
-            </WmsControlSettingRow>
-          </div>
-
-          <p className="text-xs text-slate-500 pt-2 border-t border-slate-200/50">Zapis zmian — przycisk „Zapisz” na dole strony.</p>
-        </div>
-      )}
-    </div>
-  );
-});
 
 type PickingCollectionMethod = "orders" | "products";
 type PickingBatchType = "single" | "multi";
@@ -847,8 +481,9 @@ function mapApiPickingRowToSaved(row: WmsPickingConfigReadApi): SavedPickingConf
     statusToPickName: row.source_status_name?.trim() || `Status #${row.source_status_id}`,
     statusAfterPickId: row.target_status_id,
     statusAfterPickName: row.target_status_name?.trim() || `Status #${row.target_status_id}`,
-    statusOnShortageId: null,
-    statusOnShortageName: null,
+    statusOnShortageId:
+      row.status_on_shortage_id != null && row.status_on_shortage_id > 0 ? row.status_on_shortage_id : null,
+    statusOnShortageName: row.status_on_shortage_name?.trim() || null,
     pickingMode,
     orderSort,
     allOrderSort,
@@ -998,7 +633,8 @@ function savedConfigToReplaceItem(
   return {
     source_status_id: cfg.statusToPickId,
     target_status_id: cfg.statusAfterPickId,
-    status_on_shortage_id: null,
+    status_on_shortage_id:
+      cfg.statusOnShortageId != null && cfg.statusOnShortageId > 0 ? cfg.statusOnShortageId : null,
     single_mode: singleMode,
     multi_mode: multiMode,
     all_mode: allMode,
@@ -2431,8 +2067,14 @@ export function WmsPickingSettingsSections({
       statusToPickName: namePick,
       statusAfterPickId: afterId,
       statusAfterPickName: nameAfter,
-      statusOnShortageId: null,
-      statusOnShortageName: null,
+      statusOnShortageId:
+        editBackup?.statusOnShortageId ??
+        savedConfigs.find((c) => c.statusToPickId === pickId)?.statusOnShortageId ??
+        null,
+      statusOnShortageName:
+        editBackup?.statusOnShortageName ??
+        savedConfigs.find((c) => c.statusToPickId === pickId)?.statusOnShortageName ??
+        null,
       pickingMode: d.pickingMode,
       orderSort: d.orderSort,
       allOrderSort: d.allOrderSort,
@@ -2646,6 +2288,17 @@ export function WmsPickingSettingsSections({
 
   return (
     <>
+      <PickingShortageSettingsProvider
+        ref={shortageRef}
+        tenantId={DAMAGE_TENANT_ID}
+        warehouseId={warehouseId}
+        statusOptionsFlat={statusOptionsFlat}
+        orderUiSummary={orderUiSummary}
+        panelSubgroups={panelSubgroups}
+        orderUiLoading={orderUiLoading}
+        orderUiErr={orderUiErr}
+        onDirtyChange={setShortagePanelDirty}
+      >
       <WmsSettingsTabFrame
         title="Zbieranie"
         sections={WMS_PICKING_SETTINGS_NAV_SECTIONS}
@@ -2910,42 +2563,23 @@ export function WmsPickingSettingsSections({
               onChange={(v) => patchExtended("allowProductsWithoutEan", v)}
             />
           </FieldGridPicking>
+          {warehouseId == null ? (
+            <p className="mt-4 text-sm text-slate-500">Wybierz magazyn w pasku u góry.</p>
+          ) : (
+            <PickingPreAssignValidationFields />
+          )}
         </SectionCardPicking>
 
-        <SectionCardPicking id="wms-pick-shortage" title="Braki przy zbieraniu" summary="Statusy po zgłoszeniu braku, priorytety i dogrywka.">
-          <SubsectionPicking title="Status zamówienia z brakującymi produktami" description="Preferencja lokalna (przeglądarka) — uzupełnienie do ustawień API poniżej.">
-            <WmsControlSettingRow label="Status zamówienia z brakującymi produktami">
-              <OrderUiStatusField
-                panelSummary={orderUiSummary}
-                panelSubgroups={panelSubgroups}
-                selectedStatusId={extended.shortageOrderStatusId}
-                onPick={(id) => patchExtended("shortageOrderStatusId", id)}
-                allowClear
-                clearLabel="— brak —"
-                placeholder="Wybierz status…"
-              />
-            </WmsControlSettingRow>
-          </SubsectionPicking>
-
-          <PickingShortageSettingsPanel
-            ref={shortageRef}
-            tenantId={DAMAGE_TENANT_ID}
-            warehouseId={warehouseId}
-            statusOptionsFlat={statusOptionsFlat}
-            orderUiSummary={orderUiSummary}
-            panelSubgroups={panelSubgroups}
-            orderUiLoading={orderUiLoading}
-            orderUiErr={orderUiErr}
-            onDirtyChange={setShortagePanelDirty}
-          />
-          <SubsectionPicking title="Notatki i ostrzeżenia (UI)">
-            <FieldGridPicking>
-              <CustomCheckbox label="Pokaż wszystkie notatki" checked={extended.showAllNotes} onChange={(v) => patchExtended("showAllNotes", v)} />
-              <CustomCheckbox label="Wyskakujące notatki" checked={extended.notesPopup} onChange={(v) => patchExtended("notesPopup", v)} />
-              <CustomCheckbox label="Pokaż ostrzeżenia" checked={extended.showWarnings} onChange={(v) => patchExtended("showWarnings", v)} />
-              <CustomCheckbox label="Podpowiedzi braków" checked={extended.showMissingProductsHints} onChange={(v) => patchExtended("showMissingProductsHints", v)} />
-            </FieldGridPicking>
-          </SubsectionPicking>
+        <SectionCardPicking
+          id="wms-pick-shortage"
+          title="Braki przy zbieraniu"
+          summary="Statusy i zachowanie zamówienia po zgłoszeniu braku."
+        >
+          {warehouseId == null ? (
+            <p className="mt-4 text-sm text-slate-500">Wybierz magazyn w pasku u góry.</p>
+          ) : (
+            <PickingShortageSettingsFields />
+          )}
         </SectionCardPicking>
 
         <SectionCardPicking id="wms-pick-warehouses" title="Magazyny" summary="Podział pracy i identyfikatory magazynów.">
@@ -3066,6 +2700,7 @@ export function WmsPickingSettingsSections({
           </FieldGridPicking>
         </SectionCardPicking>
       </WmsSettingsTabFrame>
+      </PickingShortageSettingsProvider>
 
       <PickingSettingsModal
         open={draft != null}

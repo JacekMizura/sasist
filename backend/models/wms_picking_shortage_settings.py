@@ -17,12 +17,14 @@ class WmsPickingShortageSettings(Base):
     tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False, index=True)
 
-    #: Status panelu OMS po zgłoszeniu braku w trakcie zbierania (NULL = bez zmiany statusu przy zgłoszeniu).
+    #: Status panelu OMS po zakończeniu zbierania z brakiem (NULL = bez zmiany statusu).
     shortage_reported_order_ui_status_id = Column(Integer, ForeignKey("order_ui_statuses.id", ondelete="SET NULL"), nullable=True)
+    #: Legacy unused by runtime — still persisted; UI no longer exposes.
     auto_enqueue_braki = Column(Boolean, nullable=False, default=True)
     allow_continue_other_lines_after_shortage = Column(Boolean, nullable=False, default=True)
-    #: normal | high | immediate_picking
+    #: Legacy unused by runtime — still persisted; UI no longer exposes. normal | high | immediate_picking
     priority_after_shortage_resolved = Column(String(32), nullable=False, default="high")
+    #: Legacy unused by runtime — still persisted; UI no longer exposes.
     auto_reopen_picking_after_shortage_resolved = Column(Boolean, nullable=False, default=True)
     #: Status OMS po domknięciu dogrywki zbierki (NULL = użyj start_status_id z ustawień pakowania, jeśli jest).
     recovery_completed_order_ui_status_id = Column(Integer, ForeignKey("order_ui_statuses.id", ondelete="SET NULL"), nullable=True)

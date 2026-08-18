@@ -6,9 +6,12 @@ export type WmsPickingShortageSettingsReadApi = {
   tenant_id: number;
   warehouse_id: number;
   shortage_reported_order_ui_status_id: number | null;
+  /** Legacy — persisted only; runtime always creates Braki tasks. */
   auto_enqueue_braki: boolean;
   allow_continue_other_lines_after_shortage: boolean;
+  /** Legacy — persisted only; Braki scoring ignores this. */
   priority_after_shortage_resolved: WmsShortageResolvePriorityApi;
+  /** Legacy — persisted only; resolver drives reopen. */
   auto_reopen_picking_after_shortage_resolved: boolean;
   recovery_completed_order_ui_status_id: number | null;
   wms_validation_failed_order_ui_status_id?: number | null;

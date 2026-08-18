@@ -14,20 +14,23 @@ class WmsPickingShortageSettingsRead(BaseModel):
     warehouse_id: int
     shortage_reported_order_ui_status_id: Optional[int] = Field(
         default=None,
-        description="Status OMS po zgłoszeniu braku podczas zbierania (null = nie zmieniaj przy zgłoszeniu).",
+        description="Status panelu po zakończeniu zbierania z brakiem (null = bez zmiany statusu).",
     )
-    auto_enqueue_braki: bool = Field(default=True, description="Automatycznie umieść zamówienie w kolejce Braki (Order Issues).")
+    auto_enqueue_braki: bool = Field(
+        default=True,
+        description="Legacy — persisted only; runtime always enqueues Braki tasks.",
+    )
     allow_continue_other_lines_after_shortage: bool = Field(
         default=True,
         description="Picker może kontynuować inne linie po zgłoszeniu braku na jednej.",
     )
     priority_after_shortage_resolved: ShortageResolvePriority = Field(
         default="high",
-        description="Priorytet po rozwiązaniu problemu (sortowanie kolejek).",
+        description="Legacy — persisted only; Braki scoring ignores this field.",
     )
     auto_reopen_picking_after_shortage_resolved: bool = Field(
         default=True,
-        description="Po rozwiązaniu problemu pokaż zamówienie ponownie w zbieraniu.",
+        description="Legacy — persisted only; recovery reopen is resolver-driven.",
     )
     recovery_completed_order_ui_status_id: Optional[int] = Field(
         default=None,

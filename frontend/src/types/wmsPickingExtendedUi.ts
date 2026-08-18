@@ -13,7 +13,6 @@ export type WmsPickingExtendedUiSettings = {
   showLocation: boolean;
   showCourierBadge: boolean;
 
-  shortageOrderStatusId: number | null;
   separateDirectSalesOrders: boolean;
   allowPickInsidePackingMode: boolean;
 
@@ -22,7 +21,6 @@ export type WmsPickingExtendedUiSettings = {
   disableForceLocationScanWhenManyLocations: boolean;
   allowReserveLocationPicking: boolean;
   allowProductsWithoutEan: boolean;
-  disableAutoDetachMissingOrdersFromCarts: boolean;
 
   sortOrdersByCourier: boolean;
   prioritizeExpressOrders: boolean;
@@ -39,11 +37,6 @@ export type WmsPickingExtendedUiSettings = {
   autoMoveToPackingStatus: boolean;
   autoPrintTransferLabels: boolean;
 
-  showAllNotes: boolean;
-  notesPopup: boolean;
-  showWarnings: boolean;
-  showMissingProductsHints: boolean;
-
   supplierAvailabilityCheck: boolean;
   legacyMode: boolean;
   debugMode: boolean;
@@ -59,7 +52,6 @@ export const DEFAULT_WMS_PICKING_EXTENDED_UI: WmsPickingExtendedUiSettings = {
   showLocation: true,
   showCourierBadge: true,
 
-  shortageOrderStatusId: null,
   separateDirectSalesOrders: false,
   allowPickInsidePackingMode: false,
 
@@ -68,7 +60,6 @@ export const DEFAULT_WMS_PICKING_EXTENDED_UI: WmsPickingExtendedUiSettings = {
   disableForceLocationScanWhenManyLocations: false,
   allowReserveLocationPicking: false,
   allowProductsWithoutEan: false,
-  disableAutoDetachMissingOrdersFromCarts: false,
 
   sortOrdersByCourier: false,
   prioritizeExpressOrders: true,
@@ -84,11 +75,6 @@ export const DEFAULT_WMS_PICKING_EXTENDED_UI: WmsPickingExtendedUiSettings = {
   autoMarkPickedLines: false,
   autoMoveToPackingStatus: false,
   autoPrintTransferLabels: false,
-
-  showAllNotes: true,
-  notesPopup: false,
-  showWarnings: true,
-  showMissingProductsHints: true,
 
   supplierAvailabilityCheck: false,
   legacyMode: false,
@@ -128,6 +114,16 @@ const DEAD_METHODS_CACHE_KEYS = [
   "autoSuggestRoute",
 ] as const;
 
+/** Dead Braki / notes UI keys — SSOT is wms_picking_shortage_settings or packing notes. */
+const DEAD_SHORTAGE_UI_CACHE_KEYS = [
+  "shortageOrderStatusId",
+  "disableAutoDetachMissingOrdersFromCarts",
+  "showAllNotes",
+  "notesPopup",
+  "showWarnings",
+  "showMissingProductsHints",
+] as const;
+
 function omitNonUiCacheFields(
   data: Partial<WmsPickingExtendedUiSettings> & Record<string, unknown>,
 ): Partial<WmsPickingExtendedUiSettings> {
@@ -141,11 +137,15 @@ function omitNonUiCacheFields(
   for (const key of DEAD_METHODS_CACHE_KEYS) {
     delete next[key];
   }
+  for (const key of DEAD_SHORTAGE_UI_CACHE_KEYS) {
+    delete next[key];
+  }
   return next;
 }
 
 export const PICKING_DEAD_QUEUE_CACHE_KEYS = DEAD_QUEUE_CACHE_KEYS;
 export const PICKING_DEAD_METHODS_CACHE_KEYS = DEAD_METHODS_CACHE_KEYS;
+export const PICKING_DEAD_SHORTAGE_UI_CACHE_KEYS = DEAD_SHORTAGE_UI_CACHE_KEYS;
 
 export function loadWmsPickingExtendedUi(warehouseId: number): WmsPickingExtendedUiSettings {
   try {

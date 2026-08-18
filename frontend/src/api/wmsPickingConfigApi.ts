@@ -38,6 +38,7 @@ export type WmsPickingConfigReadApi = {
   created_at: string;
   source_status_name?: string | null;
   target_status_name?: string | null;
+  status_on_shortage_name?: string | null;
   status_after_production_name?: string | null;
   status_on_component_shortage_name?: string | null;
   finished_goods_buffer_location_name?: string | null;

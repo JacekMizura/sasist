@@ -42,14 +42,14 @@ export const WMS_PICKING_SETTINGS_NAV_SECTIONS: WmsSettingsSectionConfig[] = [
     label: "Walidacja zbierania",
     icon: ScanLine,
     iconClassName: "bg-cyan-50 text-cyan-700",
-    searchText: "skan walidacja ean lokalizacja",
+    searchText: "skan walidacja ean lokalizacja przydział",
   },
   {
     id: "wms-pick-shortage",
     label: "Braki",
     icon: TriangleAlert,
     iconClassName: "bg-rose-50 text-rose-600",
-    searchText: "braki dogrywka",
+    searchText: "braki status wózek",
   },
   {
     id: "wms-pick-warehouses",
