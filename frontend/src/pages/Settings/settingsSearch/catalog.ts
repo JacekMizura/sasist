@@ -353,13 +353,6 @@ export const WMS_SETTINGS_SEARCH_CATALOG: WmsSettingsSearchEntry[] = [
     sectionLabel: "Braki",
   }),
   e({
-    id: "picking.split_work_between_warehouses",
-    label: "Rozdziel pracę między magazynami",
-    tabId: "picking",
-    sectionId: "wms-pick-warehouses",
-    sectionLabel: "Magazyny",
-  }),
-  e({
     id: "picking.auto_start_next_order",
     label: "Auto: następne zamówienie",
     tabId: "picking",

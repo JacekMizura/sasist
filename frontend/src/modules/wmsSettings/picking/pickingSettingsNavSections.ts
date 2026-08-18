@@ -6,7 +6,6 @@ import {
   Sparkles,
   Tablet,
   TriangleAlert,
-  Warehouse,
 } from "lucide-react";
 
 import type { WmsSettingsSectionConfig } from "../../../pages/Settings/wmsSettingsSectionConfig";
@@ -50,12 +49,6 @@ export const WMS_PICKING_SETTINGS_NAV_SECTIONS: WmsSettingsSectionConfig[] = [
     icon: TriangleAlert,
     iconClassName: "bg-rose-50 text-rose-600",
     searchText: "braki status wózek",
-  },
-  {
-    id: "wms-pick-warehouses",
-    label: "Magazyny",
-    icon: Warehouse,
-    iconClassName: "bg-emerald-50 text-emerald-600",
   },
   {
     id: "wms-pick-automation",

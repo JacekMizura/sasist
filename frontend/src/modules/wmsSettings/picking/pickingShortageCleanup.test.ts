@@ -28,9 +28,9 @@ describe("Braki przy zbieraniu cleanup", () => {
 
   const scanIdx = panel.indexOf('id="wms-pick-scan"');
   const shortageIdx = panel.indexOf('id="wms-pick-shortage"');
-  const warehousesIdx = panel.indexOf('id="wms-pick-warehouses"');
+  const automationIdx = panel.indexOf('id="wms-pick-automation"');
   const scanBlock = panel.slice(scanIdx, shortageIdx);
-  const shortageBlock = panel.slice(shortageIdx, warehousesIdx);
+  const shortageBlock = panel.slice(shortageIdx, automationIdx);
 
   it("A) shortageOrderStatusId is gone from UI/type", () => {
     expect(types).not.toMatch(/shortageOrderStatusId:/);

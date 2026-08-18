@@ -7,6 +7,7 @@ import {
   PICKING_DEAD_METHODS_CACHE_KEYS,
   PICKING_DEAD_QUEUE_CACHE_KEYS,
   PICKING_DEAD_SHORTAGE_UI_CACHE_KEYS,
+  PICKING_DEAD_WAREHOUSES_CACHE_KEYS,
   saveWmsPickingExtendedUi,
   storageKeyWmsPickingExtendedUi,
 } from "./wmsPickingExtendedUi";
@@ -186,5 +187,39 @@ describe("wms-picking-extended-ui localStorage vs list_display", () => {
     expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("notesPopup");
     expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("showWarnings");
     expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("showMissingProductsHints");
+  });
+
+  it("strips dead Magazyny keys from cache and defaults", () => {
+    localStorage.setItem(
+      storageKeyWmsPickingExtendedUi(WH),
+      JSON.stringify({
+        ...DEFAULT_WMS_PICKING_EXTENDED_UI,
+        splitWorkBetweenWarehouses: true,
+        ignoreLocationStockLevels: true,
+        zonePickingEnabled: true,
+        mainPickingWarehouse: "WH-1",
+        fallbackWarehouse: "WH-2",
+        autoOpenScanner: false,
+      }),
+    );
+    const loaded = loadWmsPickingExtendedUi(WH);
+    for (const key of PICKING_DEAD_WAREHOUSES_CACHE_KEYS) {
+      expect(loaded).not.toHaveProperty(key);
+    }
+    expect(loaded.autoOpenScanner).toBe(false);
+
+    saveWmsPickingExtendedUi(WH, loaded);
+    const raw = JSON.parse(localStorage.getItem(storageKeyWmsPickingExtendedUi(WH)) ?? "{}") as Record<
+      string,
+      unknown
+    >;
+    for (const key of PICKING_DEAD_WAREHOUSES_CACHE_KEYS) {
+      expect(raw).not.toHaveProperty(key);
+    }
+    expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("splitWorkBetweenWarehouses");
+    expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("ignoreLocationStockLevels");
+    expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("zonePickingEnabled");
+    expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("mainPickingWarehouse");
+    expect(DEFAULT_WMS_PICKING_EXTENDED_UI).not.toHaveProperty("fallbackWarehouse");
   });
 });

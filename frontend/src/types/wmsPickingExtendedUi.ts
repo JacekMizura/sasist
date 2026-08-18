@@ -25,12 +25,6 @@ export type WmsPickingExtendedUiSettings = {
   sortOrdersByCourier: boolean;
   prioritizeExpressOrders: boolean;
 
-  splitWorkBetweenWarehouses: boolean;
-  ignoreLocationStockLevels: boolean;
-  mainPickingWarehouse: string;
-  fallbackWarehouse: string;
-  zonePickingEnabled: boolean;
-
   autoStartNextOrder: boolean;
   autoOpenScanner: boolean;
   autoMarkPickedLines: boolean;
@@ -63,12 +57,6 @@ export const DEFAULT_WMS_PICKING_EXTENDED_UI: WmsPickingExtendedUiSettings = {
 
   sortOrdersByCourier: false,
   prioritizeExpressOrders: true,
-
-  splitWorkBetweenWarehouses: false,
-  ignoreLocationStockLevels: false,
-  mainPickingWarehouse: "",
-  fallbackWarehouse: "",
-  zonePickingEnabled: false,
 
   autoStartNextOrder: false,
   autoOpenScanner: true,
@@ -124,6 +112,15 @@ const DEAD_SHORTAGE_UI_CACHE_KEYS = [
   "showMissingProductsHints",
 ] as const;
 
+/** Dead „Magazyny” keys — SSOT is WarehouseContext + warehouse-scoped picking runtime. */
+const DEAD_WAREHOUSES_CACHE_KEYS = [
+  "splitWorkBetweenWarehouses",
+  "ignoreLocationStockLevels",
+  "zonePickingEnabled",
+  "mainPickingWarehouse",
+  "fallbackWarehouse",
+] as const;
+
 function omitNonUiCacheFields(
   data: Partial<WmsPickingExtendedUiSettings> & Record<string, unknown>,
 ): Partial<WmsPickingExtendedUiSettings> {
@@ -140,12 +137,16 @@ function omitNonUiCacheFields(
   for (const key of DEAD_SHORTAGE_UI_CACHE_KEYS) {
     delete next[key];
   }
+  for (const key of DEAD_WAREHOUSES_CACHE_KEYS) {
+    delete next[key];
+  }
   return next;
 }
 
 export const PICKING_DEAD_QUEUE_CACHE_KEYS = DEAD_QUEUE_CACHE_KEYS;
 export const PICKING_DEAD_METHODS_CACHE_KEYS = DEAD_METHODS_CACHE_KEYS;
 export const PICKING_DEAD_SHORTAGE_UI_CACHE_KEYS = DEAD_SHORTAGE_UI_CACHE_KEYS;
+export const PICKING_DEAD_WAREHOUSES_CACHE_KEYS = DEAD_WAREHOUSES_CACHE_KEYS;
 
 export function loadWmsPickingExtendedUi(warehouseId: number): WmsPickingExtendedUiSettings {
   try {

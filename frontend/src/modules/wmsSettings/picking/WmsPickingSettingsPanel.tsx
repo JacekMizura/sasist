@@ -53,7 +53,6 @@ import {
   WmsBoolSettingRow,
   WmsControlSettingRow,
   wmsSettingControlInputClass,
-  wmsSettingControlSelectClass,
   wmsSettingsRowsStackClass,
 } from "../../../pages/Settings/wmsSettingsUi";
 import { OrderUiStatusField } from "../../../components/orders/OrderUiStatusField";
@@ -153,7 +152,6 @@ const radioLabelClass =
   "flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-3 py-2 hover:bg-slate-50 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-500/30";
 const radioInputClass = "h-4 w-4 shrink-0 border-slate-300 text-blue-600 focus:ring-blue-500 bg-white cursor-pointer";
 
-const textInputClassPicking = wmsSettingControlSelectClass;
 const numberInputClass = wmsSettingControlInputClass;
 const fieldHintClass = "mt-1.5 text-xs leading-relaxed text-slate-500";
 const configBlockTitleClass = "text-sm font-semibold text-slate-900";
@@ -2580,38 +2578,6 @@ export function WmsPickingSettingsSections({
           ) : (
             <PickingShortageSettingsFields />
           )}
-        </SectionCardPicking>
-
-        <SectionCardPicking id="wms-pick-warehouses" title="Magazyny" summary="Podział pracy i identyfikatory magazynów.">
-          <FieldGridPicking>
-            <CustomCheckbox
-              label="Rozdziel pracę między magazynami"
-              checked={extended.splitWorkBetweenWarehouses}
-              onChange={(v) => patchExtended("splitWorkBetweenWarehouses", v)}
-            />
-            <CustomCheckbox
-              label="Ignoruj stany magazynowe lokalizacji"
-              checked={extended.ignoreLocationStockLevels}
-              onChange={(v) => patchExtended("ignoreLocationStockLevels", v)}
-            />
-            <CustomCheckbox label="Zbieranie strefowe" checked={extended.zonePickingEnabled} onChange={(v) => patchExtended("zonePickingEnabled", v)} />
-            <WmsControlSettingRow asLabel label="Główny magazyn zbierania">
-              <input
-                className={textInputClassPicking}
-                value={extended.mainPickingWarehouse}
-                onChange={(e) => patchExtended("mainPickingWarehouse", e.target.value)}
-                placeholder="ID lub nazwa"
-              />
-            </WmsControlSettingRow>
-            <WmsControlSettingRow asLabel label="Magazyn zapasowy">
-              <input
-                className={textInputClassPicking}
-                value={extended.fallbackWarehouse}
-                onChange={(e) => patchExtended("fallbackWarehouse", e.target.value)}
-                placeholder="ID lub nazwa"
-              />
-            </WmsControlSettingRow>
-          </FieldGridPicking>
         </SectionCardPicking>
 
         <SectionCardPicking id="wms-pick-automation" title="Automatyzacja" summary="Automatyczne akcje podczas i po zbieraniu.">
