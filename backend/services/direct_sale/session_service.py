@@ -26,6 +26,9 @@ def create_session(
     reservation_scope: str = "SESSION",
 ) -> DirectSaleSession:
     now = datetime.utcnow()
+    from .enable_gate import assert_direct_sales_business_enabled
+
+    assert_direct_sales_business_enabled(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
     default_doc = "RECEIPT"
     try:
         settings = resolve_direct_sales_settings(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))

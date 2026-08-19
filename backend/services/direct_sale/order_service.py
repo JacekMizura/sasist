@@ -172,6 +172,7 @@ def create_order_from_session(
         db,
         order,
         configured_status_id=panel_status_id,
+        operator_user_id=int(sess.operator_user_id) if getattr(sess, "operator_user_id", None) else None,
     )
     db.flush()
 

@@ -9,11 +9,12 @@ import {
 } from "../../modules/directSales/settings/directSalesSettingsCache";
 import { getDirectSalesSettings } from "../../modules/wmsSettings/directSales/api/directSalesSettingsApi";
 import {
+  mergeTerminalEnableMeta,
   normalizeDirectSalesSettings,
-  type DirectSalesSettingsConfig,
+  type ResolvedDirectSalesTerminalSettings,
 } from "../../modules/wmsSettings/directSales/schemas/directSalesSettingsSchema";
 
-export type { DirectSalesSettingsConfig as ResolvedDirectSalesSettings } from "../../modules/wmsSettings/directSales/schemas/directSalesSettingsSchema";
+export type { ResolvedDirectSalesTerminalSettings as ResolvedDirectSalesSettings } from "../../modules/wmsSettings/directSales/schemas/directSalesSettingsSchema";
 
 const STALE_MS = 5 * 60 * 1000;
 
@@ -22,7 +23,7 @@ const STALE_MS = 5 * 60 * 1000;
  */
 export function useDirectSalesResolvedSettings(warehouseId: number | null) {
   const tenantId = DAMAGE_TENANT_ID;
-  const [resolvedDirectSalesSettings, setResolvedDirectSalesSettings] = useState<DirectSalesSettingsConfig>(
+  const [resolvedDirectSalesSettings, setResolvedDirectSalesSettings] = useState<ResolvedDirectSalesTerminalSettings>(
     () => (warehouseId != null ? cachedOrDefaultSettings(tenantId, warehouseId) : cachedOrDefaultSettings(tenantId, 0)),
   );
   const [refreshing, setRefreshing] = useState(false);
@@ -30,7 +31,7 @@ export function useDirectSalesResolvedSettings(warehouseId: number | null) {
   const lastFetchRef = useRef(0);
 
   const applyFromApi = useCallback((read: Awaited<ReturnType<typeof getDirectSalesSettings>>) => {
-    const normalized = normalizeDirectSalesSettings(read.resolved);
+    const normalized = mergeTerminalEnableMeta(normalizeDirectSalesSettings(read.resolved), read);
     setResolvedDirectSalesSettings(normalized);
     writeCachedDirectSalesSettings(read);
     setError(null);
@@ -54,7 +55,6 @@ export function useDirectSalesResolvedSettings(warehouseId: number | null) {
           e && typeof e === "object" && "response" in e
             ? (e as { response?: { status?: number } }).response?.status
             : undefined;
-        // Never silently keep defaults when auth failed — surface 401/403.
         if (status === 401 || status === 403 || !cached) {
           setError(
             status === 401 || status === 403

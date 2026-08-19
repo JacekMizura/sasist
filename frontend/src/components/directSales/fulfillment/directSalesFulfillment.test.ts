@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { formatDirectSalesAggregateTotal } from "../../../modules/directSales/settings/formatDirectSalesPrice";
 import {
   DS_PAYMENT_METHODS_V2_KEY,
+  mergeTerminalEnableMeta,
   normalizeDirectSalesSettings,
 } from "../../../modules/wmsSettings/directSales/schemas/directSalesSettingsSchema";
 import { normalizeDirectSaleFulfillment } from "../../../utils/normalizeDirectSales";
@@ -49,11 +50,34 @@ describe("direct sales UX helpers", () => {
     expect(cfg.payment_methods.transfer).toBe(true);
   });
 
-  it("keeps intentional transfer=false after payment_methods_v2", () => {
-    const cfg = normalizeDirectSalesSettings({
-      payment_methods: { cash: true, card: true, blik: true, transfer: false, mixed: false },
-      extensions: { [DS_PAYMENT_METHODS_V2_KEY]: true },
-    });
-    expect(cfg.payment_methods.transfer).toBe(false);
+  it("strips dead workflow status ids so they cannot dirty the form", () => {
+    const cfg = normalizeDirectSalesSettings(
+      {
+        default_order_status_id: 12,
+        session_created_order_status_id: 1,
+        paid_order_status_id: 2,
+        issued_order_status_id: 3,
+        cancelled_order_status_id: 4,
+      },
+      [{ id: 12, name: "Zakończone", main_group: "DONE" }],
+    );
+    expect(cfg.default_order_status_id).toBe(12);
+    expect(cfg).not.toHaveProperty("session_created_order_status_id");
+    expect(cfg).not.toHaveProperty("paid_order_status_id");
+    expect(cfg).not.toHaveProperty("issued_order_status_id");
+    expect(cfg).not.toHaveProperty("cancelled_order_status_id");
+  });
+
+  it("mergeTerminalEnableMeta applies legacy fail-open effective enabled", () => {
+    const cfg = mergeTerminalEnableMeta({ enabled: false }, { enabled_effective: true, enabled_enforced: false });
+    expect(cfg.enabled).toBe(false);
+    expect(cfg.enabled_effective).toBe(true);
+    expect(cfg.enabled_enforced).toBe(false);
+  });
+
+  it("mergeTerminalEnableMeta reflects stamped enforced off", () => {
+    const cfg = mergeTerminalEnableMeta({ enabled: false }, { enabled_effective: false, enabled_enforced: true });
+    expect(cfg.enabled_effective).toBe(false);
+    expect(cfg.enabled_enforced).toBe(true);
   });
 });

@@ -33,13 +33,8 @@ class DirectSalesPaymentMethods(BaseModel):
 
 class DirectSalesSettingsConfig(BaseModel):
     enabled: bool = False
-    #: Panel status assigned after sale complete (``order_ui_statuses.id``).
+    #: Panel status assigned when the sale order is created at complete (``order_ui_statuses.id``).
     default_order_status_id: Optional[int] = Field(None, ge=1)
-    #: Optional workflow hooks for future operational automation.
-    session_created_order_status_id: Optional[int] = Field(None, ge=1)
-    paid_order_status_id: Optional[int] = Field(None, ge=1)
-    issued_order_status_id: Optional[int] = Field(None, ge=1)
-    cancelled_order_status_id: Optional[int] = Field(None, ge=1)
     default_document_type: DocumentTypeDefault = "PA"
     auto_start_new_session: bool = True
     payment_methods: DirectSalesPaymentMethods = Field(default_factory=DirectSalesPaymentMethods)
@@ -77,6 +72,10 @@ class DirectSalesSettingsRead(BaseModel):
     tenant_defaults: DirectSalesSettingsConfig
     warehouse_overrides: DirectSalesSettingsConfig | None = None
     has_warehouse_override: bool = False
+    #: Effective business ON/OFF for terminal / new-work gate (legacy fail-open when unstamped).
+    enabled_effective: bool = True
+    #: True once ``extensions.ds_enabled_v1`` governs this scope — checkbox is binding.
+    enabled_enforced: bool = False
     settings_version: str = ""
     updated_at: Optional[str] = None
 

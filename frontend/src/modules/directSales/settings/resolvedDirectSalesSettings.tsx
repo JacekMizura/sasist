@@ -1,12 +1,11 @@
-import { createContext, useContext, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { createContext, useContext } from "react";
 
-import {
-  DEFAULT_DIRECT_SALES_SETTINGS,
-  type DirectSalesSettingsConfig,
-} from "../../wmsSettings/directSales/schemas/directSalesSettingsSchema";
+import type { ResolvedDirectSalesTerminalSettings } from "../../wmsSettings/directSales/schemas/directSalesSettingsSchema";
+import { DEFAULT_TERMINAL_DIRECT_SALES_SETTINGS } from "../../wmsSettings/directSales/schemas/directSalesSettingsSchema";
 
 /** Resolved direct-sales business config — single source of truth for the operator terminal. */
-export type ResolvedDirectSalesSettings = DirectSalesSettingsConfig;
+export type ResolvedDirectSalesSettings = ResolvedDirectSalesTerminalSettings;
 
 const ResolvedDirectSalesSettingsContext = createContext<ResolvedDirectSalesSettings | null>(null);
 
@@ -35,5 +34,5 @@ export function useResolvedDirectSalesSettings(): ResolvedDirectSalesSettings {
 /** Safe accessor for tests/storybook — falls back to schema defaults when provider is absent. */
 export function useResolvedDirectSalesSettingsOrDefault(): ResolvedDirectSalesSettings {
   const ctx = useContext(ResolvedDirectSalesSettingsContext);
-  return ctx ?? DEFAULT_DIRECT_SALES_SETTINGS;
+  return ctx ?? DEFAULT_TERMINAL_DIRECT_SALES_SETTINGS;
 }

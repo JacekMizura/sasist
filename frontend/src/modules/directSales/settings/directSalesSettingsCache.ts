@@ -1,8 +1,11 @@
 import {
   DEFAULT_DIRECT_SALES_SETTINGS,
+  DEFAULT_TERMINAL_DIRECT_SALES_SETTINGS,
+  mergeTerminalEnableMeta,
   normalizeDirectSalesSettings,
   type DirectSalesSettingsConfig,
   type DirectSalesSettingsRead,
+  type ResolvedDirectSalesTerminalSettings,
 } from "../../wmsSettings/directSales/schemas/directSalesSettingsSchema";
 
 const CACHE_PREFIX = "direct_sales_settings_v2";
@@ -12,7 +15,7 @@ export type CachedDirectSalesSettings = {
   warehouseId: number;
   settingsVersion: string;
   updatedAt: string | null;
-  resolved: DirectSalesSettingsConfig;
+  resolved: ResolvedDirectSalesTerminalSettings;
   cachedAt: string;
 };
 
@@ -38,7 +41,7 @@ export function readCachedDirectSalesSettings(
     }
     return {
       ...parsed,
-      resolved: normalizeDirectSalesSettings(parsed.resolved),
+      resolved: mergeTerminalEnableMeta(normalizeDirectSalesSettings(parsed.resolved), parsed.resolved),
     };
   } catch {
     return null;
@@ -53,7 +56,7 @@ export function writeCachedDirectSalesSettings(read: DirectSalesSettingsRead): v
     warehouseId: read.warehouse_id,
     settingsVersion: version,
     updatedAt: read.updated_at ?? null,
-    resolved: normalizeDirectSalesSettings(read.resolved),
+    resolved: mergeTerminalEnableMeta(normalizeDirectSalesSettings(read.resolved), read),
     cachedAt: new Date().toISOString(),
   };
   try {
@@ -66,8 +69,8 @@ export function writeCachedDirectSalesSettings(read: DirectSalesSettingsRead): v
 export function cachedOrDefaultSettings(
   tenantId: number,
   warehouseId: number,
-): DirectSalesSettingsConfig {
-  return readCachedDirectSalesSettings(tenantId, warehouseId)?.resolved ?? DEFAULT_DIRECT_SALES_SETTINGS;
+): ResolvedDirectSalesTerminalSettings {
+  return readCachedDirectSalesSettings(tenantId, warehouseId)?.resolved ?? DEFAULT_TERMINAL_DIRECT_SALES_SETTINGS;
 }
 
 export function shouldRefreshCachedSettings(

@@ -23,6 +23,7 @@ export function useDirectSalesSettings(tenantId: number, warehouseId: number | n
   const [statusOptions, setStatusOptions] = useState<OrderStatusOption[]>([]);
   const [panelSummary, setPanelSummary] = useState<OrderUiStatusPanelSummary | null>(null);
   const [panelSubgroups, setPanelSubgroups] = useState<OrderUiPanelSubgroupRead[]>([]);
+  const [enabledEnforced, setEnabledEnforced] = useState(false);
 
   const load = useCallback(async () => {
     if (warehouseId == null) return;
@@ -39,6 +40,7 @@ export function useDirectSalesSettings(tenantId: number, warehouseId: number | n
       setPanelSummary(summary);
       setPanelSubgroups(subgroups);
       setHasWarehouseOverride(data.has_warehouse_override);
+      setEnabledEnforced(Boolean(data.enabled_enforced));
       const base = scope === "tenant" ? data.tenant_defaults : data.resolved;
       const normalized = normalizeDirectSalesSettings(base, statuses);
       setDraft(normalized);
@@ -80,6 +82,7 @@ export function useDirectSalesSettings(tenantId: number, warehouseId: number | n
     setDraft(normalized);
     setSavedScopeSnapshot(fingerprint(normalized));
     setHasWarehouseOverride(data.has_warehouse_override);
+    setEnabledEnforced(Boolean(data.enabled_enforced));
     if (warehouseId != null && scope === "warehouse") {
       writeCachedDirectSalesSettings(data);
     }
@@ -107,6 +110,7 @@ export function useDirectSalesSettings(tenantId: number, warehouseId: number | n
     statusOptions,
     panelSummary,
     panelSubgroups,
+    enabledEnforced,
     reload: load,
   };
 }

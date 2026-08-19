@@ -41,7 +41,12 @@ export type DocumentSubtype = "RECEIPT" | "INVOICE";
 type Args = {
   warehouseId: number | null;
   onProductAdded: (productId: number) => void;
+  /** Feature flag ON — terminal may mount and finish inflight work. */
   enabled?: boolean;
+  /** May create a brand-new session (blocked when stamped OFF). */
+  allowNewSession?: boolean;
+  /** Stamped OFF — block scan/add/search and qty increases. */
+  expansionBlocked?: boolean;
   onSuspended?: () => void;
 };
 
@@ -57,6 +62,8 @@ export function useDirectSalesSession({
   warehouseId,
   onProductAdded,
   enabled = true,
+  allowNewSession = true,
+  expansionBlocked = false,
   onSuspended,
 }: Args) {
   const resolvedDirectSalesSettings = useResolvedDirectSalesSettings();
@@ -128,6 +135,7 @@ export function useDirectSalesSession({
   const ensureSession = useCallback(async () => {
     if (session?.status === "ACTIVE" || session?.status === "CHECKOUT") return session;
     if (session || warehouseId == null) return session;
+    if (!allowNewSession) return null;
     const created = await createDirectSaleSession({
       tenantId: DAMAGE_TENANT_ID,
       warehouseId,
@@ -135,10 +143,10 @@ export function useDirectSalesSession({
     });
     setSession(created);
     return created;
-  }, [session, warehouseId, issueStrategy]);
+  }, [session, warehouseId, issueStrategy, allowNewSession]);
 
   const startNewSession = useCallback(async () => {
-    if (warehouseId == null) return null;
+    if (warehouseId == null || !allowNewSession) return null;
     setLastComplete(null);
     setCompletionView(null);
     setCompleteError(null);
@@ -150,7 +158,7 @@ export function useDirectSalesSession({
     });
     setSession(created);
     return created;
-  }, [warehouseId, issueStrategy]);
+  }, [warehouseId, issueStrategy, allowNewSession]);
 
   const refreshCompletion = useCallback(async (sessionId: number) => {
     const scope = apiScope();
@@ -220,12 +228,13 @@ export function useDirectSalesSession({
     }
     if (initRef.current) return;
     initRef.current = true;
+    if (!allowNewSession) return;
     void ensureSession().catch((e) => {
       handleOperationalApiError(e, OPERATIONAL_ENDPOINTS.DIRECT_SALES_SESSION);
       setUnavailable(true);
       setError(null);
     });
-  }, [enabled, warehouseId, ensureSession]);
+  }, [enabled, allowNewSession, warehouseId, ensureSession]);
 
   const addByCode = useCallback(
     async (raw: string, sourceLocationId?: number | null) => {
@@ -319,8 +328,8 @@ export function useDirectSalesSession({
   );
 
   useWmsPageScanHandler(
-    enabled && warehouseId != null && !unavailable ? handleScan : null,
-    enabled && warehouseId != null && !unavailable,
+    enabled && warehouseId != null && !unavailable && !expansionBlocked ? handleScan : null,
+    enabled && warehouseId != null && !unavailable && !expansionBlocked,
   );
   const changeLineQty = useCallback(
     async (lineId: number, quantity: number) => {

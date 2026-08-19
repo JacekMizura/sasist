@@ -28,6 +28,9 @@ def search_direct_sale_products(
     if len(q) < 1:
         return []
     _assert_warehouse_for_tenant(db, tenant_id, warehouse_id)
+    from .enable_gate import assert_direct_sales_business_enabled
+
+    assert_direct_sales_business_enabled(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
     try:
         ds_cfg = resolve_direct_sales_settings(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)).resolved
         prefer_store_locations = bool(ds_cfg.prefer_store_locations)

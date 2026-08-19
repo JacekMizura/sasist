@@ -21,6 +21,7 @@ type Props = {
   warehouseId: number;
   busy: boolean;
   removing?: boolean;
+  expansionBlocked?: boolean;
   onQtyChange: (lineId: number, qty: number) => void;
   onLocationChange: (lineId: number, locationId: number | null) => void;
   onRemove: (lineId: number) => void;
@@ -48,6 +49,7 @@ export function SessionLineCard({
   warehouseId,
   busy,
   removing = false,
+  expansionBlocked = false,
   onQtyChange,
   onLocationChange,
   onRemove,
@@ -92,8 +94,12 @@ export function SessionLineCard({
       setQtyDraft(String(line.quantity));
       return;
     }
+    if (expansionBlocked && n > line.quantity) {
+      setQtyDraft(String(line.quantity));
+      return;
+    }
     onQtyChange(line.id, n);
-  }, [qtyDraft, line.id, line.quantity, onQtyChange]);
+  }, [qtyDraft, expansionBlocked, line.id, line.quantity, onQtyChange]);
 
   const unitLabel = formatDirectSalesUnitPrice(
     line.unit_price,
@@ -224,7 +230,7 @@ export function SessionLineCard({
           />
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || expansionBlocked}
             onClick={() => onQtyChange(line.id, line.quantity + 1)}
             className="w-12 h-12 rounded-2xl border border-slate-100 text-blue-600 hover:bg-slate-50 flex justify-center items-center transition-all disabled:opacity-50"
           >

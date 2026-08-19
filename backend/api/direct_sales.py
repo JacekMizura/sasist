@@ -320,19 +320,23 @@ def post_create_session(
     db: Session = Depends(get_db),
     user: AppUser = Depends(get_current_user),
 ):
-    sess = create_session(
-        db,
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        operator_user_id=_operator_id(user),
-        workstation_id=body.workstation_id,
-        operational_zone_id=body.operational_zone_id,
-        issue_strategy=body.issue_strategy,
-        reservation_scope=body.reservation_scope,
-    )
-    db.commit()
-    db.refresh(sess)
-    return _session_to_read(db, sess)
+    try:
+        sess = create_session(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            operator_user_id=_operator_id(user),
+            workstation_id=body.workstation_id,
+            operational_zone_id=body.operational_zone_id,
+            issue_strategy=body.issue_strategy,
+            reservation_scope=body.reservation_scope,
+        )
+        db.commit()
+        db.refresh(sess)
+        return _session_to_read(db, sess)
+    except DirectSaleError as exc:
+        db.rollback()
+        _raise_direct_sale_http(exc)
 
 
 @router.get("/products/search", response_model=list[DirectSaleProductSearchHit])
@@ -343,14 +347,17 @@ def get_direct_sale_product_search(
     limit: int = Query(12, ge=1, le=24),
     db: Session = Depends(get_db),
 ):
-    rows = search_direct_sale_products(
-        db,
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        query=q,
-        limit=limit,
-    )
-    return [DirectSaleProductSearchHit(**row) for row in rows]
+    try:
+        rows = search_direct_sale_products(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            query=q,
+            limit=limit,
+        )
+        return [DirectSaleProductSearchHit(**row) for row in rows]
+    except DirectSaleError as exc:
+        _raise_direct_sale_http(exc)
 
 
 @router.get("/history", response_model=list[DirectSaleHistoryEntryRead])

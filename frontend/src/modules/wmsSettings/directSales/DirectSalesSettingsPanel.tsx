@@ -97,11 +97,10 @@ export const DirectSalesSettingsPanel = forwardRef<DirectSalesSettingsPanelHandl
               </button>
             </div>
           </div>
-          <ValidationWarnings config={state.draft} statusOptions={state.statusOptions} />
+          <ValidationWarnings config={state.draft} statusOptions={state.statusOptions} enabledEnforced={state.enabledEnforced} />
         </div>
         <GeneralSection
           config={state.draft}
-          statusOptions={state.statusOptions}
           panelSummary={state.panelSummary}
           panelSubgroups={state.panelSubgroups}
           onChange={state.patch}

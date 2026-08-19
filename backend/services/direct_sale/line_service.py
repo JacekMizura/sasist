@@ -50,6 +50,15 @@ def update_session_line_quantity(
             performed_by_user_id=performed_by_user_id,
         )
     line = get_session_line(db, sess, line_id=line_id)
+    old_qty = float(line.quantity or 0)
+    if qty > old_qty:
+        from .enable_gate import assert_direct_sales_expansion_allowed
+
+        assert_direct_sales_expansion_allowed(
+            db,
+            tenant_id=int(sess.tenant_id),
+            warehouse_id=int(sess.warehouse_id),
+        )
     line.quantity = qty
     _touch_soft_hold_qty(line, qty)
     sess.last_activity_at = datetime.utcnow()

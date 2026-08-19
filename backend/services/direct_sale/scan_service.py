@@ -19,6 +19,7 @@ from ..product_sales_offers import (
 )
 from ..product_sales_offers.crud_service import ensure_default_offer_for_product
 from ..product_sales_offers.errors import OfferStockUnavailableError
+from .enable_gate import assert_direct_sales_business_enabled
 from .errors import DirectSaleError
 from .soft_hold_service import create_soft_hold_for_scan
 
@@ -152,6 +153,9 @@ def _add_line_for_product(
     qty = float(quantity)
     if qty <= 0:
         raise DirectSaleError("Ilość musi być > 0.", code="invalid_qty")
+    assert_direct_sales_business_enabled(
+        db, tenant_id=int(sess.tenant_id), warehouse_id=int(sess.warehouse_id)
+    )
     if product is None:
         raise DirectSaleError("Produkt niedostępny.", code="product_not_found", http_status=404)
 

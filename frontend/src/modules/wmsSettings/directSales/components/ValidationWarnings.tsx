@@ -5,9 +5,11 @@ import { WarningBlock } from "./settingsUi";
 export function ValidationWarnings({
   config,
   statusOptions = [],
+  enabledEnforced,
 }: {
   config: DirectSalesSettingsConfig;
   statusOptions?: OrderStatusOption[];
+  enabledEnforced?: boolean;
 }) {
   const warnings: string[] = [];
   if (config.enabled && config.default_order_status_id == null) {
@@ -30,7 +32,15 @@ export function ValidationWarnings({
     warnings.push("Brak aktywnej metody płatności — terminal nie będzie mógł zakończyć sprzedaży.");
   }
   if (!config.enabled) {
-    warnings.push("Sprzedaż bezpośrednia jest wyłączona w konfiguracji biznesowej (niezależnie od flag wdrożeniowych).");
+    if (enabledEnforced) {
+      warnings.push(
+        "Sprzedaż bezpośrednia jest wyłączona dla tego zakresu — terminal i API nie pozwolą otworzyć nowej sesji (istniejące sesje można dokończyć).",
+      );
+    } else {
+      warnings.push(
+        "Przełącznik zapisany jako wyłączony, ale obowiązuje tryb legacy — sprzedaż działa do pierwszego zapisu ustawień z tym polem.",
+      );
+    }
   }
   if (!warnings.length) return null;
   return (

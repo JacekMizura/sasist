@@ -1,4 +1,10 @@
-**WMS Zbieranie → Zaawansowane cleanup (2026-08-18) — NO commit/push.**
+**Direct Sales Ogólne + safe enabled rollout (2026-08-19) — on main after gate.**
+- `extensions.ds_enabled_v1` stamp on conscious PUT; legacy fail-open until stamped
+- SSOT: `resolve_direct_sales_business_enabled` + API `enabled_effective` / `enabled_enforced`
+- Completion mode: stamped OFF allows finish inflight session, blocks expansion (qty+/scan/add)
+- UI cleanup retained: dead workflow statuses, panel SSOT, WMS hook skip for DIRECT_SALE
+
+
 - Removed entire nav/section + 4 localStorage keys (`supplierAvailabilityCheck`, `legacyMode`, `debugMode`, `advancedRoutingMode`); strip on load/save
 - Runtime unchanged: Inventory ATP, CartLifecycle, graph route_sort_key, picking-terminal, picking_config
 - GAP (not this task): `PickingOrchestrator` still calls forbidden assign; wave/simulation already 409 `legacy_sim_assign_forbidden`

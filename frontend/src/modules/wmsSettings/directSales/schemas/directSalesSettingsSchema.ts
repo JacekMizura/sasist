@@ -23,13 +23,17 @@ export type DirectSalesPaymentMethods = {
   mixed: boolean;
 };
 
+/** Dead keys stripped from cached/API payloads — not part of live config. */
+export const DEAD_DIRECT_SALES_WORKFLOW_STATUS_KEYS = [
+  "session_created_order_status_id",
+  "paid_order_status_id",
+  "issued_order_status_id",
+  "cancelled_order_status_id",
+] as const;
+
 export type DirectSalesSettingsConfig = {
   enabled: boolean;
   default_order_status_id: number | null;
-  session_created_order_status_id: number | null;
-  paid_order_status_id: number | null;
-  issued_order_status_id: number | null;
-  cancelled_order_status_id: number | null;
   default_document_type: DocumentTypeDefault;
   auto_start_new_session: boolean;
   payment_methods: DirectSalesPaymentMethods;
@@ -67,8 +71,18 @@ export type DirectSalesSettingsRead = {
   tenant_defaults: DirectSalesSettingsConfig;
   warehouse_overrides: DirectSalesSettingsConfig | null;
   has_warehouse_override: boolean;
+  /** Effective business ON/OFF for terminal (legacy fail-open when unstamped). */
+  enabled_effective?: boolean;
+  /** True once ds_enabled_v1 stamp governs — checkbox is binding. */
+  enabled_enforced?: boolean;
   settings_version?: string;
   updated_at?: string | null;
+};
+
+/** Terminal/runtime view — config + rollout enable semantics from GET resolved. */
+export type ResolvedDirectSalesTerminalSettings = DirectSalesSettingsConfig & {
+  enabled_effective: boolean;
+  enabled_enforced: boolean;
 };
 
 export type DirectSalesSettingsSave = {
@@ -82,10 +96,6 @@ export type EditScope = "tenant" | "warehouse";
 export const DEFAULT_DIRECT_SALES_SETTINGS: DirectSalesSettingsConfig = {
   enabled: false,
   default_order_status_id: null,
-  session_created_order_status_id: null,
-  paid_order_status_id: null,
-  issued_order_status_id: null,
-  cancelled_order_status_id: null,
   default_document_type: "PA",
   auto_start_new_session: true,
   payment_methods: { cash: true, card: true, blik: true, transfer: true, mixed: false },
@@ -124,8 +134,27 @@ export const DEFAULT_DIRECT_SALES_SETTINGS: DirectSalesSettingsConfig = {
   extensions: {},
 };
 
+export const DEFAULT_TERMINAL_DIRECT_SALES_SETTINGS: ResolvedDirectSalesTerminalSettings = {
+  ...DEFAULT_DIRECT_SALES_SETTINGS,
+  enabled_effective: true,
+  enabled_enforced: false,
+};
+
+export function mergeTerminalEnableMeta(
+  config: DirectSalesSettingsConfig,
+  read?: Pick<DirectSalesSettingsRead, "enabled_effective" | "enabled_enforced"> | null,
+): ResolvedDirectSalesTerminalSettings {
+  return {
+    ...config,
+    enabled_effective: read?.enabled_effective ?? true,
+    enabled_enforced: read?.enabled_enforced ?? false,
+  };
+}
+
 /** Matches backend ``ds_payment_methods_v2`` — after save, transfer=false is intentional. */
 export const DS_PAYMENT_METHODS_V2_KEY = "ds_payment_methods_v2";
+/** Rollout stamp: until set, ``enabled=false`` does not block (legacy fail-open). */
+export const DS_ENABLED_V1_KEY = "ds_enabled_v1";
 
 function migratePaymentMethodsDefaults(
   pm: DirectSalesPaymentMethods,
@@ -158,8 +187,11 @@ export function normalizeDirectSalesSettings(
     statusOptions,
     legacyDefault ?? "paid",
   );
-  const pick = (field: keyof DirectSalesSettingsConfig) =>
-    resolveDirectSalesStatusId(readOptionalStatusId(d[field]), statusOptions);
+  const rest = { ...d } as Record<string, unknown>;
+  for (const key of DEAD_DIRECT_SALES_WORKFLOW_STATUS_KEYS) {
+    delete rest[key];
+  }
+  delete rest.default_order_status;
 
   const extensions = { ...DEFAULT_DIRECT_SALES_SETTINGS.extensions, ...(d.extensions ?? {}) };
   const payment_methods = migratePaymentMethodsDefaults(
@@ -169,12 +201,8 @@ export function normalizeDirectSalesSettings(
 
   return {
     ...DEFAULT_DIRECT_SALES_SETTINGS,
-    ...d,
+    ...(rest as Partial<DirectSalesSettingsConfig>),
     default_order_status_id: defaultOrderStatusId,
-    session_created_order_status_id: pick("session_created_order_status_id"),
-    paid_order_status_id: pick("paid_order_status_id"),
-    issued_order_status_id: pick("issued_order_status_id"),
-    cancelled_order_status_id: pick("cancelled_order_status_id"),
     payment_methods,
     discounts: {
       ...DEFAULT_DIRECT_SALES_SETTINGS.discounts,

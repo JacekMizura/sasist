@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from copy import deepcopy
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -13,7 +14,6 @@ from sqlalchemy.orm import Session
 from ..models.direct_sales_settings import TENANT_DEFAULT_WAREHOUSE_ID, DirectSalesSettings
 from ..schemas.direct_sales_settings import DirectSalesSettingsConfig, DirectSalesSettingsRead
 from .order_status_select_service import (
-    list_selectable_order_status_options,
     resolve_order_status_id_by_legacy_name_hints,
     resolve_order_status_id_with_fallback,
 )
@@ -23,13 +23,122 @@ SYSTEM_DEFAULTS = DirectSalesSettingsConfig().model_dump()
 _LEGACY_DEFAULT_ORDER_STATUS_KEY = "default_order_status"
 # Pre-f0fa7a2e system default stamped transfer=False into saved settings JSON.
 _DS_PAYMENT_METHODS_V2_KEY = "ds_payment_methods_v2"
-_STATUS_ID_FIELDS = (
-    "default_order_status_id",
+# Rollout: until stamped, ``enabled=false`` does not block (legacy fail-open).
+DS_ENABLED_V1_KEY = "ds_enabled_v1"
+# Removed from UI/schema — persist on save so historical JSON is not wiped.
+LEGACY_WORKFLOW_STATUS_ID_KEYS: tuple[str, ...] = (
     "session_created_order_status_id",
     "paid_order_status_id",
     "issued_order_status_id",
     "cancelled_order_status_id",
 )
+
+
+def _extensions_dict(data: dict[str, Any]) -> dict[str, Any]:
+    ext = data.get("extensions")
+    return ext if isinstance(ext, dict) else {}
+
+
+def _has_enabled_v1_stamp(data: dict[str, Any]) -> bool:
+    return bool(_extensions_dict(data).get(DS_ENABLED_V1_KEY))
+
+
+def _stored_enabled(data: dict[str, Any]) -> bool:
+    merged = _deep_merge(SYSTEM_DEFAULTS, data)
+    return bool(merged.get("enabled", False))
+
+
+@dataclass(frozen=True)
+class DirectSalesEnableState:
+    """Resolved enable semantics for a tenant/warehouse scope."""
+
+    stored_enabled: bool
+    enabled_effective: bool
+    enabled_enforced: bool
+
+    @property
+    def expansion_blocked(self) -> bool:
+        """New work / qty increase blocked — enforced scope with effective OFF."""
+        return self.enabled_enforced and not self.enabled_effective
+
+
+def resolve_direct_sales_enable_state(
+    *,
+    tenant_data: dict[str, Any],
+    wh_data: dict[str, Any],
+    warehouse_id: int,
+    resolved_stored_enabled: bool,
+) -> DirectSalesEnableState:
+    """Single SSOT for rollout stamp + tenant/warehouse inheritance."""
+    wh_id = int(warehouse_id)
+    tenant_stamped = _has_enabled_v1_stamp(tenant_data)
+    wh_stamped = _has_enabled_v1_stamp(wh_data) if wh_id > 0 else False
+
+    if wh_id > 0 and wh_stamped:
+        return DirectSalesEnableState(
+            stored_enabled=bool(resolved_stored_enabled),
+            enabled_effective=bool(resolved_stored_enabled),
+            enabled_enforced=True,
+        )
+
+    if tenant_stamped:
+        tenant_enabled = _stored_enabled(tenant_data)
+        return DirectSalesEnableState(
+            stored_enabled=bool(resolved_stored_enabled),
+            enabled_effective=tenant_enabled,
+            enabled_enforced=True,
+        )
+
+    # Legacy fail-open: feature flag alone governed sales before v1 stamp.
+    return DirectSalesEnableState(
+        stored_enabled=bool(resolved_stored_enabled),
+        enabled_effective=True,
+        enabled_enforced=False,
+    )
+
+
+def resolve_direct_sales_business_enabled(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+) -> bool:
+    """Effective business ON/OFF — use for terminal visibility and new-work gate."""
+    try:
+        read = resolve_direct_sales_settings(
+            db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
+        )
+        return bool(read.enabled_effective)
+    except Exception:
+        return True
+
+
+def is_direct_sales_expansion_blocked(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+) -> bool:
+    """True when stamped OFF — blocks create/scan/add/search and qty increases."""
+    try:
+        read = resolve_direct_sales_settings(
+            db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
+        )
+        return bool(read.enabled_enforced and not read.enabled_effective)
+    except Exception:
+        return False
+
+
+def preserve_legacy_workflow_status_ids(
+    existing: dict[str, Any],
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Echo historical workflow status IDs into saved JSON without exposing them on the live config."""
+    out = deepcopy(payload)
+    for key in LEGACY_WORKFLOW_STATUS_ID_KEYS:
+        if key in existing and key not in out:
+            out[key] = existing[key]
+    return out
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -119,10 +228,6 @@ def _apply_status_id_fallbacks(
 ) -> DirectSalesSettingsConfig:
     if int(warehouse_id) <= 0:
         return cfg
-    valid_ids = {
-        int(o.id)
-        for o in list_selectable_order_status_options(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
-    }
     payload = cfg.model_dump()
     default_raw = payload.get("default_order_status_id")
     default_configured = int(default_raw) if default_raw is not None else None
@@ -139,14 +244,6 @@ def _apply_status_id_fallbacks(
         warehouse_id=int(warehouse_id),
         configured_id=default_configured,
     )
-    for field in _STATUS_ID_FIELDS:
-        if field == "default_order_status_id":
-            continue
-        raw = payload.get(field)
-        if raw is None:
-            continue
-        sid = int(raw)
-        payload[field] = sid if sid in valid_ids else None
     return DirectSalesSettingsConfig.model_validate(payload)
 
 
@@ -260,6 +357,13 @@ def resolve_direct_sales_settings(
         apply_status_fallbacks=resolve_wh is not None,
     )
 
+    enable_state = resolve_direct_sales_enable_state(
+        tenant_data=tenant_data,
+        wh_data=wh_data if wh_id > 0 else {},
+        warehouse_id=wh_id,
+        resolved_stored_enabled=bool(resolved.enabled),
+    )
+
     version, updated_at = _settings_version_for_read(
         tenant_row=tenant_row,
         wh_row=wh_row,
@@ -272,6 +376,8 @@ def resolve_direct_sales_settings(
         tenant_defaults=tenant_defaults,
         warehouse_overrides=warehouse_overrides if has_override else None,
         has_warehouse_override=has_override,
+        enabled_effective=enable_state.enabled_effective,
+        enabled_enforced=enable_state.enabled_enforced,
         settings_version=version,
         updated_at=updated_at,
     )
@@ -289,7 +395,11 @@ def save_direct_sales_settings(
     payload = settings.model_dump()
     ext = payload.get("extensions") if isinstance(payload.get("extensions"), dict) else {}
     ext = {**ext, _DS_PAYMENT_METHODS_V2_KEY: True}
+    # Conscious save stamps v1 — checkbox becomes the business gate for this scope.
+    if "enabled" in payload:
+        ext = {**ext, DS_ENABLED_V1_KEY: True}
     payload["extensions"] = ext
+    payload = preserve_legacy_workflow_status_ids(_parse_row(row), payload)
     row.settings_json = json.dumps(payload, ensure_ascii=False)
     row.updated_at = datetime.utcnow()
     db.flush()

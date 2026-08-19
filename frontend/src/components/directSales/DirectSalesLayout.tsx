@@ -31,6 +31,9 @@ export function DirectSalesLayout({ terminal }: Props) {
     runtime,
     status,
     salesEnabled,
+    expansionBlocked,
+    completionMode,
+    terminalAccessible,
     unavailableReason,
     sessionState,
     productSearch,
@@ -65,7 +68,7 @@ export function DirectSalesLayout({ terminal }: Props) {
     );
   }
 
-  if (!salesEnabled || sessionState.unavailable) {
+  if (!terminalAccessible || sessionState.unavailable) {
     return (
       <div className="flex h-full flex-col bg-white">
         <div className="flex-1 flex items-center justify-center p-6">
@@ -130,13 +133,19 @@ export function DirectSalesLayout({ terminal }: Props) {
         
         {/* LEWA KOLUMNA: Wyszukiwarka, Zawieszone, Historia */}
         <div className="flex h-full min-h-0 w-full shrink-0 flex-col lg:w-[24rem] lg:min-w-[24rem] border-b border-blue-50 lg:border-b-0 lg:border-r z-20 overflow-hidden">
-          <ProductSearchPanel
-            session={session}
-            search={productSearch}
-            busy={sessionState.busy}
-            onAddProduct={(id, loc, offerId) => void sessionState.addByProductId(id, loc, offerId)}
-            onScanCode={(code) => void sessionState.addByCode(code)}
-          />
+          {completionMode ? (
+            <div className="border-b border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-900 lg:px-6">
+              Sprzedaż wyłączona w ustawieniach — dokończ bieżącą sesję (bez dodawania produktów).
+            </div>
+          ) : (
+            <ProductSearchPanel
+              session={session}
+              search={productSearch}
+              busy={sessionState.busy}
+              onAddProduct={(id, loc, offerId) => void sessionState.addByProductId(id, loc, offerId)}
+              onScanCode={(code) => void sessionState.addByCode(code)}
+            />
+          )}
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 lg:px-6">
             <DirectSalesHistoryPanel
               rows={history.rows}
@@ -156,6 +165,7 @@ export function DirectSalesLayout({ terminal }: Props) {
           <DirectSalesSidebarActions
             busy={sessionState.busy}
             hasSession={session != null}
+            allowNewSession={salesEnabled}
             onSuspend={() => void sessionState.suspend()}
             onNewSession={handleNewSession}
           />
@@ -169,6 +179,7 @@ export function DirectSalesLayout({ terminal }: Props) {
             busy={sessionState.busy}
             removingLineId={sessionState.removingLineId}
             highlight={issueFlash}
+            expansionBlocked={expansionBlocked}
             onQtyChange={(id, qty) => void sessionState.changeLineQty(id, qty)}
             onLocationChange={(id, loc) => void sessionState.changeLineLocation(id, loc)}
             onRemove={(id) => void sessionState.removeLine(id)}

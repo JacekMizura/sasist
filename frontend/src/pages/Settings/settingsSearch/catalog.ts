@@ -362,11 +362,26 @@ export const WMS_SETTINGS_SEARCH_CATALOG: WmsSettingsSearchEntry[] = [
     sectionLabel: "Ogólne",
   }),
   e({
+    id: "direct_sales.default_order_status_id",
+    label: "Status zamówienia sprzedaży",
+    tabId: "direct_sales",
+    sectionId: "ds-general",
+    sectionLabel: "Ogólne",
+  }),
+  e({
     id: "direct_sales.default_document_type",
     label: "Typ dokumentu domyślny",
     tabId: "direct_sales",
     sectionId: "ds-general",
     sectionLabel: "Ogólne",
+  }),
+  e({
+    id: "direct_sales.auto_start_new_session",
+    label: "Automatycznie rozpocznij nową sesję po zamknięciu potwierdzenia sprzedaży",
+    tabId: "direct_sales",
+    sectionId: "ds-general",
+    sectionLabel: "Ogólne",
+    keywords: ["sesja", "potwierdzenie"],
   }),
   e({
     id: "direct_sales.allow_oversell",

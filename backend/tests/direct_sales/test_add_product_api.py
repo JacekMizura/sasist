@@ -105,6 +105,8 @@ class TestSessionAddProductDomain(unittest.TestCase):
         sess = MagicMock(status="ACTIVE", tenant_id=1, warehouse_id=1, id=87, lines=[])
         offer = MagicMock(id=3)
         with patch(
+            "backend.services.direct_sale.scan_service.assert_direct_sales_business_enabled",
+        ), patch(
             "backend.services.direct_sale.scan_service._resolve_offer_for_line",
             return_value=offer,
         ), patch(

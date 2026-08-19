@@ -116,8 +116,9 @@ def assign_direct_sale_completed_panel_status(
     order: Order,
     *,
     configured_status_id: int | None = None,
+    operator_user_id: int | None = None,
 ) -> None:
-    """Stationary retail: land on completed/DONE panel status, never default NEW."""
+    """Stationary retail: panel status via SSOT ``apply_order_panel_ui_status``."""
     if order.tenant_id is None or order.warehouse_id is None:
         return
     tid = int(order.tenant_id)
@@ -126,7 +127,9 @@ def assign_direct_sale_completed_panel_status(
         resolve_order_status_id_by_legacy_name_hints,
         resolve_order_status_id_with_fallback,
     )
+    from .order_panel_ui_status_service import apply_order_panel_ui_status
 
+    sid: int | None = None
     if configured_status_id is not None and int(configured_status_id) > 0:
         sid = resolve_order_status_id_with_fallback(
             db,
@@ -134,17 +137,21 @@ def assign_direct_sale_completed_panel_status(
             warehouse_id=wid,
             configured_id=int(configured_status_id),
         )
-        if sid is not None:
-            order.order_ui_status_id = int(sid)
-            return
-    for legacy_key in ("completed", "paid", "ready"):
-        sid = resolve_order_status_id_by_legacy_name_hints(
-            db,
-            tenant_id=tid,
-            warehouse_id=wid,
-            legacy_key=legacy_key,
-        )
-        if sid is not None:
-            order.order_ui_status_id = int(sid)
-            return
-    assign_default_new_panel_status_to_order(db, order)
+    if sid is None:
+        for legacy_key in ("completed", "paid", "ready"):
+            sid = resolve_order_status_id_by_legacy_name_hints(
+                db,
+                tenant_id=tid,
+                warehouse_id=wid,
+                legacy_key=legacy_key,
+            )
+            if sid is not None:
+                break
+    if sid is None:
+        sid = get_or_create_default_new_order_ui_status_id(db, tid, wid)
+    apply_order_panel_ui_status(
+        db,
+        order=order,
+        sub_status_id=int(sid),
+        operator_user_id=operator_user_id,
+    )

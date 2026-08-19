@@ -1,3 +1,23 @@
+## 2026-08-19 — Direct Sales enabled rollout (ds_enabled_v1 fail-open)
+
+- Stamp on PUT only; unstamped → enabled_effective=true regardless of stored enabled=false
+- Stamped → honor checkbox; expansion gate (qty increase) + completion mode FE
+- 102 BE + 7 FE tests PASS; vite build PASS
+
+## 2026-08-18 — Direct Sales Ogólne FINAL GATE: BLOCKED (no commit)
+
+- `enabled` default/missing → false; pre-gate runtime ignored the checkbox → deploy can 403 working sales
+- No prod DB access; local sqlite 0 settings rows; STOP per gate rule
+- Proposed rollout: stamp `extensions.ds_enabled_v1`; until stamped, fail-open when feature flag ON
+- Other gates (SSOT, legacy keys, UI, A/B/C merge, tests, vite build) would PASS; tsc -b FAIL elsewhere (changed files not in error list)
+
+## 2026-08-18 — Direct Sales Ogólne: dead workflow statuses + enable gate + status SSOT
+
+- UI: one status picker, document type, auto new session, enabled checkbox; no workflow block
+- Runtime: `apply_order_panel_ui_status` for DS complete; skip production/picking/smart-matching for DIRECT_SALE
+- `enabled` gates create/scan/add/search (403); feature flag still 404; existing sessions not deleted
+- Legacy `*_order_status_id` keys echoed on save, not in live schema/UI
+
 ## 2026-08-18 — WMS Zbieranie → Zaawansowane: drop dead localStorage section
 
 - Removed section + keys: supplierAvailabilityCheck, legacyMode, debugMode, advancedRoutingMode

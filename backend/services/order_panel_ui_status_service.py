@@ -92,6 +92,17 @@ def _run_production_status_hook(
         )
 
 
+def _should_run_wms_fulfillment_status_hooks(order: Order) -> bool:
+    """WMS packaging / production / picking hooks apply to WMS orders only.
+
+    Direct-sale orders already issue stock at the counter (channel DIRECT_SALE).
+    Status is still written through this SSOT; those hooks must not start a WMS flow.
+    """
+    from .order_operational_mode import resolve_order_operational_mode
+
+    return not resolve_order_operational_mode(order).is_direct_sale
+
+
 def _run_post_status_hooks(
     db: Session,
     *,
@@ -100,6 +111,8 @@ def _run_post_status_hooks(
     new_status_id: Optional[int],
     operator_user_id: Optional[int],
 ) -> None:
+    if not _should_run_wms_fulfillment_status_hooks(order):
+        return
     _run_smart_matching_status_hook(
         db, order=order, sub_status_id=new_status_id, operator_user_id=operator_user_id
     )
@@ -190,6 +203,8 @@ def apply_order_panel_ui_status(
         pass
 
     def _hooks() -> None:
+        if not _should_run_wms_fulfillment_status_hooks(order):
+            return
         if skip_production_trigger:
             _run_smart_matching_status_hook(
                 db, order=order, sub_status_id=sub_status_id, operator_user_id=operator_user_id

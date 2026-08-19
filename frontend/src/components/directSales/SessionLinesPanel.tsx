@@ -7,6 +7,7 @@ type Props = {
   busy: boolean;
   removingLineId?: number | null;
   highlight?: boolean;
+  expansionBlocked?: boolean;
   onQtyChange: (lineId: number, qty: number) => void;
   onLocationChange: (lineId: number, locationId: number | null) => void;
   onRemove: (lineId: number) => void;
@@ -19,6 +20,7 @@ export function SessionLinesPanel({
   busy,
   removingLineId = null,
   highlight,
+  expansionBlocked = false,
   onQtyChange,
   onLocationChange,
   onRemove,
@@ -47,6 +49,7 @@ export function SessionLinesPanel({
               warehouseId={warehouseId}
               busy={busy}
               removing={removingLineId === ln.id}
+              expansionBlocked={expansionBlocked}
               onQtyChange={onQtyChange}
               onLocationChange={onLocationChange}
               onRemove={onRemove}
