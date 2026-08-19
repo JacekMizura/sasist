@@ -34,6 +34,10 @@ LEGACY_WORKFLOW_STATUS_ID_KEYS: tuple[str, ...] = (
 )
 # Removed from UI/schema — preserve in JSON on save for safe round-trip.
 LEGACY_STOCK_SETTING_KEYS: tuple[str, ...] = ("allow_oversell",)
+LEGACY_DISCOUNT_SETTING_KEYS: tuple[str, ...] = (
+    "require_manager_approval",
+    "allow_negative_margin_override",
+)
 
 _LEGACY_ALLOCATION_STRATEGY_MAP: dict[str, str] = {
     "auto": "auto_split",
@@ -171,6 +175,35 @@ def preserve_legacy_stock_setting_keys(
     return out
 
 
+def preserve_legacy_discount_setting_keys(
+    existing: dict[str, Any],
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Echo removed discount keys inside ``discounts`` without exposing them on live config."""
+    out = deepcopy(payload)
+    existing_disc = existing.get("discounts") if isinstance(existing.get("discounts"), dict) else {}
+    disc = out.get("discounts") if isinstance(out.get("discounts"), dict) else {}
+    if not isinstance(disc, dict):
+        disc = {}
+    merged_disc = deepcopy(disc)
+    for key in LEGACY_DISCOUNT_SETTING_KEYS:
+        if key in existing_disc and key not in merged_disc:
+            merged_disc[key] = existing_disc[key]
+    out["discounts"] = merged_disc
+    return out
+
+
+def _strip_legacy_discount_keys(data: dict[str, Any]) -> dict[str, Any]:
+    out = deepcopy(data)
+    disc = out.get("discounts")
+    if isinstance(disc, dict):
+        cleaned = deepcopy(disc)
+        for key in LEGACY_DISCOUNT_SETTING_KEYS:
+            cleaned.pop(key, None)
+        out["discounts"] = cleaned
+    return out
+
+
 def _migrate_allocation_strategy_field(data: dict[str, Any]) -> dict[str, Any]:
     out = deepcopy(data)
     if "allocation_strategy" in out:
@@ -295,6 +328,7 @@ def _config_from_dict(
     merged = _deep_merge(SYSTEM_DEFAULTS, data)
     merged = _migrate_allocation_strategy_field(merged)
     merged = _migrate_payment_methods_defaults(merged)
+    merged = _strip_legacy_discount_keys(merged)
     for key in LEGACY_STOCK_SETTING_KEYS:
         merged.pop(key, None)
     if db is not None and tenant_id is not None and warehouse_id is not None and int(warehouse_id) > 0:
@@ -445,6 +479,7 @@ def save_direct_sales_settings(
     existing_raw = _parse_row(row)
     payload = preserve_legacy_workflow_status_ids(existing_raw, payload)
     payload = preserve_legacy_stock_setting_keys(existing_raw, payload)
+    payload = preserve_legacy_discount_setting_keys(existing_raw, payload)
     row.settings_json = json.dumps(payload, ensure_ascii=False)
     row.updated_at = datetime.utcnow()
     db.flush()

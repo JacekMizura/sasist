@@ -173,6 +173,9 @@ def _stage_lock_and_validate(
         raise DirectSaleError("Sesja nie może być zakończona.", code="invalid_status")
     if infer_pipeline_status_from_session(sess) == PIPELINE_COMPLETED:
         return
+    from .discount_validation_service import validate_session_discounts_for_complete
+
+    validate_session_discounts_for_complete(db, sess)
     entities.allocations = plan_issue_allocations(db, sess, list(sess.lines or []))
     merge_pipeline_entities(sess, {"validated": True, "allocation_count": len(entities.allocations)})
 

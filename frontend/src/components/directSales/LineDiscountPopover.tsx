@@ -3,6 +3,7 @@ import { Percent, Tag } from "lucide-react";
 
 import { PrimaryButton } from "../../design-system/PrimaryButton";
 import { useResolvedDirectSalesSettings } from "../../modules/directSales/settings/resolvedDirectSalesSettings";
+import { normalizeQuickDiscountPercents } from "../../modules/directSales/settings/quickDiscountPercents";
 
 type Props = {
   disabled?: boolean;
@@ -29,7 +30,13 @@ export function LineDiscountPopover({
 
   if (!settings.discounts?.allow_line_discounts) return null;
 
-  const quick = settings.discounts?.quick_discount_percents ?? [5, 10, 15, 20];
+  const showQuick = settings.discounts?.show_discount_buttons !== false;
+  const quick = showQuick
+    ? normalizeQuickDiscountPercents(
+        settings.discounts?.quick_discount_percents,
+        settings.discounts?.max_discount_percent ?? 50,
+      )
+    : [];
 
   const apply = (type: "percent" | "amount" | null, value: number) => {
     onApply(type, value);
@@ -91,18 +98,20 @@ export function LineDiscountPopover({
             className="no-number-spinner mb-2 w-full rounded-lg border border-slate-200 px-2 py-1 text-xs"
             placeholder={mode === "percent" ? "np. 10" : "np. 5.00"}
           />
-          <div className="mb-2 flex flex-wrap gap-1">
-            {quick.map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => apply("percent", p)}
-                className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700 hover:bg-slate-200"
-              >
-                {p}%
-              </button>
-            ))}
-          </div>
+          {showQuick && quick.length > 0 ? (
+            <div className="mb-2 flex flex-wrap gap-1">
+              {quick.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => apply("percent", p)}
+                  className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700 hover:bg-slate-200"
+                >
+                  {p}%
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div className="flex gap-1">
             <PrimaryButton
               type="button"

@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useResolvedDirectSalesSettings } from "../../modules/directSales/settings/resolvedDirectSalesSettings";
+import { normalizeQuickDiscountPercents } from "../../modules/directSales/settings/quickDiscountPercents";
 
 type Props = {
   disabled?: boolean;
@@ -18,7 +19,14 @@ export function OrderDiscountPanel({ disabled, discountType, discountValue, onAp
 
   if (!settings.discounts?.allow_order_discounts) return null;
 
-  const quick = settings.discounts?.quick_discount_percents ?? [5, 10, 15, 20];
+  const showQuick = settings.discounts?.show_discount_buttons !== false;
+  const quick = showQuick
+    ? normalizeQuickDiscountPercents(
+        settings.discounts?.quick_discount_percents,
+        settings.discounts?.max_discount_percent ?? 50,
+      )
+    : [];
+  const maxPercent = settings.discounts?.max_discount_percent ?? 50;
 
   return (
     <div className="rounded-2xl border border-amber-100 bg-amber-50/40 p-4 space-y-2">
@@ -48,22 +56,24 @@ export function OrderDiscountPanel({ disabled, discountType, discountValue, onAp
         className="no-number-spinner w-full rounded-lg border border-amber-100 bg-white px-3 py-2 text-sm"
         placeholder={mode === "percent" ? "Rabat %" : "Rabat zł"}
       />
-      <div className="flex flex-wrap gap-1">
-        {quick.map((p) => (
-          <button
-            key={p}
-            type="button"
-            disabled={disabled}
-            onClick={() => {
-              setDraft(String(p));
-              onApply("percent", p);
-            }}
-            className="rounded-md bg-white border border-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-900"
-          >
-            {p}%
-          </button>
-        ))}
-      </div>
+      {showQuick && quick.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {quick.map((p) => (
+            <button
+              key={p}
+              type="button"
+              disabled={disabled}
+              onClick={() => {
+                setDraft(String(p));
+                onApply("percent", p);
+              }}
+              className="rounded-md bg-white border border-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-900"
+            >
+              {p}%
+            </button>
+          ))}
+        </div>
+      ) : null}
       <button
         type="button"
         disabled={disabled}
@@ -73,6 +83,7 @@ export function OrderDiscountPanel({ disabled, discountType, discountValue, onAp
             onApply(null, 0);
             return;
           }
+          if (mode === "percent" && v > maxPercent) return;
           onApply(mode, v);
         }}
         className="w-full rounded-lg bg-amber-600 py-2 text-xs font-bold text-white disabled:opacity-40"

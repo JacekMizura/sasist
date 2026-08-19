@@ -1,4 +1,5 @@
 import type { DirectSalesSettingsConfig } from "../schemas/directSalesSettingsSchema";
+import { parseQuickDiscountPercentsInput } from "../../../directSales/settings/quickDiscountPercents";
 import { FieldRow, inputClass, SettingsCard, ToggleRow } from "../components/settingsUi";
 
 type Props = {
@@ -37,7 +38,10 @@ export function DiscountsSection({ config, onChange }: Props) {
         checked={d.show_discount_buttons}
         onChange={(show_discount_buttons) => onChange(patchDiscounts(config, { show_discount_buttons }))}
       />
-      <FieldRow label="Maksymalny rabat (%)" hint="Dotyczy rabatów procentowych na pozycji i zamówieniu.">
+      <FieldRow
+        label="Maksymalny rabat (%)"
+        hint="Maksymalny łączny rabat względem wartości przed rabatami (pozycja + zamówienie)."
+      >
         <input
           type="number"
           min={0}
@@ -61,28 +65,14 @@ export function DiscountsSection({ config, onChange }: Props) {
           className={inputClass}
           value={d.quick_discount_percents.join(", ")}
           onChange={(e) => {
-            const parts = e.target.value
-              .split(/[,;\s]+/)
-              .map((x) => Number(x.trim()))
-              .filter((n) => Number.isFinite(n) && n > 0 && n <= 100);
-            onChange(patchDiscounts(config, { quick_discount_percents: parts.length ? parts : [5, 10, 15, 20] }));
+            onChange(
+              patchDiscounts(config, {
+                quick_discount_percents: parseQuickDiscountPercentsInput(e.target.value),
+              }),
+            );
           }}
         />
       </FieldRow>
-      <ToggleRow
-        label="Wymagaj zatwierdzenia kierownika (przyszłe)"
-        hint="Flaga konfiguracyjna — egzekwowanie w kolejnej iteracji."
-        checked={d.require_manager_approval}
-        onChange={(require_manager_approval) => onChange(patchDiscounts(config, { require_manager_approval }))}
-      />
-      <ToggleRow
-        label="Zezwalaj na sprzedaż poniżej marży (przyszłe)"
-        hint="Flaga konfiguracyjna — egzekwowanie w kolejnej iteracji."
-        checked={d.allow_negative_margin_override}
-        onChange={(allow_negative_margin_override) =>
-          onChange(patchDiscounts(config, { allow_negative_margin_override }))
-        }
-      />
     </SettingsCard>
   );
 }

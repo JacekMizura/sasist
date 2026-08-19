@@ -10,8 +10,6 @@ export type DirectSalesDiscountSettings = {
   allow_line_discounts: boolean;
   allow_order_discounts: boolean;
   max_discount_percent: number;
-  require_manager_approval: boolean;
-  allow_negative_margin_override: boolean;
   show_discount_buttons: boolean;
   quick_discount_percents: number[];
 };
@@ -26,6 +24,11 @@ export type DirectSalesPaymentMethods = {
 
 /** Dead keys stripped from cached/API payloads — not part of live config. */
 export const DEAD_DIRECT_SALES_STOCK_SETTING_KEYS = ["allow_oversell"] as const;
+
+export const DEAD_DIRECT_SALES_DISCOUNT_SETTING_KEYS = [
+  "require_manager_approval",
+  "allow_negative_margin_override",
+] as const;
 
 export const DEAD_DIRECT_SALES_WORKFLOW_STATUS_KEYS = [
   "session_created_order_status_id",
@@ -122,8 +125,6 @@ export const DEFAULT_DIRECT_SALES_SETTINGS: DirectSalesSettingsConfig = {
     allow_line_discounts: true,
     allow_order_discounts: true,
     max_discount_percent: 50,
-    require_manager_approval: false,
-    allow_negative_margin_override: false,
     show_discount_buttons: true,
     quick_discount_percents: [5, 10, 15, 20],
   },
@@ -174,6 +175,16 @@ function readOptionalStatusId(raw: unknown): number | null {
   return Number.isFinite(n) && n >= 1 ? n : null;
 }
 
+function stripDeadDiscountKeys(
+  raw: Partial<DirectSalesDiscountSettings> & Record<string, unknown>,
+): Partial<DirectSalesDiscountSettings> {
+  const out = { ...raw };
+  for (const key of DEAD_DIRECT_SALES_DISCOUNT_SETTING_KEYS) {
+    delete out[key];
+  }
+  return out as Partial<DirectSalesDiscountSettings>;
+}
+
 export function normalizeDirectSalesSettings(
   raw: unknown,
   statusOptions: OrderStatusOption[] = [],
@@ -212,7 +223,7 @@ export function normalizeDirectSalesSettings(
     payment_methods,
     discounts: {
       ...DEFAULT_DIRECT_SALES_SETTINGS.discounts,
-      ...((d.discounts ?? {}) as Partial<DirectSalesDiscountSettings>),
+      ...stripDeadDiscountKeys((d.discounts ?? {}) as Partial<DirectSalesDiscountSettings> & Record<string, unknown>),
     },
     extensions,
   };

@@ -15,8 +15,6 @@ class DirectSalesDiscountSettings(BaseModel):
     allow_line_discounts: bool = True
     allow_order_discounts: bool = True
     max_discount_percent: float = Field(50.0, ge=0, le=100)
-    require_manager_approval: bool = False
-    allow_negative_margin_override: bool = False
     show_discount_buttons: bool = True
     quick_discount_percents: list[float] = Field(
         default_factory=lambda: [5.0, 10.0, 15.0, 20.0],

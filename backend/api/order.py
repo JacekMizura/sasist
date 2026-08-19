@@ -1651,6 +1651,20 @@ def _order_item_meta_dict(item: OrderItem) -> dict:
         return {}
 
 
+def _direct_sale_order_discount_allocated_in_lines(items: list[OrderItem] | None) -> bool:
+    """Direct-sale OrderItems store final prices — order.discount_* is audit-only."""
+    for item in items or []:
+        if order_item_is_replaced_line(item):
+            continue
+        meta = _order_item_meta_dict(item)
+        try:
+            if float(meta.get("order_discount_allocation_gross") or 0) > 1e-9:
+                return True
+        except (TypeError, ValueError):
+            pass
+    return False
+
+
 def _oms_waiting_from_meta(item: OrderItem) -> bool:
     return bool(_order_item_meta_dict(item).get("oms_waiting_for_stock"))
 
@@ -1941,7 +1955,17 @@ def build_order_read(db: Session, order: Order) -> OrderRead:
         dt_norm = None
     dv_raw = getattr(order, "discount_value", None)
     discount_amount = 0.0
-    if sum_line_net_active > 1e-9 and dv_raw is not None and dt_norm is not None:
+    total_products_value: Optional[float] = None
+    from ..services.direct_sale.order_display import is_direct_sale_order
+
+    discount_already_in_lines = (
+        is_direct_sale_order(order)
+        and _direct_sale_order_discount_allocated_in_lines(list(order.items or []))
+    )
+    if discount_already_in_lines:
+        if sum_line_net_active > 1e-9:
+            total_products_value = round(sum_line_net_active, 2)
+    elif sum_line_net_active > 1e-9 and dv_raw is not None and dt_norm is not None:
         try:
             dvf = float(dv_raw)
             if dt_norm == "percent":
@@ -1951,8 +1975,7 @@ def build_order_read(db: Session, order: Order) -> OrderRead:
         except (TypeError, ValueError):
             discount_amount = 0.0
 
-    total_products_value: Optional[float] = None
-    if sum_line_net_active > 1e-9:
+    if not discount_already_in_lines and sum_line_net_active > 1e-9:
         total_products_value = round(sum_line_net_active - discount_amount, 2)
 
     shipping_revenue_net: Optional[float] = panel_shipping_cost if panel_shipping_cost is not None else None

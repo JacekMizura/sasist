@@ -18,7 +18,8 @@ from ..barcode_generation import next_internal_order_number, next_order_barcode
 from ..direct_sales_settings_service import resolve_direct_sales_settings
 from ..order_default_new_panel_status import assign_direct_sale_completed_panel_status
 from .errors import DirectSaleError
-from .session_financials_service import compute_line_financials, compute_session_totals
+from .order_discount_allocation import compute_final_line_gross_allocations
+from .session_financials_service import compute_session_totals
 
 
 def _resolve_panel_status_id(
@@ -176,24 +177,31 @@ def create_order_from_session(
     )
     db.flush()
 
+    allocations_by_line_id = {
+        int(row["line_id"]): row for row in compute_final_line_gross_allocations(db, sess)
+    }
     items_by_line: dict[int, OrderItem] = {}
     for ln in sorted(active_lines, key=lambda x: int(x.sort_order or 0)):
         qty = int(round(float(ln.quantity or 0)))
         if qty <= 0:
             continue
-        fin = compute_line_financials(db, ln)
+        fin = allocations_by_line_id.get(int(ln.id))
+        if fin is None:
+            continue
         line_meta = {
-            "line_gross_total": float(fin["line_gross"]),
+            "line_gross_total": float(fin["final_line_gross"]),
             "line_discount_gross": float(fin["line_discount_gross"]),
+            "order_discount_allocation_gross": float(fin.get("order_discount_allocation_gross") or 0),
+            "gross_before_line_discount": float(fin["gross_before_discount"]),
             "price_input_mode": "NETTO",
         }
-        unit_net = round(float(fin["line_net"]) / qty, 4) if qty > 0 else 0.0
+        unit_net = float(fin.get("final_unit_net") or 0)
         oi = OrderItem(
             order_id=int(order.id),
             product_id=int(ln.product_id),
             quantity=qty,
             unit_price=unit_net,
-            total_price=round(float(fin["line_net"]), 2),
+            total_price=round(float(fin["final_line_net"]), 2),
             vat_percent=float(fin["vat_percent"]),
             metadata_json=json.dumps(line_meta, ensure_ascii=False),
             source_location_id=int(ln.source_location_id) if ln.source_location_id else None,

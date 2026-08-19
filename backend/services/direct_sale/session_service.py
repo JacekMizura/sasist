@@ -192,8 +192,7 @@ def set_session_order_discount(
         raise DirectSaleError("Nieprawidłowy typ rabatu.", code="invalid_discount")
     validate_order_discount(
         db,
-        tenant_id=int(sess.tenant_id),
-        warehouse_id=int(sess.warehouse_id),
+        sess,
         discount_type=dt or None,
         discount_value=float(discount_value or 0),
     )
