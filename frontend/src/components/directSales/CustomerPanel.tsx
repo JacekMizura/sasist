@@ -6,7 +6,6 @@ import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import { PrimaryButton } from "../../design-system/PrimaryButton";
 import type { DirectSalesCustomerState } from "../../hooks/directSales/useDirectSalesCustomer";
 import type { DirectSaleSession } from "../../utils/normalizeDirectSales";
-import { useResolvedDirectSalesSettings } from "../../modules/directSales/settings/resolvedDirectSalesSettings";
 import { customerPickerSubtitle } from "../../modules/customers/customerProfile";
 import {
   formatCustomerAddressStreet,
@@ -34,7 +33,6 @@ export function CustomerPanel({
   disabled,
   onSessionUpdated,
 }: Props) {
-  const resolvedDirectSalesSettings = useResolvedDirectSalesSettings();
   const [nip, setNip] = useState("");
   const [company, setCompany] = useState("");
   const [street, setStreet] = useState("");

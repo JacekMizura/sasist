@@ -30,6 +30,13 @@ export const DEAD_DIRECT_SALES_DISCOUNT_SETTING_KEYS = [
   "allow_negative_margin_override",
 ] as const;
 
+export const DEAD_DIRECT_SALES_CUSTOMER_SETTING_KEYS = [
+  "allow_anonymous",
+  "require_customer_for_invoice",
+  "auto_save_customers",
+  "quick_create_customer",
+] as const;
+
 export const DEAD_DIRECT_SALES_WORKFLOW_STATUS_KEYS = [
   "session_created_order_status_id",
   "paid_order_status_id",
@@ -56,10 +63,6 @@ export type DirectSalesSettingsConfig = {
   show_stock: boolean;
   show_product_images: boolean;
   prefer_store_locations: boolean;
-  allow_anonymous: boolean;
-  require_customer_for_invoice: boolean;
-  auto_save_customers: boolean;
-  quick_create_customer: boolean;
   discounts: DirectSalesDiscountSettings;
   keyboard_shortcuts: boolean;
   scanner_mode: boolean;
@@ -117,10 +120,6 @@ export const DEFAULT_DIRECT_SALES_SETTINGS: DirectSalesSettingsConfig = {
   show_stock: true,
   show_product_images: true,
   prefer_store_locations: true,
-  allow_anonymous: true,
-  require_customer_for_invoice: true,
-  auto_save_customers: true,
-  quick_create_customer: true,
   discounts: {
     allow_line_discounts: true,
     allow_order_discounts: true,
@@ -204,6 +203,9 @@ export function normalizeDirectSalesSettings(
     delete rest[key];
   }
   for (const key of DEAD_DIRECT_SALES_STOCK_SETTING_KEYS) {
+    delete rest[key];
+  }
+  for (const key of DEAD_DIRECT_SALES_CUSTOMER_SETTING_KEYS) {
     delete rest[key];
   }
   delete rest.default_order_status;

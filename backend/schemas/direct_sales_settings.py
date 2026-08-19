@@ -49,10 +49,6 @@ class DirectSalesSettingsConfig(BaseModel):
     show_stock: bool = True
     show_product_images: bool = True
     prefer_store_locations: bool = True
-    allow_anonymous: bool = True
-    require_customer_for_invoice: bool = True
-    auto_save_customers: bool = True
-    quick_create_customer: bool = True
     discounts: DirectSalesDiscountSettings = Field(default_factory=DirectSalesDiscountSettings)
     keyboard_shortcuts: bool = True
     scanner_mode: bool = True

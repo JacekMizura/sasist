@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  DEAD_DIRECT_SALES_CUSTOMER_SETTING_KEYS,
   DEFAULT_DIRECT_SALES_SETTINGS,
   normalizeDirectSalesSettings,
 } from "./directSalesSettingsSchema";
@@ -33,5 +34,30 @@ describe("normalizeDirectSalesSettings stock section", () => {
   it("canonical defaults match normalized legacy store_first", () => {
     const legacy = normalizeDirectSalesSettings({ allocation_strategy: "store_first" });
     expect(legacy.allocation_strategy).toBe(DEFAULT_DIRECT_SALES_SETTINGS.allocation_strategy);
+  });
+});
+
+describe("normalizeDirectSalesSettings customer cleanup", () => {
+  it("strips legacy customer keys from live config", () => {
+    const out = normalizeDirectSalesSettings({
+      allow_anonymous: false,
+      require_customer_for_invoice: true,
+      auto_save_customers: false,
+      quick_create_customer: true,
+      enabled: true,
+    });
+    for (const key of DEAD_DIRECT_SALES_CUSTOMER_SETTING_KEYS) {
+      expect(out).not.toHaveProperty(key);
+    }
+    expect(out.enabled).toBe(true);
+  });
+
+  it("does not mark dirty against defaults when legacy customer keys are stripped", () => {
+    const fromApi = normalizeDirectSalesSettings({
+      allow_anonymous: false,
+      scanner_mode: DEFAULT_DIRECT_SALES_SETTINGS.scanner_mode,
+    });
+    expect(fromApi).not.toHaveProperty("allow_anonymous");
+    expect(fromApi.scanner_mode).toBe(DEFAULT_DIRECT_SALES_SETTINGS.scanner_mode);
   });
 });

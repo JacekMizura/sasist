@@ -22,9 +22,6 @@ export function ValidationWarnings({
   ) {
     warnings.push("Zapisany status po sprzedaży nie istnieje lub jest nieaktywny — zostanie użyty domyślny po zapisie.");
   }
-  if (!config.allow_anonymous && !config.require_customer_for_invoice) {
-    warnings.push("Każda sprzedaż będzie wymagała przypisanego klienta.");
-  }
   if (!config.payment_methods.cash && !config.payment_methods.card && !config.payment_methods.blik && !config.payment_methods.transfer) {
     warnings.push("Brak aktywnej metody płatności — terminal nie będzie mógł zakończyć sprzedaży.");
   }
