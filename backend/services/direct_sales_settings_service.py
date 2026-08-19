@@ -44,6 +44,12 @@ LEGACY_CUSTOMER_SETTING_KEYS: tuple[str, ...] = (
     "auto_save_customers",
     "quick_create_customer",
 )
+LEGACY_TERMINAL_SETTING_KEYS: tuple[str, ...] = (
+    "scanner_mode",
+    "auto_focus_scan",
+    "terminal_sounds",
+    "zebra_tablet_mode",
+)
 
 _LEGACY_ALLOCATION_STRATEGY_MAP: dict[str, str] = {
     "auto": "auto_split",
@@ -188,6 +194,18 @@ def preserve_legacy_customer_setting_keys(
     """Echo removed customer keys into saved JSON without exposing them on the live config."""
     out = deepcopy(payload)
     for key in LEGACY_CUSTOMER_SETTING_KEYS:
+        if key in existing and key not in out:
+            out[key] = existing[key]
+    return out
+
+
+def preserve_legacy_terminal_setting_keys(
+    existing: dict[str, Any],
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Echo removed terminal keys into saved JSON without exposing them on the live config."""
+    out = deepcopy(payload)
+    for key in LEGACY_TERMINAL_SETTING_KEYS:
         if key in existing and key not in out:
             out[key] = existing[key]
     return out
@@ -351,6 +369,8 @@ def _config_from_dict(
         merged.pop(key, None)
     for key in LEGACY_CUSTOMER_SETTING_KEYS:
         merged.pop(key, None)
+    for key in LEGACY_TERMINAL_SETTING_KEYS:
+        merged.pop(key, None)
     if db is not None and tenant_id is not None and warehouse_id is not None and int(warehouse_id) > 0:
         merged = _migrate_legacy_status_fields(db, merged, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
     cfg = DirectSalesSettingsConfig.model_validate(merged)
@@ -501,6 +521,7 @@ def save_direct_sales_settings(
     payload = preserve_legacy_stock_setting_keys(existing_raw, payload)
     payload = preserve_legacy_discount_setting_keys(existing_raw, payload)
     payload = preserve_legacy_customer_setting_keys(existing_raw, payload)
+    payload = preserve_legacy_terminal_setting_keys(existing_raw, payload)
     row.settings_json = json.dumps(payload, ensure_ascii=False)
     row.updated_at = datetime.utcnow()
     db.flush()

@@ -51,10 +51,6 @@ class DirectSalesSettingsConfig(BaseModel):
     prefer_store_locations: bool = True
     discounts: DirectSalesDiscountSettings = Field(default_factory=DirectSalesDiscountSettings)
     keyboard_shortcuts: bool = True
-    scanner_mode: bool = True
-    auto_focus_scan: bool = True
-    terminal_sounds: bool = True
-    zebra_tablet_mode: bool = False
     extensions: dict[str, Any] = Field(default_factory=dict)
 
 

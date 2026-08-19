@@ -124,7 +124,9 @@ export function PaymentTerminalPanel({
                   className={methodButtonClass(paymentMethod === m.id)}
                 >
                   {m.label}
-                  {m.key ? <span className="ml-1 text-[10px] opacity-60">{m.key}</span> : null}
+                  {resolvedDirectSalesSettings.keyboard_shortcuts && m.key ? (
+                    <span className="ml-1 text-[10px] opacity-60">{m.key}</span>
+                  ) : null}
                 </button>
               ))}
             </div>

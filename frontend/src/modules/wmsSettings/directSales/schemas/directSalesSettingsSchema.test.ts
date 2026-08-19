@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEAD_DIRECT_SALES_CUSTOMER_SETTING_KEYS,
+  DEAD_DIRECT_SALES_TERMINAL_SETTING_KEYS,
   DEFAULT_DIRECT_SALES_SETTINGS,
   normalizeDirectSalesSettings,
 } from "./directSalesSettingsSchema";
@@ -55,9 +56,37 @@ describe("normalizeDirectSalesSettings customer cleanup", () => {
   it("does not mark dirty against defaults when legacy customer keys are stripped", () => {
     const fromApi = normalizeDirectSalesSettings({
       allow_anonymous: false,
-      scanner_mode: DEFAULT_DIRECT_SALES_SETTINGS.scanner_mode,
     });
     expect(fromApi).not.toHaveProperty("allow_anonymous");
-    expect(fromApi.scanner_mode).toBe(DEFAULT_DIRECT_SALES_SETTINGS.scanner_mode);
+    expect(fromApi.enabled).toBe(DEFAULT_DIRECT_SALES_SETTINGS.enabled);
+  });
+});
+
+describe("normalizeDirectSalesSettings terminal cleanup", () => {
+  it("strips legacy terminal keys from live config", () => {
+    const out = normalizeDirectSalesSettings({
+      scanner_mode: true,
+      auto_focus_scan: false,
+      terminal_sounds: true,
+      zebra_tablet_mode: true,
+      keyboard_shortcuts: true,
+    });
+    for (const key of DEAD_DIRECT_SALES_TERMINAL_SETTING_KEYS) {
+      expect(out).not.toHaveProperty(key);
+    }
+    expect(out.keyboard_shortcuts).toBe(true);
+  });
+
+  it("does not mark dirty against defaults when legacy terminal keys are stripped", () => {
+    const fromApi = normalizeDirectSalesSettings({
+      scanner_mode: true,
+      auto_focus_scan: false,
+      terminal_sounds: true,
+      zebra_tablet_mode: false,
+    });
+    for (const key of DEAD_DIRECT_SALES_TERMINAL_SETTING_KEYS) {
+      expect(fromApi).not.toHaveProperty(key);
+    }
+    expect(fromApi.keyboard_shortcuts).toBe(DEFAULT_DIRECT_SALES_SETTINGS.keyboard_shortcuts);
   });
 });

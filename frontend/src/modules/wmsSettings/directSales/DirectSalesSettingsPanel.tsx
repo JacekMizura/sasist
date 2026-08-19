@@ -10,7 +10,6 @@ import { GeneralSection } from "./sections/GeneralSection";
 import { PaymentsSection } from "./sections/PaymentsSection";
 import { PricingSection } from "./sections/PricingSection";
 import { StockSection } from "./sections/StockSection";
-import { TerminalSection } from "./sections/TerminalSection";
 
 export type DirectSalesSettingsPanelHandle = {
   saveAll: () => Promise<void>;
@@ -108,7 +107,6 @@ export const DirectSalesSettingsPanel = forwardRef<DirectSalesSettingsPanelHandl
         <StockSection config={state.draft} onChange={state.patch} />
         <PricingSection config={state.draft} onChange={state.patch} />
         <DiscountsSection config={state.draft} onChange={state.patch} />
-        <TerminalSection config={state.draft} onChange={state.patch} />
       </WmsSettingsTabFrame>
     );
   },

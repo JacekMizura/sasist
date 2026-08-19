@@ -37,6 +37,13 @@ export const DEAD_DIRECT_SALES_CUSTOMER_SETTING_KEYS = [
   "quick_create_customer",
 ] as const;
 
+export const DEAD_DIRECT_SALES_TERMINAL_SETTING_KEYS = [
+  "scanner_mode",
+  "auto_focus_scan",
+  "terminal_sounds",
+  "zebra_tablet_mode",
+] as const;
+
 export const DEAD_DIRECT_SALES_WORKFLOW_STATUS_KEYS = [
   "session_created_order_status_id",
   "paid_order_status_id",
@@ -65,10 +72,6 @@ export type DirectSalesSettingsConfig = {
   prefer_store_locations: boolean;
   discounts: DirectSalesDiscountSettings;
   keyboard_shortcuts: boolean;
-  scanner_mode: boolean;
-  auto_focus_scan: boolean;
-  terminal_sounds: boolean;
-  zebra_tablet_mode: boolean;
   extensions: Record<string, unknown>;
 };
 
@@ -128,10 +131,6 @@ export const DEFAULT_DIRECT_SALES_SETTINGS: DirectSalesSettingsConfig = {
     quick_discount_percents: [5, 10, 15, 20],
   },
   keyboard_shortcuts: true,
-  scanner_mode: true,
-  auto_focus_scan: true,
-  terminal_sounds: true,
-  zebra_tablet_mode: false,
   extensions: {},
 };
 
@@ -206,6 +205,9 @@ export function normalizeDirectSalesSettings(
     delete rest[key];
   }
   for (const key of DEAD_DIRECT_SALES_CUSTOMER_SETTING_KEYS) {
+    delete rest[key];
+  }
+  for (const key of DEAD_DIRECT_SALES_TERMINAL_SETTING_KEYS) {
     delete rest[key];
   }
   delete rest.default_order_status;

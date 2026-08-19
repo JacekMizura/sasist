@@ -408,12 +408,12 @@ export const WMS_SETTINGS_SEARCH_CATALOG: WmsSettingsSearchEntry[] = [
     keywords: ["puste", "lokalizacja", "picker"],
   }),
   e({
-    id: "direct_sales.scanner_mode",
-    label: "Włącz tryb skanera",
+    id: "direct_sales.keyboard_shortcuts",
+    label: "Włącz skróty klawiaturowe",
     tabId: "direct_sales",
-    sectionId: "ds-terminal",
-    sectionLabel: "Zaawansowane",
-    keywords: ["tryb", "skaner"],
+    sectionId: "ds-payments",
+    sectionLabel: "Płatności",
+    keywords: ["skróty", "F1", "F2", "F3", "klawiatura", "terminal"],
   }),
 
   // Returns / receiving / production

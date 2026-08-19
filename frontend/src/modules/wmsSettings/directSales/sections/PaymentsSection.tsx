@@ -44,6 +44,17 @@ export function PaymentsSection({ config, onChange }: Props) {
         checked={config.allow_incomplete_payment}
         onChange={(allow_incomplete_payment) => onChange({ allow_incomplete_payment })}
       />
+      <div className="mt-4 border-t border-slate-100 pt-4">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Obsługa terminala</p>
+        <ToggleRow
+          label="Włącz skróty klawiaturowe"
+          checked={config.keyboard_shortcuts}
+          onChange={(keyboard_shortcuts) => onChange({ keyboard_shortcuts })}
+        />
+        <p className="mt-1 text-xs text-slate-500">
+          F1 gotówka · F2 karta · F3 BLIK · Ctrl+Enter realizacja sprzedaży
+        </p>
+      </div>
     </SettingsCard>
   );
 }
