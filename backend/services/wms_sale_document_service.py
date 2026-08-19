@@ -10,11 +10,13 @@ from datetime import datetime
 from sqlalchemy.orm import Session, joinedload
 
 from ..models.commerce_operational import Payment, PaymentTransaction
+from ..models.customer import Customer
 from ..models.document_series import DocumentSeries
 from ..models.order import Order
 from ..models.order_item import OrderItem
 from ..models.sale_document import SaleDocument
 from .document_number_service import allocate_next_document_number
+from .sale_document_buyer_snapshot import persist_buyer_snapshot
 from .sale_document_financials import compute_sale_totals_from_order
 
 logger = logging.getLogger(__name__)
@@ -176,8 +178,20 @@ def create_sale_document(
         .filter(Order.id == int(order.id))
         .first()
     )
+    order_for_snapshot = order_loaded if order_loaded is not None else order
     if order_loaded is not None:
         _enrich_sale_document_row(db, row=row, order=order_loaded, series=ds)
+
+    customer: Customer | None = None
+    if getattr(order_for_snapshot, "customer_id", None):
+        customer = db.query(Customer).filter(Customer.id == int(order_for_snapshot.customer_id)).first()
+    persist_buyer_snapshot(
+        db,
+        row=row,
+        order=order_for_snapshot,
+        panel_document_type=panel,
+        customer=customer,
+    )
 
     db.add(row)
 

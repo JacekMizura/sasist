@@ -59,6 +59,7 @@ class TestSaleDocumentsPostgresTypes(unittest.TestCase):
             cols = {row[1] for row in conn.execute(text("PRAGMA table_info(sale_documents)"))}
         self.assertIn("payment_captured_at", cols)
         self.assertIn("document_type_id", cols)
+        self.assertIn("buyer_json", cols)
 
     def test_legacy_datetime_alter_would_fail_on_postgres_compile(self):
         bad = "ALTER TABLE sale_documents ADD COLUMN payment_captured_at DATETIME"

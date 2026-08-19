@@ -24,6 +24,7 @@ from ..models.stock_document import StockDocument
 from ..models.warehouse_inventory_movement import WarehouseInventoryMovement
 from .document_number_service import stock_document_display_label
 from .sale_document_financials import compute_sale_totals_from_order
+from .sale_document_buyer_snapshot import buyer_snapshot_to_display, parse_buyer_snapshot
 
 _LEGACY_NUMBER_RE = re.compile(r"\{[A-Z_]+\}")
 
@@ -200,7 +201,7 @@ def map_order_for_print(
 
     financials = compute_canonical_financials(order_full)
     payment = _resolve_payment(db, None, order_full, gross=float(financials["total_gross"]))
-    buyer = _customer_display(customer, order_full)
+    buyer = _resolve_buyer_display(None, customer, order_full)
     created = order_full.order_date or order_full.created_at
 
     return {
@@ -226,7 +227,19 @@ def map_order_for_print(
     }
 
 
-def _customer_display(customer: Customer | None, order: Order) -> dict[str, Any]:
+def _resolve_buyer_display(
+    doc: SaleDocument | None,
+    customer: Customer | None,
+    order: Order,
+) -> dict[str, Any]:
+    if doc is not None:
+        snapshot = parse_buyer_snapshot(getattr(doc, "buyer_json", None))
+        if snapshot:
+            return buyer_snapshot_to_display(snapshot)
+    return _customer_display_legacy(customer, order)
+
+
+def _customer_display_legacy(customer: Customer | None, order: Order) -> dict[str, Any]:
     if customer is not None:
         name = str(customer.company_name or "").strip()
         if not name:
@@ -402,7 +415,8 @@ def map_sale_document(
 
     panel_type = str(doc.panel_document_type or "").upper()
     doc_type = "FV" if panel_type == "INVOICE" else "PA"
-    client = _customer_display(customer, order_full)["name"]
+    buyer = _resolve_buyer_display(doc, customer, order_full)
+    client = buyer["name"]
 
     base: dict[str, Any] = {
         "id": str(doc.id),
@@ -466,7 +480,7 @@ def map_sale_document(
             "warehouse_name": str(getattr(warehouse, "name", None) or "").strip() or None,
             "lines": financials["lines"],
             "vat_rows": financials["vat_rows"],
-            "buyer": _customer_display(customer, order_full),
+            "buyer": buyer,
             "seller": _seller_from_series(series, tenant),
             "series_meta": {
                 "id": str(series.id) if series else None,

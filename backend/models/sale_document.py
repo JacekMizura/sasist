@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from ..database import Base
@@ -38,6 +38,8 @@ class SaleDocument(Base):
     payment_status = Column(String(24), nullable=True)
     payment_captured_at = Column(DateTime, nullable=True)
     payment_external_transaction_id = Column(String(128), nullable=True)
+    #: Immutable buyer snapshot at issuance — NULL = legacy live fallback on read.
+    buyer_json = Column(Text, nullable=True)
 
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
 
