@@ -32,6 +32,24 @@ LEGACY_WORKFLOW_STATUS_ID_KEYS: tuple[str, ...] = (
     "issued_order_status_id",
     "cancelled_order_status_id",
 )
+# Removed from UI/schema — preserve in JSON on save for safe round-trip.
+LEGACY_STOCK_SETTING_KEYS: tuple[str, ...] = ("allow_oversell",)
+
+_LEGACY_ALLOCATION_STRATEGY_MAP: dict[str, str] = {
+    "auto": "auto_split",
+    "store_first": "auto_split",
+    "pick_face": "single_location",
+}
+
+
+def normalize_allocation_strategy(raw: object | None) -> str:
+    """Map legacy allocation_strategy values to the three live strategies."""
+    s = str(raw or "").strip().lower()
+    if s in _LEGACY_ALLOCATION_STRATEGY_MAP:
+        return _LEGACY_ALLOCATION_STRATEGY_MAP[s]
+    if s in ("auto_split", "single_location", "manual"):
+        return s
+    return "auto_split"
 
 
 def _extensions_dict(data: dict[str, Any]) -> dict[str, Any]:
@@ -138,6 +156,25 @@ def preserve_legacy_workflow_status_ids(
     for key in LEGACY_WORKFLOW_STATUS_ID_KEYS:
         if key in existing and key not in out:
             out[key] = existing[key]
+    return out
+
+
+def preserve_legacy_stock_setting_keys(
+    existing: dict[str, Any],
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Echo removed stock keys (e.g. allow_oversell) into saved JSON without live config exposure."""
+    out = deepcopy(payload)
+    for key in LEGACY_STOCK_SETTING_KEYS:
+        if key in existing and key not in out:
+            out[key] = existing[key]
+    return out
+
+
+def _migrate_allocation_strategy_field(data: dict[str, Any]) -> dict[str, Any]:
+    out = deepcopy(data)
+    if "allocation_strategy" in out:
+        out["allocation_strategy"] = normalize_allocation_strategy(out.get("allocation_strategy"))
     return out
 
 
@@ -256,7 +293,10 @@ def _config_from_dict(
     apply_status_fallbacks: bool = False,
 ) -> DirectSalesSettingsConfig:
     merged = _deep_merge(SYSTEM_DEFAULTS, data)
+    merged = _migrate_allocation_strategy_field(merged)
     merged = _migrate_payment_methods_defaults(merged)
+    for key in LEGACY_STOCK_SETTING_KEYS:
+        merged.pop(key, None)
     if db is not None and tenant_id is not None and warehouse_id is not None and int(warehouse_id) > 0:
         merged = _migrate_legacy_status_fields(db, merged, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
     cfg = DirectSalesSettingsConfig.model_validate(merged)
@@ -393,13 +433,18 @@ def save_direct_sales_settings(
     scope_wh = TENANT_DEFAULT_WAREHOUSE_ID if int(warehouse_id) <= 0 else int(warehouse_id)
     row = _get_or_create_row(db, tenant_id, scope_wh)
     payload = settings.model_dump()
+    payload["allocation_strategy"] = normalize_allocation_strategy(payload.get("allocation_strategy"))
+    for key in LEGACY_STOCK_SETTING_KEYS:
+        payload.pop(key, None)
     ext = payload.get("extensions") if isinstance(payload.get("extensions"), dict) else {}
     ext = {**ext, _DS_PAYMENT_METHODS_V2_KEY: True}
     # Conscious save stamps v1 — checkbox becomes the business gate for this scope.
     if "enabled" in payload:
         ext = {**ext, DS_ENABLED_V1_KEY: True}
     payload["extensions"] = ext
-    payload = preserve_legacy_workflow_status_ids(_parse_row(row), payload)
+    existing_raw = _parse_row(row)
+    payload = preserve_legacy_workflow_status_ids(existing_raw, payload)
+    payload = preserve_legacy_stock_setting_keys(existing_raw, payload)
     row.settings_json = json.dumps(payload, ensure_ascii=False)
     row.updated_at = datetime.utcnow()
     db.flush()

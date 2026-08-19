@@ -7,7 +7,7 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field
 
 DocumentTypeDefault = Literal["PA", "FV"]
-AllocationStrategy = Literal["auto", "store_first", "pick_face", "manual"]
+AllocationStrategy = Literal["auto_split", "single_location", "manual"]
 PriceDisplayMode = Literal["gross", "net", "both"]
 
 
@@ -41,8 +41,7 @@ class DirectSalesSettingsConfig(BaseModel):
     require_cash_received: bool = True
     show_change_amount: bool = True
     allow_incomplete_payment: bool = False
-    allow_oversell: bool = False
-    allocation_strategy: AllocationStrategy = "store_first"
+    allocation_strategy: AllocationStrategy = "auto_split"
     hide_empty_locations: bool = True
     price_display: PriceDisplayMode = "gross"
     show_ean: bool = True

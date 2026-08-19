@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from ...models.commerce_operational import DirectSaleSession, DirectSaleSessionLine
 from ...models.product import Product
 from ..location_stock_service import resolve_product_id, suggest_issue_locations_for_sales
+from ..direct_sales_settings_service import resolve_direct_sales_settings
 from ..product_sales_offers import (
     assert_offer_quantity_available,
     auto_select_offer_if_unique,
@@ -139,6 +140,21 @@ def session_scan_add_line(
     )
 
 
+def _resolve_prefer_store_locations(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+) -> bool:
+    try:
+        cfg = resolve_direct_sales_settings(
+            db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
+        ).resolved
+        return bool(cfg.prefer_store_locations)
+    except Exception:
+        return True
+
+
 def _add_line_for_product(
     db: Session,
     sess: DirectSaleSession,
@@ -182,6 +198,11 @@ def _add_line_for_product(
         warehouse_id=int(sess.warehouse_id),
         product_id=pid,
         quantity=qty,
+        prefer_store_locations=_resolve_prefer_store_locations(
+            db,
+            tenant_id=int(sess.tenant_id),
+            warehouse_id=int(sess.warehouse_id),
+        ),
     )
     suggested_lid = int(suggestions[0]["location_id"]) if suggestions else None
     src_lid = int(source_location_id) if source_location_id else suggested_lid

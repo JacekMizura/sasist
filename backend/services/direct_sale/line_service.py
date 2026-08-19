@@ -8,6 +8,8 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from ...models.commerce_operational import DirectSaleSession, DirectSaleSessionLine
+from ..product_sales_offers import assert_offer_quantity_available
+from ..product_sales_offers.errors import OfferStockUnavailableError
 from .errors import DirectSaleError
 from .line_delete_service import get_session_line, remove_session_line as _remove_session_line
 from .scan_service import session_add_product_line
@@ -59,6 +61,27 @@ def update_session_line_quantity(
             tenant_id=int(sess.tenant_id),
             warehouse_id=int(sess.warehouse_id),
         )
+        offer_id = int(line.product_sales_offer_id) if line.product_sales_offer_id else None
+        if offer_id is None or offer_id <= 0:
+            raise DirectSaleError(
+                "Brak oferty sprzedażowej dla pozycji.",
+                code="offer_missing",
+                http_status=400,
+            )
+        try:
+            assert_offer_quantity_available(
+                db,
+                offer=offer_id,
+                tenant_id=int(sess.tenant_id),
+                warehouse_id=int(sess.warehouse_id),
+                quantity=qty,
+            )
+        except OfferStockUnavailableError as exc:
+            raise DirectSaleError(
+                str(exc.detail),
+                code="offer_stock_unavailable",
+                http_status=400,
+            ) from exc
     line.quantity = qty
     _touch_soft_hold_qty(line, qty)
     sess.last_activity_at = datetime.utcnow()

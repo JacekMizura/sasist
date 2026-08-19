@@ -89,31 +89,12 @@ def _allocations_from_splits(
     return out
 
 
-def _oversell_allocation(
-    line: DirectSaleSessionLine,
-    *,
-    location_id: int | None,
-) -> list[IssueAllocation]:
-    pid = int(line.product_id)
-    need = float(line.quantity or 0)
-    if need <= 0:
-        return []
-    lid = int(location_id) if location_id else 0
-    if lid <= 0:
-        raise DirectSaleError(
-            f"Brak lokalizacji źródłowej dla produktu #{pid}.",
-            code="missing_source_location",
-        )
-    return [IssueAllocation(int(line.id), pid, lid, need)]
-
-
 def _fallback_line_allocations(
     db: Session,
     sess: DirectSaleSession,
     line: DirectSaleSessionLine,
     *,
     reason_code: str,
-    allow_oversell: bool = False,
     prefer_store_locations: bool = True,
 ) -> list[IssueAllocation]:
     tid = int(sess.tenant_id)
@@ -122,12 +103,6 @@ def _fallback_line_allocations(
     need = float(line.quantity or 0)
     if need <= 0:
         return []
-
-    if allow_oversell:
-        return _oversell_allocation(
-            line,
-            location_id=int(line.source_location_id) if line.source_location_id else None,
-        )
 
     warehouse_avail = _warehouse_product_available(db, tenant_id=tid, warehouse_id=wid, product_id=pid)
     if warehouse_avail + 1e-9 < need:
@@ -168,7 +143,6 @@ def _plan_single_line(
     sess: DirectSaleSession,
     line: DirectSaleSessionLine,
     *,
-    allow_oversell: bool = False,
     prefer_store_locations: bool = True,
 ) -> list[IssueAllocation]:
     strategy = (getattr(sess, "issue_strategy", None) or "STRICT_LOCATION").strip().upper()
@@ -182,22 +156,6 @@ def _plan_single_line(
     lid = int(line.source_location_id) if line.source_location_id else None
 
     try:
-        if allow_oversell:
-            pick_lid = lid
-            if pick_lid is None:
-                splits = suggest_issue_locations_for_sales(
-                    db,
-                    tenant_id=tid,
-                    warehouse_id=wid,
-                    product_id=pid,
-                    quantity=need,
-                    prefer_store_locations=prefer_store_locations,
-                )
-                if splits:
-                    pick_lid = int(splits[0]["location_id"])
-                elif line.suggested_location_id:
-                    pick_lid = int(line.suggested_location_id)
-            return _oversell_allocation(line, location_id=pick_lid)
         if strategy == "STRICT_LOCATION":
             if lid is None:
                 raise DirectSaleError(
@@ -254,15 +212,15 @@ def _plan_single_line(
             )
         return _allocations_from_splits(line, splits, need=need)
     except DirectSaleError as exc:
-        if allow_oversell and exc.code in _FALLBACK_CODES:
-            return _oversell_allocation(line, location_id=lid)
+        # Manual / STRICT — operator-chosen location only; never auto-reassign.
+        if strategy == "STRICT_LOCATION":
+            raise
         if exc.code in _FALLBACK_CODES:
             return _fallback_line_allocations(
                 db,
                 sess,
                 line,
                 reason_code=exc.code,
-                allow_oversell=allow_oversell,
                 prefer_store_locations=prefer_store_locations,
             )
         raise
@@ -281,11 +239,6 @@ def _resolve_session_settings(db: Session, sess: DirectSaleSession):
         return None
 
 
-def _resolve_allow_oversell(db: Session, sess: DirectSaleSession) -> bool:
-    cfg = _resolve_session_settings(db, sess)
-    return bool(cfg.allow_oversell) if cfg is not None else False
-
-
 def _resolve_prefer_store_locations(db: Session, sess: DirectSaleSession) -> bool:
     cfg = _resolve_session_settings(db, sess)
     return bool(cfg.prefer_store_locations) if cfg is not None else True
@@ -296,7 +249,6 @@ def plan_issue_allocations(
     sess: DirectSaleSession,
     lines: list[DirectSaleSessionLine],
 ) -> list[IssueAllocation]:
-    allow_oversell = _resolve_allow_oversell(db, sess)
     prefer_store_locations = _resolve_prefer_store_locations(db, sess)
     out: list[IssueAllocation] = []
     for line in lines:
@@ -305,7 +257,6 @@ def plan_issue_allocations(
                 db,
                 sess,
                 line,
-                allow_oversell=allow_oversell,
                 prefer_store_locations=prefer_store_locations,
             )
         )

@@ -25,9 +25,6 @@ export function ValidationWarnings({
   if (!config.allow_anonymous && !config.require_customer_for_invoice) {
     warnings.push("Każda sprzedaż będzie wymagała przypisanego klienta.");
   }
-  if (config.allow_oversell) {
-    warnings.push("Sprzedaż ponad stan może prowadzić do ujemnych stanów magazynowych i rozjazdów inwentaryzacyjnych.");
-  }
   if (!config.payment_methods.cash && !config.payment_methods.card && !config.payment_methods.blik && !config.payment_methods.transfer) {
     warnings.push("Brak aktywnej metody płatności — terminal nie będzie mógł zakończyć sprzedaży.");
   }
@@ -46,7 +43,7 @@ export function ValidationWarnings({
   return (
     <div className="space-y-2">
       {warnings.map((w) => (
-        <WarningBlock key={w} tone={w.includes("ponad stan") ? "red" : "amber"}>
+        <WarningBlock key={w} tone="amber">
           {w}
         </WarningBlock>
       ))}

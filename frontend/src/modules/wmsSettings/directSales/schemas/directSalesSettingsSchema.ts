@@ -1,8 +1,9 @@
 import type { OrderStatusOption } from "../../../../types/wmsPackingSettings";
+import { normalizeAllocationStrategy } from "../../../../utils/directSales/allocationStrategy";
 import { resolveDirectSalesStatusId } from "../utils/resolveDirectSalesStatusId";
 
 export type DocumentTypeDefault = "PA" | "FV";
-export type AllocationStrategy = "auto" | "store_first" | "pick_face" | "manual";
+export type AllocationStrategy = "auto_split" | "single_location" | "manual";
 export type PriceDisplayMode = "gross" | "net" | "both";
 
 export type DirectSalesDiscountSettings = {
@@ -24,6 +25,8 @@ export type DirectSalesPaymentMethods = {
 };
 
 /** Dead keys stripped from cached/API payloads — not part of live config. */
+export const DEAD_DIRECT_SALES_STOCK_SETTING_KEYS = ["allow_oversell"] as const;
+
 export const DEAD_DIRECT_SALES_WORKFLOW_STATUS_KEYS = [
   "session_created_order_status_id",
   "paid_order_status_id",
@@ -40,7 +43,6 @@ export type DirectSalesSettingsConfig = {
   require_cash_received: boolean;
   show_change_amount: boolean;
   allow_incomplete_payment: boolean;
-  allow_oversell: boolean;
   allocation_strategy: AllocationStrategy;
   hide_empty_locations: boolean;
   price_display: PriceDisplayMode;
@@ -102,8 +104,7 @@ export const DEFAULT_DIRECT_SALES_SETTINGS: DirectSalesSettingsConfig = {
   require_cash_received: true,
   show_change_amount: true,
   allow_incomplete_payment: false,
-  allow_oversell: false,
-  allocation_strategy: "store_first",
+  allocation_strategy: "auto_split",
   hide_empty_locations: true,
   price_display: "gross",
   show_ean: true,
@@ -191,6 +192,9 @@ export function normalizeDirectSalesSettings(
   for (const key of DEAD_DIRECT_SALES_WORKFLOW_STATUS_KEYS) {
     delete rest[key];
   }
+  for (const key of DEAD_DIRECT_SALES_STOCK_SETTING_KEYS) {
+    delete rest[key];
+  }
   delete rest.default_order_status;
 
   const extensions = { ...DEFAULT_DIRECT_SALES_SETTINGS.extensions, ...(d.extensions ?? {}) };
@@ -198,11 +202,13 @@ export function normalizeDirectSalesSettings(
     { ...DEFAULT_DIRECT_SALES_SETTINGS.payment_methods, ...pm },
     extensions,
   );
+  const allocation_strategy = normalizeAllocationStrategy(d.allocation_strategy);
 
   return {
     ...DEFAULT_DIRECT_SALES_SETTINGS,
     ...(rest as Partial<DirectSalesSettingsConfig>),
     default_order_status_id: defaultOrderStatusId,
+    allocation_strategy,
     payment_methods,
     discounts: {
       ...DEFAULT_DIRECT_SALES_SETTINGS.discounts,
