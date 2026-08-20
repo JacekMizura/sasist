@@ -226,7 +226,7 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
       <SectionCard
         id="wms-smart-history"
         title="Historia doboru"
-        summary="Serie decyzji pakowania budujące reguły Smart Matching — kliknij wiersz, aby zobaczyć przebieg 1→N."
+        summary="Historia decyzji pakowania używana do budowania reguł Smart Matching — kliknij wiersz, aby zobaczyć przebieg doborów."
       >
         <SmartMatchingHistorySeriesTable
           items={series}

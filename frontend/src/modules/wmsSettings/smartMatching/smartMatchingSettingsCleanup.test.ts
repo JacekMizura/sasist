@@ -51,28 +51,33 @@ describe("Smart Matching settings cleanup + history series UI", () => {
     expect(navSrc).not.toContain('label: "Zaawansowane"');
   });
 
-  it("compact series table without fingerprint / separate rules table", () => {
+  it("compact table: packaging / product / hit count — no algorithm status columns", () => {
     expect(panel).toContain("SmartMatchingHistorySeriesTable");
     expect(panel).toContain("getWmsSmartMatchingHistorySeries");
     expect(panel).not.toContain("Aktywne reguły dopasowania");
-    expect(panel).not.toContain("composition_key.slice");
     expect(seriesTable).not.toContain("fingerprint");
-    expect(seriesTable).toContain("Skład");
     expect(seriesTable).toContain("Opakowanie");
-    expect(seriesTable).toContain("Seria");
-    expect(seriesTable).toContain("Status");
-    expect(seriesTable).toContain("+{");
-    expect(seriesTable).toContain("innych produktów");
+    expect(seriesTable).toContain("Produkt / zestaw");
+    expect(seriesTable).toContain("Ilość doborów");
+    expect(seriesTable).toContain("Ostatni operator");
+    expect(seriesTable).not.toContain(">Status<");
+    expect(seriesTable).not.toContain(">Seria<");
+    expect(seriesTable).not.toContain("W trakcie");
+    expect(seriesTable).not.toContain("Reguła aktywna");
+    expect(seriesTable).not.toContain("/ {series.threshold}");
+    expect(seriesTable).toContain("hit_count");
+    expect(seriesTable).toContain("+{extraCount} innych produktów");
   });
 
-  it("popover: hit numbering, DECYDUJĄCY only via is_decisive, NADPISANIE", () => {
+  it("popover: hit numbering, DECYDUJĄCY only via is_decisive, NADPISANIE in detail", () => {
     expect(seriesTable).toContain("SeriesPopover");
+    expect(seriesTable).toContain("w-[28rem]");
     expect(seriesTable).toContain("hit.hit_index");
     expect(seriesTable).toContain("hit.is_decisive");
     expect(seriesTable).toContain("Decydujący");
     expect(seriesTable).toContain("Nadpisanie");
-    expect(seriesTable).toContain("Reguła aktywna");
-    expect(seriesTable).toContain("W trakcie");
+    expect(seriesTable).toContain("TRYB:");
+    expect(seriesTable).toContain("AKTUALNY PRÓG:");
     expect(seriesTable).not.toContain("created_at) as decisive");
   });
 
