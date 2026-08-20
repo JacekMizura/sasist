@@ -19,7 +19,9 @@ def is_carton_compatible_with_shipping(
     Hard filter: if the order has a shipping_method_id, the carton must be linked
     via carton_shipping_method_links. No shipping method → compatible (no hard fail).
     """
-    sid = (shipping_method_id or "").strip()
+    if shipping_method_id is None or shipping_method_id == "":
+        return True
+    sid = str(shipping_method_id).strip()
     if not sid:
         return True
     cid = (carton_id or "").strip()

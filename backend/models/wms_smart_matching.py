@@ -52,7 +52,7 @@ class WmsSmartMatchingSettings(Base):
 
 
 class WmsSmartMatchingObservationV2(Base):
-    """Per-product packing observation for Smart Matching engine v2 (min-qty learning)."""
+    """One packing decision observation (SINGLE_PRODUCT or COMPOSITION)."""
 
     __tablename__ = "wms_smart_matching_observations_v2"
 
@@ -60,20 +60,28 @@ class WmsSmartMatchingObservationV2(Base):
     tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False, index=True)
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True)
+    #: SINGLE = the product; COMPOSITION = min(product_id) anchor for NOT NULL FK (not learning key).
     product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
     quantity = Column(Integer, nullable=False)
     carton_id = Column(String(36), ForeignKey("cartons.id", ondelete="SET NULL"), nullable=True, index=True)
     suggested_carton_id = Column(String(36), nullable=True)
     user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True)
     engine_version = Column(Integer, nullable=False, default=2)
+    #: SINGLE_PRODUCT | COMPOSITION (legacy rows treated as SINGLE_PRODUCT).
+    pattern_type = Column(String(32), nullable=False, default="SINGLE_PRODUCT", index=True)
+    #: Structural SSOT for COMPOSITION (and SINGLE snapshot). JSON list of {product_id, quantity}.
+    composition_items_json = Column(Text, nullable=True)
+    #: Deterministic index hash only — not UI/domain SSOT.
+    composition_identity_hash = Column(String(64), nullable=True, index=True)
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow, index=True)
 
 
 class WmsSmartMatchingRuleV2(Base):
     """
-    Smart Matching v2 rule: product_id + min_qty → carton_id.
+    Smart Matching v2 rule.
 
-    Breakpoint semantics: for order qty Q pick ACTIVE rules with min_qty <= Q, then MAX(min_qty).
+    SINGLE_PRODUCT: product_id + min_qty → carton_id (breakpoint semantics).
+    COMPOSITION: exact normalized items → carton_id (min_qty sentinel 0; key = composition_identity_hash).
     """
 
     __tablename__ = "wms_smart_matching_rules_v2"
@@ -81,11 +89,13 @@ class WmsSmartMatchingRuleV2(Base):
         UniqueConstraint(
             "tenant_id",
             "warehouse_id",
+            "pattern_type",
             "product_id",
             "min_qty",
             "carton_id",
             "source",
-            name="uq_wms_sm_v2_rule_breakpoint",
+            "composition_identity_hash",
+            name="uq_wms_sm_v2_rule_pattern",
         ),
     )
 
@@ -119,6 +129,10 @@ class WmsSmartMatchingRuleV2(Base):
     last_order_id = Column(Integer, ForeignKey("orders.id", ondelete="SET NULL"), nullable=True)
     last_used_at = Column(DateTime, nullable=True)
     engine_version = Column(Integer, nullable=False, default=2)
+    pattern_type = Column(String(32), nullable=False, default="SINGLE_PRODUCT", index=True)
+    composition_items_json = Column(Text, nullable=True)
+    #: Empty string for SINGLE; sha1 for COMPOSITION. Part of unique key.
+    composition_identity_hash = Column(String(64), nullable=False, default="", index=True)
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=True, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -207,7 +207,7 @@ def test_f_set_product_as_single_sku(db):
     assert int(rule.product_id) == 10
 
 
-def test_g_multi_sku_does_not_create_v2_rule(db):
+def test_g_multi_sku_creates_composition_observation_not_single_rules(db):
     _set_threshold(db, 2)
     o = Order(
         id=99,
@@ -226,8 +226,10 @@ def test_g_multi_sku_does_not_create_v2_rule(db):
     assert single_product_qty_from_order(db, o) is None
     obs = record_v2_observation_and_learn(db, order=o, carton_id="carton-x")
     db.commit()
-    assert obs is None
-    assert db.query(WmsSmartMatchingObservationV2).count() == 0
+    assert obs is not None
+    assert str(obs.pattern_type) == "COMPOSITION"
+    assert db.query(WmsSmartMatchingObservationV2).count() == 1
+    # One pack below threshold — no AUTO rule yet
     assert db.query(WmsSmartMatchingRuleV2).count() == 0
 
 

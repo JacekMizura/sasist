@@ -61,6 +61,7 @@ def reconcile_product_breakpoint_conflicts(
             WmsSmartMatchingRuleV2.product_id == int(product_id),
             WmsSmartMatchingRuleV2.source == SOURCE_AUTO,
             WmsSmartMatchingRuleV2.status == STATUS_ACTIVE,
+            WmsSmartMatchingRuleV2.pattern_type == "SINGLE_PRODUCT",
         )
         .all()
     )
@@ -119,6 +120,9 @@ def insert_ambiguous_competitor(
         last_order_id=int(last_order_id) if last_order_id else None,
         last_used_at=now,
         engine_version=2,
+        pattern_type=str(getattr(template, "pattern_type", None) or "SINGLE_PRODUCT"),
+        composition_items_json=getattr(template, "composition_items_json", None),
+        composition_identity_hash=str(getattr(template, "composition_identity_hash", None) or ""),
         created_at=now,
         updated_at=now,
     )

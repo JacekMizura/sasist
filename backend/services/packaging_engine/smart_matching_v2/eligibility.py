@@ -1,4 +1,4 @@
-"""Eligibility for Smart Matching v2 learning / suggestion."""
+"""Eligibility helpers — prefer composition.pattern_from_order for full v2."""
 
 from __future__ import annotations
 
@@ -8,7 +8,8 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from ....models.order import Order
-from ....models.order_item import OrderItem
+from .composition import pattern_from_order
+from .constants import PATTERN_SINGLE
 
 
 @dataclass(frozen=True)
@@ -19,21 +20,12 @@ class V2EligibleLine:
 
 def single_product_qty_from_order(db: Session, order: Order) -> Optional[V2EligibleLine]:
     """
-    v2 applies only to orders with exactly one distinct product_id
-    (variant = own product_id; set = set product_id, no BOM explode).
+    SINGLE_PRODUCT only. Multi-SKU returns None.
 
-    Multiple OrderItem rows for the same product_id are aggregated by qty.
-    Multi-SKU baskets return None (no v2 learning / no fake basket key).
+    Prefer pattern_from_order() for Observation / learning that handles both types.
+    Kept for tests and SINGLE-only call sites.
     """
-    items = db.query(OrderItem).filter(OrderItem.order_id == int(order.id)).all()
-    by_pid: dict[int, int] = {}
-    for it in items:
-        pid = int(getattr(it, "product_id", 0) or 0)
-        qty = int(getattr(it, "quantity", 0) or 0)
-        if pid <= 0 or qty <= 0:
-            continue
-        by_pid[pid] = by_pid.get(pid, 0) + qty
-    if len(by_pid) != 1:
+    snap = pattern_from_order(db, order)
+    if snap is None or snap.pattern_type != PATTERN_SINGLE:
         return None
-    pid, qty = next(iter(by_pid.items()))
-    return V2EligibleLine(product_id=pid, quantity=qty)
+    return V2EligibleLine(product_id=int(snap.anchor_product_id), quantity=int(snap.quantity))

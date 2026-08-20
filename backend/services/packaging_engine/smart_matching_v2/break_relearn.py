@@ -1,5 +1,5 @@
 """
-Override streak + AUTO rule break/relearn (Phase 2 + 5A linkage).
+Override streak + AUTO rule break/relearn (Phase 2 + 5A + COMPOSITION).
 
 break_threshold = learning threshold (settings identical_orders_threshold),
 preferring the rule's created_threshold when set.
@@ -9,8 +9,8 @@ Override → override_streak += 1; at threshold → status BROKEN (AUTO only)
   and broken_by_observation_id = current observation (deterministic).
 MANUAL / is_locked rules are never auto-broken.
 
-Important: if order qty > suggested rule.min_qty, do NOT count as override.
-That path is how higher breakpoint rules (3→X, 5→Y) form without breaking the lower rule.
+SINGLE only: if order qty > suggested rule.min_qty, do NOT count as override
+(higher breakpoint path). COMPOSITION always counts exact-pattern overrides.
 """
 
 from __future__ import annotations
@@ -22,7 +22,14 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from ....models.wms_smart_matching import WmsSmartMatchingObservationV2, WmsSmartMatchingRuleV2
-from .constants import SOURCE_AUTO, STATUS_ACTIVE, STATUS_BROKEN, VALID_THRESHOLDS
+from .constants import (
+    PATTERN_COMPOSITION,
+    PATTERN_SINGLE,
+    SOURCE_AUTO,
+    STATUS_ACTIVE,
+    STATUS_BROKEN,
+    VALID_THRESHOLDS,
+)
 from .resolver import ResolvedV2Rule
 
 logger = logging.getLogger(__name__)
@@ -36,7 +43,7 @@ def _break_threshold(rule: WmsSmartMatchingRuleV2, settings_row) -> int:
     return th if th in VALID_THRESHOLDS else 3
 
 
-def _competing_series_ready(
+def _competing_series_ready_single(
     db: Session,
     *,
     tenant_id: int,
@@ -46,7 +53,6 @@ def _competing_series_ready(
     rule_min_qty: int,
     threshold: int,
 ) -> bool:
-    """True when chosen carton already has enough obs at same min_qty (conflict, not break)."""
     obs = (
         db.query(WmsSmartMatchingObservationV2)
         .filter(
@@ -54,15 +60,41 @@ def _competing_series_ready(
             WmsSmartMatchingObservationV2.warehouse_id == int(warehouse_id),
             WmsSmartMatchingObservationV2.product_id == int(product_id),
             WmsSmartMatchingObservationV2.carton_id == str(chosen_carton_id),
+            (
+                (WmsSmartMatchingObservationV2.pattern_type == PATTERN_SINGLE)
+                | (WmsSmartMatchingObservationV2.pattern_type.is_(None))
+            ),
         )
         .all()
     )
-    # Caller flushes current observation first — count includes it.
     n = len(obs)
     if n < threshold:
         return False
     qtys = [int(o.quantity) for o in obs]
     return min(qtys) == int(rule_min_qty)
+
+
+def _competing_series_ready_composition(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    identity_hash: str,
+    chosen_carton_id: str,
+    threshold: int,
+) -> bool:
+    n = (
+        db.query(WmsSmartMatchingObservationV2)
+        .filter(
+            WmsSmartMatchingObservationV2.tenant_id == int(tenant_id),
+            WmsSmartMatchingObservationV2.warehouse_id == int(warehouse_id),
+            WmsSmartMatchingObservationV2.pattern_type == PATTERN_COMPOSITION,
+            WmsSmartMatchingObservationV2.composition_identity_hash == str(identity_hash),
+            WmsSmartMatchingObservationV2.carton_id == str(chosen_carton_id),
+        )
+        .count()
+    )
+    return n >= threshold
 
 
 def apply_override_streak_after_choice(
@@ -73,12 +105,9 @@ def apply_override_streak_after_choice(
     order_quantity: int,
     settings_row,
     breaking_observation_id: Optional[int] = None,
+    pattern_type: str = PATTERN_SINGLE,
+    composition_identity_hash: str = "",
 ) -> Optional[WmsSmartMatchingRuleV2]:
-    """
-    Update override_streak on the ACTIVE AUTO rule that would have been suggested.
-    Returns the rule if it was BROKEN by this call.
-    When broken, sets broken_by_observation_id to breaking_observation_id (required for history).
-    """
     if resolved is None or resolved.ambiguous:
         return None
     rule = resolved.rule
@@ -103,8 +132,9 @@ def apply_override_streak_after_choice(
             db.flush()
         return None
 
-    # Higher qty than current breakpoint → candidate for a new higher min_qty rule, not a break.
-    if int(order_quantity) > int(rule.min_qty):
+    pt = str(pattern_type or getattr(rule, "pattern_type", None) or PATTERN_SINGLE)
+    # SINGLE higher-breakpoint path — not an override of the lower rule.
+    if pt == PATTERN_SINGLE and int(order_quantity) > int(rule.min_qty):
         return None
 
     streak = int(rule.override_streak or 0) + 1
@@ -113,16 +143,31 @@ def apply_override_streak_after_choice(
     threshold = _break_threshold(rule, settings_row)
     broken = None
     if streak >= threshold:
-        # Same-breakpoint competing series → conflict path in learning, not BROKEN.
-        if _competing_series_ready(
-            db,
-            tenant_id=int(rule.tenant_id),
-            warehouse_id=int(rule.warehouse_id),
-            product_id=int(rule.product_id),
-            chosen_carton_id=chosen,
-            rule_min_qty=int(rule.min_qty),
-            threshold=threshold,
-        ):
+        competing = False
+        if pt == PATTERN_COMPOSITION:
+            competing = _competing_series_ready_composition(
+                db,
+                tenant_id=int(rule.tenant_id),
+                warehouse_id=int(rule.warehouse_id),
+                identity_hash=str(
+                    composition_identity_hash
+                    or getattr(rule, "composition_identity_hash", None)
+                    or ""
+                ),
+                chosen_carton_id=chosen,
+                threshold=threshold,
+            )
+        else:
+            competing = _competing_series_ready_single(
+                db,
+                tenant_id=int(rule.tenant_id),
+                warehouse_id=int(rule.warehouse_id),
+                product_id=int(rule.product_id),
+                chosen_carton_id=chosen,
+                rule_min_qty=int(rule.min_qty),
+                threshold=threshold,
+            )
+        if competing:
             db.add(rule)
             db.flush()
             return None
@@ -131,10 +176,9 @@ def apply_override_streak_after_choice(
             rule.broken_by_observation_id = int(breaking_observation_id)
         broken = rule
         logger.info(
-            "smart_matching_v2 AUTO rule BROKEN id=%s product=%s min_qty=%s carton=%s streak=%s thr=%s obs=%s",
+            "smart_matching_v2 AUTO rule BROKEN id=%s pattern=%s carton=%s streak=%s thr=%s obs=%s",
             rule.id,
-            rule.product_id,
-            rule.min_qty,
+            pt,
             rule.carton_id,
             streak,
             threshold,

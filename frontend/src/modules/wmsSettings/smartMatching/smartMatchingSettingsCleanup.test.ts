@@ -65,6 +65,9 @@ describe("Smart Matching settings + history events v2 UI", () => {
     expect(eventsTable).not.toContain("fingerprint");
     expect(eventsTable).not.toContain("W trakcie");
     expect(eventsTable).not.toContain("Ilość doborów");
+    expect(eventsTable).toContain("Brak decyzji Smart Matching v2.");
+    expect(eventsTable).not.toContain("jedno-produktowych");
+    expect(eventsTable).toContain("COMPOSITION");
   });
 
   it("popover: hit_index vs quantity separate; DECYDUJĄCY / PRZERWAŁ REGUŁĘ", () => {

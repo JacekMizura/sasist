@@ -235,8 +235,11 @@ export type WmsSmartMatchingHistoryEventApi = {
   observation_id: number;
   order_id: number;
   order_number?: string | null;
+  pattern_type?: string;
   product: { id: number; name: string };
   quantity: number;
+  composition_items?: { product_id: number; name: string; quantity: number }[];
+  composition_identity_hash?: string | null;
   carton?: { id?: string | null; name?: string | null } | null;
   suggested_carton?: { id?: string | null; name?: string | null } | null;
   operator: { id?: number | null; display_name?: string | null };
@@ -286,6 +289,9 @@ export type WmsSmartMatchingLearningSeriesApi = {
   product_name: string;
   carton_id: string;
   carton_name?: string | null;
+  pattern_type?: string;
+  composition_identity_hash?: string | null;
+  composition_items?: { product_id: number; name: string; quantity: number }[];
   created_threshold?: number | null;
   hits: WmsSmartMatchingLearningSeriesHitApi[];
   rule?: {
@@ -300,6 +306,7 @@ export type WmsSmartMatchingLearningSeriesApi = {
     is_locked: boolean;
     created_threshold?: number | null;
     label: string;
+    pattern_type?: string;
   } | null;
 };
 
@@ -337,15 +344,19 @@ export async function getSmartMatchingHistoryEvents(
 export async function getSmartMatchingLearningSeries(
   tenantId: number,
   warehouseId: number,
-  productId: number,
-  cartonId: string,
+  opts: {
+    cartonId: string;
+    productId?: number;
+    compositionIdentityHash?: string | null;
+  },
 ): Promise<WmsSmartMatchingLearningSeriesApi> {
   const res = await api.get<WmsSmartMatchingLearningSeriesApi>("/wms/smart-matching/learning-series", {
     params: {
       tenant_id: tenantId,
       warehouse_id: warehouseId,
-      product_id: productId,
-      carton_id: cartonId,
+      carton_id: opts.cartonId,
+      product_id: opts.productId,
+      composition_identity_hash: opts.compositionIdentityHash || undefined,
     },
   });
   return res.data;

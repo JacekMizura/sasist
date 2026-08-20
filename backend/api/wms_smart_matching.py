@@ -27,6 +27,7 @@ from ..schemas.wms_smart_matching import (
     WmsSmartMatchingSettingsSave,
 )
 from ..services.packaging_engine.smart_matching_history_events_v2 import (
+    learning_series_for_composition,
     learning_series_for_product_carton,
     list_history_events_v2,
 )
@@ -183,18 +184,38 @@ def get_smart_matching_history_events(
 def get_smart_matching_learning_series(
     tenant_id: int = Query(..., ge=1),
     warehouse_id: int = Depends(require_operable_warehouse),
-    product_id: int = Query(..., ge=1),
     carton_id: str = Query(..., min_length=1),
+    product_id: int | None = Query(None, ge=1),
+    composition_identity_hash: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Popover series for (product, carton) — hit_index oldest→newest, render newest-first."""
-    payload = learning_series_for_product_carton(
-        db,
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        product_id=product_id,
-        carton_id=carton_id,
-    )
+    """
+    Popover series.
+    SINGLE: product_id + carton_id.
+    COMPOSITION: composition_identity_hash + carton_id.
+    """
+    hid = (composition_identity_hash or "").strip()
+    if hid:
+        payload = learning_series_for_composition(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            identity_hash=hid,
+            carton_id=carton_id,
+        )
+    elif product_id is not None:
+        payload = learning_series_for_product_carton(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            product_id=product_id,
+            carton_id=carton_id,
+        )
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="product_id or composition_identity_hash required",
+        )
     return WmsSmartMatchingLearningSeriesOut.model_validate(payload)
 
 

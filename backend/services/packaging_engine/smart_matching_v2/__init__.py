@@ -1,4 +1,4 @@
-"""Smart Matching suggest — v2 breakpoint first, optional legacy v1 exact fallback."""
+"""Smart Matching suggest — v2 SINGLE + COMPOSITION, optional legacy v1 exact fallback."""
 
 from __future__ import annotations
 
@@ -14,8 +14,9 @@ from ..smart_matching_store import (
     get_or_create_settings,
 )
 from ..suggestions import PackagingSuggestionDraft
-from .eligibility import single_product_qty_from_order
-from .resolver import resolve_breakpoint_rule
+from .composition import pattern_from_order
+from .constants import PATTERN_COMPOSITION, PATTERN_SINGLE
+from .resolver import resolve_breakpoint_rule, resolve_composition_rule
 from .shipping import is_carton_compatible_with_shipping
 from .product_rules import is_product_smart_matching_enabled
 
@@ -59,7 +60,7 @@ def evaluate_smart_matching_v2(
 ) -> "SmartResult":
     """
     Returns SmartResult for StrategyResolver.
-    Ambiguous v2 conflict → ambiguous=True, no draft (no v1 fallback).
+    COMPOSITION exact before SINGLE. Ambiguous → no draft (no v1 fallback).
     """
     from ..strategy_resolver import SmartResult
 
@@ -74,19 +75,34 @@ def evaluate_smart_matching_v2(
     by_id = {str(c.id): c for c in cartons}
     shipping_method_id = getattr(order, "shipping_method_id", None)
 
-    line = single_product_qty_from_order(db, order)
-    if line is not None:
-        if not is_product_smart_matching_enabled(
-            db, tenant_id=tenant_id, warehouse_id=warehouse_id, product_id=int(line.product_id)
+    snap = pattern_from_order(db, order)
+    if snap is not None:
+        product_ids = [int(i.product_id) for i in snap.items]
+        if any(
+            not is_product_smart_matching_enabled(
+                db, tenant_id=tenant_id, warehouse_id=warehouse_id, product_id=pid
+            )
+            for pid in product_ids
         ):
             return SmartResult(draft=None, ambiguous=False, reason="PRODUCT_DISABLED")
-        resolved = resolve_breakpoint_rule(
-            db,
-            tenant_id=tenant_id,
-            warehouse_id=warehouse_id,
-            product_id=line.product_id,
-            quantity=line.quantity,
-        )
+
+        resolved = None
+        if snap.pattern_type == PATTERN_COMPOSITION:
+            resolved = resolve_composition_rule(
+                db,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                identity_hash=snap.identity_hash,
+            )
+        else:
+            resolved = resolve_breakpoint_rule(
+                db,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                product_id=snap.anchor_product_id,
+                quantity=snap.quantity,
+            )
+
         if resolved is not None and resolved.ambiguous:
             return SmartResult(draft=None, ambiguous=True, reason="AMBIGUOUS")
         if resolved is not None and not resolved.ambiguous:
@@ -95,19 +111,26 @@ def evaluate_smart_matching_v2(
                 db, carton_id=cid, shipping_method_id=shipping_method_id
             ):
                 conf = min(0.95, 0.78 + min(0.15, int(resolved.rule.hit_count or 0) * 0.02))
+                if snap.pattern_type == PATTERN_COMPOSITION:
+                    reason = (
+                        f"Smart Matching v2: composition "
+                        f"({len(snap.items)} SKUs) → carton "
+                        f"({int(resolved.rule.hit_count)} hits)."
+                    )
+                else:
+                    reason = (
+                        f"Smart Matching v2: product #{snap.anchor_product_id} "
+                        f"min_qty≥{int(resolved.rule.min_qty)} → carton "
+                        f"({int(resolved.rule.hit_count)} hits)."
+                    )
                 draft = _draft_from_carton(
                     order_id=oid,
                     carton=by_id[cid],
                     confidence=conf,
-                    reason=(
-                        f"Smart Matching v2: product #{line.product_id} "
-                        f"min_qty≥{int(resolved.rule.min_qty)} → carton "
-                        f"({int(resolved.rule.hit_count)} hits)."
-                    ),
+                    reason=reason,
                     sort_key=conf + 0.6,
                 )
                 return SmartResult(draft=draft, ambiguous=False, reason="V2")
-            # Incompatible / missing → treat as no Smart v2
 
     legacy_on = bool(getattr(settings, "legacy_v1_fallback_enabled", True))
     if legacy_on:

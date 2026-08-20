@@ -212,12 +212,22 @@ class WmsSmartMatchingLinkedRuleOut(BaseModel):
     hit_count: int = 0
 
 
+class WmsSmartMatchingCompositionItemOut(BaseModel):
+    product_id: int
+    name: str
+    quantity: int
+
+
 class WmsSmartMatchingHistoryEventOut(BaseModel):
     observation_id: int
     order_id: int
     order_number: Optional[str] = None
+    pattern_type: str = "SINGLE_PRODUCT"
     product: WmsSmartMatchingProductRefOut
     quantity: int
+    composition_items: list[WmsSmartMatchingCompositionItemOut] = Field(default_factory=list)
+    #: Opaque index key for learning-series; never display in UI.
+    composition_identity_hash: Optional[str] = None
     carton: Optional[WmsSmartMatchingNamedRefOut] = None
     suggested_carton: Optional[WmsSmartMatchingNamedRefOut] = None
     operator: WmsSmartMatchingOperatorOut = Field(default_factory=WmsSmartMatchingOperatorOut)
@@ -264,6 +274,7 @@ class WmsSmartMatchingLearningSeriesRuleOut(BaseModel):
     is_locked: bool = False
     created_threshold: Optional[int] = None
     label: str
+    pattern_type: str = "SINGLE_PRODUCT"
 
 
 class WmsSmartMatchingLearningSeriesOut(BaseModel):
@@ -271,6 +282,9 @@ class WmsSmartMatchingLearningSeriesOut(BaseModel):
     product_name: str
     carton_id: str
     carton_name: Optional[str] = None
+    pattern_type: str = "SINGLE_PRODUCT"
+    composition_identity_hash: Optional[str] = None
+    composition_items: list[WmsSmartMatchingCompositionItemOut] = Field(default_factory=list)
     created_threshold: Optional[int] = None
     hits: list[WmsSmartMatchingLearningSeriesHitOut] = Field(default_factory=list)
     rule: Optional[WmsSmartMatchingLearningSeriesRuleOut] = None

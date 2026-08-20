@@ -192,7 +192,17 @@ function LearningPopover({
       {series.rule ? (
         <div className="mt-3 border-t border-slate-100 pt-2.5 text-[12px] leading-snug text-slate-800">
           <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Reguła</p>
-          <p className="mt-0.5 font-medium">{series.rule.product_name}</p>
+          {series.pattern_type === "COMPOSITION" && (series.composition_items?.length ?? 0) > 0 ? (
+            <ul className="mt-0.5 space-y-0.5">
+              {series.composition_items!.map((ci) => (
+                <li key={ci.product_id}>
+                  {ci.name} ×{ci.quantity}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-0.5 font-medium">{series.rule.product_name}</p>
+          )}
           <p className="text-slate-700">{series.rule.label}</p>
         </div>
       ) : null}
@@ -282,12 +292,12 @@ export function SmartMatchingHistoryEventsTable({
     setOpenId(ev.observation_id);
     setSeriesBusy(true);
     try {
-      const s = await getSmartMatchingLearningSeries(
-        tenantId,
-        warehouseId,
-        ev.product.id,
-        cid,
-      );
+      const s = await getSmartMatchingLearningSeries(tenantId, warehouseId, {
+        cartonId: cid,
+        productId: ev.pattern_type === "COMPOSITION" ? undefined : ev.product.id,
+        compositionIdentityHash:
+          ev.pattern_type === "COMPOSITION" ? ev.composition_identity_hash : undefined,
+      });
       setSeries(s);
     } catch {
       setSeries(null);
@@ -405,7 +415,7 @@ export function SmartMatchingHistoryEventsTable({
               ) : items.length === 0 ? (
                 <tr>
                   <td colSpan={6} className={`${td} text-slate-500`}>
-                    Brak decyzji v2 — pojawią się po spakowaniu zamówień jedno-produktowych.
+                    Brak decyzji Smart Matching v2.
                   </td>
                 </tr>
               ) : (
@@ -420,9 +430,29 @@ export function SmartMatchingHistoryEventsTable({
                       <td className={`${td} whitespace-nowrap font-medium text-slate-900`}>
                         {ev.carton?.name || ev.carton?.id || "—"}
                       </td>
-                      <td className={`${td} max-w-[16rem] truncate`}>{ev.product.name}</td>
+                      <td className={`${td} max-w-[16rem]`}>
+                        {ev.pattern_type === "COMPOSITION" && (ev.composition_items?.length ?? 0) > 0 ? (
+                          <div className="leading-tight">
+                            <div className="truncate font-medium text-slate-900">
+                              {ev.composition_items![0].name} ×{ev.composition_items![0].quantity}
+                            </div>
+                            {(ev.composition_items?.length ?? 0) > 1 ? (
+                              <div className="text-[11px] text-slate-500">
+                                +{(ev.composition_items!.length - 1)}{" "}
+                                {ev.composition_items!.length - 1 === 1
+                                  ? "inny produkt"
+                                  : "inne produkty"}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="truncate">{ev.product.name}</span>
+                        )}
+                      </td>
                       <td className={`${td} text-right tabular-nums font-semibold text-slate-900`}>
-                        {ev.quantity} szt.
+                        {ev.pattern_type === "COMPOSITION"
+                          ? `${ev.quantity} szt.`
+                          : `${ev.quantity} szt.`}
                       </td>
                       <td className={td}>
                         {ev.operator.display_name ? (

@@ -16,7 +16,8 @@ from ...models.carton import Carton
 from ...models.order import Order
 from ...models.product import Product
 from ...models.wms_smart_matching import WmsSmartMatchingObservationV2, WmsSmartMatchingRuleV2
-from .smart_matching_v2.constants import SOURCE_MANUAL, STATUS_AMBIGUOUS
+from .smart_matching_v2.constants import PATTERN_COMPOSITION, PATTERN_SINGLE, SOURCE_MANUAL, STATUS_AMBIGUOUS
+from .smart_matching_v2.composition import parse_composition_items_json
 
 
 EVENT_TYPES = frozenset(
@@ -276,6 +277,8 @@ def list_history_events_v2(
             carton_ids.add(str(o.suggested_carton_id))
         product_ids.add(int(o.product_id))
         order_ids.add(int(o.order_id))
+        for row in parse_composition_items_json(getattr(o, "composition_items_json", None)):
+            product_ids.add(int(row["product_id"]))
     for r in rules:
         carton_ids.add(str(r.carton_id))
 
@@ -306,13 +309,31 @@ def list_history_events_v2(
         )
 
         pid = int(o.product_id)
+        pt = str(getattr(o, "pattern_type", None) or PATTERN_SINGLE)
+        composition_items: list[dict[str, Any]] = []
+        for row in parse_composition_items_json(getattr(o, "composition_items_json", None)):
+            ipid = int(row["product_id"])
+            composition_items.append(
+                {
+                    "product_id": ipid,
+                    "name": product_names.get(ipid) or f"#{ipid}",
+                    "quantity": int(row["quantity"]),
+                }
+            )
         items.append(
             {
                 "observation_id": oid,
                 "order_id": int(o.order_id),
                 "order_number": order_numbers.get(int(o.order_id)),
+                "pattern_type": pt,
                 "product": {"id": pid, "name": product_names.get(pid) or f"#{pid}"},
                 "quantity": int(o.quantity),
+                "composition_items": composition_items if pt == PATTERN_COMPOSITION else [],
+                "composition_identity_hash": (
+                    str(getattr(o, "composition_identity_hash", None) or "") or None
+                    if pt == PATTERN_COMPOSITION
+                    else None
+                ),
                 "carton": {
                     "id": chosen,
                     "name": (carton_names.get(chosen) if chosen else None) or chosen,
@@ -356,8 +377,8 @@ def learning_series_for_product_carton(
     carton_id: str,
 ) -> dict[str, Any]:
     """
-    Popover series: observations for (product, carton), hit_index oldest→newest,
-    response newest-first. Decisive / broken from deterministic rule FKs.
+    Popover series for SINGLE_PRODUCT: (product, carton), hit_index oldest→newest,
+    response newest-first.
     """
     tid = int(tenant_id)
     wid = int(warehouse_id)
@@ -371,6 +392,10 @@ def learning_series_for_product_carton(
             WmsSmartMatchingObservationV2.warehouse_id == wid,
             WmsSmartMatchingObservationV2.product_id == pid,
             WmsSmartMatchingObservationV2.carton_id == cid,
+            (
+                (WmsSmartMatchingObservationV2.pattern_type == PATTERN_SINGLE)
+                | (WmsSmartMatchingObservationV2.pattern_type.is_(None))
+            ),
         )
         .order_by(
             WmsSmartMatchingObservationV2.created_at.asc(),
@@ -386,9 +411,104 @@ def learning_series_for_product_carton(
             WmsSmartMatchingRuleV2.warehouse_id == wid,
             WmsSmartMatchingRuleV2.product_id == pid,
             WmsSmartMatchingRuleV2.carton_id == cid,
+            WmsSmartMatchingRuleV2.pattern_type == PATTERN_SINGLE,
         )
         .all()
     )
+    return _build_learning_series_payload(
+        db,
+        obs=obs,
+        rules=rules,
+        carton_id=cid,
+        product_id=pid,
+        pattern_type=PATTERN_SINGLE,
+        composition_items=[],
+        identity_hash=None,
+    )
+
+
+def learning_series_for_composition(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    identity_hash: str,
+    carton_id: str,
+) -> dict[str, Any]:
+    """Popover series for COMPOSITION: (exact hash, carton)."""
+    tid = int(tenant_id)
+    wid = int(warehouse_id)
+    hid = str(identity_hash or "").strip()
+    cid = str(carton_id).strip()
+
+    obs = (
+        db.query(WmsSmartMatchingObservationV2)
+        .filter(
+            WmsSmartMatchingObservationV2.tenant_id == tid,
+            WmsSmartMatchingObservationV2.warehouse_id == wid,
+            WmsSmartMatchingObservationV2.pattern_type == PATTERN_COMPOSITION,
+            WmsSmartMatchingObservationV2.composition_identity_hash == hid,
+            WmsSmartMatchingObservationV2.carton_id == cid,
+        )
+        .order_by(
+            WmsSmartMatchingObservationV2.created_at.asc(),
+            WmsSmartMatchingObservationV2.id.asc(),
+        )
+        .all()
+    )
+    rules = (
+        db.query(WmsSmartMatchingRuleV2)
+        .filter(
+            WmsSmartMatchingRuleV2.tenant_id == tid,
+            WmsSmartMatchingRuleV2.warehouse_id == wid,
+            WmsSmartMatchingRuleV2.pattern_type == PATTERN_COMPOSITION,
+            WmsSmartMatchingRuleV2.composition_identity_hash == hid,
+            WmsSmartMatchingRuleV2.carton_id == cid,
+        )
+        .all()
+    )
+    items_json = None
+    if obs:
+        items_json = getattr(obs[0], "composition_items_json", None)
+    elif rules:
+        items_json = getattr(rules[0], "composition_items_json", None)
+    raw = parse_composition_items_json(items_json)
+    pids = {int(r["product_id"]) for r in raw}
+    names = _product_map(db, pids)
+    composition_items = [
+        {
+            "product_id": int(r["product_id"]),
+            "name": names.get(int(r["product_id"])) or f"#{r['product_id']}",
+            "quantity": int(r["quantity"]),
+        }
+        for r in raw
+    ]
+    anchor = int(obs[0].product_id) if obs else (int(rules[0].product_id) if rules else 0)
+    return _build_learning_series_payload(
+        db,
+        obs=obs,
+        rules=rules,
+        carton_id=cid,
+        product_id=anchor,
+        pattern_type=PATTERN_COMPOSITION,
+        composition_items=composition_items,
+        identity_hash=hid,
+    )
+
+
+def _build_learning_series_payload(
+    db: Session,
+    *,
+    obs: list,
+    rules: list,
+    carton_id: str,
+    product_id: int,
+    pattern_type: str,
+    composition_items: list[dict[str, Any]],
+    identity_hash: Optional[str],
+) -> dict[str, Any]:
+    cid = str(carton_id).strip()
+    pid = int(product_id)
     by_created = {
         int(r.created_from_observation_id): r
         for r in rules
@@ -399,7 +519,6 @@ def learning_series_for_product_carton(
         for r in rules
         if getattr(r, "broken_by_observation_id", None) is not None
     }
-    # Prefer AUTO rule created from this carton series for popover summary.
     primary_rule = None
     for r in rules:
         if r.created_from_observation_id is not None and str(r.source) != SOURCE_MANUAL:
@@ -444,23 +563,27 @@ def learning_series_for_product_carton(
 
     rule_out = None
     if primary_rule is not None:
+        cname = carton_names.get(str(primary_rule.carton_id)) or str(primary_rule.carton_id)
+        if pattern_type == PATTERN_COMPOSITION and composition_items:
+            parts = [f"{ci['name']} ×{ci['quantity']}" for ci in composition_items[:4]]
+            label = f"{', '.join(parts)} → {cname}"
+        else:
+            label = f"od {int(primary_rule.min_qty)} szt. → {cname}"
         rule_out = {
             "id": int(primary_rule.id),
             "product_id": pid,
             "product_name": product_names.get(pid) or f"#{pid}",
             "min_qty": int(primary_rule.min_qty),
             "carton_id": str(primary_rule.carton_id),
-            "carton_name": carton_names.get(str(primary_rule.carton_id)) or str(primary_rule.carton_id),
+            "carton_name": cname,
             "source": str(primary_rule.source),
             "status": str(primary_rule.status),
             "is_locked": bool(primary_rule.is_locked),
             "created_threshold": int(primary_rule.created_threshold)
             if primary_rule.created_threshold is not None
             else None,
-            "label": (
-                f"od {int(primary_rule.min_qty)} szt. → "
-                f"{carton_names.get(str(primary_rule.carton_id)) or primary_rule.carton_id}"
-            ),
+            "label": label,
+            "pattern_type": pattern_type,
         }
 
     return {
@@ -468,6 +591,9 @@ def learning_series_for_product_carton(
         "product_name": product_names.get(pid) or f"#{pid}",
         "carton_id": cid,
         "carton_name": carton_names.get(cid) or cid,
+        "pattern_type": pattern_type,
+        "composition_identity_hash": identity_hash,
+        "composition_items": composition_items,
         "created_threshold": int(primary_rule.created_threshold)
         if primary_rule is not None and primary_rule.created_threshold is not None
         else None,

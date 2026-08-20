@@ -2412,6 +2412,9 @@ def ensure_wms_smart_matching_tables(engine: Engine) -> None:
                         suggested_carton_id VARCHAR(36),
                         user_id INTEGER REFERENCES app_users(id) ON DELETE SET NULL,
                         engine_version INTEGER NOT NULL DEFAULT 2,
+                        pattern_type VARCHAR(32) NOT NULL DEFAULT 'SINGLE_PRODUCT',
+                        composition_items_json TEXT,
+                        composition_identity_hash VARCHAR(64),
                         created_at DATETIME
                     )
                     """
@@ -2423,6 +2426,38 @@ def ensure_wms_smart_matching_tables(engine: Engine) -> None:
                     "ON wms_smart_matching_observations_v2(tenant_id, warehouse_id, product_id)"
                 )
             )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_wms_sm_obs_v2_comp_hash "
+                    "ON wms_smart_matching_observations_v2(tenant_id, warehouse_id, composition_identity_hash)"
+                )
+            )
+        else:
+            obs_cols = _table_column_names(conn, "wms_smart_matching_observations_v2")
+            if "pattern_type" not in obs_cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_smart_matching_observations_v2 "
+                        "ADD COLUMN pattern_type VARCHAR(32) NOT NULL DEFAULT 'SINGLE_PRODUCT'"
+                    )
+                )
+            if "composition_items_json" not in obs_cols:
+                conn.execute(
+                    text("ALTER TABLE wms_smart_matching_observations_v2 ADD COLUMN composition_items_json TEXT")
+                )
+            if "composition_identity_hash" not in obs_cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_smart_matching_observations_v2 "
+                        "ADD COLUMN composition_identity_hash VARCHAR(64)"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_wms_sm_obs_v2_comp_hash "
+                        "ON wms_smart_matching_observations_v2(tenant_id, warehouse_id, composition_identity_hash)"
+                    )
+                )
         if not _table_exists(conn, "wms_smart_matching_rules_v2"):
             conn.execute(
                 text(
@@ -2447,9 +2482,15 @@ def ensure_wms_smart_matching_tables(engine: Engine) -> None:
                         last_order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
                         last_used_at DATETIME,
                         engine_version INTEGER NOT NULL DEFAULT 2,
+                        pattern_type VARCHAR(32) NOT NULL DEFAULT 'SINGLE_PRODUCT',
+                        composition_items_json TEXT,
+                        composition_identity_hash VARCHAR(64) NOT NULL DEFAULT '',
                         created_at DATETIME,
                         updated_at DATETIME,
-                        UNIQUE(tenant_id, warehouse_id, product_id, min_qty, carton_id, source)
+                        UNIQUE(
+                            tenant_id, warehouse_id, pattern_type, product_id, min_qty,
+                            carton_id, source, composition_identity_hash
+                        )
                     )
                     """
                 )
@@ -2460,8 +2501,13 @@ def ensure_wms_smart_matching_tables(engine: Engine) -> None:
                     "ON wms_smart_matching_rules_v2(tenant_id, warehouse_id, product_id, status)"
                 )
             )
-        # Non-destructive: broken_by_observation_id for Phase 5A history linkage.
-        if _table_exists(conn, "wms_smart_matching_rules_v2"):
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_wms_sm_rules_v2_comp_hash "
+                    "ON wms_smart_matching_rules_v2(tenant_id, warehouse_id, composition_identity_hash, status)"
+                )
+            )
+        else:
             cols_v2 = _table_column_names(conn, "wms_smart_matching_rules_v2")
             if "broken_by_observation_id" not in cols_v2:
                 conn.execute(
@@ -2474,6 +2520,145 @@ def ensure_wms_smart_matching_tables(engine: Engine) -> None:
                     text(
                         "CREATE INDEX IF NOT EXISTS ix_wms_sm_rules_v2_broken_by "
                         "ON wms_smart_matching_rules_v2(broken_by_observation_id)"
+                    )
+                )
+            if "pattern_type" not in cols_v2:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_smart_matching_rules_v2 "
+                        "ADD COLUMN pattern_type VARCHAR(32) NOT NULL DEFAULT 'SINGLE_PRODUCT'"
+                    )
+                )
+            if "composition_items_json" not in cols_v2:
+                conn.execute(
+                    text("ALTER TABLE wms_smart_matching_rules_v2 ADD COLUMN composition_items_json TEXT")
+                )
+            if "composition_identity_hash" not in cols_v2:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_smart_matching_rules_v2 "
+                        "ADD COLUMN composition_identity_hash VARCHAR(64) NOT NULL DEFAULT ''"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_wms_sm_rules_v2_comp_hash "
+                        "ON wms_smart_matching_rules_v2(tenant_id, warehouse_id, composition_identity_hash, status)"
+                    )
+                )
+            # Rebuild unique constraint to include pattern_type + composition_identity_hash (SQLite).
+            if _is_sqlite(engine):
+                uq_sql = conn.execute(
+                    text("SELECT sql FROM sqlite_master WHERE type='table' AND name='wms_smart_matching_rules_v2'")
+                ).scalar()
+                normalized = " ".join((uq_sql or "").split())
+                needs_rebuild = (
+                    "UNIQUE(tenant_id, warehouse_id, product_id, min_qty, carton_id, source)" in normalized
+                    and "composition_identity_hash)" not in normalized.replace(" ", "")
+                )
+                if needs_rebuild:
+                    conn.execute(text("ALTER TABLE wms_smart_matching_rules_v2 RENAME TO wms_smart_matching_rules_v2_old"))
+                    conn.execute(
+                        text(
+                            """
+                            CREATE TABLE wms_smart_matching_rules_v2 (
+                                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                                tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                                warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+                                product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                                min_qty INTEGER NOT NULL,
+                                carton_id VARCHAR(36) NOT NULL REFERENCES cartons(id) ON DELETE CASCADE,
+                                source VARCHAR(16) NOT NULL DEFAULT 'AUTO',
+                                status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
+                                is_locked BOOLEAN NOT NULL DEFAULT 0,
+                                hit_count INTEGER NOT NULL DEFAULT 0,
+                                override_streak INTEGER NOT NULL DEFAULT 0,
+                                created_from_observation_id INTEGER
+                                    REFERENCES wms_smart_matching_observations_v2(id) ON DELETE SET NULL,
+                                broken_by_observation_id INTEGER
+                                    REFERENCES wms_smart_matching_observations_v2(id) ON DELETE SET NULL,
+                                created_threshold INTEGER,
+                                last_order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+                                last_used_at DATETIME,
+                                engine_version INTEGER NOT NULL DEFAULT 2,
+                                pattern_type VARCHAR(32) NOT NULL DEFAULT 'SINGLE_PRODUCT',
+                                composition_items_json TEXT,
+                                composition_identity_hash VARCHAR(64) NOT NULL DEFAULT '',
+                                created_at DATETIME,
+                                updated_at DATETIME,
+                                UNIQUE(
+                                    tenant_id, warehouse_id, pattern_type, product_id, min_qty,
+                                    carton_id, source, composition_identity_hash
+                                )
+                            )
+                            """
+                        )
+                    )
+                    old_cols = _table_column_names(conn, "wms_smart_matching_rules_v2_old")
+                    has_broken = "broken_by_observation_id" in old_cols
+                    has_pt = "pattern_type" in old_cols
+                    has_cj = "composition_items_json" in old_cols
+                    has_ch = "composition_identity_hash" in old_cols
+                    broken_sel = "broken_by_observation_id" if has_broken else "NULL"
+                    pt_sel = "COALESCE(pattern_type, 'SINGLE_PRODUCT')" if has_pt else "'SINGLE_PRODUCT'"
+                    cj_sel = "composition_items_json" if has_cj else "NULL"
+                    ch_sel = "COALESCE(composition_identity_hash, '')" if has_ch else "''"
+                    conn.execute(
+                        text(
+                            f"""
+                            INSERT INTO wms_smart_matching_rules_v2 (
+                                id, tenant_id, warehouse_id, product_id, min_qty, carton_id, source, status,
+                                is_locked, hit_count, override_streak, created_from_observation_id,
+                                broken_by_observation_id, created_threshold, last_order_id, last_used_at,
+                                engine_version, pattern_type, composition_items_json, composition_identity_hash,
+                                created_at, updated_at
+                            )
+                            SELECT
+                                id, tenant_id, warehouse_id, product_id, min_qty, carton_id, source, status,
+                                is_locked, hit_count, override_streak, created_from_observation_id,
+                                {broken_sel}, created_threshold, last_order_id, last_used_at,
+                                engine_version, {pt_sel}, {cj_sel}, {ch_sel},
+                                created_at, updated_at
+                            FROM wms_smart_matching_rules_v2_old
+                            """
+                        )
+                    )
+                    conn.execute(text("DROP TABLE wms_smart_matching_rules_v2_old"))
+                    conn.execute(
+                        text(
+                            "CREATE INDEX IF NOT EXISTS ix_wms_sm_rules_v2_product "
+                            "ON wms_smart_matching_rules_v2(tenant_id, warehouse_id, product_id, status)"
+                        )
+                    )
+                    conn.execute(
+                        text(
+                            "CREATE INDEX IF NOT EXISTS ix_wms_sm_rules_v2_comp_hash "
+                            "ON wms_smart_matching_rules_v2(tenant_id, warehouse_id, composition_identity_hash, status)"
+                        )
+                    )
+            else:
+                # Postgres: drop legacy unique if present; create new.
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_smart_matching_rules_v2 "
+                        "DROP CONSTRAINT IF EXISTS uq_wms_sm_v2_rule_breakpoint"
+                    )
+                )
+                conn.execute(
+                    text(
+                        """
+                        DO $$ BEGIN
+                          IF NOT EXISTS (
+                            SELECT 1 FROM pg_constraint WHERE conname = 'uq_wms_sm_v2_rule_pattern'
+                          ) THEN
+                            ALTER TABLE wms_smart_matching_rules_v2
+                              ADD CONSTRAINT uq_wms_sm_v2_rule_pattern UNIQUE (
+                                tenant_id, warehouse_id, pattern_type, product_id, min_qty,
+                                carton_id, source, composition_identity_hash
+                              );
+                          END IF;
+                        END $$;
+                        """
                     )
                 )
         if not _table_exists(conn, "wms_smart_matching_product_settings"):

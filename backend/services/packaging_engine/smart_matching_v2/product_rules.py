@@ -247,6 +247,8 @@ def upsert_manual_rule(
         override_streak=0,
         created_threshold=None,
         engine_version=2,
+        pattern_type="SINGLE_PRODUCT",
+        composition_identity_hash="",
         created_at=now,
         updated_at=now,
     )
