@@ -282,6 +282,7 @@ def _planned_stock_counts_for_line(
 
 def _any_planned_lines(db: Session, tenant_id: int, warehouse_id: int, lines: Sequence[RMZLine]) -> bool:
     from .bundles.bundle_return_service import line_has_pending_bundle_component_receipt
+    from .returns.intake_disposition import read_line_allocation, total_fg_qty
     from .returns.manufactured_component_recovery_service import (
         line_has_pending_component_receipt,
         saleable_fg_qty_for_receipt,
@@ -291,11 +292,16 @@ def _any_planned_lines(db: Session, tenant_id: int, warehouse_id: int, lines: Se
         aq_legacy, dmg, _rj = _planned_stock_counts_for_line(
             db, tenant_id, warehouse_id, ln, include_rejected=False
         )
-        fg_aq = saleable_fg_qty_for_receipt(ln)
-        # FG=0 + DISASSEMBLE with accepted bundle components must still plan a Z-PZ
+        alloc = read_line_allocation(ln)
+        if alloc is not None:
+            fg_aq = total_fg_qty(alloc)
+            dmg_planned = False  # damaged FG already in allocation fg buckets
+        else:
+            fg_aq = saleable_fg_qty_for_receipt(ln)
+            dmg_planned = bool(dmg)
         if (
             fg_aq > 0
-            or dmg
+            or dmg_planned
             or line_has_pending_component_receipt(ln)
             or line_has_pending_bundle_component_receipt(db, ln)
         ):
@@ -537,23 +543,35 @@ def _append_rmz_lines_to_document(
     item_rows: List[StockDocumentItem] = []
 
     from ..models.rmz_line_component_recovery import RmzLineComponentRecovery
-    from ..models.wms_settings import WmsSettings
     from .inventory_carrier_ops import upsert_dock_inventory_for_loose_receipt
     from .inventory_lot_keys import NO_EXPIRY_SENTINEL
     from .returns.manufactured_component_recovery_service import (
         RECEIPT_MODE_DEFAULT_LOCATION,
-        line_has_pending_component_receipt,
-        receipt_mode_from_settings,
+        assert_snapshot_recovery_location_for_commit,
         saleable_fg_qty_for_receipt,
     )
+    from .returns.rmz_workflow_config_service import read_rmz_workflow_snapshot
 
-    settings = (
-        db.query(WmsSettings)
-        .filter(WmsSettings.tenant_id == tenant_id, WmsSettings.warehouse_id == wh_id)
-        .first()
-    )
-    mfg_receipt_mode = receipt_mode_from_settings(settings)
-    recovery_location_id = getattr(settings, "manufactured_recovery_location_id", None) if settings else None
+    snap = read_rmz_workflow_snapshot(rmz)
+    if snap is not None:
+        mfg_receipt_mode = snap.manufactured_recovery_receipt_mode
+        recovery_location_id = snap.manufactured_recovery_location_id
+    else:
+        # Should not happen after ensure_rmz_workflow_snapshot on commit path
+        mfg_receipt_mode = "STANDARD_PUTAWAY"
+        recovery_location_id = None
+
+    if mfg_receipt_mode == RECEIPT_MODE_DEFAULT_LOCATION:
+        if recovery_location_id is None or int(recovery_location_id) <= 0:
+            raise ValueError(
+                "DEFAULT_LOCATION: brak manufactured_recovery_location_id w snapshotcie RMZ"
+            )
+        assert_snapshot_recovery_location_for_commit(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=wh_id,
+            location_id=int(recovery_location_id),
+        )
 
     def add_line(
         *,
@@ -687,33 +705,90 @@ def _append_rmz_lines_to_document(
             raise ValueError(f"Z-PZ: produkt {pid} nie znaleziony dla tenant_id={tenant_id}")
         unit_price, vat = _order_item_pricing(db, int(ln.order_item_id))
 
-        _, damaged_pairs, _rej = _planned_stock_counts_for_line(
-            db, tenant_id, wh_id, ln, include_rejected=False
+        from .returns.intake_disposition import (
+            DISP_OUTLET_B,
+            DISP_SALEABLE,
+            DISP_SERVICE_C,
+            fg_qty_for_disposition,
+            read_line_allocation,
+            try_deterministic_legacy_conversion,
         )
-        # SALEABLE FG: fg_intake_qty when manufacturing recovery active, else accepted_qty
-        aq = saleable_fg_qty_for_receipt(ln)
-        if aq > 0:
-            add_line(
-                product_id=pid,
-                qty=float(aq),
-                disposition=DISPOSITION_SALEABLE,
-                return_decision="ACCEPTED",
-                rmz_damage_entry_id=None,
-                purchase_price_net=unit_price,
-                vat_rate=vat,
-            )
+        from .returns.rmz_workflow_config_service import read_rmz_workflow_snapshot
 
-        for entry_key, cond in damaged_pairs:
-            disp = DISPOSITION_OUTLET_B if cond == "B" else DISPOSITION_SERVICE_C
-            add_line(
-                product_id=pid,
-                qty=1.0,
-                disposition=disp,
-                return_decision="DAMAGED_B" if cond == "B" else "DAMAGED_C",
-                rmz_damage_entry_id=entry_key,
-                purchase_price_net=unit_price,
-                vat_rate=vat,
+        snap = read_rmz_workflow_snapshot(rmz)
+        mfg_mode = (
+            snap.manufactured_component_recovery_mode
+            if snap is not None
+            else "OFF"
+        )
+        alloc = read_line_allocation(ln)
+        if alloc is None and mfg_mode != "OFF":
+            alloc = try_deterministic_legacy_conversion(ln, recovery_mode=mfg_mode)
+
+        if alloc is not None:
+            # SSOT path: FG remaining only from allocation — never re-add full damaged_b/c.
+            saleable_fg = fg_qty_for_disposition(alloc, DISP_SALEABLE)
+            outlet_fg = fg_qty_for_disposition(alloc, DISP_OUTLET_B)
+            service_fg = fg_qty_for_disposition(alloc, DISP_SERVICE_C)
+            if saleable_fg > 0:
+                add_line(
+                    product_id=pid,
+                    qty=float(saleable_fg),
+                    disposition=DISPOSITION_SALEABLE,
+                    return_decision="ACCEPTED",
+                    rmz_damage_entry_id=None,
+                    purchase_price_net=unit_price,
+                    vat_rate=vat,
+                )
+            rid = int(ln.id or 0)
+            for i in range(outlet_fg):
+                add_line(
+                    product_id=pid,
+                    qty=1.0,
+                    disposition=DISPOSITION_OUTLET_B,
+                    return_decision="DAMAGED_B",
+                    rmz_damage_entry_id=f"intake-b-{rid}-{i}",
+                    purchase_price_net=unit_price,
+                    vat_rate=vat,
+                )
+            for i in range(service_fg):
+                add_line(
+                    product_id=pid,
+                    qty=1.0,
+                    disposition=DISPOSITION_SERVICE_C,
+                    return_decision="DAMAGED_C",
+                    rmz_damage_entry_id=f"intake-c-{rid}-{i}",
+                    purchase_price_net=unit_price,
+                    vat_rate=vat,
+                )
+        else:
+            _, damaged_pairs, _rej = _planned_stock_counts_for_line(
+                db, tenant_id, wh_id, ln, include_rejected=False
             )
+            # Legacy FG path (no manufacturing allocation)
+            aq = saleable_fg_qty_for_receipt(ln)
+            if aq > 0:
+                add_line(
+                    product_id=pid,
+                    qty=float(aq),
+                    disposition=DISPOSITION_SALEABLE,
+                    return_decision="ACCEPTED",
+                    rmz_damage_entry_id=None,
+                    purchase_price_net=unit_price,
+                    vat_rate=vat,
+                )
+
+            for entry_key, cond in damaged_pairs:
+                disp = DISPOSITION_OUTLET_B if cond == "B" else DISPOSITION_SERVICE_C
+                add_line(
+                    product_id=pid,
+                    qty=1.0,
+                    disposition=disp,
+                    return_decision="DAMAGED_B" if cond == "B" else "DAMAGED_C",
+                    rmz_damage_entry_id=entry_key,
+                    purchase_price_net=unit_price,
+                    vat_rate=vat,
+                )
 
         # Component recoveries → Z-PZ lines (accepted only; scrap = audit only, no stock)
         recoveries = (
@@ -839,6 +914,27 @@ def ensure_rmz_return_receipt_document(
     if not lines or not _any_planned_lines(db, tenant_id, wh_id, lines):
         logger.info("[Z-PZ] skip — no ACCEPTED/DAMAGED quantities rmz_id=%s", rid)
         return None
+
+    # Validate DEFAULT_LOCATION before creating any Z-PZ shell / inventory movement.
+    from .returns.manufactured_component_recovery_service import (
+        RECEIPT_MODE_DEFAULT_LOCATION,
+        assert_snapshot_recovery_location_for_commit,
+    )
+    from .returns.rmz_workflow_config_service import read_rmz_workflow_snapshot
+
+    snap = read_rmz_workflow_snapshot(rmz)
+    if snap is not None and snap.manufactured_recovery_receipt_mode == RECEIPT_MODE_DEFAULT_LOCATION:
+        loc_id = snap.manufactured_recovery_location_id
+        if loc_id is None or int(loc_id) <= 0:
+            raise ValueError(
+                "DEFAULT_LOCATION: brak manufactured_recovery_location_id w snapshotcie RMZ"
+            )
+        assert_snapshot_recovery_location_for_commit(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=wh_id,
+            location_id=int(loc_id),
+        )
 
     doc: StockDocument
     if collective:

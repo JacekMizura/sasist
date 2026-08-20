@@ -69,28 +69,46 @@ class TestLegacyMigration(unittest.TestCase):
         self.assertEqual(legacy_returns_mode_label("warehouse", True, True), "advanced")
 
 
+def _snap(
+    refund: str = "disabled",
+    *,
+    mfg_mode: str = "OFF",
+    receipt: str = "STANDARD_PUTAWAY",
+    loc: int | None = None,
+) -> RmzWorkflowSnapshot:
+    return RmzWorkflowSnapshot(
+        2,
+        False,
+        False,
+        refund,  # type: ignore[arg-type]
+        mfg_mode,  # type: ignore[arg-type]
+        receipt,  # type: ignore[arg-type]
+        loc,
+    )
+
+
 class TestWarehouseCommitRefundGates(unittest.TestCase):
     def test_disabled_rejects_refund(self) -> None:
-        snap = RmzWorkflowSnapshot(1, False, False, "disabled")
+        snap = _snap("disabled")
         with self.assertRaises(RmzFinalizeError):
             validate_warehouse_commit_refund_payload(snap, process_refund=True, refund_type="PARTIAL")
 
     def test_office_rejects_refund_on_commit(self) -> None:
-        snap = RmzWorkflowSnapshot(1, False, False, "office")
+        snap = _snap("office")
         with self.assertRaises(RmzFinalizeError):
             validate_warehouse_commit_refund_payload(snap, process_refund=True, refund_type="NONE")
 
     def test_warehouse_allows_refund(self) -> None:
-        snap = RmzWorkflowSnapshot(1, False, False, "warehouse")
+        snap = _snap("warehouse")
         validate_warehouse_commit_refund_payload(snap, process_refund=True, refund_type="PARTIAL")
 
     def test_office_commit_transition(self) -> None:
-        snap = RmzWorkflowSnapshot(1, False, False, "office")
+        snap = _snap("office")
         self.assertEqual(resolve_warehouse_commit_transition(snap, [], all_rejected=False), "office_pending")
         self.assertEqual(resolve_warehouse_commit_transition(snap, [], all_rejected=True), "rejected")
 
     def test_disabled_commit_success(self) -> None:
-        snap = RmzWorkflowSnapshot(1, False, False, "disabled")
+        snap = _snap("disabled")
         self.assertEqual(resolve_warehouse_commit_transition(snap, [], all_rejected=False), "success")
 
 
@@ -134,9 +152,13 @@ class TestReadSsot(unittest.TestCase):
         row.refund_processing = "office"
         row.require_photos = True
         row.require_condition = False
+        row.manufactured_component_recovery_mode = "OFF"
+        row.manufactured_recovery_receipt_mode = "STANDARD_PUTAWAY"
+        row.manufactured_recovery_location_id = None
         snap = read_returns_settings_ssot(row)
         self.assertEqual(snap.refund_processing, "office")
         self.assertTrue(snap.require_photos)
+        self.assertEqual(snap.manufactured_component_recovery_mode, "OFF")
 
 
 if __name__ == "__main__":

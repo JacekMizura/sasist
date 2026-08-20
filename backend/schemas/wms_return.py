@@ -302,6 +302,8 @@ class WmsReturnLineRead(BaseModel):
     stock_intake_mode: Optional[StockIntakeMode] = None
     fg_intake_qty: Optional[int] = None
     disassembly_qty: Optional[int] = None
+    #: SSOT per-disposition FG vs disassembly (SALEABLE / OUTLET_B / SERVICE_C).
+    intake_disposition: List["WmsReturnIntakeDispositionRead"] = Field(default_factory=list)
     component_recoveries: List[WmsReturnComponentRecoveryRead] = Field(default_factory=list)
     has_active_manufacturing_bom: bool = False
     manufactured_recovery_eligible: bool = False
@@ -462,7 +464,15 @@ class WmsReturnRead(BaseModel):
     )
     manufactured_component_recovery_mode: Optional[ManufacturedComponentRecoveryMode] = Field(
         default=None,
-        description="Tryb odzysku komponentów z ustawień WMS magazynu (OFF/OPTIONAL/REQUIRED).",
+        description="Snapshot: tryb odzysku komponentów dla tego RMZ (OFF/OPTIONAL/REQUIRED).",
+    )
+    manufactured_recovery_receipt_mode: Optional[ManufacturedRecoveryReceiptMode] = Field(
+        default=None,
+        description="Snapshot: STANDARD_PUTAWAY | DEFAULT_LOCATION.",
+    )
+    manufactured_recovery_location_id: Optional[int] = Field(
+        default=None,
+        description="Snapshot: lokalizacja odzysków gdy DEFAULT_LOCATION.",
     )
     returns_workflow_version: Optional[int] = Field(
         default=None,
@@ -561,6 +571,16 @@ class WmsReturnComponentRecoveryIn(BaseModel):
     expected_qty: Optional[float] = Field(default=None, ge=0)
 
 
+class WmsReturnIntakeDispositionIn(BaseModel):
+    disposition: Literal["SALEABLE", "OUTLET_B", "SERVICE_C"]
+    fg_qty: int = Field(ge=0)
+    disassembly_qty: int = Field(ge=0)
+
+
+class WmsReturnIntakeDispositionRead(WmsReturnIntakeDispositionIn):
+    pass
+
+
 class WmsSettingsRead(BaseModel):
     tenant_id: int
     warehouse_id: int
@@ -630,6 +650,7 @@ class WmsReturnLineSplitProcess(BaseModel):
     stock_intake_mode: Optional[StockIntakeMode] = None
     fg_intake_qty: Optional[int] = Field(default=None, ge=0)
     disassembly_qty: Optional[int] = Field(default=None, ge=0)
+    intake_disposition: Optional[List[WmsReturnIntakeDispositionIn]] = None
     component_recoveries: List[WmsReturnComponentRecoveryIn] = Field(default_factory=list)
 
 

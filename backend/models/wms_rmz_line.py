@@ -45,11 +45,14 @@ class RMZLine(Base):
     bundle_return_status = Column(String(32), nullable=True)
 
     #: Manufacturing recovery intake: FG | DISASSEMBLE | MIXED | null (null = legacy FG-only path)
+    #: Projection only — SSOT is intake_disposition_json.
     stock_intake_mode = Column(String(24), nullable=True)
-    #: Units of finished good restocked as FG on Z-PZ (split with disassembly_qty).
+    #: Units of finished good restocked as FG on Z-PZ (projection from intake_disposition_json).
     fg_intake_qty = Column(Integer, nullable=True)
-    #: Units of finished good disassembled into BOM components.
+    #: Units of finished good disassembled into BOM components (projection).
     disassembly_qty = Column(Integer, nullable=True)
+    #: SSOT: per-disposition FG vs disassembly [{disposition, fg_qty, disassembly_qty}, ...].
+    intake_disposition_json = Column(Text, nullable=True)
 
     bundle_component_returns = relationship(
         "ReturnLineBundleComponent",

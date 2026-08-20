@@ -4,6 +4,7 @@ import type {
   WmsBomPreviewRead,
   WmsReturnComponentRecoveryIn,
   WmsReturnComponentRecoveryRead,
+  WmsReturnIntakeDisposition,
   WmsReturnLineRead,
 } from "../../types/wmsReturn";
 import { ReturnStockIntakeSection } from "./intake/ReturnStockIntakeSection";
@@ -12,24 +13,50 @@ import {
   MANUFACTURED_INTAKE_COPY,
   clampInt,
   resolveStockIntakeMode,
-  splitReturnedQty,
   type StockIntakeTileId,
 } from "./intake/stockIntakeMode";
+
+export type IntakeDispositionCode = "SALEABLE" | "OUTLET_B" | "SERVICE_C";
 
 export type ManufacturedRecoveryDraft = {
   stock_intake_mode: StockIntakeMode | null;
   fg_intake_qty: number;
   disassembly_qty: number;
+  intake_disposition: WmsReturnIntakeDisposition[];
   component_recoveries: WmsReturnComponentRecoveryIn[];
 };
 
-type Props = {
-  line: WmsReturnLineRead;
-  mode: ManufacturedComponentRecoveryMode;
-  value: ManufacturedRecoveryDraft;
-  onChange: (next: ManufacturedRecoveryDraft) => void;
-  disabled?: boolean;
+const BUCKET_LABEL: Record<IntakeDispositionCode, string> = {
+  SALEABLE: "OK (A)",
+  OUTLET_B: "Uszkodzone B",
+  SERVICE_C: "Uszkodzone C",
 };
+
+function emptyAllocation(): WmsReturnIntakeDisposition[] {
+  return [
+    { disposition: "SALEABLE", fg_qty: 0, disassembly_qty: 0 },
+    { disposition: "OUTLET_B", fg_qty: 0, disassembly_qty: 0 },
+    { disposition: "SERVICE_C", fg_qty: 0, disassembly_qty: 0 },
+  ];
+}
+
+function commercialBuckets(line: WmsReturnLineRead): Record<IntakeDispositionCode, number> {
+  return {
+    SALEABLE: Math.max(0, Math.floor(Number(line.accepted_qty) || 0)),
+    OUTLET_B: Math.max(0, Math.floor(Number(line.damaged_b_qty) || 0)),
+    SERVICE_C: Math.max(0, Math.floor(Number(line.damaged_c_qty) || 0)),
+  };
+}
+
+function projectAggregates(rows: WmsReturnIntakeDisposition[]): {
+  fg: number;
+  dq: number;
+  mode: StockIntakeMode | null;
+} {
+  const fg = rows.reduce((s, r) => s + Math.max(0, Number(r.fg_qty) || 0), 0);
+  const dq = rows.reduce((s, r) => s + Math.max(0, Number(r.disassembly_qty) || 0), 0);
+  return { fg, dq, mode: resolveStockIntakeMode(fg, dq) };
+}
 
 function scaleMatrix(
   preview: WmsBomPreviewRead | null | undefined,
@@ -57,31 +84,38 @@ function scaleMatrix(
   });
 }
 
+function allocationFromCommercial(
+  buckets: Record<IntakeDispositionCode, number>,
+  mode: ManufacturedComponentRecoveryMode,
+  existing?: WmsReturnIntakeDisposition[] | null,
+): WmsReturnIntakeDisposition[] {
+  const required = mode === "REQUIRED";
+  const byDisp = new Map((existing ?? []).map((r) => [r.disposition, r]));
+  return (["SALEABLE", "OUTLET_B", "SERVICE_C"] as IntakeDispositionCode[]).map((d) => {
+    const qty = buckets[d];
+    const prev = byDisp.get(d);
+    if (required) {
+      return { disposition: d, fg_qty: 0, disassembly_qty: qty };
+    }
+    if (prev && Number(prev.fg_qty) + Number(prev.disassembly_qty) === qty) {
+      return {
+        disposition: d,
+        fg_qty: Math.max(0, Math.floor(Number(prev.fg_qty) || 0)),
+        disassembly_qty: Math.max(0, Math.floor(Number(prev.disassembly_qty) || 0)),
+      };
+    }
+    // OPTIONAL default: keep as FG
+    return { disposition: d, fg_qty: qty, disassembly_qty: 0 };
+  });
+}
+
 export function draftFromLine(
   line: WmsReturnLineRead,
   mode: ManufacturedComponentRecoveryMode,
 ): ManufacturedRecoveryDraft {
-  const physical = Math.max(0, Math.floor(Number(line.quantity) || 0));
-  const required = mode === "REQUIRED";
-  const locked = Boolean(line.manufactured_recovery_locked_reason);
-  let fg = line.fg_intake_qty != null ? Math.max(0, Math.floor(Number(line.fg_intake_qty))) : required ? 0 : physical;
-  let dq =
-    line.disassembly_qty != null
-      ? Math.max(0, Math.floor(Number(line.disassembly_qty)))
-      : required
-        ? physical
-        : 0;
-  if (required) {
-    fg = 0;
-    if (dq < 1 && !locked) dq = physical;
-  }
-  if (fg + dq > physical) {
-    dq = Math.max(0, physical - fg);
-  }
-  let intake: StockIntakeMode | null = line.stock_intake_mode ?? null;
-  if (!intake) {
-    intake = resolveStockIntakeMode(fg, dq);
-  }
+  const buckets = commercialBuckets(line);
+  const rows = allocationFromCommercial(buckets, mode, line.intake_disposition ?? null);
+  const { fg, dq, mode: intake } = projectAggregates(rows);
   const recoveries: WmsReturnComponentRecoveryIn[] = (line.component_recoveries ?? []).map(
     (r: WmsReturnComponentRecoveryRead) => ({
       composition_line_id: r.composition_line_id,
@@ -95,62 +129,89 @@ export function draftFromLine(
     stock_intake_mode: intake,
     fg_intake_qty: fg,
     disassembly_qty: dq,
+    intake_disposition: rows,
     component_recoveries: recoveries.length > 0 ? recoveries : scaleMatrix(line.bom_preview, dq, []),
   };
 }
 
+type Props = {
+  line: WmsReturnLineRead;
+  mode: ManufacturedComponentRecoveryMode;
+  value: ManufacturedRecoveryDraft;
+  onChange: (next: ManufacturedRecoveryDraft) => void;
+  disabled?: boolean;
+};
+
 function emit(
   line: WmsReturnLineRead,
   value: ManufacturedRecoveryDraft,
-  fg: number,
-  dq: number,
+  rows: WmsReturnIntakeDisposition[],
   onChange: (next: ManufacturedRecoveryDraft) => void,
 ) {
-  const recoveries = scaleMatrix(line.bom_preview, dq, value.component_recoveries);
+  const { fg, dq, mode } = projectAggregates(rows);
   onChange({
-    stock_intake_mode: resolveStockIntakeMode(fg, dq),
+    stock_intake_mode: mode,
     fg_intake_qty: fg,
     disassembly_qty: dq,
-    component_recoveries: recoveries,
+    intake_disposition: rows,
+    component_recoveries: scaleMatrix(line.bom_preview, dq, value.component_recoveries),
   });
 }
 
 export function ManufacturedRecoveryIntakePanel({ line, mode, value, onChange, disabled }: Props) {
   if (!line.manufactured_recovery_eligible || mode === "OFF") return null;
 
-  const physical = Math.max(0, Math.floor(Number(line.quantity) || 0));
+  const buckets = commercialBuckets(line);
+  const receivable =
+    buckets.SALEABLE + buckets.OUTLET_B + buckets.SERVICE_C;
+  if (receivable <= 0) {
+    return (
+      <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+        Brak ilości do przyjęcia (wszystkie sztuki odrzucone) — odzysk komponentów nie dotyczy.
+      </div>
+    );
+  }
+
   const required = mode === "REQUIRED";
   const lockedReason = line.manufactured_recovery_locked_reason?.trim() || null;
   const locked = Boolean(lockedReason);
-  const fg = required ? 0 : value.fg_intake_qty;
-  const dq = value.disassembly_qty;
-  const sum = fg + dq;
-  const over = sum > physical;
-  const under = sum < physical && sum > 0;
-  const activeMode = value.stock_intake_mode ?? resolveStockIntakeMode(fg, dq);
+  const rows = value.intake_disposition?.length
+    ? value.intake_disposition
+    : allocationFromCommercial(buckets, mode, null);
+  const { fg, dq, mode: activeMode } = projectAggregates(rows);
+  const activeBuckets = (["SALEABLE", "OUTLET_B", "SERVICE_C"] as IntakeDispositionCode[]).filter(
+    (d) => buckets[d] > 0,
+  );
 
-  const applyTile = (tile: StockIntakeTileId) => {
+  const setBucketDq = (disposition: IntakeDispositionCode, nextDq: number) => {
+    if (disabled || locked || required) return;
+    const qty = buckets[disposition];
+    const dqN = clampInt(nextDq, 0, qty);
+    const next = rows.map((r) =>
+      r.disposition === disposition
+        ? { ...r, disassembly_qty: dqN, fg_qty: Math.max(0, qty - dqN) }
+        : r,
+    );
+    emit(line, value, next, onChange);
+  };
+
+  const applyGlobalTile = (tile: StockIntakeTileId) => {
     if (disabled || locked) return;
     if (required && tile === "FG") return;
-    if (physical <= 1 && tile === "MIXED") {
-      emit(line, value, 0, physical, onChange);
-      return;
-    }
-    const next = splitReturnedQty(physical, required ? "DISASSEMBLE" : tile, tile === "MIXED" ? Math.min(1, physical) : undefined);
-    emit(line, value, next.fg, next.dq, onChange);
-  };
-
-  const setMixedFg = (nextFg: number) => {
-    if (disabled || locked || required) return;
-    const fgN = clampInt(nextFg, 0, physical);
-    emit(line, value, fgN, Math.max(0, physical - fgN), onChange);
-  };
-
-  const setMixedDq = (nextDq: number) => {
-    if (disabled || locked) return;
-    const dqN = clampInt(nextDq, required ? 1 : 0, physical);
-    const fgN = required ? 0 : Math.max(0, physical - dqN);
-    emit(line, value, fgN, dqN, onChange);
+    const next = emptyAllocation().map((r) => {
+      const qty = buckets[r.disposition as IntakeDispositionCode] ?? 0;
+      if (qty <= 0) return r;
+      if (required || tile === "DISASSEMBLE") {
+        return { ...r, fg_qty: 0, disassembly_qty: qty };
+      }
+      if (tile === "FG") {
+        return { ...r, fg_qty: qty, disassembly_qty: 0 };
+      }
+      // MIXED: split each non-zero bucket ~half (deterministic per bucket, not heuristic across buckets)
+      const dqPart = qty <= 1 ? qty : Math.floor(qty / 2);
+      return { ...r, fg_qty: qty - dqPart, disassembly_qty: dqPart };
+    });
+    emit(line, value, next, onChange);
   };
 
   const setAccepted = (compositionLineId: number, accepted: number) => {
@@ -188,24 +249,66 @@ export function ManufacturedRecoveryIntakePanel({ line, mode, value, onChange, d
   });
 
   return (
-    <ReturnStockIntakeSection
-      copy={MANUFACTURED_INTAKE_COPY}
-      physicalQty={physical}
-      mode={activeMode}
-      fgQty={fg}
-      disassemblyQty={dq}
-      components={componentRows}
-      manyQtyLabel={`${Math.max(dq, 1)} szt.`}
-      disabled={disabled || locked}
-      forceDisassemble={required}
-      lockedReason={lockedReason}
-      requiredHint={required}
-      overLimit={over}
-      underLimit={under}
-      onSelectMode={applyTile}
-      onMixedFgChange={setMixedFg}
-      onMixedDqChange={setMixedDq}
-      onAcceptedChange={(key, accepted) => setAccepted(Number(key), accepted)}
-    />
+    <div className="mt-3 space-y-3">
+      <ReturnStockIntakeSection
+        copy={{
+          ...MANUFACTURED_INTAKE_COPY,
+          sectionTitle: "Sposób przyjęcia (produkty produkowane)",
+          badgeHint:
+            "Rozliczenie FG vs rozmontowanie osobno dla OK / B / C. Odrzucone sztuki nie wchodzą do przyjęcia.",
+        }}
+        physicalQty={receivable}
+        mode={activeMode}
+        fgQty={fg}
+        disassemblyQty={dq}
+        components={componentRows}
+        manyQtyLabel={`${Math.max(dq, 1)} szt.`}
+        disabled={disabled || locked}
+        forceDisassemble={required}
+        lockedReason={lockedReason}
+        requiredHint={required}
+        overLimit={false}
+        underLimit={false}
+        onSelectMode={applyGlobalTile}
+        onMixedFgChange={() => undefined}
+        onMixedDqChange={() => undefined}
+        onAcceptedChange={(key, accepted) => setAccepted(Number(key), accepted)}
+      />
+      <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+        <p className="text-xs font-semibold text-slate-800">Alokacja per klasa jakości</p>
+        {activeBuckets.map((d) => {
+          const row = rows.find((r) => r.disposition === d) ?? {
+            disposition: d,
+            fg_qty: buckets[d],
+            disassembly_qty: 0,
+          };
+          const qty = buckets[d];
+          return (
+            <div
+              key={d}
+              className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-2 py-2 text-xs"
+            >
+              <span className="min-w-[7rem] font-medium text-slate-800">{BUCKET_LABEL[d]}</span>
+              <span className="tabular-nums text-slate-500">{qty} szt.</span>
+              <label className="ml-auto flex items-center gap-1 text-slate-600">
+                Rozmontuj
+                <input
+                  type="number"
+                  min={0}
+                  max={qty}
+                  className="w-16 rounded border border-slate-200 px-1.5 py-0.5 tabular-nums"
+                  value={row.disassembly_qty}
+                  disabled={disabled || locked || required}
+                  onChange={(e) => setBucketDq(d, Number(e.target.value))}
+                />
+              </label>
+              <span className="tabular-nums text-slate-700">
+                FG: <strong>{row.fg_qty}</strong>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

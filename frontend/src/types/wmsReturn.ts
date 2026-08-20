@@ -168,6 +168,7 @@ export type WmsReturnLineRead = {
   stock_intake_mode?: StockIntakeMode | null;
   fg_intake_qty?: number | null;
   disassembly_qty?: number | null;
+  intake_disposition?: WmsReturnIntakeDisposition[] | null;
   component_recoveries?: WmsReturnComponentRecoveryRead[];
   has_active_manufacturing_bom?: boolean;
   manufactured_recovery_eligible?: boolean;
@@ -177,6 +178,11 @@ export type WmsReturnLineRead = {
 
 export type StockIntakeMode = "FG" | "DISASSEMBLE" | "MIXED";
 export type ManufacturedComponentRecoveryMode = "OFF" | "OPTIONAL" | "REQUIRED";
+export type WmsReturnIntakeDisposition = {
+  disposition: "SALEABLE" | "OUTLET_B" | "SERVICE_C";
+  fg_qty: number;
+  disassembly_qty: number;
+};
 export type ManufacturedRecoveryReceiptMode = "STANDARD_PUTAWAY" | "DEFAULT_LOCATION";
 
 export type WmsBomPreviewComponentRead = {
@@ -307,6 +313,8 @@ export type WmsReturnRead = {
   warehouse_document_type?: string | null;
   warehouse_document_number?: string | null;
   manufactured_component_recovery_mode?: ManufacturedComponentRecoveryMode | null;
+  manufactured_recovery_receipt_mode?: ManufacturedRecoveryReceiptMode | null;
+  manufactured_recovery_location_id?: number | null;
   returns_workflow_version?: number | null;
   require_condition?: boolean | null;
   require_photos?: boolean | null;
@@ -452,6 +460,7 @@ export type WmsReturnLineSplitProcess = {
   stock_intake_mode?: StockIntakeMode | null;
   fg_intake_qty?: number | null;
   disassembly_qty?: number | null;
+  intake_disposition?: WmsReturnIntakeDisposition[] | null;
   component_recoveries?: WmsReturnComponentRecoveryIn[];
 };
 

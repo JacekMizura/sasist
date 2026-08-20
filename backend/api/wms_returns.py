@@ -1120,14 +1120,18 @@ def _rmz_line_to_read(db: Session, ln: RMZLine, order_id: int) -> WmsReturnLineR
         WmsBomPreviewComponentRead,
         WmsBomPreviewRead,
         WmsReturnComponentRecoveryRead,
+        WmsReturnIntakeDispositionRead,
     )
-    from ..services.inventory_management_policy_service import get_or_create_wms_settings_row
     from ..services.production_manufacturing_composition import get_active_manufacturing_composition
+    from ..services.returns.intake_disposition import parse_intake_disposition_json
     from ..services.returns.manufactured_component_recovery_service import (
         bom_preview_for_product,
         manufactured_recovery_locked_reason,
         product_qualifies_for_manufacturing_recovery,
-        recovery_mode_from_settings,
+    )
+    from ..services.returns.rmz_workflow_config_service import (
+        ensure_rmz_workflow_snapshot,
+        read_rmz_workflow_snapshot,
     )
 
     aq, dq, dbq, dcq, rq = _wms_return_line_qty_fields_from_rmz_row(ln)
@@ -1152,13 +1156,10 @@ def _rmz_line_to_read(db: Session, ln: RMZLine, order_id: int) -> WmsReturnLineR
 
     rmz = db.query(WmsOrderReturn).filter(WmsOrderReturn.id == int(ln.rmz_id)).first()
     tenant_id = int(rmz.tenant_id) if rmz else 0
-    warehouse_id = int(rmz.warehouse_id) if rmz else 0
-    settings = (
-        get_or_create_wms_settings_row(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
-        if tenant_id and warehouse_id
-        else None
-    )
-    mode = recovery_mode_from_settings(settings)
+    wf_snap = None
+    if rmz is not None:
+        wf_snap = read_rmz_workflow_snapshot(rmz) or ensure_rmz_workflow_snapshot(db, rmz)
+    mode = wf_snap.manufactured_component_recovery_mode if wf_snap else "OFF"
     has_bom = False
     eligible = False
     if tenant_id and mode != "OFF":
@@ -1193,8 +1194,27 @@ def _rmz_line_to_read(db: Session, ln: RMZLine, order_id: int) -> WmsReturnLineR
         for r in recovery_rows
     ]
     preview = None
-    if eligible and has_bom:
-        dq_prev = int(getattr(ln, "disassembly_qty", None) or 1)
+    dq_prev = int(getattr(ln, "disassembly_qty", None) or 1)
+    if recovery_rows:
+        # Freeze: preview from saved recovery rows (not live ProductComposition).
+        preview = WmsBomPreviewRead(
+            composition_id=int(recovery_rows[0].composition_id),
+            composition_name="",
+            disassembly_qty=max(1, dq_prev),
+            components=[
+                WmsBomPreviewComponentRead(
+                    composition_id=int(r.composition_id),
+                    composition_line_id=int(r.composition_line_id),
+                    component_product_id=int(r.component_product_id),
+                    expected_qty=float(r.expected_qty or 0),
+                    quantity_per_unit=float(r.expected_qty or 0) / float(max(1, dq_prev)),
+                    component_name=None,
+                    component_sku=None,
+                )
+                for r in recovery_rows
+            ],
+        )
+    elif eligible and has_bom:
         raw_preview = bom_preview_for_product(
             db, tenant_id=tenant_id, product_id=int(ln.product_id), disassembly_qty=max(1, dq_prev)
         )
@@ -1222,6 +1242,20 @@ def _rmz_line_to_read(db: Session, ln: RMZLine, order_id: int) -> WmsReturnLineR
     if intake_out not in ("FG", "DISASSEMBLE", "MIXED"):
         intake_out = None
 
+    alloc_rows = parse_intake_disposition_json(getattr(ln, "intake_disposition_json", None))
+    intake_disposition = (
+        [
+            WmsReturnIntakeDispositionRead(
+                disposition=str(r["disposition"]),  # type: ignore[arg-type]
+                fg_qty=int(r["fg_qty"]),
+                disassembly_qty=int(r["disassembly_qty"]),
+            )
+            for r in alloc_rows
+        ]
+        if alloc_rows
+        else []
+    )
+
     return WmsReturnLineRead(
         id=int(ln.id),
         order_item_id=int(ln.order_item_id),
@@ -1248,6 +1282,7 @@ def _rmz_line_to_read(db: Session, ln: RMZLine, order_id: int) -> WmsReturnLineR
         stock_intake_mode=intake_out,  # type: ignore[arg-type]
         fg_intake_qty=getattr(ln, "fg_intake_qty", None),
         disassembly_qty=getattr(ln, "disassembly_qty", None),
+        intake_disposition=intake_disposition,
         component_recoveries=recovery_reads,
         has_active_manufacturing_bom=bool(has_bom),
         manufactured_recovery_eligible=bool(eligible and mode != "OFF"),
@@ -1291,14 +1326,8 @@ def _serialize_return_read(db: Session, row: WmsOrderReturn) -> WmsReturnRead:
     if ui_row is None and getattr(row, "ui_status_id", None):
         ui_row = db.query(ReturnUiStatus).filter(ReturnUiStatus.id == row.ui_status_id).first()
     terminal = _is_terminal(rs)
-    from ..services.inventory_management_policy_service import get_or_create_wms_settings_row
-    from ..services.returns.manufactured_component_recovery_service import recovery_mode_from_settings
-
-    wh_settings = get_or_create_wms_settings_row(
-        db, tenant_id=int(row.tenant_id), warehouse_id=int(row.warehouse_id)
-    )
-    recovery_mode = recovery_mode_from_settings(wh_settings)
-    wf_snap = read_rmz_workflow_snapshot(row)
+    wf_snap = read_rmz_workflow_snapshot(row) or ensure_rmz_workflow_snapshot(db, row)
+    recovery_mode = wf_snap.manufactured_component_recovery_mode
     rs_tkey = getattr(rs, "transition_key", None) if rs is not None else None
     wh_committed = getattr(row, "warehouse_document_id", None) is not None
     content_editable = (
@@ -1330,11 +1359,13 @@ def _serialize_return_read(db: Session, row: WmsOrderReturn) -> WmsReturnRead:
         ui_status=_brief_ui_status(ui_row),
         workflow_finished=terminal,
         workflow_editable=content_editable,
-        returns_workflow_version=wf_snap.version if wf_snap else None,
-        require_condition=wf_snap.require_condition if wf_snap else None,
-        require_photos=wf_snap.require_photos if wf_snap else None,
-        refund_processing=wf_snap.refund_processing if wf_snap else None,
+        returns_workflow_version=wf_snap.version,
+        require_condition=wf_snap.require_condition,
+        require_photos=wf_snap.require_photos,
+        refund_processing=wf_snap.refund_processing,
         manufactured_component_recovery_mode=recovery_mode,  # type: ignore[arg-type]
+        manufactured_recovery_receipt_mode=wf_snap.manufactured_recovery_receipt_mode,  # type: ignore[arg-type]
+        manufactured_recovery_location_id=wf_snap.manufactured_recovery_location_id,
         **_rmz_document_fields(db, row),
     )
 
@@ -2726,6 +2757,7 @@ def process_rmz_line_split(
             return_type=return_type,
             validate_photos=True,
             line_validation=line_val,
+            recovery_mode=snapshot.manufactured_component_recovery_mode,
         )
     except RmzFinalizeError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc

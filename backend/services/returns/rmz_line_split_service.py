@@ -158,6 +158,7 @@ def apply_rmz_line_split(
     return_type: str,
     validate_photos: bool = False,
     line_validation: RmzLineValidationSettings | None = None,
+    recovery_mode: str | None = None,
 ) -> None:
     """Apply split-process payload to RMZ line (no commit)."""
     req_photos = line_validation.require_photos if line_validation else bool(settings.require_photos)
@@ -337,6 +338,12 @@ def apply_rmz_line_split(
         }
         for r in (body.component_recoveries or [])
     ]
+    raw_alloc = getattr(body, "intake_disposition", None)
+    intake_disposition = None
+    if raw_alloc is not None:
+        intake_disposition = [
+            (r.model_dump() if hasattr(r, "model_dump") else dict(r)) for r in raw_alloc
+        ]
     apply_manufacturing_recovery_to_line(
         db,
         tenant_id=int(row.tenant_id),
@@ -347,6 +354,8 @@ def apply_rmz_line_split(
         fg_intake_qty=getattr(body, "fg_intake_qty", None),
         disassembly_qty=getattr(body, "disassembly_qty", None),
         component_recoveries=recovery_payload if recovery_payload else None,
+        intake_disposition=intake_disposition,
+        recovery_mode=recovery_mode,
         require_decision=bool(complete_line),
     )
 

@@ -142,9 +142,8 @@ class TestSaleableFgQty(unittest.TestCase):
 
 
 class TestCommercialRejectedIndependent(unittest.TestCase):
-    def test_15_rejected_still_plans_components(self) -> None:
-        """Case 15: commercial REJECTED does not block physical recovery posting."""
-        rec = SimpleNamespace(posted_at=None, accepted_qty=4.0)
+    def test_15_rejected_only_no_saleable_fg(self) -> None:
+        """REJECTED commercial qty never contributes saleable FG; orphan recoveries are separate."""
         ln = _Line(
             accepted_qty=0,
             rejected_qty=2,
@@ -154,13 +153,14 @@ class TestCommercialRejectedIndependent(unittest.TestCase):
             decision="REJECTED",
             damage_entries_json=None,
             id=1,
-            stock_intake_mode=INTAKE_DISASSEMBLE,
-            fg_intake_qty=0,
-            disassembly_qty=2,
-            component_recoveries=[rec],
+            stock_intake_mode=None,
+            fg_intake_qty=None,
+            disassembly_qty=None,
+            intake_disposition_json=None,
+            component_recoveries=[],
         )
         self.assertEqual(saleable_fg_qty_for_receipt(ln), 0)
-        self.assertTrue(_any_planned_lines(None, 1, 1, [ln]))  # type: ignore[arg-type]
+        self.assertFalse(_any_planned_lines(None, 1, 1, [ln]))  # type: ignore[arg-type]
 
 
 class TestLineAllowsDisassemble(unittest.TestCase):
@@ -250,7 +250,7 @@ class TestApplyRecovery(unittest.TestCase):
         db = MagicMock()
         db.query.return_value.filter.return_value.all.return_value = []
         settings = SimpleNamespace(manufactured_component_recovery_mode=RECOVERY_MODE_OPTIONAL)
-        ln = _Line(id=1, product_id=9, quantity=1, accepted_qty=0, rmz_id=1)
+        ln = _Line(id=1, product_id=9, quantity=1, accepted_qty=1, rmz_id=1)
         apply_manufacturing_recovery_to_line(
             db,
             tenant_id=1,
@@ -289,7 +289,7 @@ class TestApplyRecovery(unittest.TestCase):
         db = MagicMock()
         db.query.return_value.filter.return_value.all.return_value = []
         settings = SimpleNamespace(manufactured_component_recovery_mode=RECOVERY_MODE_OPTIONAL)
-        ln = _Line(id=1, product_id=9, quantity=2, accepted_qty=0, rmz_id=1)
+        ln = _Line(id=1, product_id=9, quantity=2, accepted_qty=2, rmz_id=1)
         apply_manufacturing_recovery_to_line(
             db,
             tenant_id=1,

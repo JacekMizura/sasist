@@ -563,12 +563,16 @@ class TestDomainActivityReturnsProduction(unittest.TestCase):
             require_photos=False,
             require_condition=False,
             refund_processing="disabled",
+            manufactured_component_recovery_mode="OFF",
+            manufactured_recovery_receipt_mode="STANDARD_PUTAWAY",
+            manufactured_recovery_location_id=None,
         )
 
         with (
             patch.object(fin, "assert_rmz_warehouse_not_yet_committed"),
             patch.object(fin, "apply_rmz_line_split"),
             patch.object(fin, "validate_rmz_lines_ready_for_finalize"),
+            patch.object(fin, "_assert_mfg_recovery_before_receipt"),
             patch.object(fin, "line_validation_settings", return_value=MagicMock()),
             patch.object(fin, "validate_warehouse_commit_refund_payload"),
             patch.object(fin, "resolve_warehouse_commit_transition", return_value="success"),

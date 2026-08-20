@@ -892,6 +892,18 @@ def ensure_wms_order_returns_columns(engine: Engine) -> None:
             conn.execute(text("ALTER TABLE wms_order_returns ADD COLUMN require_photos BOOLEAN"))
         if "refund_processing" not in columns:
             conn.execute(text("ALTER TABLE wms_order_returns ADD COLUMN refund_processing VARCHAR(24)"))
+        if "manufactured_component_recovery_mode" not in columns:
+            conn.execute(
+                text("ALTER TABLE wms_order_returns ADD COLUMN manufactured_component_recovery_mode VARCHAR(24)")
+            )
+        if "manufactured_recovery_receipt_mode" not in columns:
+            conn.execute(
+                text("ALTER TABLE wms_order_returns ADD COLUMN manufactured_recovery_receipt_mode VARCHAR(32)")
+            )
+        if "manufactured_recovery_location_id" not in columns:
+            conn.execute(
+                text("ALTER TABLE wms_order_returns ADD COLUMN manufactured_recovery_location_id INTEGER")
+            )
 
         conn.execute(
             text(
@@ -2028,6 +2040,8 @@ def ensure_manufactured_component_recovery_schema(engine: Engine) -> None:
                 conn.execute(text("ALTER TABLE rmz_lines ADD COLUMN fg_intake_qty INTEGER"))
             if "disassembly_qty" not in cols:
                 conn.execute(text("ALTER TABLE rmz_lines ADD COLUMN disassembly_qty INTEGER"))
+            if "intake_disposition_json" not in cols:
+                conn.execute(text("ALTER TABLE rmz_lines ADD COLUMN intake_disposition_json TEXT"))
 
     if not _table_exists(engine, "rmz_line_component_recoveries"):
         from ..models.rmz_line_component_recovery import RmzLineComponentRecovery
@@ -2951,6 +2965,8 @@ def ensure_manufactured_component_recovery_schema(engine: Engine) -> None:
                 conn.execute(text("ALTER TABLE rmz_lines ADD COLUMN fg_intake_qty INTEGER"))
             if "disassembly_qty" not in cols:
                 conn.execute(text("ALTER TABLE rmz_lines ADD COLUMN disassembly_qty INTEGER"))
+            if "intake_disposition_json" not in cols:
+                conn.execute(text("ALTER TABLE rmz_lines ADD COLUMN intake_disposition_json TEXT"))
 
         if not _table_exists(conn, "rmz_line_component_recoveries"):
             conn.execute(

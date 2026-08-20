@@ -40,6 +40,10 @@ class WmsOrderReturn(Base):
     require_condition = Column(Boolean, nullable=True)
     require_photos = Column(Boolean, nullable=True)
     refund_processing = Column(String(24), nullable=True)
+    #: Manufactured recovery policy snapshot (same workflow stamp as refund_processing).
+    manufactured_component_recovery_mode = Column(String(24), nullable=True)
+    manufactured_recovery_receipt_mode = Column(String(32), nullable=True)
+    manufactured_recovery_location_id = Column(Integer, nullable=True)
 
     #: Powiązany dokument magazynowy Z-PZ utworzony przy finalizacji zwrotu.
     warehouse_document_id = Column(

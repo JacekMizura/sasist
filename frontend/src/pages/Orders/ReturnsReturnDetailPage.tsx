@@ -598,7 +598,7 @@ export default function ReturnsReturnDetailPage() {
         const drafts: Record<number, WmsReturnFinalizeLineIn> = {};
         const recoveryDrafts: Record<number, ManufacturedRecoveryDraft> = {};
         const modeRaw = String(
-          r.manufactured_component_recovery_mode || settings?.manufactured_component_recovery_mode || "OFF",
+          r.manufactured_component_recovery_mode || "OFF",
         ).toUpperCase();
         const recoveryModeInit: ManufacturedComponentRecoveryMode =
           modeRaw === "OPTIONAL" || modeRaw === "REQUIRED" ? modeRaw : "OFF";
@@ -774,13 +774,9 @@ export default function ReturnsReturnDetailPage() {
   }, [moduleCfg?.detail_layout]);
 
   const manufacturedRecoveryMode = useMemo((): ManufacturedComponentRecoveryMode => {
-    const raw = String(
-      data?.manufactured_component_recovery_mode ||
-        wmsSettings?.manufactured_component_recovery_mode ||
-        "OFF",
-    ).toUpperCase();
+    const raw = String(data?.manufactured_component_recovery_mode || "OFF").toUpperCase();
     return raw === "OPTIONAL" || raw === "REQUIRED" ? raw : "OFF";
-  }, [data?.manufactured_component_recovery_mode, wmsSettings?.manufactured_component_recovery_mode]);
+  }, [data?.manufactured_component_recovery_mode]);
 
   const allLinesReady = useMemo(() => {
     if (!data) return false;
@@ -1006,9 +1002,7 @@ export default function ReturnsReturnDetailPage() {
                 void getWmsReturn(rid, DAMAGE_TENANT_ID).then((fresh) => {
                   setData(fresh);
                   const modeRaw = String(
-                    fresh.manufactured_component_recovery_mode ||
-                      wmsSettings?.manufactured_component_recovery_mode ||
-                      "OFF",
+                    fresh.manufactured_component_recovery_mode || "OFF",
                   ).toUpperCase();
                   const mode: ManufacturedComponentRecoveryMode =
                     modeRaw === "OPTIONAL" || modeRaw === "REQUIRED" ? modeRaw : "OFF";

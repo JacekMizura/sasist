@@ -63,25 +63,59 @@ describe("OMS RMZ finalize recovery reuse", () => {
     expect(draft.component_recoveries?.[0]?.accepted_qty).toBe(40);
   });
 
-  it("mergeRecoveryIntoFinalizeDraft attaches WMS recovery draft fields", () => {
+  it("finalizeLineFromRead carries intake_disposition buckets", () => {
+    const draft = finalizeLineFromRead(
+      baseLine({
+        stock_intake_mode: "MIXED",
+        fg_intake_qty: 2,
+        disassembly_qty: 4,
+        intake_disposition: [
+          { disposition: "SALEABLE", fg_qty: 2, disassembly_qty: 2 },
+          { disposition: "OUTLET_B", fg_qty: 0, disassembly_qty: 2 },
+          { disposition: "SERVICE_C", fg_qty: 0, disassembly_qty: 0 },
+        ],
+        component_recoveries: [
+          {
+            composition_id: 1,
+            composition_line_id: 5,
+            component_product_id: 200,
+            expected_qty: 8,
+            accepted_qty: 8,
+            scrap_qty: 0,
+          },
+        ],
+      }),
+    );
+    expect(draft.intake_disposition).toHaveLength(3);
+    expect(draft.intake_disposition?.[0]).toEqual({
+      disposition: "SALEABLE",
+      fg_qty: 2,
+      disassembly_qty: 2,
+    });
+  });
+
+  it("mergeRecoveryIntoFinalizeDraft keeps intake_disposition for dirty-save", () => {
     const base = finalizeLineFromRead(baseLine());
     const merged = mergeRecoveryIntoFinalizeDraft(base, {
       stock_intake_mode: "MIXED",
-      fg_intake_qty: 5,
-      disassembly_qty: 15,
+      fg_intake_qty: 2,
+      disassembly_qty: 2,
+      intake_disposition: [
+        { disposition: "SALEABLE", fg_qty: 2, disassembly_qty: 2 },
+        { disposition: "OUTLET_B", fg_qty: 0, disassembly_qty: 0 },
+        { disposition: "SERVICE_C", fg_qty: 0, disassembly_qty: 0 },
+      ],
       component_recoveries: [
         {
           composition_line_id: 5,
           component_product_id: 200,
-          accepted_qty: 30,
+          accepted_qty: 4,
           scrap_qty: 0,
-          expected_qty: 30,
+          expected_qty: 4,
         },
       ],
     });
-    expect(merged.fg_intake_qty).toBe(5);
-    expect(merged.disassembly_qty).toBe(15);
-    expect(merged.stock_intake_mode).toBe("MIXED");
-    expect(merged.component_recoveries).toHaveLength(1);
+    expect(merged.intake_disposition?.[0]?.fg_qty).toBe(2);
+    expect(merged.intake_disposition?.[0]?.disassembly_qty).toBe(2);
   });
 });

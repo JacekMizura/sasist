@@ -34,6 +34,32 @@ from .rmz_workflow_config_service import (
 logger = logging.getLogger(__name__)
 
 
+def _assert_mfg_recovery_before_receipt(
+    db: Session,
+    row: WmsOrderReturn,
+    rmz_lines: Sequence[RMZLine],
+    snapshot: RmzWorkflowSnapshot,
+) -> None:
+    from ...models.order_item import OrderItem
+    from ..bundles.bundle_return_service import bundle_component_returns_for_line
+    from .manufactured_component_recovery_service import (
+        assert_manufacturing_recovery_ready_for_warehouse_commit,
+    )
+
+    for ln in rmz_lines:
+        oi = db.query(OrderItem).filter(OrderItem.id == int(ln.order_item_id)).first()
+        is_bundle = bool(oi and getattr(oi, "is_bundle_parent", False))
+        if not is_bundle:
+            is_bundle = bool(bundle_component_returns_for_line(db, int(ln.id)))
+        assert_manufacturing_recovery_ready_for_warehouse_commit(
+            db,
+            tenant_id=int(row.tenant_id),
+            rmz_line=ln,
+            recovery_mode=snapshot.manufactured_component_recovery_mode,
+            is_bundle_line=is_bundle,
+        )
+
+
 def _apply_transition(db: Session, row: WmsOrderReturn, transition_key: str) -> None:
     st = get_by_transition_key(db, row.tenant_id, row.warehouse_id, transition_key)
     if st is None:
@@ -136,6 +162,7 @@ def warehouse_commit_rmz_return(
             return_type=return_type,
             validate_photos=True,
             line_validation=line_val,
+            recovery_mode=snapshot.manufactured_component_recovery_mode,
         )
 
     rmz_lines = list(lines_by_oi.values())
@@ -144,6 +171,7 @@ def warehouse_commit_rmz_return(
         require_photos=snapshot.require_photos,
         require_condition=snapshot.require_condition,
     )
+    _assert_mfg_recovery_before_receipt(db, row, rmz_lines, snapshot)
 
     try:
         from .return_domain_activity import (
@@ -247,6 +275,7 @@ def warehouse_commit_rmz_existing_lines(
         require_photos=snapshot.require_photos,
         require_condition=snapshot.require_condition,
     )
+    _assert_mfg_recovery_before_receipt(db, row, rmz_lines, snapshot)
 
     all_rejected = all(ln.decision == "REJECTED" for ln in rmz_lines)
     pz_doc = None

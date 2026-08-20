@@ -150,6 +150,7 @@ export function finalizeLineFromRead(ln: WmsReturnLineRead): WmsReturnFinalizeLi
     stock_intake_mode: ln.stock_intake_mode ?? null,
     fg_intake_qty: ln.fg_intake_qty ?? null,
     disassembly_qty: ln.disassembly_qty ?? null,
+    intake_disposition: Array.isArray(ln.intake_disposition) ? ln.intake_disposition : undefined,
     component_recoveries: recoveries,
   };
 }
@@ -160,6 +161,7 @@ export function mergeRecoveryIntoFinalizeDraft(
     stock_intake_mode: WmsReturnFinalizeLineIn["stock_intake_mode"];
     fg_intake_qty: number;
     disassembly_qty: number;
+    intake_disposition?: WmsReturnFinalizeLineIn["intake_disposition"];
     component_recoveries: NonNullable<WmsReturnFinalizeLineIn["component_recoveries"]>;
   } | null,
 ): WmsReturnFinalizeLineIn {
@@ -169,6 +171,7 @@ export function mergeRecoveryIntoFinalizeDraft(
     stock_intake_mode: recovery.stock_intake_mode,
     fg_intake_qty: recovery.fg_intake_qty,
     disassembly_qty: recovery.disassembly_qty,
+    intake_disposition: recovery.intake_disposition ?? draft.intake_disposition,
     component_recoveries: recovery.component_recoveries,
   };
 }
@@ -201,6 +204,8 @@ export function mergeLineReadFromDraft(ln: WmsReturnLineRead, draft: WmsReturnFi
     stock_intake_mode: draft.stock_intake_mode !== undefined ? draft.stock_intake_mode : ln.stock_intake_mode,
     fg_intake_qty: draft.fg_intake_qty !== undefined ? draft.fg_intake_qty : ln.fg_intake_qty,
     disassembly_qty: draft.disassembly_qty !== undefined ? draft.disassembly_qty : ln.disassembly_qty,
+    intake_disposition:
+      draft.intake_disposition !== undefined ? draft.intake_disposition : ln.intake_disposition,
     component_recoveries:
       draft.component_recoveries != null
         ? draft.component_recoveries.map((e) => ({

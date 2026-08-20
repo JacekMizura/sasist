@@ -1562,7 +1562,6 @@ export default function WmsReturnsPage() {
         setLineSeeds(seeds);
         const recoveryModeRaw = String(
           wmsReturn.manufactured_component_recovery_mode ||
-            wmsSettings?.manufactured_component_recovery_mode ||
             "OFF",
         ).toUpperCase();
         const recoveryMode: ManufacturedComponentRecoveryMode =
@@ -2716,9 +2715,7 @@ export default function WmsReturnsPage() {
           wmsReturn?.lines.find((l) => Number(l.order_item_id) === Number(seed.orderItemId)) ??
           wmsReturn?.lines.find((l) => Number(l.product_id) === Number(seed.candidate.productId));
         const recoveryModeRaw = String(
-          wmsReturn?.manufactured_component_recovery_mode ||
-            wmsSettings?.manufactured_component_recovery_mode ||
-            "OFF",
+          wmsReturn?.manufactured_component_recovery_mode || "OFF",
         ).toUpperCase();
         const recoveryMode: ManufacturedComponentRecoveryMode =
           recoveryModeRaw === "OPTIONAL" || recoveryModeRaw === "REQUIRED" ? recoveryModeRaw : "OFF";
@@ -2732,6 +2729,7 @@ export default function WmsReturnsPage() {
               stock_intake_mode: recoveryDraft.stock_intake_mode,
               fg_intake_qty: recoveryDraft.fg_intake_qty,
               disassembly_qty: recoveryDraft.disassembly_qty,
+              intake_disposition: recoveryDraft.intake_disposition,
               component_recoveries: recoveryDraft.component_recoveries,
             }
           : null;
@@ -2922,7 +2920,6 @@ export default function WmsReturnsPage() {
       lineOverrides,
       dmgReasons,
       mfgRecoveryByLineId,
-      wmsSettings?.manufactured_component_recovery_mode,
       wmsReturn?.manufactured_component_recovery_mode,
       wmsReturn?.lines,
     ]
@@ -3602,7 +3599,6 @@ export default function WmsReturnsPage() {
         wmsReturn?.lines.find((l) => Number(l.product_id) === Number(seed.candidate.productId));
       const recoveryModeRaw = String(
         wmsReturn?.manufactured_component_recovery_mode ||
-          wmsSettings?.manufactured_component_recovery_mode ||
           "OFF",
       ).toUpperCase();
       const recoveryMode: ManufacturedComponentRecoveryMode =
@@ -3646,6 +3642,7 @@ export default function WmsReturnsPage() {
                 stock_intake_mode: recoveryDraft.stock_intake_mode,
                 fg_intake_qty: recoveryDraft.fg_intake_qty,
                 disassembly_qty: recoveryDraft.disassembly_qty,
+                intake_disposition: recoveryDraft.intake_disposition,
                 component_recoveries: recoveryDraft.component_recoveries,
               }
             : {}),
@@ -3660,7 +3657,6 @@ export default function WmsReturnsPage() {
       mfgRecoveryByLineId,
       wmsReturn?.lines,
       wmsReturn?.manufactured_component_recovery_mode,
-      wmsSettings?.manufactured_component_recovery_mode,
     ],
   );
 
@@ -4770,7 +4766,6 @@ export default function WmsReturnsPage() {
                                   if (!rmzLn?.manufactured_recovery_eligible) return null;
                                   const recoveryModeRaw = String(
                                     wmsReturn?.manufactured_component_recovery_mode ||
-                                      wmsSettings?.manufactured_component_recovery_mode ||
                                       "OFF",
                                   ).toUpperCase();
                                   const recoveryMode: ManufacturedComponentRecoveryMode =

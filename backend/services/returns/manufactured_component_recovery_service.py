@@ -66,6 +66,7 @@ def assert_recovery_location_in_warehouse(
     warehouse_id: int,
     location_id: int,
     tenant_id: Optional[int] = None,
+    require_active: bool = True,
 ) -> None:
     from ...models.location import Location
     from ...models.warehouse import Warehouse
@@ -77,12 +78,470 @@ def assert_recovery_location_in_warehouse(
     )
     if loc is None:
         raise ValueError("Lokalizacja odzysków musi należeć do wybranego magazynu")
+    if require_active and not bool(getattr(loc, "is_active", True)):
+        raise ValueError("Lokalizacja odzysków jest nieaktywna")
     if tenant_id is not None:
         wh = db.query(Warehouse).filter(Warehouse.id == int(warehouse_id)).first()
-        # Soft check when warehouse exposes tenant; skip if not present
         wh_tid = getattr(wh, "tenant_id", None) if wh is not None else None
         if wh_tid is not None and int(wh_tid) != int(tenant_id):
             raise ValueError("Lokalizacja odzysków musi należeć do wybranego magazynu")
+
+
+def assert_snapshot_recovery_location_for_commit(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    location_id: int,
+) -> None:
+    """Hard gate before DEFAULT_LOCATION inventory — no fallback."""
+    try:
+        assert_recovery_location_in_warehouse(
+            db,
+            warehouse_id=int(warehouse_id),
+            location_id=int(location_id),
+            tenant_id=int(tenant_id),
+            require_active=True,
+        )
+    except ValueError as exc:
+        raise RmzFinalizeError(str(exc)) from exc
+    from ...models.location import Location
+
+    loc = db.query(Location).filter(Location.id == int(location_id)).first()
+    # Reject DOCK / special roles that are not storage putaway destinations.
+    role = str(getattr(loc, "location_type", None) or getattr(loc, "type", "") or "").strip().upper()
+    if role in ("DOCK", "PICK_START", "PACKING"):
+        raise RmzFinalizeError(
+            f"Lokalizacja odzysków (id={location_id}) nie może być typu {role} — wybierz lokalizację magazynową."
+        )
+
+
+def saleable_fg_qty_for_receipt(rmz_line: RMZLine) -> int:
+    """
+    Compatibility: total remaining FG across dispositions (projection).
+
+    Prefer intake_disposition_json SALEABLE+OUTLET_B+SERVICE_C fg sums when present;
+    else projected fg_intake_qty; else legacy accepted_qty only when no intake.
+    """
+    from .intake_disposition import read_line_allocation, total_fg_qty
+
+    alloc = read_line_allocation(rmz_line)
+    if alloc is not None:
+        return total_fg_qty(alloc)
+    mode = (str(getattr(rmz_line, "stock_intake_mode", None) or "").strip().upper() or None)
+    fg_raw = getattr(rmz_line, "fg_intake_qty", None)
+    dq = int(getattr(rmz_line, "disassembly_qty", None) or 0)
+    if mode in INTAKE_MODES or fg_raw is not None or dq > 0:
+        return max(0, int(fg_raw if fg_raw is not None else 0))
+    return max(0, int(getattr(rmz_line, "accepted_qty", None) or 0))
+
+
+def line_has_pending_component_receipt(rmz_line: RMZLine) -> bool:
+    recoveries = list(getattr(rmz_line, "component_recoveries", None) or [])
+    for r in recoveries:
+        if getattr(r, "posted_at", None) is not None:
+            continue
+        if float(getattr(r, "accepted_qty", 0) or 0) > 1e-9:
+            return True
+    return False
+
+
+def _clear_unposted_recoveries(db: Session, rmz_line: RMZLine) -> None:
+    existing = (
+        db.query(RmzLineComponentRecovery)
+        .filter(RmzLineComponentRecovery.rmz_line_id == int(rmz_line.id))
+        .all()
+    )
+    if any(getattr(r, "posted_at", None) for r in existing):
+        raise RmzFinalizeError("Component recoveries already posted — cannot change")
+    for r in existing:
+        db.delete(r)
+    db.flush()
+
+
+def _persist_component_matrix(
+    db: Session,
+    *,
+    tenant_id: int,
+    rmz_line: RMZLine,
+    disassembly_qty: int,
+    component_recoveries: Optional[Sequence[Mapping[str, Any]]],
+    actor_user_id: Optional[int],
+    reuse_existing_if_complete: bool = True,
+) -> None:
+    """Materialize recovery rows from live BOM only when writing/changing matrix."""
+    existing = (
+        db.query(RmzLineComponentRecovery)
+        .filter(RmzLineComponentRecovery.rmz_line_id == int(rmz_line.id))
+        .all()
+    )
+    if any(getattr(r, "posted_at", None) for r in existing):
+        raise RmzFinalizeError("Component recoveries already posted — cannot change")
+
+    dq = max(0, int(disassembly_qty or 0))
+    if dq <= 0:
+        for r in existing:
+            db.delete(r)
+        db.flush()
+        return
+
+    payload = list(component_recoveries or [])
+    # Freeze: if existing unposted rows already complete for this dq and no new payload, keep them.
+    if reuse_existing_if_complete and not payload and existing:
+        # Verify expected sums still match requested dq using stored coefficient × dq.
+        # Rows store absolute expected_qty — if count matches and matrix balanced, keep.
+        try:
+            validate_recovery_matrix(
+                [
+                    {
+                        "expected_qty": float(r.expected_qty or 0),
+                        "accepted_qty": float(r.accepted_qty or 0),
+                        "scrap_qty": float(r.scrap_qty or 0),
+                    }
+                    for r in existing
+                ]
+            )
+            return
+        except RmzFinalizeError:
+            pass
+
+    if not payload and dq > 0:
+        raise RmzFinalizeError("Podaj rozliczenie komponentów (accepted/scrap) dla rozmontowania")
+
+    composition = get_active_manufacturing_composition(
+        db, tenant_id=int(tenant_id), product_id=int(rmz_line.product_id)
+    )
+    if composition is None:
+        # Prefer reusing composition_id from existing rows when live BOM gone but rows present
+        if existing and payload:
+            composition_id = int(existing[0].composition_id)
+        else:
+            raise RmzFinalizeError("Brak aktywnej receptury produkcyjnej dla produktu")
+        expected_by_line = {
+            int(r.composition_line_id): {
+                "composition_id": int(r.composition_id),
+                "composition_line_id": int(r.composition_line_id),
+                "component_product_id": int(r.component_product_id),
+                "expected_qty": float(r.expected_qty or 0),
+            }
+            for r in existing
+        }
+        # Scale expected if dq changed vs stored
+        if existing:
+            # Derive per-unit from first row if possible
+            pass
+        merged = []
+        for p in payload:
+            cl_id = int(p.get("composition_line_id") or 0)
+            if cl_id not in expected_by_line:
+                raise RmzFinalizeError(f"Nieznany composition_line_id={cl_id} dla zamrożonego BOM")
+            base = dict(expected_by_line[cl_id])
+            # Keep frozen expected from existing row (do not rebuild from live recipe)
+            base["accepted_qty"] = float(p.get("accepted_qty") or 0)
+            base["scrap_qty"] = float(p.get("scrap_qty") or 0)
+            merged.append(base)
+        if len(merged) != len(expected_by_line):
+            raise RmzFinalizeError("Macierz odzysku musi zawierać wszystkie komponenty zamrożonego BOM")
+        validate_recovery_matrix(merged)
+        # Rebuild composition stub for upsert
+        class _Comp:
+            id = composition_id
+
+        upsert_component_recoveries(db, rmz_line, _Comp(), merged, tenant_id=int(tenant_id))  # type: ignore[arg-type]
+    else:
+        expected_rows = build_bom_expected_rows(composition, dq)
+        # If existing rows for same composition_line_ids exist and payload omits expected,
+        # still use BOM×dq for new write (first materialization). Once written, reopen uses
+        # existing rows via reuse_existing_if_complete unless payload provided.
+        by_line = {int(r["composition_line_id"]): r for r in expected_rows}
+        merged = []
+        for p in payload:
+            cl_id = int(p.get("composition_line_id") or 0)
+            if cl_id not in by_line:
+                raise RmzFinalizeError(f"Nieznany composition_line_id={cl_id} dla aktywnego BOM")
+            base = dict(by_line[cl_id])
+            base["accepted_qty"] = float(p.get("accepted_qty") or 0)
+            base["scrap_qty"] = float(p.get("scrap_qty") or 0)
+            merged.append(base)
+        if len(merged) != len(expected_rows):
+            raise RmzFinalizeError("Macierz odzysku musi zawierać wszystkie komponenty BOM")
+        validate_recovery_matrix(merged)
+        upsert_component_recoveries(db, rmz_line, composition, merged, tenant_id=int(tenant_id))
+
+    recoveries = (
+        db.query(RmzLineComponentRecovery)
+        .filter(RmzLineComponentRecovery.rmz_line_id == int(rmz_line.id))
+        .all()
+    )
+    audit_component_scrap(db, rmz_line=rmz_line, recoveries=recoveries, actor_user_id=actor_user_id)
+
+
+def apply_manufacturing_recovery_to_line(
+    db: Session,
+    *,
+    tenant_id: int,
+    rmz_line: RMZLine,
+    settings: WmsSettings,
+    is_bundle_line: bool,
+    stock_intake_mode: Optional[str] = None,
+    fg_intake_qty: Optional[int] = None,
+    disassembly_qty: Optional[int] = None,
+    component_recoveries: Optional[Sequence[Mapping[str, Any]]] = None,
+    intake_disposition: Optional[Sequence[Mapping[str, Any]]] = None,
+    recovery_mode: Optional[str] = None,
+    actor_user_id: Optional[int] = None,
+    require_decision: bool = False,
+) -> None:
+    """
+    Persist recovery allocation on an RMZ line (split-process / finalize).
+
+    SSOT = ``intake_disposition_json``. Aggregate fg/dq/mode are projections.
+    ``recovery_mode`` should come from RMZ workflow snapshot (not live settings).
+    """
+    from .intake_disposition import (
+        all_fg_allocation_from_commercial,
+        apply_projection_to_line,
+        commercial_buckets,
+        parse_intake_disposition_json,
+        physical_receivable_qty,
+        required_allocation_from_commercial,
+        total_disassembly_qty,
+        validate_allocation_against_commercial,
+    )
+
+    mode = normalize_recovery_mode(recovery_mode) if recovery_mode is not None else recovery_mode_from_settings(settings)
+    eligible = product_qualifies_for_manufacturing_recovery(
+        db, int(tenant_id), int(rmz_line.product_id), is_bundle_line=bool(is_bundle_line)
+    )
+
+    buckets = commercial_buckets(rmz_line)
+    receivable = physical_receivable_qty(
+        accepted_qty=buckets["SALEABLE"],
+        damaged_b_qty=buckets["OUTLET_B"],
+        damaged_c_qty=buckets["SERVICE_C"],
+    )
+
+    if mode == RECOVERY_MODE_OFF or not eligible:
+        if is_bundle_line:
+            return
+        if getattr(rmz_line, "disassembly_qty", None) or getattr(rmz_line, "stock_intake_mode", None) or getattr(
+            rmz_line, "intake_disposition_json", None
+        ):
+            existing = (
+                db.query(RmzLineComponentRecovery)
+                .filter(RmzLineComponentRecovery.rmz_line_id == int(rmz_line.id))
+                .all()
+            )
+            if any(getattr(r, "posted_at", None) for r in existing):
+                return
+            for r in existing:
+                db.delete(r)
+            rmz_line.stock_intake_mode = None
+            rmz_line.fg_intake_qty = None
+            rmz_line.disassembly_qty = None
+            rmz_line.intake_disposition_json = None
+        return
+
+    has_payload = (
+        intake_disposition is not None
+        or component_recoveries is not None
+        or stock_intake_mode is not None
+        or fg_intake_qty is not None
+        or disassembly_qty is not None
+    )
+    if not require_decision and not has_payload:
+        return
+
+    if receivable <= 0:
+        # All rejected / nothing receivable — clear unposted recovery, zero allocation
+        try:
+            _clear_unposted_recoveries(db, rmz_line)
+        except RmzFinalizeError:
+            return
+        apply_projection_to_line(
+            rmz_line,
+            all_fg_allocation_from_commercial(accepted_qty=0, damaged_b_qty=0, damaged_c_qty=0),
+        )
+        return
+
+    if intake_disposition is not None:
+        rows = parse_intake_disposition_json(list(intake_disposition))
+        assert rows is not None
+    elif mode == RECOVERY_MODE_REQUIRED and (require_decision or has_payload):
+        # Explicit FG intent is not allowed under REQUIRED.
+        intake_u = (str(stock_intake_mode).strip().upper() if stock_intake_mode else None) or None
+        fg_i = int(fg_intake_qty) if fg_intake_qty is not None else 0
+        dq_i = int(disassembly_qty) if disassembly_qty is not None else 0
+        if intake_u == INTAKE_FG or (fg_i > 0 and dq_i == 0 and (fg_intake_qty is not None or intake_u)):
+            raise RmzFinalizeError(
+                "Wymagany odzysk komponentów: wybierz rozmontowanie (DISASSEMBLE) dla produktu produkowanego"
+            )
+        rows = required_allocation_from_commercial(
+            accepted_qty=buckets["SALEABLE"],
+            damaged_b_qty=buckets["OUTLET_B"],
+            damaged_c_qty=buckets["SERVICE_C"],
+        )
+    elif require_decision and not has_payload:
+        # OPTIONAL default: all FG
+        rows = all_fg_allocation_from_commercial(
+            accepted_qty=buckets["SALEABLE"],
+            damaged_b_qty=buckets["OUTLET_B"],
+            damaged_c_qty=buckets["SERVICE_C"],
+        )
+    elif fg_intake_qty is not None or disassembly_qty is not None or stock_intake_mode is not None:
+        # Compatibility bridge: only when mathematically unique (single commercial bucket).
+        from .intake_disposition import try_deterministic_legacy_conversion
+
+        prev_fg = getattr(rmz_line, "fg_intake_qty", None)
+        prev_dq = getattr(rmz_line, "disassembly_qty", None)
+        prev_mode = getattr(rmz_line, "stock_intake_mode", None)
+        if fg_intake_qty is not None:
+            rmz_line.fg_intake_qty = int(fg_intake_qty)
+        if disassembly_qty is not None:
+            rmz_line.disassembly_qty = int(disassembly_qty)
+        if stock_intake_mode is not None:
+            rmz_line.stock_intake_mode = str(stock_intake_mode).strip().upper()
+        rows = try_deterministic_legacy_conversion(rmz_line, recovery_mode=mode)
+        rmz_line.fg_intake_qty = prev_fg
+        rmz_line.disassembly_qty = prev_dq
+        rmz_line.stock_intake_mode = prev_mode
+        if rows is None:
+            raise RmzFinalizeError(
+                "Podaj intake_disposition_json (alokacja FG/DISASSEMBLE per SALEABLE/OUTLET_B/SERVICE_C) "
+                "— legacy fg/disassembly jest niejednoznaczne przy wielu klasach jakości."
+            )
+    else:
+        raise RmzFinalizeError(
+            "Podaj intake_disposition_json (alokacja FG/DISASSEMBLE per SALEABLE/OUTLET_B/SERVICE_C)"
+        )
+
+    validate_allocation_against_commercial(
+        rows,
+        accepted_qty=buckets["SALEABLE"],
+        damaged_b_qty=buckets["OUTLET_B"],
+        damaged_c_qty=buckets["SERVICE_C"],
+    )
+
+    if mode == RECOVERY_MODE_REQUIRED:
+        for r in rows:
+            if int(r.get("fg_qty") or 0) != 0:
+                raise RmzFinalizeError(
+                    "Wymagany odzysk komponentów: fg_qty musi być 0 dla każdej disposition (pełne rozmontowanie)"
+                )
+        if total_disassembly_qty(rows) != receivable:
+            raise RmzFinalizeError(
+                "Wymagany odzysk komponentów: disassembly_qty musi równać się physical_receivable_qty"
+            )
+
+    dq = total_disassembly_qty(rows)
+    if dq > 0 and not line_allows_disassemble_change(db, rmz_line):
+        raise RmzFinalizeError(LOCKED_FG_POSTED)
+
+    apply_projection_to_line(rmz_line, rows)
+
+    if dq > 0:
+        _persist_component_matrix(
+            db,
+            tenant_id=int(tenant_id),
+            rmz_line=rmz_line,
+            disassembly_qty=dq,
+            component_recoveries=component_recoveries,
+            actor_user_id=actor_user_id,
+        )
+    else:
+        try:
+            _clear_unposted_recoveries(db, rmz_line)
+        except RmzFinalizeError:
+            raise
+
+    db.flush()
+
+
+def resolve_line_allocation_for_commit(
+    rmz_line: RMZLine,
+    *,
+    recovery_mode: str,
+) -> list[dict[str, int | str]]:
+    """Resolve allocation for warehouse commit — no heuristics across multiple buckets."""
+    from .intake_disposition import try_deterministic_legacy_conversion, validate_allocation_against_commercial
+
+    rows = try_deterministic_legacy_conversion(rmz_line, recovery_mode=recovery_mode)
+    if rows is None:
+        raise RmzFinalizeError(
+            "Brak jednoznacznej alokacji intake (intake_disposition_json). "
+            "Uzupełnij FG/DISASSEMBLE dla SALEABLE / OUTLET_B / SERVICE_C przed zatwierdzeniem magazynowym."
+        )
+    buckets = {
+        "SALEABLE": max(0, int(getattr(rmz_line, "accepted_qty", None) or 0)),
+        "OUTLET_B": max(0, int(getattr(rmz_line, "damaged_b_qty", None) or 0)),
+        "SERVICE_C": max(0, int(getattr(rmz_line, "damaged_c_qty", None) or 0)),
+    }
+    validate_allocation_against_commercial(
+        rows,
+        accepted_qty=buckets["SALEABLE"],
+        damaged_b_qty=buckets["OUTLET_B"],
+        damaged_c_qty=buckets["SERVICE_C"],
+    )
+    return rows
+
+
+def assert_manufacturing_recovery_ready_for_warehouse_commit(
+    db: Session,
+    *,
+    tenant_id: int,
+    rmz_line: RMZLine,
+    recovery_mode: str,
+    is_bundle_line: bool,
+) -> None:
+    """Hard gate before Z-PZ — REQUIRED / OPTIONAL allocation + recovery matrix."""
+    from .intake_disposition import physical_receivable_qty, total_disassembly_qty
+
+    mode = normalize_recovery_mode(recovery_mode)
+    if mode == RECOVERY_MODE_OFF:
+        return
+    if is_bundle_line:
+        return
+    if not product_qualifies_for_manufacturing_recovery(
+        db, int(tenant_id), int(rmz_line.product_id), is_bundle_line=False
+    ):
+        return
+
+    receivable = physical_receivable_qty(
+        accepted_qty=int(getattr(rmz_line, "accepted_qty", None) or 0),
+        damaged_b_qty=int(getattr(rmz_line, "damaged_b_qty", None) or 0),
+        damaged_c_qty=int(getattr(rmz_line, "damaged_c_qty", None) or 0),
+    )
+    if receivable <= 0:
+        return
+
+    rows = resolve_line_allocation_for_commit(rmz_line, recovery_mode=mode)
+    if mode == RECOVERY_MODE_REQUIRED:
+        if any(int(r.get("fg_qty") or 0) != 0 for r in rows):
+            raise RmzFinalizeError(
+                "REQUIRED: cała physical_receivable_qty musi być rozmontowana (fg_qty=0)"
+            )
+        if total_disassembly_qty(rows) != receivable:
+            raise RmzFinalizeError("REQUIRED: disassembly_qty musi równać się physical_receivable_qty")
+
+    dq = total_disassembly_qty(rows)
+    if dq > 0:
+        recoveries = (
+            db.query(RmzLineComponentRecovery)
+            .filter(RmzLineComponentRecovery.rmz_line_id == int(rmz_line.id))
+            .all()
+        )
+        if not recoveries:
+            raise RmzFinalizeError("Brak rozliczenia komponentów BOM przed zatwierdzeniem magazynowym")
+        validate_recovery_matrix(
+            [
+                {
+                    "expected_qty": float(r.expected_qty or 0),
+                    "accepted_qty": float(r.accepted_qty or 0),
+                    "scrap_qty": float(r.scrap_qty or 0),
+                }
+                for r in recoveries
+            ]
+        )
 
 
 def product_qualifies_for_manufacturing_recovery(
@@ -280,163 +739,6 @@ def audit_component_scrap(
             "note": "Scrap: no inventory / no Z-PZ line (audit only)",
         },
     )
-
-
-def saleable_fg_qty_for_receipt(rmz_line: RMZLine) -> int:
-    """
-    SALEABLE FG quantity for Z-PZ.
-
-    When manufacturing recovery intake is active (fg_intake_qty set or DISASSEMBLE),
-    use fg_intake_qty; otherwise legacy accepted_qty.
-    """
-    mode = (str(getattr(rmz_line, "stock_intake_mode", None) or "").strip().upper() or None)
-    fg_raw = getattr(rmz_line, "fg_intake_qty", None)
-    dq = int(getattr(rmz_line, "disassembly_qty", None) or 0)
-    if mode in INTAKE_MODES or fg_raw is not None or dq > 0:
-        return max(0, int(fg_raw if fg_raw is not None else 0))
-    return max(0, int(getattr(rmz_line, "accepted_qty", None) or 0))
-
-
-def line_has_pending_component_receipt(rmz_line: RMZLine) -> bool:
-    recoveries = list(getattr(rmz_line, "component_recoveries", None) or [])
-    for r in recoveries:
-        if getattr(r, "posted_at", None) is not None:
-            continue
-        if float(getattr(r, "accepted_qty", 0) or 0) > 1e-9:
-            return True
-    return False
-
-
-def apply_manufacturing_recovery_to_line(
-    db: Session,
-    *,
-    tenant_id: int,
-    rmz_line: RMZLine,
-    settings: WmsSettings,
-    is_bundle_line: bool,
-    stock_intake_mode: Optional[str],
-    fg_intake_qty: Optional[int],
-    disassembly_qty: Optional[int],
-    component_recoveries: Optional[Sequence[Mapping[str, Any]]],
-    actor_user_id: Optional[int] = None,
-    require_decision: bool = False,
-) -> None:
-    """
-    Persist recovery fields on an RMZ line during split-process / finalize.
-
-    Commercial REJECTED must NOT clear recovery — callers pass recovery payload
-    independently of accepted/rejected commercial qty.
-    """
-    mode = recovery_mode_from_settings(settings)
-    eligible = product_qualifies_for_manufacturing_recovery(
-        db, int(tenant_id), int(rmz_line.product_id), is_bundle_line=bool(is_bundle_line)
-    )
-
-    if mode == RECOVERY_MODE_OFF or not eligible:
-        # Bundle STOCK disassemble reuses stock_intake_mode / fg / disassembly columns —
-        # never clear them when this line is a bundle parent / bundle component return.
-        if is_bundle_line:
-            return
-        # Clear recovery only when mode off / not eligible and nothing posted
-        if getattr(rmz_line, "disassembly_qty", None) or getattr(rmz_line, "stock_intake_mode", None):
-            existing = (
-                db.query(RmzLineComponentRecovery)
-                .filter(RmzLineComponentRecovery.rmz_line_id == int(rmz_line.id))
-                .all()
-            )
-            if any(getattr(r, "posted_at", None) for r in existing):
-                return
-            for r in existing:
-                db.delete(r)
-            rmz_line.stock_intake_mode = None
-            rmz_line.fg_intake_qty = None
-            rmz_line.disassembly_qty = None
-        return
-
-    intake = (str(stock_intake_mode).strip().upper() if stock_intake_mode else None) or None
-    fg = int(fg_intake_qty) if fg_intake_qty is not None else 0
-    dq = int(disassembly_qty) if disassembly_qty is not None else 0
-    physical = int(float(getattr(rmz_line, "quantity", 0) or 0))
-
-    if require_decision or intake or dq > 0 or fg > 0 or (component_recoveries is not None):
-        if mode == RECOVERY_MODE_REQUIRED:
-            if intake != INTAKE_DISASSEMBLE:
-                raise RmzFinalizeError(
-                    "Wymagany odzysk komponentów: wybierz rozmontowanie (DISASSEMBLE) dla produktu produkowanego"
-                )
-            if dq < 1:
-                raise RmzFinalizeError("Wymagany odzysk komponentów: disassembly_qty musi być > 0")
-
-        if intake is None and (dq > 0 or (component_recoveries and len(component_recoveries) > 0)):
-            intake = INTAKE_MIXED if fg > 0 else INTAKE_DISASSEMBLE
-        if intake is None and fg > 0 and dq == 0:
-            intake = INTAKE_FG
-        if intake == INTAKE_DISASSEMBLE and fg > 0 and dq > 0:
-            intake = INTAKE_MIXED
-        if fg > 0 and dq > 0:
-            intake = INTAKE_MIXED
-        # OPTIONAL: default to FG (legacy restock) when operator did not choose recovery UI
-        if intake is None and mode == RECOVERY_MODE_OPTIONAL and require_decision:
-            intake = INTAKE_FG
-            if fg <= 0:
-                fg = max(0, int(getattr(rmz_line, "accepted_qty", None) or 0))
-
-        validate_intake_split(physical, fg, dq, intake)
-
-        if dq > 0 or intake == INTAKE_DISASSEMBLE:
-            if not line_allows_disassemble_change(db, rmz_line):
-                raise RmzFinalizeError(LOCKED_FG_POSTED)
-
-            composition = get_active_manufacturing_composition(
-                db, tenant_id=int(tenant_id), product_id=int(rmz_line.product_id)
-            )
-            if composition is None:
-                raise RmzFinalizeError("Brak aktywnej receptury produkcyjnej dla produktu")
-
-            expected_rows = build_bom_expected_rows(composition, dq)
-            by_line = {int(r["composition_line_id"]): r for r in expected_rows}
-            payload = list(component_recoveries or [])
-            if not payload and dq > 0:
-                raise RmzFinalizeError("Podaj rozliczenie komponentów (accepted/scrap) dla rozmontowania")
-
-            merged: list[dict[str, Any]] = []
-            for p in payload:
-                cl_id = int(p.get("composition_line_id") or 0)
-                if cl_id not in by_line:
-                    raise RmzFinalizeError(f"Nieznany composition_line_id={cl_id} dla aktywnego BOM")
-                base = dict(by_line[cl_id])
-                base["accepted_qty"] = float(p.get("accepted_qty") or 0)
-                base["scrap_qty"] = float(p.get("scrap_qty") or 0)
-                # Keep snapshot expected from BOM × disassembly (ignore client expected override)
-                merged.append(base)
-
-            if dq > 0 and len(merged) != len(expected_rows):
-                raise RmzFinalizeError("Macierz odzysku musi zawierać wszystkie komponenty BOM")
-
-            validate_recovery_matrix(merged)
-            upsert_component_recoveries(db, rmz_line, composition, merged, tenant_id=int(tenant_id))
-            recoveries = (
-                db.query(RmzLineComponentRecovery)
-                .filter(RmzLineComponentRecovery.rmz_line_id == int(rmz_line.id))
-                .all()
-            )
-            audit_component_scrap(db, rmz_line=rmz_line, recoveries=recoveries, actor_user_id=actor_user_id)
-        else:
-            # FG only — clear unposted recoveries
-            existing = (
-                db.query(RmzLineComponentRecovery)
-                .filter(RmzLineComponentRecovery.rmz_line_id == int(rmz_line.id))
-                .all()
-            )
-            if any(getattr(r, "posted_at", None) for r in existing):
-                raise RmzFinalizeError("Component recoveries already posted — cannot change")
-            for r in existing:
-                db.delete(r)
-
-        rmz_line.stock_intake_mode = intake
-        rmz_line.fg_intake_qty = fg
-        rmz_line.disassembly_qty = dq
-        db.flush()
 
 
 def bom_preview_for_product(
