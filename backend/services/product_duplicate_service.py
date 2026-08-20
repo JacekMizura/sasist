@@ -165,7 +165,8 @@ def duplicate_product_session(
             require_recv_width=bool(getattr(src, "require_recv_width", False)),
             require_recv_length=bool(getattr(src, "require_recv_length", False)),
             require_recv_weight=bool(getattr(src, "require_recv_weight", False)),
-            require_recv_master_carton=bool(getattr(src, "require_recv_master_carton", False)),
+            # Dead feature-flag — do not copy; carton scan uses bulk_ean / units_per_carton.
+            require_recv_master_carton=False,
             require_recv_master_carton_ean=bool(getattr(src, "require_recv_master_carton_ean", False)),
             require_recv_master_carton_qty=bool(getattr(src, "require_recv_master_carton_qty", False)),
             require_recv_master_carton_dims=bool(getattr(src, "require_recv_master_carton_dims", False)),

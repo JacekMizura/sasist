@@ -1,4 +1,10 @@
-**Przyjęcia → Ogólne validation cleanup (2026-08-20) — PASS.**
+**Putaway lot identity + dead carton toggle cleanup (2026-08-20) — PASS.**
+- `_item_storage_lot_inventory_key` + hard-delete dock revert → `dock_lot_keys_for_pz_line` (line identity, not `product.track_*`)
+- Live putaway already used line identity; fixed legacy backfill/hard-delete split-brain
+- Removed dead `toggle_master_carton_pack` (API/service/FE type); no writer for `require_recv_master_carton`
+- Regressions A–F; putaway/lifecycle PASS; vite build PASS
+
+**Przyjęcia → Ogólne validation cleanup (2026-08-20) — PASS `23ad64a3`.**
 - UI: 3 blocks / 9 settings; removed dead `require_master_carton` feature flag
 - Soft master-data (dims/weight/carton completeness); hard traceability (batch/expiry/serial)
 - Weight must be > 0; carton EAN/qty/dims/weight unified in completeness helper

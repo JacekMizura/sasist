@@ -17,7 +17,6 @@ _PATCH_COLUMN_MAP: Dict[str, Column] = {
     "require_recv_width": Product.require_recv_width,
     "require_recv_length": Product.require_recv_length,
     "require_recv_weight": Product.require_recv_weight,
-    "require_recv_master_carton": Product.require_recv_master_carton,
     "require_recv_master_carton_ean": Product.require_recv_master_carton_ean,
     "require_recv_master_carton_qty": Product.require_recv_master_carton_qty,
     "require_recv_master_carton_dims": Product.require_recv_master_carton_dims,
@@ -95,7 +94,6 @@ _BOOL_FIELDS = frozenset(
         "require_recv_width",
         "require_recv_length",
         "require_recv_weight",
-        "require_recv_master_carton",
         "require_recv_master_carton_ean",
         "require_recv_master_carton_qty",
         "require_recv_master_carton_dims",
@@ -253,15 +251,3 @@ def apply_clear_unit_logistics(db: Session, filt) -> int:
     return db.query(Product).filter(filt).update(update, synchronize_session=False)
 
 
-def apply_toggle_master_carton_pack(db: Session, filt, value: Any) -> int:
-    if not isinstance(value, dict) or "enabled" not in value:
-        raise HTTPException(status_code=400, detail="value must be { enabled: boolean }")
-    on = bool(value.get("enabled"))
-    update = {
-        Product.require_recv_master_carton: on,
-        Product.require_recv_master_carton_ean: on,
-        Product.require_recv_master_carton_qty: on,
-        Product.require_recv_master_carton_dims: on,
-        Product.require_recv_master_carton_weight: on,
-    }
-    return db.query(Product).filter(filt).update(update, synchronize_session=False)

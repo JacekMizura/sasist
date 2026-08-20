@@ -810,7 +810,6 @@ BULK_UPDATE_ACTIONS = frozenset({
     "set_min_stock",
     "patch_logistics_fields",
     "clear_logistics_data",
-    "toggle_master_carton_pack",
     "set_categories",
     "set_product_family",
     "set_tags",
@@ -1045,11 +1044,6 @@ def _execute_product_bulk_update(
         from ..services.product_bulk_logistics_patch import apply_clear_unit_logistics
 
         return apply_clear_unit_logistics(db, filt)
-
-    if act == "toggle_master_carton_pack":
-        from ..services.product_bulk_logistics_patch import apply_toggle_master_carton_pack
-
-        return apply_toggle_master_carton_pack(db, filt, value)
 
     if act == "set_categories":
         from ..services.product_categories import set_product_assignment
@@ -4015,7 +4009,7 @@ def update_product(
         "require_recv_width",
         "require_recv_length",
         "require_recv_weight",
-        "require_recv_master_carton",
+        # require_recv_master_carton ignored — dead feature flag (legacy column preserved).
         "require_recv_master_carton_ean",
         "require_recv_master_carton_qty",
         "require_recv_master_carton_dims",

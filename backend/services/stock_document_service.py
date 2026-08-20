@@ -45,7 +45,7 @@ from .document_creator_service import (
     created_by_read_for_document,
     stamp_document_creator,
 )
-from .inventory_lot_keys import NO_EXPIRY_SENTINEL, normalize_batch_number
+from .inventory_lot_keys import NO_EXPIRY_SENTINEL, dock_lot_keys_for_pz_line, normalize_batch_number
 from .inventory_serial_service import list_serials_for_document_lines, serial_range_label
 from .stock_disposition import stock_disposition_for_document_line
 from .stock_operation_receipt_service import append_receipt_operation, backfill_receipt_gap_for_line
@@ -788,18 +788,17 @@ def bump_receiving_in_progress_if_new(doc: StockDocument) -> None:
         doc.receiving_status = "IN_PROGRESS"
 
 
-def _item_storage_lot_inventory_key(row: StockDocumentItem, p: Optional[Product]) -> tuple[int, str, object]:
-    """Inventory row key (product, batch, expiry storage) for a PZ line."""
+def _item_storage_lot_inventory_key(row: StockDocumentItem, p: Optional[Product] = None) -> tuple[int, str, object]:
+    """Inventory row key (product, batch, expiry) for a PZ line.
+
+    Uses lot identity stored on the document line (same as putaway / dock transfer),
+    never live ``product.track_*`` or current WMS settings — so receive→putaway and
+    hard-delete revert match the physical stock even if policy changed later.
+    ``p`` is unused (kept for call-site compatibility).
+    """
     if row.product_id is None:
         raise ValueError("internal: inventory lot key requested for a non-product PZ line")
-    tb = bool(getattr(p, "track_batch", False)) if p else False
-    te = bool(getattr(p, "track_expiry", False)) if p else False
-    bn = "" if not tb else normalize_batch_number(getattr(row, "batch_number", None))
-    if not te:
-        ed_store = NO_EXPIRY_SENTINEL
-    else:
-        ed_raw = getattr(row, "expiry_date", None)
-        ed_store = ed_raw if ed_raw is not None else NO_EXPIRY_SENTINEL
+    bn, ed_store = dock_lot_keys_for_pz_line(row)
     return int(row.product_id), bn, ed_store
 
 

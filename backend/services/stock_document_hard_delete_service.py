@@ -14,7 +14,7 @@ from ..models.location import Location
 from ..models.product import Product
 from ..models.stock_document import StockDocument, StockDocumentItem
 from ..models.stock_operation import STOCK_OP_PUTAWAY, StockOperation
-from ..services.inventory_lot_keys import NO_EXPIRY_SENTINEL, normalize_batch_number
+from ..services.inventory_lot_keys import dock_lot_keys_for_pz_line
 from ..services.stock_document_service import (
     _doc_status_lower,
     _item_storage_lot_inventory_key,
@@ -169,17 +169,8 @@ def _revert_posted_accept_inventory_and_delivery(
             )
             continue
 
-        prod = db.query(Product).filter(Product.id == sdi.product_id).first()
-        tb = bool(getattr(prod, "track_batch", False)) if prod else False
-        te = bool(getattr(prod, "track_expiry", False)) if prod else False
-        bn = "" if not tb else normalize_batch_number(getattr(sdi, "batch_number", None))
-        if not te:
-            ed_store = NO_EXPIRY_SENTINEL
-        else:
-            ed_raw = getattr(sdi, "expiry_date", None)
-            if ed_raw is None or ed_raw >= NO_EXPIRY_SENTINEL:
-                raise ValueError("Nie można odwrócić przyjęcia — brak danych partii / ważności na linii.")
-            ed_store = ed_raw
+        # Match dock inventory by identity stored on the PZ line (not product.track_*).
+        bn, ed_store = dock_lot_keys_for_pz_line(sdi)
 
         inv = (
             db.query(Inventory)

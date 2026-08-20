@@ -1,3 +1,9 @@
+## 2026-08-20 — Putaway lot identity + remove dead carton toggle
+
+- Lot key / hard-delete: line identity via `dock_lot_keys_for_pz_line` (not live settings / `product.track_*`)
+- Deleted `toggle_master_carton_pack`; stopped bulk/API writes of `require_recv_master_carton`
+- Regressions A–F; vite build PASS
+
 ## 2026-08-20 — Przyjęcia → Ogólne: clarify validation settings / remove dead carton flag
 
 - 9 live settings in 3 UI blocks; dropped misleading `require_master_carton` (scan uses product `bulk_ean`)
