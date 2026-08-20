@@ -324,18 +324,3 @@ export async function fetchDirectSaleHistory(params: DirectSalesScope & {
   });
   return Array.isArray(data) ? data.map(normalizeHistoryEntry) : [];
 }
-
-export async function reprintDirectSaleDocument(params: DirectSalesScope & {
-  jobId: number;
-}): Promise<{ new_job_id: number; message: string }> {
-  const { data } = await api.post(
-    `direct-sales/documents/${params.jobId}/reprint`,
-    {},
-    { params: directSalesQuery(params) },
-  );
-  const d = (data ?? {}) as Record<string, unknown>;
-  return {
-    new_job_id: Number(d.new_job_id) || 0,
-    message: String(d.message ?? "Zlecono ponowne generowanie."),
-  };
-}
