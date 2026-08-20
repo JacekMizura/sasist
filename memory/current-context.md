@@ -1,9 +1,21 @@
-**Smart Matching settings cleanup (2026-08-20) — PASS (pending commit).**
-- Settings nav: Ogólne + Historia doboru only (Widok / Zaawansowane removed)
-- Fake metrics removed (avg_confidence / avg_fill / missing dims / failed); KPI label = „Aktywne reguły dopasowania”
-- Deleted dead `PackingFitRecommendationPanel`; removed unused `packagingSuggestions` gate prop
-- Reset copy = delete auto-rules only; history kept; fingerprint/scoring/carton-gate REKOM. unchanged
-- Tests: BE smart matching 10 PASS; FE cleanup 12 PASS; fit/packing 29 PASS; `npm run build` PASS
+**Smart Matching / 3D Matching v2 — Phase 1 PASS (gate; commit pending).**
+- Product decisions FINAL (break=threshold, min_qty, strategy enum, shipping hard, engine v1/v2)
+- Phase 1: v2 models + observations + min_qty learning + breakpoint resolver; new writes v2 only; v1 readonly
+- Learning: (product,carton) ≥ threshold → one rule `min_qty=MIN(qty)`; decisive = triggering obs
+- Tests: `test_wms_smart_matching_v2` + legacy suite 26 PASS; `import backend.main` OK
+- STOP — Phase 2 (break/conflict/shipping) only after Phase 1 commit
+
+**Smart Matching history series redesign — PASS `b8271b1e`.**
+- Series UI: composition+carton tracks; popover 1→N; DECYDUJĄCY via `created_from_history_id` only
+- Also `created_threshold` on rule INSERT; legacy NULL = no decisive / „Aktualny próg”
+- GET `/wms/smart-matching/history-series`; no heuristic backfill; runtime algorithm unchanged
+
+**Smart Matching settings cleanup — CLOSED at `d128ea59` (accepted).**
+- Settings = Ogólne + Historia only; Widok/Zaawansowane gone; fake metrics gone
+- Dead UI/prop gone: `PackingFitRecommendationPanel`, gate `packagingSuggestions`
+- ACTIVE: enabled / threshold / proposal_init / auto-label; history = audit + training; reset = auto-rules only
+- PackingView `recommended_cartons` KEPT; gate REKOM. separate; fingerprint/scoring/cartonization untouched
+- Do not reopen this scope. Deferred (separate tasks): (1) SM → carton gate, (2) real analytics dashboard, (3) drop 3D placeholder „Błędy i brakujące wymiary”
 
 **Receiving Validation cleanup — CLOSED at `18b1fc64` (accepted).**
 - Migrated policy = SSOT; putaway = PZ line lot identity; no receiving/putaway runtime on `product.track_*`

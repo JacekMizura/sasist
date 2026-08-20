@@ -2379,6 +2379,102 @@ def ensure_wms_smart_matching_tables(engine: Engine) -> None:
                     """
                 )
             )
+        # Settings v2 columns (strategy + legacy fallback).
+        if _table_exists(conn, "wms_smart_matching_settings"):
+            scols = _table_column_names(conn, "wms_smart_matching_settings")
+            if "packaging_strategy" not in scols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_smart_matching_settings "
+                        "ADD COLUMN packaging_strategy VARCHAR(32) NOT NULL DEFAULT 'SMART_THEN_3D'"
+                    )
+                )
+            if "legacy_v1_fallback_enabled" not in scols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_smart_matching_settings "
+                        f"ADD COLUMN legacy_v1_fallback_enabled {_bool_col_default(engine, default_true=True)}"
+                    )
+                )
+        # Smart Matching engine v2 tables.
+        if not _table_exists(conn, "wms_smart_matching_observations_v2"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE wms_smart_matching_observations_v2 (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+                        order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+                        product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                        quantity INTEGER NOT NULL,
+                        carton_id VARCHAR(36) REFERENCES cartons(id) ON DELETE SET NULL,
+                        suggested_carton_id VARCHAR(36),
+                        user_id INTEGER REFERENCES app_users(id) ON DELETE SET NULL,
+                        engine_version INTEGER NOT NULL DEFAULT 2,
+                        created_at DATETIME
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_wms_sm_obs_v2_product "
+                    "ON wms_smart_matching_observations_v2(tenant_id, warehouse_id, product_id)"
+                )
+            )
+        if not _table_exists(conn, "wms_smart_matching_rules_v2"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE wms_smart_matching_rules_v2 (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+                        product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                        min_qty INTEGER NOT NULL,
+                        carton_id VARCHAR(36) NOT NULL REFERENCES cartons(id) ON DELETE CASCADE,
+                        source VARCHAR(16) NOT NULL DEFAULT 'AUTO',
+                        status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
+                        is_locked BOOLEAN NOT NULL DEFAULT 0,
+                        hit_count INTEGER NOT NULL DEFAULT 0,
+                        override_streak INTEGER NOT NULL DEFAULT 0,
+                        created_from_observation_id INTEGER
+                            REFERENCES wms_smart_matching_observations_v2(id) ON DELETE SET NULL,
+                        created_threshold INTEGER,
+                        last_order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+                        last_used_at DATETIME,
+                        engine_version INTEGER NOT NULL DEFAULT 2,
+                        created_at DATETIME,
+                        updated_at DATETIME,
+                        UNIQUE(tenant_id, warehouse_id, product_id, min_qty, carton_id, source)
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_wms_sm_rules_v2_product "
+                    "ON wms_smart_matching_rules_v2(tenant_id, warehouse_id, product_id, status)"
+                )
+            )
+        if not _table_exists(conn, "wms_smart_matching_product_settings"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE wms_smart_matching_product_settings (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+                        product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                        smart_matching_enabled BOOLEAN NOT NULL DEFAULT 1,
+                        created_at DATETIME,
+                        updated_at DATETIME,
+                        UNIQUE(tenant_id, warehouse_id, product_id)
+                    )
+                    """
+                )
+            )
         conn.commit()
 
 

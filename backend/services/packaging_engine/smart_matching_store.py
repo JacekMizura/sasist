@@ -62,6 +62,8 @@ def get_or_create_settings(db: Session, *, tenant_id: int, warehouse_id: int) ->
         proposal_init_status_id=None,
         auto_label_enabled=False,
         auto_label_status_ids_json="[]",
+        packaging_strategy="SMART_THEN_3D",
+        legacy_v1_fallback_enabled=True,
     )
     db.add(row)
     db.flush()
@@ -80,6 +82,8 @@ def settings_to_out(row: WmsSmartMatchingSettings) -> WmsSmartMatchingSettingsOu
         else None,
         auto_label_enabled=bool(row.auto_label_enabled),
         auto_label_status_ids=_loads_ids(row.auto_label_status_ids_json),
+        packaging_strategy=str(getattr(row, "packaging_strategy", None) or "SMART_THEN_3D"),
+        legacy_v1_fallback_enabled=bool(getattr(row, "legacy_v1_fallback_enabled", True)),
     )
 
 
@@ -93,6 +97,8 @@ def save_settings(
     proposal_init_status_id: Optional[int],
     auto_label_enabled: bool,
     auto_label_status_ids: list[int],
+    packaging_strategy: Optional[str] = None,
+    legacy_v1_fallback_enabled: Optional[bool] = None,
 ) -> WmsSmartMatchingSettings:
     row = get_or_create_settings(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
     row.enabled = bool(enabled)
@@ -102,6 +108,13 @@ def save_settings(
     row.auto_label_enabled = bool(auto_label_enabled)
     ids = sorted({int(x) for x in auto_label_status_ids if int(x) > 0})
     row.auto_label_status_ids_json = json.dumps(ids)
+    if packaging_strategy is not None:
+        from .smart_matching_v2.constants import DEFAULT_PACKAGING_STRATEGY, PACKAGING_STRATEGIES
+
+        ps = str(packaging_strategy).strip().upper()
+        row.packaging_strategy = ps if ps in PACKAGING_STRATEGIES else DEFAULT_PACKAGING_STRATEGY
+    if legacy_v1_fallback_enabled is not None:
+        row.legacy_v1_fallback_enabled = bool(legacy_v1_fallback_enabled)
     row.updated_at = datetime.utcnow()
     db.add(row)
     db.flush()
@@ -278,26 +291,11 @@ def record_packing_carton_choice(
         existing.last_used_at = now
         existing.updated_at = now
         db.add(existing)
+    # v2 cutover: do NOT create new v1 exact-composition rules.
+    # Existing v1 rules remain readable via legacy_v1_fallback_enabled.
     elif same_count >= threshold and settings.enabled:
-        db.add(
-            WmsSmartMatchingRule(
-                tenant_id=tid,
-                warehouse_id=wid,
-                composition_key=key,
-                composition_label=label,
-                carton_id=cid,
-                hit_count=int(same_count),
-                is_auto=True,
-                last_order_id=int(order.id),
-                last_used_at=now,
-                created_from_history_id=int(hist.id),
-                created_threshold=int(threshold),
-                created_at=now,
-                updated_at=now,
-            )
-        )
         logger.info(
-            "smart_matching rule created tenant=%s wh=%s key=%s carton=%s hits=%s",
+            "smart_matching v1 rule create skipped (engine v2) tenant=%s wh=%s key=%s carton=%s hits=%s",
             tid,
             wid,
             key[:12],
@@ -310,13 +308,15 @@ def record_packing_carton_choice(
 
 
 def reset_auto_rules(db: Session, *, tenant_id: int, warehouse_id: int) -> int:
-    """Delete only auto-created associations; keep packing history."""
+    """Delete only auto-created associations (v1 + v2 AUTO); keep packing history/observations."""
+    from ...models.wms_smart_matching import WmsSmartMatchingRuleV2
+    from .smart_matching_v2.constants import SOURCE_AUTO
+
     q = db.query(WmsSmartMatchingRule).filter(
         WmsSmartMatchingRule.tenant_id == int(tenant_id),
         WmsSmartMatchingRule.warehouse_id == int(warehouse_id),
         WmsSmartMatchingRule.is_auto.is_(True),
     )
-    # Breaks cascade via FK when rule deleted — also clear orphan breaks for warehouse autos.
     rule_ids = [int(r.id) for r in q.all()]
     n = 0
     if rule_ids:
@@ -328,8 +328,20 @@ def reset_auto_rules(db: Session, *, tenant_id: int, warehouse_id: int) -> int:
             .filter(WmsSmartMatchingRule.id.in_(rule_ids))
             .delete(synchronize_session=False)
         )
+    n_v2 = (
+        db.query(WmsSmartMatchingRuleV2)
+        .filter(
+            WmsSmartMatchingRuleV2.tenant_id == int(tenant_id),
+            WmsSmartMatchingRuleV2.warehouse_id == int(warehouse_id),
+            WmsSmartMatchingRuleV2.source == SOURCE_AUTO,
+            WmsSmartMatchingRuleV2.is_locked.is_(False),
+        )
+        .delete(synchronize_session=False)
+    )
     db.flush()
-    return int(n or 0)
+    # Bulk delete leaves ORM identity map stale; expire so recreate can INSERT cleanly.
+    db.expire_all()
+    return int(n or 0) + int(n_v2 or 0)
 
 
 def list_history(

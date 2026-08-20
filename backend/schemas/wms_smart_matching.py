@@ -16,6 +16,8 @@ class WmsSmartMatchingSettingsOut(BaseModel):
     proposal_init_status_id: Optional[int] = None
     auto_label_enabled: bool = False
     auto_label_status_ids: list[int] = Field(default_factory=list)
+    packaging_strategy: str = "SMART_THEN_3D"
+    legacy_v1_fallback_enabled: bool = True
 
 
 class WmsSmartMatchingSettingsSave(BaseModel):
@@ -26,6 +28,8 @@ class WmsSmartMatchingSettingsSave(BaseModel):
     proposal_init_status_id: Optional[int] = None
     auto_label_enabled: bool = False
     auto_label_status_ids: list[int] = Field(default_factory=list)
+    packaging_strategy: Optional[str] = None
+    legacy_v1_fallback_enabled: Optional[bool] = None
 
 
 class WmsSmartMatchingBreakOut(BaseModel):

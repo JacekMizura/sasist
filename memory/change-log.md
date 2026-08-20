@@ -1,3 +1,21 @@
+## 2026-08-20 — Smart Matching v2 Phase 1 (data model + min_qty)
+
+- Models: ObservationV2, RuleV2 (min_qty/source/status/lock), ProductSettings stub, strategy + legacy_v1 flags
+- Package `smart_matching_v2/`: eligibility, learning (MIN qty), breakpoint resolver, observations
+- Finish packing writes v2 obs+learn; no new v1 rules; suggest: v2 then legacy v1 if enabled
+- Tests A–I/G + legacy cutover 26 PASS; startup OK
+
+## 2026-08-20 — Smart Matching history series redesign
+
+- `created_from_history_id` + `created_threshold` on rule INSERT only; no legacy backfill
+- GET `/history-series` projection; FE compact table + popover; merged active rules into series status
+
+## 2026-08-20 — Smart Matching settings cleanup CLOSED (`d128ea59`)
+
+- Accepted: Ogólne + Historia; no Widok/Zaawansowane/fake metrics; dead panel + gate prop gone
+- Runtime KEPT (settings, recommended_cartons, history/reset semantics); gate REKOM. separate
+- Deferred: SM→gate wiring, real analytics, 3D errors placeholder removal — do not reopen cleanup scope
+
 ## 2026-08-20 — Putaway lot identity + remove dead carton toggle
 
 - Lot key / hard-delete: line identity via `dock_lot_keys_for_pz_line` (not live settings / `product.track_*`)

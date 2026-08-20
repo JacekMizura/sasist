@@ -91,6 +91,8 @@ def put_smart_matching_settings(
             proposal_init_status_id=body.proposal_init_status_id,
             auto_label_enabled=body.auto_label_enabled,
             auto_label_status_ids=list(body.auto_label_status_ids or []),
+            packaging_strategy=body.packaging_strategy,
+            legacy_v1_fallback_enabled=body.legacy_v1_fallback_enabled,
         )
         db.commit()
         db.refresh(row)

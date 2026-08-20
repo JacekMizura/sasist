@@ -197,7 +197,10 @@ from .wms_packing_replacement_label import WmsPackingReplacementLabel  # noqa: F
 from .wms_smart_matching import (  # noqa: F401
     WmsSmartMatchingBreak,
     WmsSmartMatchingHistory,
+    WmsSmartMatchingObservationV2,
+    WmsSmartMatchingProductSettings,
     WmsSmartMatchingRule,
+    WmsSmartMatchingRuleV2,
     WmsSmartMatchingSettings,
 )
 from .wms_picking_shortage_settings import WmsPickingShortageSettings  # noqa: F401

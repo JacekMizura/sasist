@@ -42,6 +42,98 @@ class WmsSmartMatchingSettings(Base):
     #: JSON array of order_ui_status ids.
     auto_label_status_ids_json = Column(Text, nullable=False, default="[]")
 
+    #: Packaging strategy SSOT (Phase 3 uses fully; default SMART_THEN_3D).
+    packaging_strategy = Column(String(32), nullable=False, default="SMART_THEN_3D")
+    #: When True, Smart suggest may fall back to legacy exact composition rules (v1 readonly).
+    legacy_v1_fallback_enabled = Column(Boolean, nullable=False, default=True)
+
+    created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=True, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class WmsSmartMatchingObservationV2(Base):
+    """Per-product packing observation for Smart Matching engine v2 (min-qty learning)."""
+
+    __tablename__ = "wms_smart_matching_observations_v2"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False, index=True)
+    order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    quantity = Column(Integer, nullable=False)
+    carton_id = Column(String(36), ForeignKey("cartons.id", ondelete="SET NULL"), nullable=True, index=True)
+    suggested_carton_id = Column(String(36), nullable=True)
+    user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True)
+    engine_version = Column(Integer, nullable=False, default=2)
+    created_at = Column(DateTime, nullable=True, default=datetime.utcnow, index=True)
+
+
+class WmsSmartMatchingRuleV2(Base):
+    """
+    Smart Matching v2 rule: product_id + min_qty → carton_id.
+
+    Breakpoint semantics: for order qty Q pick ACTIVE rules with min_qty <= Q, then MAX(min_qty).
+    """
+
+    __tablename__ = "wms_smart_matching_rules_v2"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "warehouse_id",
+            "product_id",
+            "min_qty",
+            "carton_id",
+            "source",
+            name="uq_wms_sm_v2_rule_breakpoint",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    min_qty = Column(Integer, nullable=False)
+    carton_id = Column(String(36), ForeignKey("cartons.id", ondelete="CASCADE"), nullable=False, index=True)
+    #: AUTO | MANUAL
+    source = Column(String(16), nullable=False, default="AUTO")
+    #: ACTIVE | BROKEN | AMBIGUOUS
+    status = Column(String(16), nullable=False, default="ACTIVE", index=True)
+    is_locked = Column(Boolean, nullable=False, default=False)
+    hit_count = Column(Integer, nullable=False, default=0)
+    override_streak = Column(Integer, nullable=False, default=0)
+    created_from_observation_id = Column(
+        Integer,
+        ForeignKey("wms_smart_matching_observations_v2.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    created_threshold = Column(Integer, nullable=True)
+    last_order_id = Column(Integer, ForeignKey("orders.id", ondelete="SET NULL"), nullable=True)
+    last_used_at = Column(DateTime, nullable=True)
+    engine_version = Column(Integer, nullable=False, default=2)
+    created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=True, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class WmsSmartMatchingProductSettings(Base):
+    """Per-product Smart Matching enable (warehouse-scoped). Phase 4 wires UI; Phase 1 schema ready."""
+
+    __tablename__ = "wms_smart_matching_product_settings"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "warehouse_id",
+            "product_id",
+            name="uq_wms_sm_product_settings",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    smart_matching_enabled = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=True, default=datetime.utcnow, onupdate=datetime.utcnow)
 
