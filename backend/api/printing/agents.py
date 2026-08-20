@@ -210,7 +210,7 @@ def agent_heartbeat(
         supported_formats=body.supported_formats,
         capabilities=body.capabilities,
     )
-    logger.info(
+    logger.debug(
         "printing.agents.heartbeat agent_id=%s is_online=%s printer_count=%s",
         updated.id,
         is_agent_online(updated),

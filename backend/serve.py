@@ -6,6 +6,8 @@ import os
 
 import uvicorn
 
+from backend.logging_filters import install_quiet_printing_agent_access_filter
+
 # Railway health probes use IPv4 — bind all interfaces (not import-time DB work).
 UVICORN_HOST = os.getenv("UVICORN_HOST", "0.0.0.0")
 
@@ -19,6 +21,9 @@ def resolve_port() -> int:
 
 
 def main() -> None:
+    # Attach before uvicorn creates handlers so Railway + local share the same wiring.
+    install_quiet_printing_agent_access_filter()
+
     port = resolve_port()
     host = UVICORN_HOST
     reload = os.getenv("UVICORN_RELOAD", "").strip().lower() in ("1", "true", "yes")

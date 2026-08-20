@@ -1,8 +1,17 @@
-**WMS Returns transition cleanup (2026-08-20) — after 4dfa5a17.**
-- Removed DEAD: `_next_transition_key_for_lines`, `_resolve_finalize_transition_key`, API `_apply_transition` / `_validate_rmz_lines_*`, `refund_stage_transition_key`, `commit_workflow` param + FE `commitWorkflow`
-- Kept LEGACY COMPAT: `qc_complete` seed + refund allowlist, `returns_mode`/`enable_refund` projection
-- ACTIVE targets only: start → office_pending|success|rejected via `rmz_finalize_service`
-- Tests returns + domain activity PASS; FE build PASS
+**Print-agent poll log noise cleanup (2026-08-20) — PASS, commit pending.**
+- `log_print_poll`: empty polls DEBUG, jobs>0 INFO (fields unchanged)
+- heartbeat success → DEBUG; errors unchanged
+- `QuietPrintingAgentAccessFilter` on `uvicorn.access`: suppress 2xx only for pending/heartbeat/devices sync; fail-open
+- Wired in `serve.py` + `main.py`; intervals/protocol/agent C# untouched
+- Tests: `test_printing_agent_log_noise.py` 13 PASS; full printing suite blocked by pre-existing circular import via `backend.main`
+
+**Manufactured recovery FIX (2026-08-20) — FINAL GATE PASS, committed.**
+- Snapshot mfg on RMZ (workflow v2); GET/runtime = snapshot only
+- SSOT: `RMZLine.intake_disposition_json`; aggregates = projection
+- DEFAULT_LOCATION validated **before** Z-PZ shell; BOM freeze via recovery rows
+- Full DB E2E: A/B/C allocation, REJECTED, REQUIRED bypass, snapshot, BOM, putaway
+- Tests: returns+activity 167 PASS; FE vitest 7 PASS; `npm run build` PASS
+
 
 **WMS Returns workflow SSOT (2026-08-20) — on main `4dfa5a17`.**
 - Live SSOT: `require_condition`, `require_photos`, `refund_processing` (disabled|warehouse|office)

@@ -253,7 +253,10 @@ def log_print_poll(
     jobs_count: int,
     job_ids: list[int],
 ) -> None:
-    logger.info(
+    # Empty polls are routine (agent ~5s); keep INFO only when work is present.
+    level = logging.INFO if int(jobs_count or 0) > 0 else logging.DEBUG
+    logger.log(
+        level,
         "[print-poll] agent_id=%s machine_id=%s active_printers=%s jobs_count=%s job_ids=%s",
         agent_id,
         machine_id,

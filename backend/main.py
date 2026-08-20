@@ -268,6 +268,9 @@ logging.basicConfig(
     stream=sys.stderr,
     force=True,
 )
+from .logging_filters import install_quiet_printing_agent_access_filter
+
+install_quiet_printing_agent_access_filter()
 logger = logging.getLogger(__name__)
 
 from .api.warehouse import router as warehouse_router
