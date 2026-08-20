@@ -42,7 +42,7 @@ export function WmsPackagingProposalEngineConfigForm({
           <WmsBoolSettingRow
             settingId="smart.packaging_suggestions_enabled"
             label="Włącz propozycje opakowań do zamówień"
-            hint="Po włączeniu system może tworzyć propozycje opakowań na podstawie historii pakowania (Smart Matching) oraz silnika 3D. Po wyłączeniu silniki nie proponują opakowań automatycznie."
+            hint="Po włączeniu system może tworzyć rekomendacje opakowań na podstawie historii pakowań (Smart Matching) oraz silnika 3D. Po wyłączeniu rekomendacje nie są używane ani aktualizowane (nowe reguły nie powstają). Historia pakowań nadal jest zapisywana."
             checked={config.packagingSuggestionsEnabled}
             onChange={(packagingSuggestionsEnabled) => patchConfig({ packagingSuggestionsEnabled })}
           />
@@ -50,12 +50,12 @@ export function WmsPackagingProposalEngineConfigForm({
       </SettingsSubsection>
 
       {showSmartLearningThreshold ? (
-        <SettingsSubsection title="Tryb Smart Matching">
+        <SettingsSubsection title="Reguły na podstawie historii pakowań">
           <div className={wmsSettingsRowsStackClass}>
             <WmsControlSettingRow
               settingId="smart.identical_orders_threshold"
-              label="Tryb Smart Matching"
-              hint="Po ilu spakowaniach zamówień o identycznej strukturze produktów system tworzy regułę powiązania z kartonem. Dotyczy wyłącznie Smart Matching (nie 3D)."
+              label="Próg identycznych zamówień"
+              hint="Po ilu spakowaniach zamówień o identycznym składzie produktów (product_id + ilość) system tworzy regułę powiązania z kartonem. Dotyczy wyłącznie Smart Matching (nie 3D)."
             >
               <select
                 className={wmsSettingControlSelectClass}

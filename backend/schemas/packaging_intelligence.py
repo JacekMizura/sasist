@@ -74,16 +74,11 @@ class PackagingSuggestionOut(BaseModel):
 
 
 class PackagingIntelligenceDashboardOut(BaseModel):
-    """Operacyjne KPI — rozszerzane o agregaty z tabel zdarzeń."""
+    """Operacyjne KPI — reguły auto + override rate + top kartony z historii."""
 
     period_days: int = Field(default=7, ge=1, le=90)
+    #: Count of active auto rules (legacy JSON key; not suggestion-event count).
     suggestions_total: int = Field(default=0, ge=0)
     override_rate_pct: Optional[float] = Field(None, ge=0, le=100, description="Udział ręcznych zmian vs propozycja")
-    avg_confidence: Optional[float] = Field(None, ge=0, le=1)
-    avg_fill_pct: Optional[float] = Field(None, ge=0, le=100)
-    products_missing_dimensions: int = Field(default=0, ge=0)
     top_packages: list[dict] = Field(default_factory=list, description="[{carton_id, name, uses}]")
-    failed_suggestions: int = Field(default=0, ge=0)
-    note: str = Field(
-        default="Szczegółowe agregaty wymagają tabeli audytu propozycji — endpoint zwraca szkielet KPI.",
-    )
+    note: str = Field(default="")

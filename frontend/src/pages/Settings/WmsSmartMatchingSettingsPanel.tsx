@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import {
-  getPackagingIntelligenceDashboard,
-  type PackagingIntelligenceDashboardApi,
-} from "../../api/packagingIntelligenceApi";
-import {
   getWmsSmartMatchingHistory,
   getWmsSmartMatchingRules,
   getWmsSmartMatchingSettings,
@@ -20,10 +16,6 @@ import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../
 import { WmsSettingsTabFrame } from "./WmsSettingsTabFrame";
 import { WmsSettingsSection } from "./WmsSettingsSection";
 import { WMS_SMART_MATCHING_NAV_SECTIONS } from "./wmsSmartMatchingSettingsNavSections";
-import {
-  PackagingIntelligenceKpiCompact,
-  PackagingIntelligenceKpiFull,
-} from "./wmsPackagingIntelligenceKpiBlocks";
 import {
   DEFAULT_WMS_PACKAGING_PROPOSAL_LOCAL_CONFIG,
   configFromApi,
@@ -82,6 +74,9 @@ function BreakTooltip({ br }: { br: WmsSmartMatchingBreakApi }) {
         {br.quantity_units != null ? String(br.quantity_units) : "—"}
       </p>
       <p>
+        <span className="font-semibold">Sugerowane:</span> {br.suggested_carton_id || "—"}
+      </p>
+      <p>
         <span className="font-semibold">Wybrane opakowanie:</span>{" "}
         {br.chosen_carton_name || br.chosen_carton_id || "—"}
       </p>
@@ -103,7 +98,7 @@ function InterruptedCell({
     return <span className="text-slate-400">–</span>;
   }
   return (
-    <span className="group relative inline-flex cursor-help font-bold text-amber-600" title="Przerwana seria">
+    <span className="group relative inline-flex cursor-help font-bold text-amber-600" title="Nadpisanie reguły">
       !
       <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white p-3 shadow-lg group-hover:block">
         <BreakTooltip br={latestBreak} />
@@ -118,8 +113,6 @@ type Props = {
 };
 
 export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve = true }: Props) {
-  const [dashboard, setDashboard] = useState<PackagingIntelligenceDashboardApi | null>(null);
-  const [dashLoading, setDashLoading] = useState(false);
   const [panelSummary, setPanelSummary] = useState<OrderUiStatusPanelSummary | null>(null);
   const [panelSubgroups, setPanelSubgroups] = useState<OrderUiPanelSubgroupRead[]>([]);
   const [statusLoadErr, setStatusLoadErr] = useState<string | null>(null);
@@ -128,20 +121,19 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [history, setHistory] = useState<WmsSmartMatchingHistoryApi[]>([]);
   const [rules, setRules] = useState<WmsSmartMatchingRuleApi[]>([]);
+  const [dataLoading, setDataLoading] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
 
   const reloadData = useCallback(async (wid: number) => {
-    const [s, h, r, d] = await Promise.all([
+    const [s, h, r] = await Promise.all([
       getWmsSmartMatchingSettings(DAMAGE_TENANT_ID, wid),
       getWmsSmartMatchingHistory(DAMAGE_TENANT_ID, wid),
       getWmsSmartMatchingRules(DAMAGE_TENANT_ID, wid),
-      getPackagingIntelligenceDashboard(DAMAGE_TENANT_ID, wid).catch(() => null),
     ]);
     setConfig(configFromApi(s));
     setHistory(h);
     setRules(r);
-    setDashboard(d);
   }, []);
 
   const persistConfig = useCallback(
@@ -175,20 +167,19 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
 
   useEffect(() => {
     if (warehouseId == null) {
-      setDashboard(null);
       setHistory([]);
       setRules([]);
       return;
     }
     let cancel = false;
-    setDashLoading(true);
+    setDataLoading(true);
     void (async () => {
       try {
         await reloadData(warehouseId);
       } catch {
         if (!cancel) setStatusLoadErr("Nie udało się wczytać Smart Matching.");
       } finally {
-        if (!cancel) setDashLoading(false);
+        if (!cancel) setDataLoading(false);
       }
     })();
     return () => {
@@ -236,9 +227,9 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
       await postWmsSmartMatchingReset(DAMAGE_TENANT_ID, warehouseId);
       await reloadData(warehouseId);
       setResetOpen(false);
-      setSaveMsg("Zresetowano automatyczne powiązania Smart Matching.");
+      setSaveMsg("Usunięto aktywne reguły dopasowania.");
     } catch {
-      setSaveMsg("Reset nie powiódł się.");
+      setSaveMsg("Usuwanie reguł nie powiodło się.");
     } finally {
       setResetBusy(false);
     }
@@ -259,25 +250,21 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
   return (
     <WmsSettingsTabFrame
       title="Smart Matching"
-      description="Uczenie na powtarzalnych decyzjach pakowania dla identycznego składu zamówienia."
+      description="Smart Matching tworzy rekomendacje opakowań na podstawie powtarzalnych decyzji pakowania dla identycznego składu zamówienia."
       sections={WMS_SMART_MATCHING_NAV_SECTIONS}
       asideLabel="Sekcje Smart Matching"
       observeSections={sectionNavObserve}
-      observeRevision={dashLoading ? "loading" : `${dashboard?.suggestions_total ?? 0}-${configRevision}-${history.length}`}
+      observeRevision={dataLoading ? "loading" : `${configRevision}-${history.length}-${rules.length}`}
     >
       {statusLoadErr ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-sm text-amber-950">{statusLoadErr}</p>
       ) : null}
       {saveMsg ? <p className="text-xs text-slate-500">{saveBusy ? "Zapisywanie…" : saveMsg}</p> : null}
 
-      <SectionCard id="wms-smart-dashboard" title="Widok" summary="Metryki z historii dopasowań Smart Matching.">
-        <PackagingIntelligenceKpiCompact dashboard={dashLoading ? null : dashboard} />
-      </SectionCard>
-
       <SectionCard
         id="wms-smart-config"
         title="Ogólne"
-        summary="Włączenie, tryb uczenia, status inicjujący oraz auto-etykiety."
+        summary="Włączenie, próg reguł z historii pakowań, status inicjujący oraz auto-etykiety."
       >
         <WmsPackagingProposalEngineConfigForm
           showSmartLearningThreshold
@@ -293,41 +280,51 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
             className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800 hover:bg-red-100"
             onClick={() => setResetOpen(true)}
           >
-            Resetuj dopasowania Smart Matching
+            Usuń aktywne reguły
           </button>
-          <p className="text-xs text-slate-500">
-            Usuwa wyłącznie automatycznie utworzone powiązania. Historia pakowania pozostaje.
+          <p className="max-w-md text-xs text-slate-500">
+            Historia decyzji pozostanie i może ponownie utworzyć reguły po kolejnych pakowaniach.
           </p>
         </div>
       </SectionCard>
 
-      <SectionCard id="wms-smart-history" title="Historia doboru" summary="Rzeczywiste wybory opakowań i przerwane serie.">
+      <SectionCard
+        id="wms-smart-history"
+        title="Historia doboru"
+        summary="Historia decyzji pakowania używana do budowania reguł Smart Matching."
+      >
         <div className="overflow-hidden rounded-lg border border-slate-200/90 bg-white shadow-sm">
           <div className="max-h-96 overflow-auto">
-            <table className="w-full min-w-[720px] border-collapse">
+            <table className="w-full min-w-[880px] border-collapse">
               <thead className="sticky top-0 bg-slate-50">
                 <tr>
-                  <th className={th}>Produkt / zestaw</th>
-                  <th className={th}>Opakowanie</th>
-                  <th className={th}>Użytkownik</th>
+                  <th className={th}>Zamówienie</th>
+                  <th className={th}>Skład / fingerprint</th>
+                  <th className={th}>Sugerowane</th>
+                  <th className={th}>Wybrane</th>
+                  <th className={th}>Operator</th>
                   <th className={th}>Data</th>
-                  <th className={`${th} text-center`}>Przerwane serie</th>
+                  <th className={`${th} text-center`}>Nadpisanie</th>
                 </tr>
               </thead>
               <tbody>
                 {history.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className={`${td} text-slate-500`}>
-                      Brak historii doboru — pojawią się po spakowaniu zamówień z wybranym opakowaniem.
+                    <td colSpan={7} className={`${td} text-slate-500`}>
+                      Brak historii — pojawi się po spakowaniu zamówień z wybranym opakowaniem.
                     </td>
                   </tr>
                 ) : (
                   history.map((h) => (
                     <tr key={h.id} className="hover:bg-slate-50/80">
-                      <td className={`${td} max-w-[16rem]`}>
+                      <td className={td}>{h.order_number || `#${h.order_id}`}</td>
+                      <td className={`${td} max-w-[14rem]`}>
                         <div className="font-medium text-slate-900">{h.composition_label || "—"}</div>
-                        <div className="text-xs text-slate-500">{h.order_number || `#${h.order_id}`}</div>
+                        <div className="truncate font-mono text-[10px] text-slate-400" title={h.composition_key}>
+                          {h.composition_key.slice(0, 12)}…
+                        </div>
                       </td>
+                      <td className={td}>{h.suggested_carton_id || "—"}</td>
                       <td className={td}>{h.carton_name || h.carton_id || "—"}</td>
                       <td className={td}>{h.user_display || "—"}</td>
                       <td className={`${td} whitespace-nowrap`}>{formatWhen(h.created_at)}</td>
@@ -344,7 +341,7 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
 
         <div className="mt-6 overflow-hidden rounded-lg border border-slate-200/90 bg-white shadow-sm">
           <p className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-            Reguły Smart Matching
+            Aktywne reguły dopasowania
           </p>
           <div className="max-h-72 overflow-auto">
             <table className="w-full min-w-[640px] border-collapse">
@@ -353,7 +350,7 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
                   <th className={th}>Zestawienie</th>
                   <th className={th}>Opakowanie</th>
                   <th className={`${th} text-right`}>Trafienia</th>
-                  <th className={`${th} text-center`}>Przerwane serie</th>
+                  <th className={`${th} text-center`}>Nadpisanie</th>
                 </tr>
               </thead>
               <tbody>
@@ -384,15 +381,11 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
         </div>
       </SectionCard>
 
-      <SectionCard id="wms-smart-analytics" title="Zaawansowane" summary="Pełny zestaw metryk i ranking kartonów.">
-        <PackagingIntelligenceKpiFull dashboard={dashLoading ? null : dashboard} />
-      </SectionCard>
-
       {resetOpen ? (
         <ConfirmModal
-          title="Resetować dopasowania Smart Matching?"
-          message="Usunięte zostaną wyłącznie automatycznie utworzone powiązania. Historia pakowania, ręczne wybory i dane zamówień pozostaną bez zmian."
-          confirmLabel="Resetuj dopasowania"
+          title="Usunąć aktywne reguły?"
+          message="Usunięte zostaną wyłącznie automatycznie utworzone powiązania. Historia decyzji pakowania pozostanie i może ponownie utworzyć reguły po kolejnych pakowaniach."
+          confirmLabel="Usuń aktywne reguły"
           confirmTone="danger"
           onConfirm={() => void confirmReset()}
           onCancel={() => {

@@ -1,4 +1,16 @@
-**Putaway lot identity + dead carton toggle cleanup (2026-08-20) — PASS.**
+**Smart Matching settings cleanup (2026-08-20) — PASS (pending commit).**
+- Settings nav: Ogólne + Historia doboru only (Widok / Zaawansowane removed)
+- Fake metrics removed (avg_confidence / avg_fill / missing dims / failed); KPI label = „Aktywne reguły dopasowania”
+- Deleted dead `PackingFitRecommendationPanel`; removed unused `packagingSuggestions` gate prop
+- Reset copy = delete auto-rules only; history kept; fingerprint/scoring/carton-gate REKOM. unchanged
+- Tests: BE smart matching 10 PASS; FE cleanup 12 PASS; fit/packing 29 PASS; `npm run build` PASS
+
+**Receiving Validation cleanup — CLOSED at `18b1fc64` (accepted).**
+- Migrated policy = SSOT; putaway = PZ line lot identity; no receiving/putaway runtime on `product.track_*`
+- `toggle_master_carton_pack` gone; carton columns = storage/compat only; `bulk_ean`/`units_per_carton` ACTIVE
+- Do not reopen this scope. Follow-ups (separate tasks): (1) `test_picking_routing_excludes_dock`, (2) Production/MM `product.track_*` audit
+
+**Putaway lot identity + dead carton toggle cleanup (2026-08-20) — PASS `18b1fc64`.**
 - `_item_storage_lot_inventory_key` + hard-delete dock revert → `dock_lot_keys_for_pz_line` (line identity, not `product.track_*`)
 - Live putaway already used line identity; fixed legacy backfill/hard-delete split-brain
 - Removed dead `toggle_master_carton_pack` (API/service/FE type); no writer for `require_recv_master_carton`

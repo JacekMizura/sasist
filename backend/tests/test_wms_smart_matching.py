@@ -309,3 +309,50 @@ def test_get_or_create_settings_defaults(db):
     db.commit()
     assert row.enabled is True
     assert int(row.identical_orders_threshold) == 3
+
+
+def test_disabled_still_writes_history_but_no_new_rules(db):
+    save_settings(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        enabled=False,
+        identical_orders_threshold=2,
+        proposal_init_status_id=None,
+        auto_label_enabled=False,
+        auto_label_status_ids=[],
+    )
+    db.commit()
+    for oid in (1, 2):
+        o = _make_order(db, oid)
+        record_packing_carton_choice(db, order=o, carton_id="carton-m")
+        db.commit()
+    assert db.query(WmsSmartMatchingHistory).count() == 2
+    assert db.query(WmsSmartMatchingRule).count() == 0
+
+
+def test_dashboard_stats_has_no_fake_atrapa_fields(db):
+    from backend.services.packaging_engine.smart_matching_store import dashboard_stats
+
+    save_settings(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        enabled=True,
+        identical_orders_threshold=2,
+        proposal_init_status_id=None,
+        auto_label_enabled=False,
+        auto_label_status_ids=[],
+    )
+    db.commit()
+    o = _make_order(db, 1)
+    record_packing_carton_choice(db, order=o, carton_id="carton-m")
+    db.commit()
+    stats = dashboard_stats(db, tenant_id=1, warehouse_id=1, period_days=7)
+    assert "avg_confidence" not in stats
+    assert "avg_fill_pct" not in stats
+    assert "products_missing_dimensions" not in stats
+    assert "failed_suggestions" not in stats
+    assert "suggestions_total" in stats
+    assert "override_rate_pct" in stats
+    assert "top_packages" in stats

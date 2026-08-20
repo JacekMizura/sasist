@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import JsBarcode from "jsbarcode";
-import type { PackagingSuggestionApi, WmsPackingRecommendedCartonApi } from "../../../api/wmsPackingApi";
+import type { WmsPackingRecommendedCartonApi } from "../../../api/wmsPackingApi";
 import { useWmsScanner } from "../../../context/WmsScannerContext";
 import { normalizeScanEan } from "../../../utils/wmsScanNormalize";
 import { AppOverlayPortal } from "../../overlay";
@@ -87,7 +87,6 @@ export type PackingCartonGateModalProps = {
   /** Nazwa szablonu / kuriera (jak na ekranie Sellasist). */
   shippingTemplateLabel: string;
   compatible: WmsPackingRecommendedCartonApi[];
-  packagingSuggestions?: PackagingSuggestionApi[];
   selectedCartonId?: string | null;
   /** Wybrane opakowania (wielopak) — identyfikatory kartonów. */
   selectedPackagingIds?: string[];

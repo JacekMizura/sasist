@@ -465,12 +465,12 @@ export const WMS_SETTINGS_SEARCH_CATALOG: WmsSettingsSearchEntry[] = [
   }),
   e({
     id: "smart.identical_orders_threshold",
-    label: "Tryb Smart Matching",
+    label: "Próg identycznych zamówień",
     tabId: "smart_matching",
     sectionId: "wms-smart-config",
     sectionLabel: "Ogólne",
-    groupLabel: "Tryb Smart Matching",
-    keywords: ["tryb", "smart", "próg", "uczenie"],
+    groupLabel: "Reguły na podstawie historii pakowań",
+    keywords: ["tryb", "smart", "próg", "historia", "reguły"],
   }),
   e({
     id: "smart.proposal_init_status",

@@ -2,14 +2,11 @@ import api from "./axios";
 
 export type PackagingIntelligenceDashboardApi = {
   period_days: number;
+  /** Active auto-rules count (legacy key name). */
   suggestions_total: number;
   override_rate_pct?: number | null;
-  avg_confidence?: number | null;
-  avg_fill_pct?: number | null;
-  products_missing_dimensions: number;
   top_packages: Array<Record<string, unknown>>;
-  failed_suggestions: number;
-  note: string;
+  note?: string;
 };
 
 export async function getPackagingIntelligenceDashboard(

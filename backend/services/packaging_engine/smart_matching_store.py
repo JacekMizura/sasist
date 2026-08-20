@@ -475,12 +475,9 @@ def dashboard_stats(db: Session, *, tenant_id: int, warehouse_id: int, period_da
 
     return {
         "period_days": int(period_days),
+        # Active auto-rules count (not suggestion events). FE label: „Aktywne reguły dopasowania”.
         "suggestions_total": int(rules_n),
         "override_rate_pct": override_pct,
-        "avg_confidence": None,
-        "avg_fill_pct": None,
-        "products_missing_dimensions": 0,
         "top_packages": top,
-        "failed_suggestions": 0,
         "note": f"Historia pakowań (okres): {total}; nadpisania serii: {overrides}.",
     }

@@ -162,9 +162,6 @@ export function WmsThreeDMatchingSettingsPanel({ warehouseId, sectionNavObserve 
     );
   }
 
-  const missingDim = dashboard?.products_missing_dimensions ?? null;
-  const failed = dashboard?.failed_suggestions ?? null;
-
   return (
     <WmsSettingsTabFrame
       title="Dopasowanie przestrzenne"
@@ -181,19 +178,9 @@ export function WmsThreeDMatchingSettingsPanel({ warehouseId, sectionNavObserve 
       <SectionCard
         id="wms-3d-dashboard"
         title="1. Dashboard"
-        summary="Metryki dopasowań 3D i jakość danych wymiarowych."
+        summary="Aktywne reguły dopasowania i udział nadpisań (bez atrap pewności/wypełnienia)."
       >
         <PackagingIntelligenceKpiCompact dashboard={dashLoading ? null : dashboard} />
-        <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          <div className="rounded-lg border border-amber-200/90 bg-amber-50/80 px-3 py-2.5 text-sm text-amber-950">
-            <span className="font-semibold">SKU bez wymiarów (agregat): </span>
-            {missingDim != null ? missingDim : dashLoading ? "…" : "—"}
-          </div>
-          <div className="rounded-lg border border-red-200/80 bg-red-50/60 px-3 py-2.5 text-sm text-red-950">
-            <span className="font-semibold">Nieudane propozycje: </span>
-            {failed != null ? failed : dashLoading ? "…" : "—"}
-          </div>
-        </div>
       </SectionCard>
 
       <SectionCard
@@ -233,44 +220,14 @@ export function WmsThreeDMatchingSettingsPanel({ warehouseId, sectionNavObserve 
       <SectionCard
         id="wms-3d-errors-dimensions"
         title="5. Błędy i brakujące wymiary"
-        summary="Jakość danych wymiarowych wpływająca na poprawność obliczeń."
+        summary="Agregaty jakości danych wymiarowych — dopiero gdy backend będzie je liczył realnie."
       >
-        <div className="overflow-hidden rounded-lg border border-slate-200/90 bg-white shadow-sm">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr>
-                <th className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                  Typ
-                </th>
-                <th className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-right text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                  Liczba
-                </th>
-                <th className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                  Działanie
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="hover:bg-slate-50/80">
-                <td className="border-b border-slate-100 px-3 py-2 font-medium text-slate-800">Nieudane dopasowania 3D</td>
-                <td className="border-b border-slate-100 px-3 py-2 text-right tabular-nums text-slate-900">
-                  {failed != null ? failed : dashLoading ? "…" : "—"}
-                </td>
-                <td className="border-b border-slate-100 px-3 py-2 text-slate-600">Lista szczegółów — API</td>
-              </tr>
-              <tr className="hover:bg-slate-50/80">
-                <td className="border-b border-slate-100 px-3 py-2 font-medium text-slate-800">Produkty bez kompletu wymiarów</td>
-                <td className="border-b border-slate-100 px-3 py-2 text-right tabular-nums text-slate-900">
-                  {missingDim != null ? missingDim : dashLoading ? "…" : "—"}
-                </td>
-                <td className="border-b border-slate-100 px-3 py-2 text-slate-600">Eksport SKU — API</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <p className="rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-4 text-sm text-slate-500">
+          Liczniki „SKU bez wymiarów” i „nieudane propozycje” nie są jeszcze wyliczane przez API — sekcja bez atrap.
+        </p>
       </SectionCard>
 
-      <SectionCard id="wms-3d-analytics" title="6. Analityka" summary="Pełne metryki i rankingi.">
+      <SectionCard id="wms-3d-analytics" title="6. Analityka" summary="Aktywne reguły dopasowania, nadpisania i ranking kartonów z historii.">
         <PackagingIntelligenceKpiFull dashboard={dashLoading ? null : dashboard} />
       </SectionCard>
     </WmsSettingsTabFrame>

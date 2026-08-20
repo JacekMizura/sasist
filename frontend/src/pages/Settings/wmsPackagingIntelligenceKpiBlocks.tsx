@@ -4,37 +4,26 @@ const th = "border-b border-slate-200 bg-slate-50 px-3 py-2 text-left text-[11px
 const td = "border-b border-slate-100 px-3 py-2 text-sm tabular-nums text-slate-900";
 const tdLabel = "border-b border-slate-100 px-3 py-2 text-sm font-medium text-slate-700";
 
+/** Only metrics with real backend values — no atrapa confidence/fill/missing/failed. */
 function kpiItems(d: PackagingIntelligenceDashboardApi) {
   return [
-    { key: "suggestions", label: "Propozycje (łącznie)", value: String(d.suggestions_total) },
+    { key: "rules", label: "Aktywne reguły dopasowania", value: String(d.suggestions_total) },
     {
       key: "override",
       label: "Udział nadpisań",
       value:
-        d.override_rate_pct != null && Number.isFinite(d.override_rate_pct) ? `${d.override_rate_pct.toFixed(1)}%` : "—",
-    },
-    {
-      key: "confidence",
-      label: "Śr. pewność",
-      value:
-        d.avg_confidence != null && Number.isFinite(d.avg_confidence)
-          ? `${(d.avg_confidence * 100).toFixed(0)}%`
+        d.override_rate_pct != null && Number.isFinite(d.override_rate_pct)
+          ? `${d.override_rate_pct.toFixed(1)}%`
           : "—",
     },
-    {
-      key: "fill",
-      label: "Śr. wypełnienie",
-      value:
-        d.avg_fill_pct != null && Number.isFinite(d.avg_fill_pct) ? `${d.avg_fill_pct.toFixed(1)}%` : "—",
-    },
-    { key: "nodim", label: "Produkty bez wymiarów", value: String(d.products_missing_dimensions) },
-    { key: "failed", label: "Nieudane propozycje", value: String(d.failed_suggestions) },
   ];
 }
 
 export function PackagingIntelligenceKpiLoading() {
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-4 text-sm text-slate-500">Ładowanie metryk z API…</div>
+    <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-4 text-sm text-slate-500">
+      Ładowanie metryk z API…
+    </div>
   );
 }
 
@@ -61,16 +50,14 @@ function KpiOperationalTable({ rows }: { rows: { key: string; label: string; val
   );
 }
 
-/** Dashboard — zwięzła tabela operacyjna (jak panel magazynowy). */
+/** Compact KPI (3D Matching Widok — shared helper). */
 export function PackagingIntelligenceKpiCompact({
   dashboard,
 }: {
   dashboard: PackagingIntelligenceDashboardApi | null;
 }) {
   if (!dashboard) return <PackagingIntelligenceKpiLoading />;
-  const all = kpiItems(dashboard);
-  const pick = all.filter((x) => ["suggestions", "override", "confidence", "fill"].includes(x.key));
-  return <KpiOperationalTable rows={pick} />;
+  return <KpiOperationalTable rows={kpiItems(dashboard)} />;
 }
 
 export function PackagingIntelligenceKpiFull({
@@ -119,41 +106,15 @@ export function PackagingIntelligenceKpiFull({
           </div>
         </div>
       ) : null}
-      <p className="rounded-lg border border-amber-200/90 bg-amber-50/80 px-3 py-2 text-xs text-amber-950">{dashboard.note}</p>
+      {dashboard.note ? <p className="text-xs text-slate-500">{dashboard.note}</p> : null}
     </div>
   );
 }
 
-/** Pusta tabela audytu — szkielet pod listę z API. */
-export function PackagingIntelligenceAuditPlaceholderTable({
-  moduleLabel,
-  colSource,
-}: {
-  moduleLabel: string;
-  colSource: string;
-}) {
+export function PackagingIntelligenceAuditPlaceholderTable() {
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200/90 bg-white shadow-sm">
-      <table className="w-full min-w-[720px] border-collapse text-sm">
-        <thead>
-          <tr>
-            <th className={th}>Czas</th>
-            <th className={th}>Zamówienie</th>
-            <th className={th}>{colSource}</th>
-            <th className={th}>Karton</th>
-            <th className={th}>Operator</th>
-            <th className={th}>Zdarzenie</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td colSpan={6} className="px-3 py-8 text-center text-sm text-slate-500">
-              Brak wierszy audytu — podłącz endpoint historii dopasowań ({moduleLabel}). Tabela jest przygotowana pod operacyjny
-              eksport i masowe filtry.
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <p className="rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-4 text-sm text-slate-500">
+      Brak szczegółowego audytu propozycji w tym widoku.
+    </p>
   );
 }

@@ -379,7 +379,6 @@ export default function WmsPackingOrderPage() {
         shippingMethodLogoUrl={packingDetail.shipping_method_logo_url}
         shippingTemplateLabel={shippingTemplateLabel}
         compatible={packingDetail.shipping_compatible_cartons ?? []}
-        packagingSuggestions={packingDetail.packaging_suggestions}
         selectedCartonId={packingDetail.selected_carton_id}
         selectedPackagingIds={ctrl.selectedPackagingIds}
         busy={ctrl.selectCartonBusy}
