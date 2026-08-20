@@ -981,6 +981,11 @@ export default function WmsReturnsPage() {
   const navigate = useNavigate();
   const rid = Number(returnId);
   const [wmsReturn, setWmsReturn] = useState<WmsReturnRead | null>(null);
+  const refundProcessing = wmsReturn?.refund_processing ?? "disabled";
+  const snapshotRequirePhotos = Boolean(wmsReturn?.require_photos);
+  const snapshotRequireCondition = Boolean(wmsReturn?.require_condition);
+  const allowWarehouseRefund = refundProcessing === "warehouse";
+  const awaitingOfficeRefund = wmsReturn?.status?.transition_key === "office_pending";
   const printFlow = usePrintMethodFlow({
     tenantId: DAMAGE_TENANT_ID,
     warehouseId: wmsReturn?.warehouse_id ?? null,
@@ -3301,8 +3306,8 @@ export default function WmsReturnsPage() {
 
     setDamageSaving(true);
     setDamageSaveError(null);
-    const requirePhotos = !!wmsSettings?.require_photos;
-    const requireCondition = !!wmsSettings?.require_condition;
+    const requirePhotos = snapshotRequirePhotos;
+    const requireCondition = snapshotRequireCondition;
 
     try {
       await new Promise((r) => setTimeout(r, 0));
@@ -3671,7 +3676,7 @@ export default function WmsReturnsPage() {
     }
 
     if (damagedUnitsMissingPhotos > 0) {
-      if (wmsSettings?.require_photos) {
+      if (snapshotRequirePhotos) {
         setDamageSaveError("Dodaj zdjęcie uszkodzenia dla wszystkich uszkodzonych sztuk.");
         return;
       }
@@ -3710,7 +3715,7 @@ export default function WmsReturnsPage() {
 
       const amt = fullRefundAmount;
       const shipAmt = refundShipping ? refundShippingAmount : 0;
-      const enableRefund = Boolean(wmsSettings?.enable_refund);
+      const enableRefund = allowWarehouseRefund;
       const finalReturn = await finalizeWmsReturn(
         selectedReturnDbId,
         DAMAGE_TENANT_ID,
@@ -3812,8 +3817,8 @@ export default function WmsReturnsPage() {
     saveChangesLoading,
     selectedReturnDbId,
     damagedUnitsMissingPhotos,
-    wmsSettings?.require_photos,
-    wmsSettings?.enable_refund,
+    snapshotRequirePhotos,
+    allowWarehouseRefund,
     lineSeeds,
     isLineFullyResolved,
     validateLineSplitForSave,
@@ -4291,9 +4296,12 @@ export default function WmsReturnsPage() {
             >
               {panelUiStatusSaving ? "…" : "Status"}
             </button>
-            {wmsSettings && !wmsSettings.enable_refund ? (
-              <span className="hidden text-[10px] text-slate-500 2xl:inline">Zwrot w biurze</span>
-            ) : (
+            {refundProcessing === "office" ? (
+              <span className="hidden text-[10px] text-slate-500 2xl:inline">Oczekuje biuro</span>
+            ) : refundProcessing === "disabled" ? (
+              <span className="hidden text-[10px] text-slate-500 2xl:inline">Bez rozliczenia</span>
+            ) : null}
+            {allowWarehouseRefund ? (
               <label
                 className={`inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs ${isFinished || orderShippingRefundMeta.displayMissing ? "opacity-60" : "cursor-pointer"}`}
                 title="Zwrot kosztów dostawy"
@@ -4336,7 +4344,7 @@ export default function WmsReturnsPage() {
                   aria-label="Zwrot kosztów dostawy"
                 />
               </label>
-            )}
+            ) : null}
             <button
               type="button"
               disabled={isFinished}
@@ -4371,8 +4379,10 @@ export default function WmsReturnsPage() {
           </div>
         </div>
         {panelUiStatusesError ? <p className="mt-1 text-[11px] font-medium text-amber-800">{panelUiStatusesError}</p> : null}
-        {wmsReturn && wmsSettings && !wmsSettings.enable_refund ? (
-          <p className="mt-1 text-[11px] text-slate-500">Zwrot środków — rozliczenie w panelu biura.</p>
+        {wmsReturn && refundProcessing === "office" && awaitingOfficeRefund ? (
+          <p className="mt-1 text-[11px] font-medium text-amber-800">RMZ oczekuje na rozliczenie w biurze.</p>
+        ) : wmsReturn && refundProcessing === "office" && !isFinished ? (
+          <p className="mt-1 text-[11px] text-slate-500">Po zapisie magazynu zwrot trafi do biura do rozliczenia.</p>
         ) : null}
       </div>
 
@@ -5660,7 +5670,7 @@ export default function WmsReturnsPage() {
                 }
               }
               if (damageSaving || isUploadingPhotos) return;
-              if ((wmsSettings?.require_photos ?? false) && damageFiles.length < 1) return;
+              if ((snapshotRequirePhotos) && damageFiles.length < 1) return;
               e.preventDefault();
               e.stopPropagation();
               void handleSaveDamage();
@@ -5714,7 +5724,7 @@ export default function WmsReturnsPage() {
 
 
 
-            {(wmsSettings?.require_condition ?? false) && (
+            {(snapshotRequireCondition) && (
               <div className="mt-4 space-y-2">
                 <p className="text-xs font-semibold text-slate-600">Klasa uszkodzenia (wymagane)</p>
                 <div className="flex gap-2">
@@ -5746,7 +5756,7 @@ export default function WmsReturnsPage() {
               </div>
             )}
 
-            {(wmsSettings?.require_condition ?? false) && (damageConditionChoice === "B" || damageConditionChoice === "C") ? (
+            {(snapshotRequireCondition) && (damageConditionChoice === "B" || damageConditionChoice === "C") ? (
               <div className="mt-4">
                 <RmzDamageTypeChips
                   damageClass={damageConditionChoice}
@@ -5767,7 +5777,7 @@ export default function WmsReturnsPage() {
             <div className="mt-4 space-y-3">
               <div className="flex flex-wrap items-end justify-between gap-2">
                 <label className="block text-xs font-semibold text-slate-600">
-                  {wmsSettings?.require_photos
+                  {snapshotRequirePhotos
                     ? `Zdjęcia (min. 1, max. ${MAX_DAMAGE_PHOTOS})`
                     : `Zdjęcia (opcjonalnie, max. ${MAX_DAMAGE_PHOTOS})`}
                 </label>
@@ -5898,11 +5908,11 @@ export default function WmsReturnsPage() {
                   isFinished ||
                   damageSaving ||
                   isUploadingPhotos ||
-                  (!!wmsSettings?.require_condition && (damageConditionChoice !== "B" && damageConditionChoice !== "C")) ||
-                  (!!wmsSettings?.require_condition &&
+                  (!!snapshotRequireCondition && (damageConditionChoice !== "B" && damageConditionChoice !== "C")) ||
+                  (!!snapshotRequireCondition &&
                     (damageConditionChoice === "B" || damageConditionChoice === "C") &&
                     filterRmzDamageTypeIdsForClass(damageConditionChoice, damageModalTypeIds).length < 1) ||
-                  (!!wmsSettings?.require_photos && damageFiles.length < 1)
+                  (!!snapshotRequirePhotos && damageFiles.length < 1)
                 }
 
                 className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-[#41546a] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#36444d] focus-visible:ring-2 focus-visible:ring-[#41546a]/40 disabled:cursor-not-allowed disabled:opacity-45"

@@ -307,6 +307,10 @@ export type WmsReturnRead = {
   warehouse_document_type?: string | null;
   warehouse_document_number?: string | null;
   manufactured_component_recovery_mode?: ManufacturedComponentRecoveryMode | null;
+  returns_workflow_version?: number | null;
+  require_condition?: boolean | null;
+  require_photos?: boolean | null;
+  refund_processing?: RefundProcessing | null;
 };
 
 export type WmsReturnCreate = {
@@ -402,14 +406,18 @@ export type ReturnUiStatusUpdatePayload = {
 };
 
 export type ReturnsMode = "simple" | "two_step" | "advanced";
+export type RefundProcessing = "disabled" | "warehouse" | "office";
 
 export type WmsSettingsRead = {
   tenant_id: number;
   warehouse_id: number;
-  returns_mode: ReturnsMode;
   require_photos: boolean;
   require_condition: boolean;
-  enable_refund: boolean;
+  refund_processing: RefundProcessing;
+  /** @deprecated legacy projection */
+  returns_mode?: ReturnsMode;
+  /** @deprecated legacy projection */
+  enable_refund?: boolean;
   z_pz_print_label_on_close?: boolean;
   z_pz_label_template_id?: number | null;
   manufactured_component_recovery_mode?: ManufacturedComponentRecoveryMode;

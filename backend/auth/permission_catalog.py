@@ -278,6 +278,14 @@ PERMISSION_TREE: list[dict[str, Any]] = [
         "Zwroty",
         [
             _node(
+                "sec_returns_ops",
+                "Operacje",
+                [
+                    _leaf("returns.warehouse_commit", "Zatwierdzenie magazynowe RMZ"),
+                    _leaf("returns.refund", "Rozliczenie zwrotu (biuro)"),
+                ],
+            ),
+            _node(
                 "sec_returns_status",
                 "Statusy",
                 [
@@ -408,6 +416,8 @@ ROLE_PERMISSION_PRESETS: dict[str, tuple[str, ...]] = {
                     "products.export",
                     "products.merge",
                     "complaints.manage",
+                    "returns.warehouse_commit",
+                    "returns.refund",
                 ),
                 *_pfx(PERMISSION_KEYS, "orders.status.", "complaints.status.", "returns.status.", "inventory.status."),
             }
@@ -426,6 +436,7 @@ ROLE_PERMISSION_PRESETS: dict[str, tuple[str, ...]] = {
                     "warehouse.picking.start",
                     "warehouse.picking.continue",
                     "warehouse.picking.assign",
+                    "returns.warehouse_commit",
                     "workforce.dashboard",
                     "workforce.activity.read",
                     "workforce.activity.write",

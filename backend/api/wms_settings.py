@@ -35,7 +35,7 @@ from ..schemas.wms_packing_settings import (
     WmsPackingSettingsRead,
     WmsPackingSettingsSave,
 )
-from ..schemas.wms_return import ReturnsMode, WmsSettingsRead, WmsSettingsSave, WmsSettingsUpsert
+from ..schemas.wms_return import WmsSettingsRead, WmsSettingsSave, WmsSettingsUpsert
 from ..schemas.wms_picking_shortage_settings import WmsPickingShortageSettingsRead, WmsPickingShortageSettingsSave
 from ..schemas.wms_picking_terminal_settings import (
     WmsPickingListDisplay,
@@ -104,19 +104,6 @@ def resolve_wms_settings_tenant_id(db: Session, tenant_id: Optional[int]) -> int
     return int(row.id)
 
 
-def _derive_flags(mode: ReturnsMode) -> tuple[bool, bool, bool]:
-    # simple: RMZ only
-    if mode == "simple":
-        return False, False, False  # require_photos, require_condition, enable_refund
-    # two_step: warehouse decisions + office refund
-    if mode == "two_step":
-        return False, False, True
-    # advanced: warehouse decisions + condition/photos + office refund
-    if mode == "advanced":
-        return True, True, True
-    return False, False, False
-
-
 def _get_or_create(db: Session, tenant_id: int, warehouse_id: int) -> WmsSettings:
     return get_or_create_wms_settings_row(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
 
@@ -126,14 +113,24 @@ def _row_to_read(row: WmsSettings) -> WmsSettingsRead:
         normalize_receipt_mode,
         normalize_recovery_mode,
     )
+    from ..services.returns.rmz_workflow_config_service import (
+        legacy_returns_mode_label,
+        read_returns_settings_ssot,
+    )
+
+    snap = read_returns_settings_ssot(row)
+    legacy_mode = legacy_returns_mode_label(
+        snap.refund_processing, snap.require_photos, snap.require_condition
+    )
 
     return WmsSettingsRead(
         tenant_id=row.tenant_id,
         warehouse_id=row.warehouse_id,
-        returns_mode=row.returns_mode,  # type: ignore[arg-type]
-        require_photos=bool(row.require_photos),
-        require_condition=bool(row.require_condition),
-        enable_refund=bool(row.enable_refund),
+        require_photos=snap.require_photos,
+        require_condition=snap.require_condition,
+        refund_processing=snap.refund_processing,
+        returns_mode=legacy_mode,
+        enable_refund=snap.refund_processing != "disabled",
         z_pz_print_label_on_close=bool(getattr(row, "z_pz_print_label_on_close", False)),
         z_pz_label_template_id=getattr(row, "z_pz_label_template_id", None),
         inventory_management_mode=normalize_inventory_management_mode(
@@ -166,10 +163,21 @@ def save_wms_settings(body: WmsSettingsSave, db: Session = Depends(get_db)):
     except ValueError:
         raise HTTPException(status_code=400, detail="Brak skonfigurowanego magazynu")
     row = _get_or_create(db, body.tenant_id, wh_id)
-    row.returns_mode = body.returns_mode
-    row.require_photos = bool(body.require_photos)
-    row.require_condition = bool(body.require_condition)
-    row.enable_refund = bool(body.enable_refund)
+    from ..services.returns.rmz_workflow_config_service import (
+        normalize_refund_processing,
+        project_legacy_settings_columns,
+    )
+
+    rp = normalize_refund_processing(body.refund_processing) if getattr(body, "refund_processing", None) else None
+    if rp is None:
+        # Legacy POST body — derive refund from enable_refund only
+        rp = "warehouse" if bool(body.enable_refund) else "disabled"
+    project_legacy_settings_columns(
+        row,
+        require_condition=bool(body.require_condition),
+        require_photos=bool(body.require_photos),
+        refund_processing=rp,
+    )
     db.commit()
     db.refresh(row)
     return _row_to_read(row)
@@ -198,8 +206,11 @@ def set_returns_mode(
     body: WmsSettingsUpsert,
     db: Session = Depends(get_db),
 ):
-    mode: ReturnsMode = body.returns_mode
-    require_photos, require_condition, enable_refund = _derive_flags(mode)
+    from ..services.returns.rmz_workflow_config_service import (
+        normalize_refund_processing,
+        project_legacy_settings_columns,
+    )
+
     tid = resolve_wms_settings_tenant_id(db, body.tenant_id)
     try:
         if body.warehouse_id is not None and int(body.warehouse_id) > 0:
@@ -210,10 +221,13 @@ def set_returns_mode(
         raise HTTPException(status_code=400, detail="Brak skonfigurowanego magazynu")
     row = _get_or_create(db, tid, wh_id)
 
-    row.returns_mode = mode
-    row.require_photos = require_photos
-    row.require_condition = require_condition
-    row.enable_refund = enable_refund
+    rp = normalize_refund_processing(body.refund_processing)
+    project_legacy_settings_columns(
+        row,
+        require_condition=bool(body.require_condition),
+        require_photos=bool(body.require_photos),
+        refund_processing=rp,
+    )
     if body.z_pz_print_label_on_close is not None:
         row.z_pz_print_label_on_close = bool(body.z_pz_print_label_on_close)
     if body.z_pz_label_template_id is not None:

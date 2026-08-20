@@ -4,7 +4,7 @@ WMS order-linked return (RMZ) — operational returns tied to an order, not a gl
 
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from ..database import Base
@@ -34,6 +34,12 @@ class WmsOrderReturn(Base):
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
     #: Archiwizacja zwrotu (linie RMZ/refund kasowane w serwisie); NULL = aktywny.
     deleted_at = Column(DateTime, nullable=True, index=True)
+
+    #: Snapshot workflow at CREATE (or lazy-stamped once on first mutation). SSOT for this RMZ.
+    returns_workflow_version = Column(Integer, nullable=True)
+    require_condition = Column(Boolean, nullable=True)
+    require_photos = Column(Boolean, nullable=True)
+    refund_processing = Column(String(24), nullable=True)
 
     #: Powiązany dokument magazynowy Z-PZ utworzony przy finalizacji zwrotu.
     warehouse_document_id = Column(

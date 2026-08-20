@@ -19,12 +19,14 @@ class WmsSettings(Base):
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False, index=True)
 
-    # simple | two_step | advanced
+    # simple | two_step | advanced — legacy projection only (SSOT: refund_processing + require_*)
     returns_mode = Column(String(24), nullable=False, default="simple")
 
     require_photos = Column(Boolean, nullable=False, default=False)
     require_condition = Column(Boolean, nullable=False, default=False)
     enable_refund = Column(Boolean, nullable=False, default=False)
+    #: disabled | warehouse | office — live SSOT for refund stage
+    refund_processing = Column(String(24), nullable=True)
 
     z_pz_print_label_on_close = Column(Boolean, nullable=False, default=False)
     z_pz_label_template_id = Column(Integer, nullable=True)

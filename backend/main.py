@@ -76,6 +76,7 @@ from .db.schema_upgrade import (
     ensure_inventory_location_uuid_columns,
     ensure_damage_report_columns,
     ensure_wms_order_returns_columns,
+    ensure_wms_returns_workflow_settings_columns,
     ensure_rmz_line_split_columns,
     ensure_rmz_line_damage_entries_json,
     ensure_manufactured_component_recovery_schema,
@@ -1009,6 +1010,7 @@ if _is_sqlite_engine():
 
 # RMZ: add external_id / status on older DBs (create_all does not ALTER existing wms_order_returns)
 ensure_wms_order_returns_columns(engine)
+ensure_wms_returns_workflow_settings_columns(engine)
 ensure_wms_order_returns_deleted_at_column(engine)
 ensure_orders_deleted_at_column(engine)
 ensure_rmz_line_split_columns(engine)

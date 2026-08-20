@@ -12,12 +12,59 @@ from sqlalchemy.orm import Session
 from ...models.wms_order_return import WmsOrderReturn
 from ...models.wms_rmz_line import RMZLine
 from ...models.wms_settings import WmsSettings
-from ...schemas.wms_return import ReturnsMode, WmsReturnLineSplitProcess
+from ...schemas.wms_return import WmsReturnLineSplitProcess
 from .errors import RmzFinalizeError
+from .rmz_workflow_config_service import RmzLineValidationSettings
 
 logger = logging.getLogger(__name__)
 
 _TERMINAL_STATUS_TYPES = frozenset({"done_success", "done_rejected"})
+_WAREHOUSE_LOCKED_TRANSITION_KEYS = frozenset({"office_pending"})
+
+
+def assert_rmz_warehouse_content_editable(row: WmsOrderReturn) -> None:
+    if getattr(row, "warehouse_document_id", None):
+        raise RmzFinalizeError("Warehouse commit completed — line edits are locked")
+    rs = getattr(row, "return_status", None)
+    if rs is not None:
+        tkey = getattr(rs, "transition_key", None)
+        if tkey in _WAREHOUSE_LOCKED_TRANSITION_KEYS:
+            raise RmzFinalizeError("Awaiting office refund — warehouse edits are locked")
+        if getattr(rs, "type", None) in _TERMINAL_STATUS_TYPES:
+            raise RmzFinalizeError("Return is already finished")
+
+
+def assert_rmz_editable(row: WmsOrderReturn) -> None:
+    """Warehouse line/qty edits — not office refund."""
+    assert_rmz_warehouse_content_editable(row)
+
+
+def assert_rmz_refundable(row: WmsOrderReturn, *, allow_legacy_qc_complete: bool = True) -> None:
+    rs = getattr(row, "return_status", None)
+    if rs is None:
+        raise RmzFinalizeError("Return status missing")
+    tkey = getattr(rs, "transition_key", None)
+    allowed = {"office_pending"}
+    if allow_legacy_qc_complete:
+        allowed.add("qc_complete")
+    if tkey not in allowed:
+        raise RmzFinalizeError(f"Refund allowed only in stage office_pending (current: {tkey})")
+    if getattr(rs, "type", None) in _TERMINAL_STATUS_TYPES:
+        raise RmzFinalizeError("Return is already finished")
+    if not getattr(row, "warehouse_document_id", None):
+        raise RmzFinalizeError("Warehouse commit required before office refund")
+
+
+def assert_rmz_warehouse_not_yet_committed(row: WmsOrderReturn) -> None:
+    """Block duplicate warehouse commit."""
+    if getattr(row, "warehouse_document_id", None):
+        raise RmzFinalizeError("Warehouse commit already completed for this return")
+    rs = getattr(row, "return_status", None)
+    tkey = getattr(rs, "transition_key", None) if rs is not None else None
+    if tkey in _WAREHOUSE_LOCKED_TRANSITION_KEYS:
+        raise RmzFinalizeError("Warehouse stage already completed — awaiting office refund")
+    if rs is not None and getattr(rs, "type", None) in _TERMINAL_STATUS_TYPES:
+        raise RmzFinalizeError("Return is already finished")
 
 
 def parse_damage_entries_raw(raw: object) -> List[dict]:
@@ -51,18 +98,11 @@ def rmz_line_has_damage_photos(ln: RMZLine) -> bool:
     return False
 
 
-def assert_rmz_editable(row: WmsOrderReturn) -> None:
-    if getattr(row, "warehouse_document_id", None):
-        raise RmzFinalizeError("Zwrot został już sfinalizowany — edycja niemożliwa")
-    rs = getattr(row, "return_status", None)
-    if rs is not None and getattr(rs, "type", None) in _TERMINAL_STATUS_TYPES:
-        raise RmzFinalizeError("Zwrot jest już zakończony")
-
-
 def validate_rmz_lines_ready_for_finalize(
     rmz_lines: Sequence[RMZLine],
     *,
     require_photos: bool,
+    require_condition: bool = False,
 ) -> None:
     if not rmz_lines:
         raise RmzFinalizeError("Return has no lines")
@@ -100,6 +140,12 @@ def validate_rmz_lines_ready_for_finalize(
                 raise RmzFinalizeError(
                     f"Line order_item_id={ln.order_item_id}: at least one damage photo is required"
                 )
+            if require_condition and dmg > 0:
+                cond = getattr(ln, "condition", None)
+                if cond not in ("B", "C"):
+                    raise RmzFinalizeError(
+                        f"Line order_item_id={ln.order_item_id}: damage condition B or C is required"
+                    )
 
 
 def apply_rmz_line_split(
@@ -111,8 +157,11 @@ def apply_rmz_line_split(
     settings: WmsSettings,
     return_type: str,
     validate_photos: bool = False,
+    line_validation: RmzLineValidationSettings | None = None,
 ) -> None:
     """Apply split-process payload to RMZ line (no commit)."""
+    req_photos = line_validation.require_photos if line_validation else bool(settings.require_photos)
+    req_condition = line_validation.require_condition if line_validation else bool(settings.require_condition)
     if int(rmz_line.product_id) != int(body.product_id):
         raise RmzFinalizeError("Product mismatch for return line")
 
@@ -160,7 +209,7 @@ def apply_rmz_line_split(
         raise RmzFinalizeError("UNCLAIMED return does not allow rejected_qty > 0")
 
     if use_entries:
-        if validate_photos and settings.require_photos:
+        if validate_photos and req_photos:
             for e in entry_rows:
                 if not [u for u in (e.photo_urls or []) if str(u).strip()]:
                     raise RmzFinalizeError(
@@ -216,9 +265,9 @@ def apply_rmz_line_split(
         condition = body.condition
         photo_urls = body.photo_urls or []
         if damaged_qty > 0:
-            if settings.require_condition and not condition:
+            if req_condition and not condition:
                 raise RmzFinalizeError("condition is required for DAMAGED")
-            if validate_photos and settings.require_photos and not photo_urls:
+            if validate_photos and req_photos and not photo_urls:
                 raise RmzFinalizeError("At least one photo_url is required (photo_urls)")
 
         if damaged_qty > 0:
@@ -302,20 +351,3 @@ def apply_rmz_line_split(
     )
 
     db.flush()
-
-
-def resolve_finalize_transition_key(
-    returns_mode: ReturnsMode,
-    rmz_lines: Sequence[RMZLine],
-    *,
-    enable_refund: bool,
-    process_refund: bool,
-) -> str:
-    all_rejected = all(ln.decision == "REJECTED" for ln in rmz_lines)
-    if all_rejected:
-        return "rejected"
-    if enable_refund and not process_refund:
-        if returns_mode == "two_step":
-            return "office_pending"
-        return "qc_complete"
-    return "success"

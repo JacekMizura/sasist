@@ -1,4 +1,19 @@
-**Direct Sales Ogólne + safe enabled rollout (2026-08-19) — on main after gate.**
+**WMS Returns workflow SSOT (2026-08-20) — READY TO COMMIT.**
+- Live SSOT: `require_condition`, `require_photos`, `refund_processing` (disabled|warehouse|office)
+- Removed active simple/two_step/advanced as runtime; legacy columns projected only
+- RMZ snapshot on CREATE (+ lazy stamp on GET/mutation); runtime reads snapshot
+- Warehouse commit = `/finalize` (+ `/commit-wms` alias); office `/refund` gated by `returns.refund`
+- Permissions: `returns.warehouse_commit`, `returns.refund`
+- two_step→warehouse (never office); office is conscious admin choice
+- Tests: returns suite + workflow SSOT PASS; FE build PASS
+
+**Immutable buyer snapshot for SaleDocument (2026-08-19) — implemented, NOT committed.**
+- `SaleDocument.buyer_json` nullable Text; ORM sync via `ensure_sale_documents_orm_columns`
+- Snapshot at `create_sale_document` via `persist_buyer_snapshot` (Direct Sales / packing / OMS / marketplace)
+- Precedence: Order addresses_json → Customer+CustomerAddress → retail PA fallback
+- `sale_document_mapper._resolve_buyer_display`: buyer_json wins; NULL → legacy live Customer/Order
+- Tests: `test_sale_document_buyer_snapshot.py` (A–H scenarios); direct_sales + mapper PASS
+
 - `extensions.ds_enabled_v1` stamp on conscious PUT; legacy fail-open until stamped
 - SSOT: `resolve_direct_sales_business_enabled` + API `enabled_effective` / `enabled_enforced`
 - Completion mode: stamped OFF allows finish inflight session, blocks expansion (qty+/scan/add)

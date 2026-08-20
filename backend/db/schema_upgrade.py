@@ -884,6 +884,14 @@ def ensure_wms_order_returns_columns(engine: Engine) -> None:
             )
         if "warehouse_document_type" not in columns:
             conn.execute(text("ALTER TABLE wms_order_returns ADD COLUMN warehouse_document_type VARCHAR(32)"))
+        if "returns_workflow_version" not in columns:
+            conn.execute(text("ALTER TABLE wms_order_returns ADD COLUMN returns_workflow_version INTEGER"))
+        if "require_condition" not in columns:
+            conn.execute(text("ALTER TABLE wms_order_returns ADD COLUMN require_condition BOOLEAN"))
+        if "require_photos" not in columns:
+            conn.execute(text("ALTER TABLE wms_order_returns ADD COLUMN require_photos BOOLEAN"))
+        if "refund_processing" not in columns:
+            conn.execute(text("ALTER TABLE wms_order_returns ADD COLUMN refund_processing VARCHAR(24)"))
 
         conn.execute(
             text(
@@ -906,6 +914,18 @@ def ensure_wms_order_returns_columns(engine: Engine) -> None:
             # Duplicates or legacy data: skip so app stays up; new inserts still validated by ORM where possible
             pass
 
+        conn.commit()
+
+
+def ensure_wms_returns_workflow_settings_columns(engine: Engine) -> None:
+    """Additive: refund_processing on wms_settings (returns workflow SSOT)."""
+    with engine.connect() as conn:
+        if not _table_exists(conn, "wms_settings"):
+            conn.commit()
+            return
+        columns = _table_column_names(conn, "wms_settings")
+        if "refund_processing" not in columns:
+            conn.execute(text("ALTER TABLE wms_settings ADD COLUMN refund_processing VARCHAR(24)"))
         conn.commit()
 
 

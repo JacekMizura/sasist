@@ -320,14 +320,20 @@ export async function getWmsReturnsModeSettings(opts?: {
 export async function setWmsReturnsModeSettings(payload: {
   tenant_id?: number | null;
   warehouse_id?: number | null;
-  returns_mode: string;
+  require_condition?: boolean;
+  require_photos?: boolean;
+  refund_processing?: string;
   z_pz_print_label_on_close?: boolean;
   z_pz_label_template_id?: number | null;
   manufactured_component_recovery_mode?: string | null;
   manufactured_recovery_receipt_mode?: string | null;
   manufactured_recovery_location_id?: number | null;
 }): Promise<WmsSettingsRead> {
-  const body: Record<string, unknown> = { returns_mode: payload.returns_mode };
+  const body: Record<string, unknown> = {
+    require_condition: Boolean(payload.require_condition),
+    require_photos: Boolean(payload.require_photos),
+    refund_processing: payload.refund_processing ?? "disabled",
+  };
   if (payload.z_pz_print_label_on_close != null) {
     body.z_pz_print_label_on_close = payload.z_pz_print_label_on_close;
   }

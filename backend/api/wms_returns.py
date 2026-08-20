@@ -17,7 +17,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
-from ..auth.deps import get_optional_current_user
+from ..auth.deps import get_optional_current_user, require_permission
 from ..models.app_user import AppUser
 from ..models.customer import Customer
 from ..models.order import Order
@@ -73,8 +73,19 @@ from ..services.rmz_return_receipt_service import (
     stock_document_ids_for_rmz,
 )
 from ..services.returns.errors import RmzFinalizeError
-from ..services.returns.rmz_finalize_service import finalize_rmz_return
-from ..services.returns.rmz_line_split_service import assert_rmz_editable
+from ..services.returns.rmz_finalize_service import (
+    process_rmz_office_refund,
+    warehouse_commit_rmz_existing_lines,
+    warehouse_commit_rmz_return,
+)
+from ..services.returns.rmz_line_split_service import assert_rmz_warehouse_content_editable
+from ..services.returns.rmz_workflow_config_service import (
+    ensure_rmz_workflow_snapshot,
+    line_validation_settings,
+    read_rmz_workflow_snapshot,
+    resolve_returns_settings,
+    stamp_rmz_snapshot_on_create,
+)
 from ..services.bundles.bundle_return_service import (
     BundleComponentReturnIn,
     apply_bundle_return_metadata,
@@ -116,6 +127,8 @@ print("[LOOKUP TEST ROUTE REGISTERED]", flush=True)
 
 router = APIRouter(tags=["WMS Returns"])
 returns_id_router = APIRouter(prefix="/id", tags=["WMS Returns"])
+_returns_wh_commit_dep = require_permission("returns.warehouse_commit")
+_returns_refund_dep = require_permission("returns.refund")
 print("IMPORTING WMS RETURNS ROUTER", flush=True)
 print(
     f"[routes] wms_returns routing={WMS_RETURNS_ROUTING_VERSION} "
@@ -1172,7 +1185,7 @@ def _shipping_cost_from_order(order: Order) -> Optional[float]:
 
 def _raise_if_rmz_not_editable(row: WmsOrderReturn) -> None:
     try:
-        assert_rmz_editable(row)
+        assert_rmz_warehouse_content_editable(row)
     except RmzFinalizeError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
@@ -1391,6 +1404,14 @@ def _serialize_return_read(db: Session, row: WmsOrderReturn) -> WmsReturnRead:
         db, tenant_id=int(row.tenant_id), warehouse_id=int(row.warehouse_id)
     )
     recovery_mode = recovery_mode_from_settings(wh_settings)
+    wf_snap = read_rmz_workflow_snapshot(row)
+    rs_tkey = getattr(rs, "transition_key", None) if rs is not None else None
+    wh_committed = getattr(row, "warehouse_document_id", None) is not None
+    content_editable = (
+        not terminal
+        and not wh_committed
+        and rs_tkey not in ("office_pending",)
+    )
     return WmsReturnRead(
         id=row.id,
         rmz_number=row.rmz_number,
@@ -1414,7 +1435,11 @@ def _serialize_return_read(db: Session, row: WmsOrderReturn) -> WmsReturnRead:
         refund=_build_refund_dict(refund_row),  # type: ignore[arg-type]
         ui_status=_brief_ui_status(ui_row),
         workflow_finished=terminal,
-        workflow_editable=not terminal,
+        workflow_editable=content_editable,
+        returns_workflow_version=wf_snap.version if wf_snap else None,
+        require_condition=wf_snap.require_condition if wf_snap else None,
+        require_photos=wf_snap.require_photos if wf_snap else None,
+        refund_processing=wf_snap.refund_processing if wf_snap else None,
         manufactured_component_recovery_mode=recovery_mode,  # type: ignore[arg-type]
         **_rmz_document_fields(db, row),
     )
@@ -2528,6 +2553,8 @@ def create_wms_return(
         status_id=start_rs.id,
         lines_json=json.dumps(lines_out),
     )
+    wh_settings = resolve_returns_settings(db, tenant_id=body.tenant_id, warehouse_id=wh_id)
+    stamp_rmz_snapshot_on_create(row, wh_settings)
     db.add(row)
     db.commit()
     db.refresh(row)
@@ -2771,10 +2798,10 @@ def process_rmz_line_split(
     ),
     commit_workflow: bool = Query(
         False,
-        description="When true, advance RMZ workflow (OMS sync). Default false — draft line persist only.",
+        description="Deprecated — ignored. Use POST .../finalize for warehouse commit.",
     ),
     db: Session = Depends(get_db),
-    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+    current_user: AppUser = Depends(_returns_wh_commit_dep),
 ):
     wh_id = _warehouse_id_for_return_mutation(db, return_id, tenant_id, warehouse_id)
     row = _load_rmz(db, return_id, tenant_id, wh_id)
@@ -2782,8 +2809,9 @@ def process_rmz_line_split(
         raise HTTPException(status_code=404, detail="Return not found")
     _raise_if_rmz_not_editable(row)
 
-    settings = _get_wms_settings(db, tenant_id, wh_id)
-    mode: ReturnsMode = settings.returns_mode  # type: ignore[assignment]
+    snapshot = ensure_rmz_workflow_snapshot(db, row)
+    line_val = line_validation_settings(snapshot)
+    settings = resolve_returns_settings(db, tenant_id=tenant_id, warehouse_id=wh_id)
 
     rmz_line = (
         db.query(RMZLine)
@@ -2796,6 +2824,12 @@ def process_rmz_line_split(
         raise HTTPException(status_code=400, detail="Product mismatch for return line")
     return_type = str(getattr(row, "return_type", "RMA") or "RMA").upper()
 
+    if commit_workflow:
+        logger.warning(
+            "[returns.split-process] commit_workflow=true ignored return_id=%s — use POST .../finalize",
+            return_id,
+        )
+
     try:
         from ..services.returns.rmz_line_split_service import apply_rmz_line_split
 
@@ -2806,29 +2840,12 @@ def process_rmz_line_split(
             body,
             settings=settings,
             return_type=return_type,
-            validate_photos=bool(commit_workflow),
+            validate_photos=True,
+            line_validation=line_val,
         )
     except RmzFinalizeError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
-    if commit_workflow:
-        rmz_lines = db.query(RMZLine).filter(RMZLine.rmz_id == row.id).all()
-        next_key = _next_transition_key_for_lines(mode, rmz_lines)
-        if next_key:
-            logger.info(
-                "[returns.return.commit] return_id=%s order_item_id=%s tenant_id=%s transition=%s",
-                return_id,
-                order_item_id,
-                tenant_id,
-                next_key,
-            )
-            _apply_transition(db, row, next_key)
-            logger.info(
-                "[returns.sync.oms] return_id=%s tenant_id=%s transition=%s",
-                return_id,
-                tenant_id,
-                next_key,
-            )
     try:
         from ..services.returns.return_domain_activity import (
             emit_component_recoveries_from_line_state,
@@ -2878,10 +2895,10 @@ def process_rmz_line(
     ),
     commit_workflow: bool = Query(
         False,
-        description="When true, advance RMZ workflow (OMS sync). Default false — draft line persist only.",
+        description="Deprecated — ignored. Use POST .../finalize for warehouse commit.",
     ),
     db: Session = Depends(get_db),
-    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+    current_user: AppUser = Depends(_returns_wh_commit_dep),
 ):
     wh_id = _warehouse_id_for_return_mutation(db, return_id, tenant_id, warehouse_id)
     row = _load_rmz(db, return_id, tenant_id, wh_id)
@@ -2889,8 +2906,7 @@ def process_rmz_line(
         raise HTTPException(status_code=404, detail="Return not found")
     _raise_if_rmz_not_editable(row)
 
-    settings = _get_wms_settings(db, tenant_id, wh_id)
-    mode: ReturnsMode = settings.returns_mode  # type: ignore[assignment]
+    snapshot = ensure_rmz_workflow_snapshot(db, row)
 
     rmz_line = (
         db.query(RMZLine)
@@ -2908,9 +2924,9 @@ def process_rmz_line(
     photo_urls = body.photo_urls or []
 
     if decision == "DAMAGED":
-        if settings.require_condition and not condition:
+        if snapshot.require_condition and not condition:
             raise HTTPException(status_code=400, detail="condition is required for DAMAGED")
-        if commit_workflow and settings.require_photos:
+        if snapshot.require_photos:
             if not photo_urls:
                 raise HTTPException(status_code=400, detail="At least one photo_url is required (photo_urls)")
         rmz_line.condition = condition if condition else None
@@ -2965,23 +2981,10 @@ def process_rmz_line(
     db.flush()
 
     if commit_workflow:
-        rmz_lines = db.query(RMZLine).filter(RMZLine.rmz_id == row.id).all()
-        next_key = _next_transition_key_for_lines(mode, rmz_lines)
-        if next_key:
-            logger.info(
-                "[returns.return.commit] return_id=%s order_item_id=%s tenant_id=%s transition=%s",
-                return_id,
-                order_item_id,
-                tenant_id,
-                next_key,
-            )
-            _apply_transition(db, row, next_key)
-            logger.info(
-                "[returns.sync.oms] return_id=%s tenant_id=%s transition=%s",
-                return_id,
-                tenant_id,
-                next_key,
-            )
+        logger.warning(
+            "[returns.process] commit_workflow=true ignored return_id=%s — use POST .../finalize",
+            return_id,
+        )
 
     try:
         from ..services.returns.return_domain_activity import emit_return_line_decision
@@ -3010,12 +3013,12 @@ def finalize_wms_return(
         description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ (jak GET /wms/returns/id/{id}).",
     ),
     db: Session = Depends(get_db),
-    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+    current_user: AppUser = Depends(_returns_wh_commit_dep),
 ):
-    """Atomowy finalize RMZ: linie → Z-PZ → status → refund (jedna transakcja)."""
+    """Warehouse commit: linie → Z-PZ → status (+ refund tylko gdy snapshot=warehouse)."""
     wh_id = _warehouse_id_for_return_mutation(db, return_id, tenant_id, warehouse_id)
     logger.info(
-        "[returns.finalize.start] return_id=%s tenant_id=%s warehouse_id=%s lines=%s",
+        "[returns.warehouse_commit.start] return_id=%s tenant_id=%s warehouse_id=%s lines=%s",
         return_id,
         tenant_id,
         wh_id,
@@ -3027,15 +3030,17 @@ def finalize_wms_return(
             raise HTTPException(status_code=404, detail="Return not found")
         _raise_if_rmz_not_editable(row)
 
-        settings = _get_wms_settings(db, tenant_id, wh_id)
-        finalize_rmz_return(
+        snapshot = ensure_rmz_workflow_snapshot(db, row)
+        settings = resolve_returns_settings(db, tenant_id=tenant_id, warehouse_id=wh_id)
+        warehouse_commit_rmz_return(
             db,
             row,
             line_payloads=body.lines,
             settings=settings,
+            snapshot=snapshot,
             refund=body.refund,
             process_refund=bool(body.process_refund),
-            actor_user_id=int(current_user.id) if current_user and getattr(current_user, "id", None) else None,
+            actor_user_id=int(current_user.id),
         )
         db.commit()
     except HTTPException:
@@ -3066,9 +3071,9 @@ def finalize_wms_return_short_path(
         description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ.",
     ),
     db: Session = Depends(get_db),
-    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+    current_user: AppUser = Depends(_returns_wh_commit_dep),
 ):
-    """Alias bez segmentu /id/ — ten sam atomowy finalize co /wms/returns/id/{id}/finalize."""
+    """Alias bez segmentu /id/ — ten sam warehouse commit co /wms/returns/id/{id}/finalize."""
     return finalize_wms_return(return_id, body, tenant_id, warehouse_id, db, current_user)
 
 
@@ -3082,11 +3087,12 @@ def commit_wms_return_workflow(
         description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ (jak GET /wms/returns/id/{id}).",
     ),
     db: Session = Depends(get_db),
+    current_user: AppUser = Depends(_returns_wh_commit_dep),
 ):
-    """Finalize WMS receiving: validate lines → Z-PZ stock receipt → workflow transition."""
+    """Warehouse commit when lines already saved — same service as finalize without line payload."""
     wh_id = _warehouse_id_for_return_mutation(db, return_id, tenant_id, warehouse_id)
     logger.info(
-        "[returns.finalize.start] return_id=%s tenant_id=%s warehouse_id=%s",
+        "[returns.warehouse_commit.start] return_id=%s tenant_id=%s warehouse_id=%s (existing lines)",
         return_id,
         tenant_id,
         wh_id,
@@ -3097,47 +3103,26 @@ def commit_wms_return_workflow(
             raise HTTPException(status_code=404, detail="Return not found")
         _raise_if_rmz_not_editable(row)
 
-        settings = _get_wms_settings(db, tenant_id, wh_id)
-        mode: ReturnsMode = settings.returns_mode  # type: ignore[assignment]
-
-        rmz_lines = db.query(RMZLine).filter(RMZLine.rmz_id == row.id).all()
-        _validate_rmz_lines_ready_for_finalize(rmz_lines, require_photos=bool(settings.require_photos))
-
-        next_key = _resolve_finalize_transition_key(
-            mode,
-            rmz_lines,
-            enable_refund=bool(settings.enable_refund),
-        )
-
-        try:
-            pz_doc = ensure_required_rmz_return_receipt_document(db, row)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-        logger.info(
-            "[returns.return.commit] return_id=%s tenant_id=%s warehouse_id=%s transition=%s line_count=%s pz_doc_id=%s",
-            return_id,
-            tenant_id,
-            wh_id,
-            next_key,
-            len(rmz_lines),
-            getattr(pz_doc, "id", None),
-        )
-        _apply_transition(db, row, next_key)
-        logger.info(
-            "[returns.sync.oms] return_id=%s tenant_id=%s transition=%s",
-            return_id,
-            tenant_id,
-            next_key,
+        snapshot = ensure_rmz_workflow_snapshot(db, row)
+        settings = resolve_returns_settings(db, tenant_id=tenant_id, warehouse_id=wh_id)
+        warehouse_commit_rmz_existing_lines(
+            db,
+            row,
+            settings=settings,
+            snapshot=snapshot,
+            actor_user_id=int(current_user.id),
         )
         db.commit()
     except HTTPException:
         db.rollback()
         raise
+    except RmzFinalizeError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
     except Exception as e:
         db.rollback()
-        logger.exception("[returns.finalize] failed return_id=%s", return_id)
-        raise HTTPException(status_code=500, detail="Return finalize failed") from e
+        logger.exception("[returns.warehouse_commit] failed return_id=%s", return_id)
+        raise HTTPException(status_code=500, detail="Return warehouse commit failed") from e
 
     row = _load_rmz(db, return_id, tenant_id, wh_id)
     if not row:
@@ -3156,107 +3141,26 @@ def process_rmz_refund(
         description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ (jak GET /wms/returns/id/{id}).",
     ),
     db: Session = Depends(get_db),
+    current_user: AppUser = Depends(_returns_refund_dep),
 ):
     wh_id = _warehouse_id_for_return_mutation(db, return_id, tenant_id, warehouse_id)
     row = _load_rmz(db, return_id, tenant_id, wh_id)
     if not row:
         raise HTTPException(status_code=404, detail="Return not found")
-    _raise_if_rmz_not_editable(row)
-    return_type = str(getattr(row, "return_type", "RMA") or "RMA").upper()
-    if return_type == "UNCLAIMED":
-        refund = db.query(WmsRefund).filter(WmsRefund.rmz_id == row.id).first()
-        if not refund:
-            refund = WmsRefund(
-                rmz_id=row.id,
-                refund_type="NONE",
-                refund_amount=None,
-                refund_shipping=False,
-                refund_shipping_amount=None,
-                decided_by=body.decided_by,
-                decided_at=datetime.utcnow(),
-            )
-            db.add(refund)
-        else:
-            refund.refund_type = "NONE"
-            refund.refund_amount = None
-            refund.refund_shipping = False
-            refund.refund_shipping_amount = None
-            refund.decided_by = body.decided_by
-            refund.decided_at = datetime.utcnow()
-        _apply_transition(db, row, "success")
-        db.commit()
-        row = _load_rmz(db, return_id, tenant_id, wh_id)
-        if not row:
-            raise HTTPException(status_code=404, detail="Return not found")
-        return _serialize_return_read(db, row)
-
-    settings = _get_wms_settings(db, tenant_id, wh_id)
-    mode: ReturnsMode = settings.returns_mode  # type: ignore[assignment]
-    eff_refund_type = str(body.refund_type or "NONE").strip().upper()
-    eff_refund_amount = body.refund_amount
-    eff_refund_shipping = bool(body.refund_shipping)
-    eff_refund_shipping_amount = body.refund_shipping_amount
-
-    if not settings.enable_refund:
-        if eff_refund_type != "NONE":
-            raise HTTPException(
-                status_code=400,
-                detail="Refund is disabled by WMS settings — use refund_type NONE to finish receiving only.",
-            )
-        eff_refund_type = "NONE"
-        eff_refund_amount = None
-        eff_refund_shipping = False
-        eff_refund_shipping_amount = None
-
-    rs = row.return_status
-    if rs is None:
-        rs = db.query(ReturnStatus).filter(ReturnStatus.id == row.status_id).first()
-    tkey = rs.transition_key if rs else None
-    expected = "office_pending" if mode == "two_step" else "qc_complete"
-    if tkey != expected:
-        raise HTTPException(status_code=400, detail=f"Refund allowed only in stage {expected}")
-
-    if eff_refund_type != "NONE":
-        if eff_refund_amount is None:
-            raise HTTPException(status_code=400, detail="refund_amount is required for refund_type != NONE")
-    else:
-        eff_refund_amount = None
-
-    if not eff_refund_shipping:
-        eff_refund_shipping_amount = None
-    else:
-        if eff_refund_shipping_amount is not None:
-            try:
-                eff_refund_shipping_amount = max(0.0, float(eff_refund_shipping_amount))
-            except Exception:
-                raise HTTPException(status_code=400, detail="refund_shipping_amount must be numeric")
-
-    refund = db.query(WmsRefund).filter(WmsRefund.rmz_id == row.id).first()
-    if not refund:
-        refund = WmsRefund(
-            rmz_id=row.id,
-            refund_type=eff_refund_type,
-            refund_amount=eff_refund_amount,
-            refund_shipping=eff_refund_shipping,
-            refund_shipping_amount=eff_refund_shipping_amount,
-            decided_by=body.decided_by,
-            decided_at=datetime.utcnow(),
-        )
-        db.add(refund)
-    else:
-        refund.refund_type = eff_refund_type
-        refund.refund_amount = eff_refund_amount
-        refund.refund_shipping = eff_refund_shipping
-        refund.refund_shipping_amount = eff_refund_shipping_amount
-        refund.decided_by = body.decided_by
-        refund.decided_at = datetime.utcnow()
 
     try:
-        ensure_rmz_return_receipt_after_refund(db, row)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    _apply_transition(db, row, "success")
-    db.commit()
+        snapshot = ensure_rmz_workflow_snapshot(db, row)
+        process_rmz_office_refund(
+            db,
+            row,
+            body,
+            snapshot=snapshot,
+            actor_user_id=int(current_user.id),
+        )
+        db.commit()
+    except RmzFinalizeError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
     row = _load_rmz(db, return_id, tenant_id, wh_id)
     if not row:
@@ -3327,6 +3231,11 @@ def get_wms_return(
     row = _load_rmz(db, return_id, tenant_id, wh_id)
     if not row:
         raise HTTPException(status_code=404, detail="Return not found")
+    # Legacy open RMZ without snapshot: stamp once on first detail load (same as first mutation).
+    if read_rmz_workflow_snapshot(row) is None:
+        ensure_rmz_workflow_snapshot(db, row)
+        db.commit()
+        row = _load_rmz(db, return_id, tenant_id, wh_id) or row
     return _serialize_return_read(db, row)
 
 

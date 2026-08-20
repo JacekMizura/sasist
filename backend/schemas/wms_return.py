@@ -464,6 +464,22 @@ class WmsReturnRead(BaseModel):
         default=None,
         description="Tryb odzysku komponentów z ustawień WMS magazynu (OFF/OPTIONAL/REQUIRED).",
     )
+    returns_workflow_version: Optional[int] = Field(
+        default=None,
+        description="Snapshot wersji workflow RMZ (1 = bieżący kontrakt).",
+    )
+    require_condition: Optional[bool] = Field(
+        default=None,
+        description="Snapshot: wymagana klasyfikacja uszkodzeń dla tego RMZ.",
+    )
+    require_photos: Optional[bool] = Field(
+        default=None,
+        description="Snapshot: wymagane zdjęcia uszkodzeń dla tego RMZ.",
+    )
+    refund_processing: Optional[RefundProcessing] = Field(
+        default=None,
+        description="Snapshot: disabled | warehouse | office — SSOT przebiegu refundu.",
+    )
 
 
 class OrderLookupHit(BaseModel):
@@ -502,6 +518,7 @@ class ActiveZPzCloseRead(BaseModel):
 
 
 ReturnsMode = Literal["simple", "two_step", "advanced"]
+RefundProcessing = Literal["disabled", "warehouse", "office"]
 InventoryManagementMode = Literal["DOCUMENTS_ONLY", "HYBRID", "EXTERNAL_INVENTORY"]
 ManufacturedComponentRecoveryMode = Literal["OFF", "OPTIONAL", "REQUIRED"]
 ManufacturedRecoveryReceiptMode = Literal["STANDARD_PUTAWAY", "DEFAULT_LOCATION"]
@@ -547,9 +564,10 @@ class WmsReturnComponentRecoveryIn(BaseModel):
 class WmsSettingsRead(BaseModel):
     tenant_id: int
     warehouse_id: int
-    returns_mode: ReturnsMode = "simple"
     require_photos: bool = False
     require_condition: bool = False
+    refund_processing: RefundProcessing = "disabled"
+    returns_mode: ReturnsMode = "simple"
     enable_refund: bool = False
     z_pz_print_label_on_close: bool = False
     z_pz_label_template_id: Optional[int] = None
@@ -564,7 +582,9 @@ class WmsSettingsUpsert(BaseModel):
 
     tenant_id: Optional[int] = None
     warehouse_id: Optional[int] = None
-    returns_mode: ReturnsMode
+    require_condition: bool = False
+    require_photos: bool = False
+    refund_processing: RefundProcessing = "disabled"
     z_pz_print_label_on_close: Optional[bool] = None
     z_pz_label_template_id: Optional[int] = None
     manufactured_component_recovery_mode: Optional[ManufacturedComponentRecoveryMode] = None
@@ -573,13 +593,14 @@ class WmsSettingsUpsert(BaseModel):
 
 
 class WmsSettingsSave(BaseModel):
-    """Full persists: mode + flags (admin panel); independent of preset derivation."""
+    """Legacy full persist — prefer PUT /returns-mode with refund_processing SSOT."""
 
     tenant_id: int
     warehouse_id: Optional[int] = None
-    returns_mode: ReturnsMode = "simple"
     require_photos: bool = False
     require_condition: bool = False
+    refund_processing: Optional[RefundProcessing] = None
+    returns_mode: ReturnsMode = "simple"
     enable_refund: bool = False
 
 

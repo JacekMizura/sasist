@@ -8,7 +8,7 @@ import { getWarehouseLocations, type WarehouseLocationItem } from "../../api/war
 import type {
   ManufacturedComponentRecoveryMode,
   ManufacturedRecoveryReceiptMode,
-  ReturnsMode,
+  RefundProcessing,
 } from "../../types/wmsReturn";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WmsSettingsTabFrame } from "./WmsSettingsTabFrame";
@@ -48,10 +48,22 @@ type LabelTemplateOption = {
   template_type?: string | null;
 };
 
-const RETURNS_MODE_OPTIONS: Array<{ value: ReturnsMode; label: string }> = [
-  { value: "simple", label: "Prosty — decyzja tylko na poziomie RMZ" },
-  { value: "two_step", label: "Dwuetapowy — magazyn decyduje, biuro wykonuje zwrot" },
-  { value: "advanced", label: "Zaawansowany — decyzje, uszkodzenia, dowody i refundacje" },
+const REFUND_PROCESSING_OPTIONS: Array<{ value: RefundProcessing; label: string; hint: string }> = [
+  {
+    value: "disabled",
+    label: "Wyłączone",
+    hint: "Brak rozliczenia finansowego w RMZ — magazyn kończy przyjęcie bez zwrotu środków.",
+  },
+  {
+    value: "warehouse",
+    label: "W magazynie",
+    hint: "Operator magazynu może rozliczyć zwrot przy zatwierdzeniu przyjęcia.",
+  },
+  {
+    value: "office",
+    label: "W biurze",
+    hint: "Magazyn kończy przyjęcie towaru; rozliczenie wykonuje biuro (kolejka „Do decyzji”).",
+  },
 ];
 
 const RECOVERY_MODE_OPTIONS: Array<{
@@ -132,8 +144,12 @@ export default function WmsReturnsSettingsPanel({ warehouseId }: Props) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [savedMode, setSavedMode] = useState<ReturnsMode>("simple");
-  const [draftMode, setDraftMode] = useState<ReturnsMode>("simple");
+  const [savedRequireCondition, setSavedRequireCondition] = useState(false);
+  const [draftRequireCondition, setDraftRequireCondition] = useState(false);
+  const [savedRequirePhotos, setSavedRequirePhotos] = useState(false);
+  const [draftRequirePhotos, setDraftRequirePhotos] = useState(false);
+  const [savedRefundProcessing, setSavedRefundProcessing] = useState<RefundProcessing>("disabled");
+  const [draftRefundProcessing, setDraftRefundProcessing] = useState<RefundProcessing>("disabled");
   const [savedPrintLabel, setSavedPrintLabel] = useState(false);
   const [draftPrintLabel, setDraftPrintLabel] = useState(false);
   const [savedTemplateId, setSavedTemplateId] = useState<number | null>(null);
@@ -162,10 +178,15 @@ export default function WmsReturnsSettingsPanel({ warehouseId }: Props) {
         }),
         api.get<LabelTemplateOption[]>("/label-templates/", { params: { tenant_id: DAMAGE_TENANT_ID } }),
       ]);
-      const m = s.returns_mode;
-      const mode: ReturnsMode = m === "two_step" || m === "advanced" ? m : "simple";
-      setSavedMode(mode);
-      setDraftMode(mode);
+      const rpRaw = String(s.refund_processing || "disabled").toLowerCase();
+      const rp: RefundProcessing =
+        rpRaw === "warehouse" || rpRaw === "office" ? rpRaw : "disabled";
+      setSavedRequireCondition(Boolean(s.require_condition));
+      setDraftRequireCondition(Boolean(s.require_condition));
+      setSavedRequirePhotos(Boolean(s.require_photos));
+      setDraftRequirePhotos(Boolean(s.require_photos));
+      setSavedRefundProcessing(rp);
+      setDraftRefundProcessing(rp);
       setSavedPrintLabel(Boolean(s.z_pz_print_label_on_close));
       setDraftPrintLabel(Boolean(s.z_pz_print_label_on_close));
       const tplId = s.z_pz_label_template_id ?? null;
@@ -227,7 +248,9 @@ export default function WmsReturnsSettingsPanel({ warehouseId }: Props) {
   }, [warehouseId, resolvedWarehouseId, draftReceiptMode]);
 
   const dirty =
-    draftMode !== savedMode ||
+    draftRequireCondition !== savedRequireCondition ||
+    draftRequirePhotos !== savedRequirePhotos ||
+    draftRefundProcessing !== savedRefundProcessing ||
     draftPrintLabel !== savedPrintLabel ||
     draftTemplateId !== savedTemplateId ||
     draftRecoveryMode !== savedRecoveryMode ||
@@ -251,7 +274,9 @@ export default function WmsReturnsSettingsPanel({ warehouseId }: Props) {
     setSaving(true);
     try {
       const payload: Parameters<typeof setWmsReturnsModeSettings>[0] = {
-        returns_mode: draftMode,
+        require_condition: draftRequireCondition,
+        require_photos: draftRequirePhotos,
+        refund_processing: draftRefundProcessing,
         z_pz_print_label_on_close: draftPrintLabel,
         z_pz_label_template_id: draftPrintLabel ? draftTemplateId : null,
         manufactured_component_recovery_mode: draftRecoveryMode,
@@ -263,10 +288,15 @@ export default function WmsReturnsSettingsPanel({ warehouseId }: Props) {
         payload.warehouse_id = warehouseId;
       }
       const s = await setWmsReturnsModeSettings(payload);
-      const m = s.returns_mode;
-      const mode: ReturnsMode = m === "two_step" || m === "advanced" ? m : "simple";
-      setSavedMode(mode);
-      setDraftMode(mode);
+      const rpRaw = String(s.refund_processing || "disabled").toLowerCase();
+      const rp: RefundProcessing =
+        rpRaw === "warehouse" || rpRaw === "office" ? rpRaw : "disabled";
+      setSavedRequireCondition(Boolean(s.require_condition));
+      setDraftRequireCondition(Boolean(s.require_condition));
+      setSavedRequirePhotos(Boolean(s.require_photos));
+      setDraftRequirePhotos(Boolean(s.require_photos));
+      setSavedRefundProcessing(rp);
+      setDraftRefundProcessing(rp);
       setSavedPrintLabel(Boolean(s.z_pz_print_label_on_close));
       setDraftPrintLabel(Boolean(s.z_pz_print_label_on_close));
       const tplId = s.z_pz_label_template_id ?? null;
@@ -308,7 +338,9 @@ export default function WmsReturnsSettingsPanel({ warehouseId }: Props) {
       saving={saving}
       onSave={() => void save()}
       onRestoreDefaults={() => {
-        setDraftMode(savedMode);
+        setDraftRequireCondition(savedRequireCondition);
+        setDraftRequirePhotos(savedRequirePhotos);
+        setDraftRefundProcessing(savedRefundProcessing);
         setDraftPrintLabel(savedPrintLabel);
         setDraftTemplateId(savedTemplateId);
         setDraftRecoveryMode(savedRecoveryMode);
@@ -320,7 +352,7 @@ export default function WmsReturnsSettingsPanel({ warehouseId }: Props) {
       <SettingsSectionCard
         sectionId={MODE_SECTION_ID}
         title="Ogólne"
-        summary="Tryb przepływu RMZ i decyzji magazynowych."
+        summary="Kontrola jakości i rozliczenie zwrotu w RMZ."
       >
           {resolvedTenantLabel != null && resolvedWarehouseLabel != null ? (
             <p className="text-[11px] text-slate-400">
@@ -344,20 +376,42 @@ export default function WmsReturnsSettingsPanel({ warehouseId }: Props) {
         ) : loading ? (
           <p className="py-8 text-center text-sm font-medium text-slate-500">Wczytywanie…</p>
         ) : (
-          <div className="space-y-2" role="radiogroup" aria-label="Tryb obsługi zwrotów">
-            {RETURNS_MODE_OPTIONS.map((o) => (
-              <label key={o.value} className={radioOuter}>
-                <input
-                  type="radio"
-                  className={radioInput}
-                  name="wms-returns-mode"
-                  value={o.value}
-                  checked={draftMode === o.value}
-                  onChange={() => setDraftMode(o.value)}
-                />
-                <span className="min-w-0 flex-1 text-sm font-medium leading-snug text-slate-800">{o.label}</span>
-              </label>
-            ))}
+          <div className={wmsSettingsRowsStackClass}>
+            <WmsBoolSettingRow
+              label="Wymagaj klasyfikacji stanu uszkodzonych produktów"
+              hint="Operator musi wybrać klasę B/C dla każdej uszkodzonej sztuki."
+              checked={draftRequireCondition}
+              onChange={setDraftRequireCondition}
+            />
+            <WmsBoolSettingRow
+              label="Wymagaj zdjęć uszkodzonych produktów"
+              hint="Przy uszkodzeniu wymagane jest co najmniej jedno zdjęcie."
+              checked={draftRequirePhotos}
+              onChange={setDraftRequirePhotos}
+            />
+            <WmsControlSettingRow
+              label="Rozliczenie zwrotu"
+              hint="Określa, kto wykonuje zwrot środków w ramach procesu RMZ."
+            >
+              <div className="space-y-2">
+                {REFUND_PROCESSING_OPTIONS.map((o) => (
+                  <label key={o.value} className={radioOuter}>
+                    <input
+                      type="radio"
+                      className={radioInput}
+                      name="wms-refund-processing"
+                      value={o.value}
+                      checked={draftRefundProcessing === o.value}
+                      onChange={() => setDraftRefundProcessing(o.value)}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-medium text-slate-800">{o.label}</span>
+                      <span className="mt-0.5 block text-xs text-slate-500">{o.hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </WmsControlSettingRow>
           </div>
         )}
       </SettingsSectionCard>

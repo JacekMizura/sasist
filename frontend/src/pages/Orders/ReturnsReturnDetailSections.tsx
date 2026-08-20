@@ -54,6 +54,7 @@ export type RmzDetailSectionRenderCtx = {
   setErr: Dispatch<SetStateAction<string | null>>;
   setPanelSummary: Dispatch<SetStateAction<ReturnUiStatusPanelSummary | null>>;
   wmsSettings: WmsSettingsRead | null;
+  refundProcessing: import("../../types/wmsReturn").RefundProcessing;
   /** @deprecated Widget Terminal WMS usunięty — flaga tylko pod menu nagłówka. */
   showWmsTerminal?: boolean;
   customerInsights: CustomerInsightsRead | null;
@@ -99,6 +100,7 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
     setErr,
     setPanelSummary,
     wmsSettings,
+    refundProcessing,
     customerInsights,
     openRefundModal,
     refund,
@@ -493,8 +495,10 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
             <ReturnDetailKpiCell label="Razem" value={formatMoneyPln(fi?.total ?? 0)} />
           </div>
 
-          {wmsSettings?.enable_refund === false ? (
-            <p className="mt-4 text-[13px] text-slate-500">Zwrot środków rozliczany w panelu biura.</p>
+          {refundProcessing === "disabled" ? (
+            <p className="mt-4 text-[13px] text-slate-500">Rozliczenie finansowe wyłączone dla tego RMZ.</p>
+          ) : refundProcessing === "office" && data.status?.transition_key === "start" ? (
+            <p className="mt-4 text-[13px] text-slate-500">Najpierw zakończ przyjęcie magazynowe — potem rozliczenie biura.</p>
           ) : (
             <div className="mt-4">
               {refund ? (

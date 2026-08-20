@@ -19,6 +19,17 @@ class TestRmzEditableGuard(unittest.TestCase):
         with self.assertRaises(RmzFinalizeError):
             assert_rmz_editable(row)
 
+    def test_refund_allowed_with_warehouse_document_in_office_pending(self) -> None:
+        from backend.services.returns.rmz_line_split_service import assert_rmz_refundable
+
+        row = MagicMock()
+        row.warehouse_document_id = 99
+        rs = MagicMock()
+        rs.transition_key = "office_pending"
+        rs.type = "in_progress"
+        row.return_status = rs
+        assert_rmz_refundable(row)
+
 
 class TestFinalizeRollback(unittest.TestCase):
     @patch("backend.services.returns.rmz_finalize_service.ensure_required_rmz_return_receipt_document")
@@ -38,7 +49,9 @@ class TestFinalizeRollback(unittest.TestCase):
         settings = MagicMock()
         settings.returns_mode = "simple"
         settings.require_photos = False
+        settings.require_condition = False
         settings.enable_refund = False
+        settings.refund_processing = "disabled"
 
         ln = MagicMock()
         ln.order_item_id = 10
@@ -47,23 +60,29 @@ class TestFinalizeRollback(unittest.TestCase):
 
         mock_z_pz.side_effect = ValueError("Z-PZ failed")
 
-        with self.assertRaises(RmzFinalizeError):
-            finalize_rmz_return(
-                db,
-                row,
-                line_payloads=[
-                    WmsReturnFinalizeLineIn(
-                        order_item_id=10,
-                        product_id=1,
-                        accepted_qty=1,
-                        damaged_qty=0,
-                        damaged_b_qty=0,
-                        damaged_c_qty=0,
-                        rejected_qty=0,
-                    )
-                ],
-                settings=settings,
-            )
+        with patch(
+            "backend.services.returns.rmz_finalize_service.ensure_rmz_workflow_snapshot",
+            return_value=MagicMock(
+                version=1, require_photos=False, require_condition=False, refund_processing="disabled"
+            ),
+        ):
+            with self.assertRaises(RmzFinalizeError):
+                finalize_rmz_return(
+                    db,
+                    row,
+                    line_payloads=[
+                        WmsReturnFinalizeLineIn(
+                            order_item_id=10,
+                            product_id=1,
+                            accepted_qty=1,
+                            damaged_qty=0,
+                            damaged_b_qty=0,
+                            damaged_c_qty=0,
+                            rejected_qty=0,
+                        )
+                    ],
+                    settings=settings,
+                )
 
 
 class TestCollectiveIntegrityRecovery(unittest.TestCase):

@@ -548,25 +548,36 @@ class TestDomainActivityReturnsProduction(unittest.TestCase):
             component_recoveries=[],
         )
         settings = SimpleNamespace(
-            returns_mode="OMS",
+            returns_mode="simple",
             require_photos=False,
+            require_condition=False,
             enable_refund=False,
+            refund_processing="disabled",
         )
         payload = SimpleNamespace(order_item_id=10)
 
         db = MagicMock()
         db.query.return_value.filter.return_value.all.return_value = [line]
+        snap = SimpleNamespace(
+            version=1,
+            require_photos=False,
+            require_condition=False,
+            refund_processing="disabled",
+        )
 
         with (
-            patch.object(fin, "assert_rmz_editable"),
+            patch.object(fin, "assert_rmz_warehouse_not_yet_committed"),
             patch.object(fin, "apply_rmz_line_split"),
             patch.object(fin, "validate_rmz_lines_ready_for_finalize"),
+            patch.object(fin, "line_validation_settings", return_value=MagicMock()),
+            patch.object(fin, "validate_warehouse_commit_refund_payload"),
+            patch.object(fin, "resolve_warehouse_commit_transition", return_value="success"),
+            patch.object(fin, "ensure_rmz_workflow_snapshot", return_value=snap),
             patch.object(
                 fin,
                 "ensure_required_rmz_return_receipt_document",
                 side_effect=lambda *a, **k: (call_order.append("zpz") or SimpleNamespace(id=99)),
             ),
-            patch.object(fin, "resolve_finalize_transition_key", return_value="COMPLETED"),
             patch.object(fin, "_apply_transition"),
             patch.object(fin, "log_audit_entry"),
             patch(

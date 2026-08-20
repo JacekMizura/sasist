@@ -16,6 +16,7 @@ import {
   getWmsReturnsModeSettings,
   getWmsCustomerInsights,
   finalizeWmsReturn,
+  processWmsReturnRefund,
 } from "../../api/wmsReturnsApi";
 import { getInventoryManagementSettings } from "../../api/inventoryManagementPolicyApi";
 import { getReturnPanelSubgroups, getReturnUiStatusSummary } from "../../api/returnUiStatusApi";
@@ -824,39 +825,51 @@ export default function ReturnsReturnDetailPage() {
       } catch {
         /* continue to finalize — backend validates */
       }
-      const lines = data.lines.map((ln) => {
-        const draft = lineDrafts[ln.order_item_id];
-        if (!draft) throw new Error("Brak draftu linii");
-        if (!ln.manufactured_recovery_eligible || manufacturedRecoveryMode === "OFF") return draft;
-        const recoveryDraft =
-          mfgRecoveryByOi[ln.order_item_id] ?? draftFromLine(ln, manufacturedRecoveryMode);
-        return mergeRecoveryIntoFinalizeDraft(draft, recoveryDraft);
-      });
-      const enableRefund = Boolean(wmsSettings?.enable_refund);
+      const refundProcessing = data.refund_processing ?? "disabled";
+      const officeRefundStage =
+        data.status?.transition_key === "office_pending" || data.status?.transition_key === "qc_complete";
+      const enableWarehouseRefund = refundProcessing === "warehouse";
       const shipAmt = refundOpts?.refundShipping ? refundOpts.refundShippingAmount : 0;
       const amt = refundOpts?.productsValue ?? refundProposal.productsValue;
       setFinalizeSaving(true);
       setErr(null);
       setLineErr(null);
       try {
-        const updated = await finalizeWmsReturn(
-          rid,
-          DAMAGE_TENANT_ID,
-          {
-            lines,
-            process_refund: enableRefund,
-            refund: enableRefund
-              ? {
-                  refund_type: amt > 0 || shipAmt > 0 ? "PARTIAL" : "NONE",
-                  refund_amount: Number.isFinite(amt) && amt > 0 ? amt : null,
-                  refund_shipping: Boolean(refundOpts?.refundShipping),
-                  refund_shipping_amount: shipAmt > 0 ? shipAmt : null,
-                  decided_by: "panel",
-                }
-              : null,
-          },
-          whId != null && Number.isFinite(Number(whId)) ? Number(whId) : null,
-        );
+        const refundPayload = {
+          refund_type: (amt > 0 || shipAmt > 0 ? "PARTIAL" : "NONE") as "PARTIAL" | "NONE",
+          refund_amount: Number.isFinite(amt) && amt > 0 ? amt : null,
+          refund_shipping: Boolean(refundOpts?.refundShipping),
+          refund_shipping_amount: shipAmt > 0 ? shipAmt : null,
+          decided_by: "panel",
+        };
+        let updated;
+        if (refundProcessing === "office" && officeRefundStage) {
+          updated = await processWmsReturnRefund(
+            rid,
+            DAMAGE_TENANT_ID,
+            refundPayload,
+            whId != null && Number.isFinite(Number(whId)) ? Number(whId) : null,
+          );
+        } else {
+          const lines = data.lines.map((ln) => {
+            const draft = lineDrafts[ln.order_item_id];
+            if (!draft) throw new Error("Brak draftu linii");
+            if (!ln.manufactured_recovery_eligible || manufacturedRecoveryMode === "OFF") return draft;
+            const recoveryDraft =
+              mfgRecoveryByOi[ln.order_item_id] ?? draftFromLine(ln, manufacturedRecoveryMode);
+            return mergeRecoveryIntoFinalizeDraft(draft, recoveryDraft);
+          });
+          updated = await finalizeWmsReturn(
+            rid,
+            DAMAGE_TENANT_ID,
+            {
+              lines,
+              process_refund: enableWarehouseRefund,
+              refund: enableWarehouseRefund ? refundPayload : null,
+            },
+            whId != null && Number.isFinite(Number(whId)) ? Number(whId) : null,
+          );
+        }
         setData(updated);
         const docId =
           updated.warehouse_document_id != null && Number.isFinite(Number(updated.warehouse_document_id))
@@ -890,7 +903,8 @@ export default function ReturnsReturnDetailPage() {
       mfgRecoveryByOi,
       refundProposal.productsValue,
       rid,
-      wmsSettings?.enable_refund,
+      data?.refund_processing,
+      data?.status?.transition_key,
     ],
   );
 
@@ -918,9 +932,14 @@ export default function ReturnsReturnDetailPage() {
     );
   }
 
-  const refund = data.refund;
+  const refundProcessing = data.refund_processing ?? "disabled";
+  const officeRefundStage =
+    data.status?.transition_key === "office_pending" || data.status?.transition_key === "qc_complete";
+
   const orderDeliveryAmount = Math.max(0, Number(data.shipping_cost) || 0);
-  const terminal = isRmzTerminal(data.status) || data.warehouse_document_id != null;
+  const terminal = isRmzTerminal(data.status);
+  const warehouseCommitted = data.warehouse_document_id != null;
+  const canEditLines = !terminal && !warehouseCommitted && !officeRefundStage;
   const rel = formatRelativeAgo(data.created_at);
   const cust = [data.first_name?.trim(), data.last_name?.trim()].filter(Boolean).join(" ") || "—";
   const srcDisp = normalizeOrderSourceDisplay(data.source);
@@ -932,19 +951,23 @@ export default function ReturnsReturnDetailPage() {
       title="Produkty w zwrocie"
       hint="Rozstrzygnij pozycje lokalnie, potem zapisz cały zwrot jednym krokiem (Z-PZ + status)."
       actions={
-        !terminal && allLinesReady ? (
+        !terminal && (allLinesReady || (refundProcessing === "office" && officeRefundStage)) ? (
           <PrimaryButton
             type="button"
             disabled={finalizeSaving}
             onClick={() => {
-              if (wmsSettings?.enable_refund) {
+              if (refundProcessing === "warehouse" || (refundProcessing === "office" && officeRefundStage)) {
                 openRefundModal();
-              } else {
+              } else if (allLinesReady) {
                 void runFinalizeReturn();
               }
             }}
           >
-            {finalizeSaving ? "Zapisywanie…" : "Zapisz zwrot"}
+            {finalizeSaving
+              ? "Zapisywanie…"
+              : refundProcessing === "office" && officeRefundStage
+                ? "Rozlicz zwrot"
+                : "Zapisz zwrot"}
           </PrimaryButton>
         ) : undefined
       }
@@ -1067,6 +1090,7 @@ export default function ReturnsReturnDetailPage() {
     setErr,
     setPanelSummary,
     wmsSettings,
+    refundProcessing,
     showWmsTerminal,
     customerInsights,
     openRefundModal,
@@ -1621,7 +1645,7 @@ function LineOperationsCard({
     }
     const rawUrls = photoUrls.map((u) => coercePhotoUrlForDamageEntry(u)).filter((x): x is string => x != null);
     const urls = [...new Set(rawUrls)].slice(0, PANEL_RMZ_MAX_PHOTOS);
-    if (wmsSettings?.require_photos && urls.length < 1) {
+    if (data?.require_photos && urls.length < 1) {
       setLocalSheetErr("Dodaj co najmniej jedno zdjęcie uszkodzenia.");
       return;
     }
@@ -1896,7 +1920,7 @@ function LineOperationsCard({
                 onNoteChange={setNoteDamage}
                 error={localSheetErr}
                 saving={sheetSaving || saving}
-                requirePhotos={Boolean(wmsSettings?.require_photos)}
+                requirePhotos={Boolean(data?.require_photos)}
                 maxPhotos={PANEL_RMZ_MAX_PHOTOS}
                 onCancel={() => collapseSheet()}
                 onSave={() => void saveDamageSheet()}
