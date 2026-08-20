@@ -14,6 +14,7 @@ from .break_relearn import apply_override_streak_after_choice
 from .constants import ENGINE_VERSION
 from .eligibility import single_product_qty_from_order
 from .learning import learn_auto_rules_for_product_carton
+from .product_rules import is_product_smart_matching_enabled
 from .resolver import resolve_breakpoint_rule
 
 
@@ -30,6 +31,7 @@ def record_v2_observation_and_learn(
     Multi-SKU baskets: no v2 observation / no v2 learning (caller may still write v1 history).
 
     Also applies AUTO override_streak / break before learning from the new choice.
+    Per-product disable: still writes observation/history; skips learning + streak when OFF.
     """
     line = single_product_qty_from_order(db, order)
     if line is None:
@@ -42,26 +44,31 @@ def record_v2_observation_and_learn(
         return None
 
     settings = get_or_create_settings(db, tenant_id=tid, warehouse_id=wid)
+    product_on = is_product_smart_matching_enabled(
+        db, tenant_id=tid, warehouse_id=wid, product_id=int(line.product_id)
+    )
 
     suggested = (suggested_carton_id or "").strip() or None
-    resolved = resolve_breakpoint_rule(
-        db,
-        tenant_id=tid,
-        warehouse_id=wid,
-        product_id=line.product_id,
-        quantity=line.quantity,
-    )
-    if suggested is None:
-        if resolved is not None and not resolved.ambiguous:
-            suggested = str(resolved.rule.carton_id)
+    resolved = None
+    if product_on:
+        resolved = resolve_breakpoint_rule(
+            db,
+            tenant_id=tid,
+            warehouse_id=wid,
+            product_id=line.product_id,
+            quantity=line.quantity,
+        )
+        if suggested is None:
+            if resolved is not None and not resolved.ambiguous:
+                suggested = str(resolved.rule.carton_id)
 
-    apply_override_streak_after_choice(
-        db,
-        resolved=resolved,
-        chosen_carton_id=cid,
-        order_quantity=int(line.quantity),
-        settings_row=settings,
-    )
+        apply_override_streak_after_choice(
+            db,
+            resolved=resolved,
+            chosen_carton_id=cid,
+            order_quantity=int(line.quantity),
+            settings_row=settings,
+        )
 
     obs = WmsSmartMatchingObservationV2(
         tenant_id=tid,
@@ -78,13 +85,14 @@ def record_v2_observation_and_learn(
     db.add(obs)
     db.flush()
 
-    learn_auto_rules_for_product_carton(
-        db,
-        tenant_id=tid,
-        warehouse_id=wid,
-        product_id=line.product_id,
-        carton_id=cid,
-        settings_row=settings,
-        last_order_id=int(order.id),
-    )
+    if product_on:
+        learn_auto_rules_for_product_carton(
+            db,
+            tenant_id=tid,
+            warehouse_id=wid,
+            product_id=line.product_id,
+            carton_id=cid,
+            settings_row=settings,
+            last_order_id=int(order.id),
+        )
     return obs

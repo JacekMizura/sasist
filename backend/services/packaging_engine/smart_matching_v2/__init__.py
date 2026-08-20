@@ -17,6 +17,7 @@ from ..suggestions import PackagingSuggestionDraft
 from .eligibility import single_product_qty_from_order
 from .resolver import resolve_breakpoint_rule
 from .shipping import is_carton_compatible_with_shipping
+from .product_rules import is_product_smart_matching_enabled
 
 if TYPE_CHECKING:
     from ..strategy_resolver import SmartResult
@@ -75,6 +76,10 @@ def evaluate_smart_matching_v2(
 
     line = single_product_qty_from_order(db, order)
     if line is not None:
+        if not is_product_smart_matching_enabled(
+            db, tenant_id=tenant_id, warehouse_id=warehouse_id, product_id=int(line.product_id)
+        ):
+            return SmartResult(draft=None, ambiguous=False, reason="PRODUCT_DISABLED")
         resolved = resolve_breakpoint_rule(
             db,
             tenant_id=tenant_id,

@@ -14,8 +14,13 @@ from ..models.order_ui_status import OrderUiStatus
 from ..schemas.wms_smart_matching import (
     WmsSmartMatchingHistoryOut,
     WmsSmartMatchingHistorySeriesPageOut,
+    WmsSmartMatchingManualRuleSave,
+    WmsSmartMatchingProductPanelOut,
+    WmsSmartMatchingProductSettingsSave,
     WmsSmartMatchingResetOut,
+    WmsSmartMatchingRuleLockSave,
     WmsSmartMatchingRuleOut,
+    WmsSmartMatchingRuleV2Out,
     WmsSmartMatchingSettingsOut,
     WmsSmartMatchingSettingsSave,
 )
@@ -27,6 +32,14 @@ from ..services.packaging_engine.smart_matching_store import (
     reset_auto_rules,
     save_settings,
     settings_to_out,
+)
+from ..services.packaging_engine.smart_matching_v2.product_rules import (
+    delete_manual_rule,
+    get_product_smart_matching_panel,
+    rule_to_dict,
+    set_product_smart_matching_enabled,
+    set_rule_locked,
+    upsert_manual_rule,
 )
 
 router = APIRouter(prefix="/wms/smart-matching", tags=["WMS Smart Matching"])
@@ -153,4 +166,164 @@ def post_smart_matching_reset(
     except SQLAlchemyError as e:
         db.rollback()
         logger.exception("post_smart_matching_reset")
+        raise HTTPException(status_code=500, detail="Database error") from e
+
+
+@router.get("/products/{product_id}", response_model=WmsSmartMatchingProductPanelOut)
+def get_product_smart_matching(
+    product_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    db: Session = Depends(get_db),
+):
+    payload = get_product_smart_matching_panel(
+        db, tenant_id=tenant_id, warehouse_id=warehouse_id, product_id=int(product_id)
+    )
+    return WmsSmartMatchingProductPanelOut.model_validate(payload)
+
+
+@router.put("/products/{product_id}/settings", response_model=WmsSmartMatchingProductPanelOut)
+def put_product_smart_matching_settings(
+    product_id: int,
+    body: WmsSmartMatchingProductSettingsSave,
+    warehouse_id: int = Depends(require_operable_warehouse),
+    db: Session = Depends(get_db),
+):
+    if int(body.warehouse_id) != int(warehouse_id):
+        raise HTTPException(status_code=400, detail="warehouse_id mismatch")
+    try:
+        set_product_smart_matching_enabled(
+            db,
+            tenant_id=int(body.tenant_id),
+            warehouse_id=int(warehouse_id),
+            product_id=int(product_id),
+            enabled=bool(body.smart_matching_enabled),
+        )
+        db.commit()
+        payload = get_product_smart_matching_panel(
+            db, tenant_id=int(body.tenant_id), warehouse_id=int(warehouse_id), product_id=int(product_id)
+        )
+        return WmsSmartMatchingProductPanelOut.model_validate(payload)
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("put_product_smart_matching_settings")
+        raise HTTPException(status_code=500, detail="Database error") from e
+
+
+@router.post("/products/{product_id}/rules", response_model=WmsSmartMatchingRuleV2Out)
+def post_product_manual_rule(
+    product_id: int,
+    body: WmsSmartMatchingManualRuleSave,
+    warehouse_id: int = Depends(require_operable_warehouse),
+    db: Session = Depends(get_db),
+):
+    if int(body.warehouse_id) != int(warehouse_id):
+        raise HTTPException(status_code=400, detail="warehouse_id mismatch")
+    try:
+        row = upsert_manual_rule(
+            db,
+            tenant_id=int(body.tenant_id),
+            warehouse_id=int(warehouse_id),
+            product_id=int(product_id),
+            min_qty=int(body.min_qty),
+            carton_id=str(body.carton_id),
+            is_locked=bool(body.is_locked),
+        )
+        db.commit()
+        db.refresh(row)
+        return WmsSmartMatchingRuleV2Out.model_validate(rule_to_dict(db, row))
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("post_product_manual_rule")
+        raise HTTPException(status_code=500, detail="Database error") from e
+
+
+@router.put("/products/{product_id}/rules/{rule_id}", response_model=WmsSmartMatchingRuleV2Out)
+def put_product_manual_rule(
+    product_id: int,
+    rule_id: int,
+    body: WmsSmartMatchingManualRuleSave,
+    warehouse_id: int = Depends(require_operable_warehouse),
+    db: Session = Depends(get_db),
+):
+    if int(body.warehouse_id) != int(warehouse_id):
+        raise HTTPException(status_code=400, detail="warehouse_id mismatch")
+    try:
+        row = upsert_manual_rule(
+            db,
+            tenant_id=int(body.tenant_id),
+            warehouse_id=int(warehouse_id),
+            product_id=int(product_id),
+            min_qty=int(body.min_qty),
+            carton_id=str(body.carton_id),
+            is_locked=bool(body.is_locked),
+            rule_id=int(rule_id),
+        )
+        db.commit()
+        db.refresh(row)
+        return WmsSmartMatchingRuleV2Out.model_validate(rule_to_dict(db, row))
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("put_product_manual_rule")
+        raise HTTPException(status_code=500, detail="Database error") from e
+
+
+@router.put("/rules-v2/{rule_id}/lock", response_model=WmsSmartMatchingRuleV2Out)
+def put_rule_v2_lock(
+    rule_id: int,
+    body: WmsSmartMatchingRuleLockSave,
+    warehouse_id: int = Depends(require_operable_warehouse),
+    db: Session = Depends(get_db),
+):
+    if int(body.warehouse_id) != int(warehouse_id):
+        raise HTTPException(status_code=400, detail="warehouse_id mismatch")
+    try:
+        row = set_rule_locked(
+            db,
+            tenant_id=int(body.tenant_id),
+            warehouse_id=int(warehouse_id),
+            rule_id=int(rule_id),
+            is_locked=bool(body.is_locked),
+        )
+        db.commit()
+        db.refresh(row)
+        return WmsSmartMatchingRuleV2Out.model_validate(rule_to_dict(db, row))
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("put_rule_v2_lock")
+        raise HTTPException(status_code=500, detail="Database error") from e
+
+
+@router.delete("/products/{product_id}/rules/{rule_id}")
+def delete_product_manual_rule(
+    product_id: int,
+    rule_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    db: Session = Depends(get_db),
+):
+    _ = product_id
+    try:
+        ok = delete_manual_rule(
+            db, tenant_id=tenant_id, warehouse_id=warehouse_id, rule_id=int(rule_id)
+        )
+        if not ok:
+            raise HTTPException(status_code=404, detail="manual rule not found")
+        db.commit()
+        return {"ok": True}
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("delete_product_manual_rule")
         raise HTTPException(status_code=500, detail="Database error") from e

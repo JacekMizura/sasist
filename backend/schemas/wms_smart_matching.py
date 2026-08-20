@@ -131,3 +131,55 @@ class WmsSmartMatchingHistorySeriesPageOut(BaseModel):
 class WmsSmartMatchingResetOut(BaseModel):
     deleted_rules: int
     message: str = "Usunięto automatycznie utworzone powiązania Smart Matching."
+
+
+class WmsSmartMatchingRuleV2Out(BaseModel):
+    id: int
+    product_id: int
+    min_qty: int
+    carton_id: str
+    carton_name: Optional[str] = None
+    source: str
+    status: str
+    is_locked: bool = False
+    hit_count: int = 0
+    override_streak: int = 0
+    created_threshold: Optional[int] = None
+
+
+class WmsSmartMatchingObservationV2Out(BaseModel):
+    id: int
+    order_id: int
+    quantity: int
+    carton_id: Optional[str] = None
+    carton_name: Optional[str] = None
+    suggested_carton_id: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class WmsSmartMatchingProductPanelOut(BaseModel):
+    product_id: int
+    smart_matching_enabled: bool = True
+    rules: list[WmsSmartMatchingRuleV2Out] = Field(default_factory=list)
+    conflicts: list[WmsSmartMatchingRuleV2Out] = Field(default_factory=list)
+    recent_observations: list[WmsSmartMatchingObservationV2Out] = Field(default_factory=list)
+
+
+class WmsSmartMatchingProductSettingsSave(BaseModel):
+    tenant_id: int = Field(..., ge=1)
+    warehouse_id: int = Field(..., ge=1)
+    smart_matching_enabled: bool = True
+
+
+class WmsSmartMatchingManualRuleSave(BaseModel):
+    tenant_id: int = Field(..., ge=1)
+    warehouse_id: int = Field(..., ge=1)
+    min_qty: int = Field(..., ge=1)
+    carton_id: str = Field(..., min_length=1)
+    is_locked: bool = False
+
+
+class WmsSmartMatchingRuleLockSave(BaseModel):
+    tenant_id: int = Field(..., ge=1)
+    warehouse_id: int = Field(..., ge=1)
+    is_locked: bool = True

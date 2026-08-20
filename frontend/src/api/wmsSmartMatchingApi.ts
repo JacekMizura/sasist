@@ -102,3 +102,131 @@ export async function postWmsSmartMatchingReset(
   );
   return res.data;
 }
+
+export type WmsSmartMatchingRuleV2Api = {
+  id: number;
+  product_id: number;
+  min_qty: number;
+  carton_id: string;
+  carton_name?: string | null;
+  source: string;
+  status: string;
+  is_locked: boolean;
+  hit_count: number;
+  override_streak: number;
+  created_threshold?: number | null;
+};
+
+export type WmsSmartMatchingObservationV2Api = {
+  id: number;
+  order_id: number;
+  quantity: number;
+  carton_id?: string | null;
+  carton_name?: string | null;
+  suggested_carton_id?: string | null;
+  created_at?: string | null;
+};
+
+export type WmsSmartMatchingProductPanelApi = {
+  product_id: number;
+  smart_matching_enabled: boolean;
+  rules: WmsSmartMatchingRuleV2Api[];
+  conflicts: WmsSmartMatchingRuleV2Api[];
+  recent_observations: WmsSmartMatchingObservationV2Api[];
+};
+
+export async function getProductSmartMatchingPanel(
+  tenantId: number,
+  warehouseId: number,
+  productId: number,
+): Promise<WmsSmartMatchingProductPanelApi> {
+  const res = await api.get<WmsSmartMatchingProductPanelApi>(
+    `/wms/smart-matching/products/${productId}`,
+    { params: { tenant_id: tenantId, warehouse_id: warehouseId } },
+  );
+  return res.data;
+}
+
+export async function putProductSmartMatchingEnabled(
+  tenantId: number,
+  warehouseId: number,
+  productId: number,
+  enabled: boolean,
+): Promise<WmsSmartMatchingProductPanelApi> {
+  const res = await api.put<WmsSmartMatchingProductPanelApi>(
+    `/wms/smart-matching/products/${productId}/settings`,
+    {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId,
+      smart_matching_enabled: enabled,
+    },
+    { params: { warehouse_id: warehouseId } },
+  );
+  return res.data;
+}
+
+export async function postProductManualRule(
+  tenantId: number,
+  warehouseId: number,
+  productId: number,
+  body: { min_qty: number; carton_id: string; is_locked?: boolean },
+): Promise<WmsSmartMatchingRuleV2Api> {
+  const res = await api.post<WmsSmartMatchingRuleV2Api>(
+    `/wms/smart-matching/products/${productId}/rules`,
+    {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId,
+      min_qty: body.min_qty,
+      carton_id: body.carton_id,
+      is_locked: Boolean(body.is_locked),
+    },
+    { params: { warehouse_id: warehouseId } },
+  );
+  return res.data;
+}
+
+export async function putProductManualRule(
+  tenantId: number,
+  warehouseId: number,
+  productId: number,
+  ruleId: number,
+  body: { min_qty: number; carton_id: string; is_locked?: boolean },
+): Promise<WmsSmartMatchingRuleV2Api> {
+  const res = await api.put<WmsSmartMatchingRuleV2Api>(
+    `/wms/smart-matching/products/${productId}/rules/${ruleId}`,
+    {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId,
+      min_qty: body.min_qty,
+      carton_id: body.carton_id,
+      is_locked: Boolean(body.is_locked),
+    },
+    { params: { warehouse_id: warehouseId } },
+  );
+  return res.data;
+}
+
+export async function putRuleV2Lock(
+  tenantId: number,
+  warehouseId: number,
+  ruleId: number,
+  isLocked: boolean,
+): Promise<WmsSmartMatchingRuleV2Api> {
+  const res = await api.put<WmsSmartMatchingRuleV2Api>(
+    `/wms/smart-matching/rules-v2/${ruleId}/lock`,
+    { tenant_id: tenantId, warehouse_id: warehouseId, is_locked: isLocked },
+    { params: { warehouse_id: warehouseId } },
+  );
+  return res.data;
+}
+
+export async function deleteProductManualRule(
+  tenantId: number,
+  warehouseId: number,
+  productId: number,
+  ruleId: number,
+): Promise<void> {
+  await api.delete(`/wms/smart-matching/products/${productId}/rules/${ruleId}`, {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId },
+  });
+}

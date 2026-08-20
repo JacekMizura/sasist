@@ -444,3 +444,84 @@ def test_q_shipping_incompatible_smart_rejected(db):
     cartons = db.query(Carton).options(noload("*")).all()
     drafts = suggest_smart_matching(db, order=order, tenant_id=1, warehouse_id=1, cartons=cartons)
     assert drafts == []
+
+
+def test_k_manual_rule_precedence(db):
+    from backend.services.packaging_engine.smart_matching_v2.constants import SOURCE_MANUAL
+    from backend.services.packaging_engine.smart_matching_v2.product_rules import upsert_manual_rule
+
+    _set_threshold(db, 2)
+    for oid in (1, 2):
+        o = _order(db, oid, product_id=1, qty=3, carton_id="carton-x")
+        record_v2_observation_and_learn(db, order=o, carton_id="carton-x")
+        db.commit()
+    upsert_manual_rule(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        product_id=1,
+        min_qty=3,
+        carton_id="carton-y",
+        is_locked=False,
+    )
+    db.commit()
+    r = resolve_breakpoint_rule(db, tenant_id=1, warehouse_id=1, product_id=1, quantity=4)
+    assert r and not r.ambiguous
+    assert r.rule.carton_id == "carton-y"
+    assert str(r.rule.source) == SOURCE_MANUAL
+
+
+def test_l_locked_manual_survives_overrides(db):
+    from backend.services.packaging_engine.smart_matching_v2.constants import SOURCE_MANUAL, STATUS_ACTIVE
+    from backend.services.packaging_engine.smart_matching_v2.product_rules import (
+        delete_manual_rule,
+        upsert_manual_rule,
+    )
+
+    rule = upsert_manual_rule(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        product_id=1,
+        min_qty=1,
+        carton_id="carton-x",
+        is_locked=True,
+    )
+    db.commit()
+    for oid in (1, 2, 3):
+        o = _order(db, oid, product_id=1, qty=1, carton_id="carton-y")
+        record_v2_observation_and_learn(db, order=o, carton_id="carton-y")
+        db.commit()
+    db.refresh(rule)
+    assert str(rule.status) == STATUS_ACTIVE
+    assert str(rule.source) == SOURCE_MANUAL
+    assert bool(rule.is_locked) is True
+    try:
+        delete_manual_rule(db, tenant_id=1, warehouse_id=1, rule_id=int(rule.id))
+        assert False, "expected locked delete to fail"
+    except ValueError:
+        pass
+
+
+def test_m_disabled_product_logs_but_no_learning_suggest(db):
+    from sqlalchemy.orm import noload
+
+    from backend.services.packaging_engine.smart_matching_v2.product_rules import (
+        set_product_smart_matching_enabled,
+    )
+
+    _set_threshold(db, 2)
+    set_product_smart_matching_enabled(
+        db, tenant_id=1, warehouse_id=1, product_id=1, enabled=False
+    )
+    db.commit()
+    for oid in (1, 2, 3):
+        o = _order(db, oid, product_id=1, qty=2, carton_id="carton-x")
+        record_v2_observation_and_learn(db, order=o, carton_id="carton-x")
+        db.commit()
+    assert db.query(WmsSmartMatchingObservationV2).count() == 3
+    assert db.query(WmsSmartMatchingRuleV2).count() == 0
+    order = _order(db, 50, product_id=1, qty=2, carton_id=None)
+    cartons = db.query(Carton).options(noload("*")).all()
+    drafts = suggest_smart_matching(db, order=order, tenant_id=1, warehouse_id=1, cartons=cartons)
+    assert drafts == []
