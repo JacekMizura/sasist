@@ -12,7 +12,7 @@ from ..models.customer import Customer, CustomerAddress
 from ..models.order import Order
 from ..models.sale_document import SaleDocument
 from .customers.customer_order_link_service import extract_order_customer_draft
-from .direct_sale.retail_customer_service import (
+from .retail_customer_service import (
     RETAIL_DISPLAY_NAME,
     customer_display_name,
     is_retail_system_customer,
