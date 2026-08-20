@@ -1,3 +1,9 @@
+## 2026-08-20 — Returns: remove dead transition helpers (post-4dfa5a17)
+
+- Deleted unused API transition helpers + noop `commit_workflow` query/FE plumbing
+- Deleted unused `refund_stage_transition_key`; kept `qc_complete` / returns_mode compat
+- 138 returns+activity tests PASS; vite build PASS
+
 ## 2026-08-19 — Direct Sales enabled rollout (ds_enabled_v1 fail-open)
 
 - Stamp on PUT only; unstamped → enabled_effective=true regardless of stored enabled=false

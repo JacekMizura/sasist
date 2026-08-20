@@ -364,10 +364,9 @@ export async function processWmsReturnLine(
   orderItemId: number,
   tenantId: number,
   payload: WmsReturnLineProcess,
-  options?: { commitWorkflow?: boolean; warehouseId?: number | null },
+  options?: { warehouseId?: number | null },
 ): Promise<WmsReturnRead> {
   const params: Record<string, string | number | boolean> = { ...tenantOnly(tenantId) };
-  if (options?.commitWorkflow === true) params.commit_workflow = true;
   if (options?.warehouseId != null && Number.isFinite(Number(options.warehouseId)) && Number(options.warehouseId) > 0) {
     params.warehouse_id = Number(options.warehouseId);
   }
@@ -382,10 +381,9 @@ export async function processWmsReturnLineSplit(
   orderItemId: number,
   tenantId: number,
   payload: WmsReturnLineSplitProcess,
-  options?: { commitWorkflow?: boolean; warehouseId?: number | null },
+  options?: { warehouseId?: number | null },
 ): Promise<WmsReturnRead> {
   const params: Record<string, string | number | boolean> = { ...tenantOnly(tenantId) };
-  if (options?.commitWorkflow === true) params.commit_workflow = true;
   if (options?.warehouseId != null && Number.isFinite(Number(options.warehouseId)) && Number(options.warehouseId) > 0) {
     params.warehouse_id = Number(options.warehouseId);
   }

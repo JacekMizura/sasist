@@ -57,7 +57,6 @@ from ..schemas.wms_return import (
     WmsReturnQueueCountsRead,
     ActiveZPzRead,
     ActiveZPzCloseRead,
-    ReturnsMode,
 )
 from ..services.delete_service import archive_wms_returns_bulk
 from ..services.returns.collective_z_pz_service import (
@@ -339,13 +338,6 @@ def _damage_entry_reads_from_rmz_line(ln: RMZLine) -> List[WmsReturnLineDamageEn
             )
         )
     return syn
-
-
-def _rmz_line_has_damage_photos(ln: RMZLine) -> bool:
-    for e in _damage_entry_reads_from_rmz_line(ln):
-        if e.photo_urls:
-            return True
-    return False
 
 
 def _normalize_wms_returns_lookup_query(raw: str) -> Tuple[str, Optional[int]]:
@@ -680,104 +672,6 @@ def _brief_from_rs(rs: Optional[ReturnStatus]) -> ReturnStatusBrief:
 
 def _is_terminal(rs: Optional[ReturnStatus]) -> bool:
     return rs is not None and rs.type in _TERMINAL_STATUS_TYPES
-
-
-def _next_transition_key_for_lines(
-    returns_mode: ReturnsMode,
-    rmz_lines: Sequence[RMZLine],
-    *,
-    require_damage_photos: bool = True,
-) -> Optional[str]:
-    if not rmz_lines or not all(ln.decision is not None for ln in rmz_lines):
-        return None
-    all_rejected = all(ln.decision == "REJECTED" for ln in rmz_lines)
-    all_damaged_have_evidence = all(
-        (ln.decision != "DAMAGED") or _rmz_line_has_damage_photos(ln) for ln in rmz_lines
-    )
-    # Simple mode: never jump straight to terminal "success" on line saves — that blocked further
-    # split-process / edits while the UI still showed an open RMZ. Refund POST moves qc_complete → success.
-    if returns_mode == "simple":
-        return "rejected" if all_rejected else "qc_complete"
-    if returns_mode == "two_step":
-        return "office_pending"
-    if returns_mode == "advanced":
-        if require_damage_photos and not all_damaged_have_evidence:
-            return None
-        return "qc_complete"
-    return None
-
-
-def _validate_rmz_lines_ready_for_finalize(
-    rmz_lines: Sequence[RMZLine],
-    *,
-    require_photos: bool,
-) -> None:
-    if not rmz_lines:
-        raise HTTPException(status_code=400, detail="Return has no lines")
-    if not all(ln.decision is not None for ln in rmz_lines):
-        raise HTTPException(status_code=400, detail="All return lines must be decided before finalize")
-
-    for ln in rmz_lines:
-        total = int(float(ln.quantity or 0))
-        if total <= 0:
-            continue
-        acc = int(ln.accepted_qty or 0)
-        dbq = int(ln.damaged_b_qty or 0)
-        dcq = int(ln.damaged_c_qty or 0)
-        rej = int(ln.rejected_qty or 0)
-        dmg = dbq + dcq
-        resolved = acc + dmg + rej
-        if resolved < total:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Line order_item_id={ln.order_item_id} is not fully resolved ({resolved}/{total})",
-            )
-        if dmg > 0 and dbq + dcq != dmg:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Line order_item_id={ln.order_item_id}: damaged_b_qty + damaged_c_qty must equal damaged units",
-            )
-        if dmg > 0 or ln.decision == "DAMAGED":
-            parsed = _parse_damage_entries_raw(getattr(ln, "damage_entries_json", None))
-            if parsed:
-                for ent in parsed:
-                    cond = ent.get("condition")
-                    if cond not in ("B", "C"):
-                        raise HTTPException(
-                            status_code=400,
-                            detail=f"Line order_item_id={ln.order_item_id}: each damage entry requires condition B or C",
-                        )
-            if require_photos and not _rmz_line_has_damage_photos(ln):
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Line order_item_id={ln.order_item_id}: at least one damage photo is required",
-                )
-
-
-def _resolve_finalize_transition_key(
-    returns_mode: ReturnsMode,
-    rmz_lines: Sequence[RMZLine],
-    *,
-    enable_refund: bool,
-) -> str:
-    all_rejected = all(ln.decision == "REJECTED" for ln in rmz_lines)
-    if all_rejected:
-        return "rejected"
-    if enable_refund:
-        if returns_mode == "two_step":
-            return "office_pending"
-        return "qc_complete"
-    return "success"
-
-
-def _apply_transition(db: Session, row: WmsOrderReturn, transition_key: str) -> None:
-    st = get_by_transition_key(db, row.tenant_id, row.warehouse_id, transition_key)
-    if st is None:
-        seed_default_statuses_session(db, row.tenant_id, row.warehouse_id)
-        st = get_by_transition_key(db, row.tenant_id, row.warehouse_id, transition_key)
-    if st is None:
-        raise HTTPException(status_code=500, detail=f"Return status '{transition_key}' missing; run migrations")
-    row.status_id = st.id
 
 
 def _str_from_block(block: dict, keys: Tuple[str, ...]) -> Optional[str]:
@@ -2796,10 +2690,6 @@ def process_rmz_line_split(
         ge=1,
         description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ (jak GET /wms/returns/id/{id}).",
     ),
-    commit_workflow: bool = Query(
-        False,
-        description="Deprecated — ignored. Use POST .../finalize for warehouse commit.",
-    ),
     db: Session = Depends(get_db),
     current_user: AppUser = Depends(_returns_wh_commit_dep),
 ):
@@ -2823,12 +2713,6 @@ def process_rmz_line_split(
     if int(rmz_line.product_id) != int(body.product_id):
         raise HTTPException(status_code=400, detail="Product mismatch for return line")
     return_type = str(getattr(row, "return_type", "RMA") or "RMA").upper()
-
-    if commit_workflow:
-        logger.warning(
-            "[returns.split-process] commit_workflow=true ignored return_id=%s — use POST .../finalize",
-            return_id,
-        )
 
     try:
         from ..services.returns.rmz_line_split_service import apply_rmz_line_split
@@ -2870,10 +2754,9 @@ def process_rmz_line_split(
         .first()
     )
     logger.info(
-        "[WMS RMZ] split-process post-commit return_id=%s order_item_id=%s commit_workflow=%s damage_entries_json=%s damaged_b=%s damaged_c=%s rejected=%s",
+        "[WMS RMZ] split-process post-commit return_id=%s order_item_id=%s damage_entries_json=%s damaged_b=%s damaged_c=%s rejected=%s",
         return_id,
         order_item_id,
-        commit_workflow,
         getattr(saved_line, "damage_entries_json", None),
         int(getattr(saved_line, "damaged_b_qty", 0) or 0),
         int(getattr(saved_line, "damaged_c_qty", 0) or 0),
@@ -2892,10 +2775,6 @@ def process_rmz_line(
         None,
         ge=1,
         description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ (jak GET /wms/returns/id/{id}).",
-    ),
-    commit_workflow: bool = Query(
-        False,
-        description="Deprecated — ignored. Use POST .../finalize for warehouse commit.",
     ),
     db: Session = Depends(get_db),
     current_user: AppUser = Depends(_returns_wh_commit_dep),
@@ -2979,12 +2858,6 @@ def process_rmz_line(
         rmz_line.final_disposition = "RETURN_TO_CUSTOMER"
 
     db.flush()
-
-    if commit_workflow:
-        logger.warning(
-            "[returns.process] commit_workflow=true ignored return_id=%s — use POST .../finalize",
-            return_id,
-        )
 
     try:
         from ..services.returns.return_domain_activity import emit_return_line_decision

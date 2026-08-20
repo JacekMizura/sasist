@@ -174,15 +174,6 @@ def validate_warehouse_commit_refund_payload(
     # warehouse: refund optional in same commit (NONE allowed)
 
 
-def refund_stage_transition_key(row: WmsOrderReturn, *, allow_legacy_qc_complete: bool = True) -> set[str]:
-    allowed = {"office_pending"}
-    if allow_legacy_qc_complete:
-        allowed.add("qc_complete")
-    rs = getattr(row, "return_status", None)
-    tkey = getattr(rs, "transition_key", None) if rs is not None else None
-    return allowed if tkey in allowed else set()
-
-
 def legacy_returns_mode_label(refund_processing: RefundProcessing, require_photos: bool, require_condition: bool) -> ReturnsMode:
     if refund_processing == "disabled":
         return "simple"

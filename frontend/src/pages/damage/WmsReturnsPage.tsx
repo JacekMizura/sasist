@@ -1056,7 +1056,6 @@ export default function WmsReturnsPage() {
   /** Umożliwia `beginGridDecision` wywołanie zapisu przed deklaracją `saveSplitForLine` (kolejność hooków). */
   type SaveSplitForLineOpts = {
     hydrateReturn?: boolean;
-    commitWorkflow?: boolean;
     /** Pełna linia REJECTED — powód dla `POST …/process` (unikamy czytania przestarzałego `lineOverrides`). */
     fullLineRejectReason?: { reasonId: string; otherText?: string | null };
     /** Split z odrzuconymi sztukami (linia mieszana / częściowa) — powód zapisywany w polu `damage_type` RMZ. */
@@ -2686,7 +2685,6 @@ export default function WmsReturnsPage() {
           const completeLine = resolvedSum >= total;
 
       const hydrate = opts?.hydrateReturn === true;
-      const commitWorkflow = opts?.commitWorkflow === true;
       setSavingSplitByLineId((prev) => ({ ...prev, [lineId]: true }));
       try {
         if (completeLine && aggregated.damaged > 0 && allDamagePhotoUrls.length > 0) {
@@ -2790,7 +2788,7 @@ export default function WmsReturnsPage() {
               damage_type: rk,
               ...(rk === WMS_REJECT_OTHER_ID ? { note: noteTrim } : {}),
             },
-            { commitWorkflow, warehouseId: Number(whId) },
+            { warehouseId: Number(whId) },
           );
         } else if (allOkLine && !useMfgRecovery) {
           ret = await processWmsReturnLine(
@@ -2801,7 +2799,7 @@ export default function WmsReturnsPage() {
               decision: "OK",
               condition: "A",
             },
-            { commitWorkflow, warehouseId: Number(whId) },
+            { warehouseId: Number(whId) },
           );
         } else {
           const splitCondition: "A" | "B" | "C" | null =
@@ -2866,7 +2864,7 @@ export default function WmsReturnsPage() {
             seed.orderItemId,
             DAMAGE_TENANT_ID,
             payload,
-            { commitWorkflow, warehouseId: Number(whId) },
+            { warehouseId: Number(whId) },
           );
         }
 

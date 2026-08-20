@@ -1,11 +1,16 @@
-**WMS Returns workflow SSOT (2026-08-20) — READY TO COMMIT.**
+**WMS Returns transition cleanup (2026-08-20) — after 4dfa5a17.**
+- Removed DEAD: `_next_transition_key_for_lines`, `_resolve_finalize_transition_key`, API `_apply_transition` / `_validate_rmz_lines_*`, `refund_stage_transition_key`, `commit_workflow` param + FE `commitWorkflow`
+- Kept LEGACY COMPAT: `qc_complete` seed + refund allowlist, `returns_mode`/`enable_refund` projection
+- ACTIVE targets only: start → office_pending|success|rejected via `rmz_finalize_service`
+- Tests returns + domain activity PASS; FE build PASS
+
+**WMS Returns workflow SSOT (2026-08-20) — on main `4dfa5a17`.**
 - Live SSOT: `require_condition`, `require_photos`, `refund_processing` (disabled|warehouse|office)
 - Removed active simple/two_step/advanced as runtime; legacy columns projected only
 - RMZ snapshot on CREATE (+ lazy stamp on GET/mutation); runtime reads snapshot
 - Warehouse commit = `/finalize` (+ `/commit-wms` alias); office `/refund` gated by `returns.refund`
 - Permissions: `returns.warehouse_commit`, `returns.refund`
 - two_step→warehouse (never office); office is conscious admin choice
-- Tests: returns suite + workflow SSOT PASS; FE build PASS
 
 **Immutable buyer snapshot for SaleDocument (2026-08-19) — implemented, NOT committed.**
 - `SaleDocument.buyer_json` nullable Text; ORM sync via `ensure_sale_documents_orm_columns`
