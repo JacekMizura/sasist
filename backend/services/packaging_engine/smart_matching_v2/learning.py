@@ -9,8 +9,10 @@ Deterministic detection (documented):
 4. Upsert ACTIVE AUTO rule (product, min_qty=candidate_min_qty, carton):
    - If an ACTIVE AUTO rule already exists for this product+carton → update
      min_qty downward if needed, refresh hit_count; never change created_from_*.
+   - If a BROKEN AUTO rule exists for this product+carton → re-activate when
+     no competing ACTIVE/AMBIGUOUS carton occupies the same min_qty.
    - If an ACTIVE AUTO rule exists for the same product+min_qty with a *different*
-     carton → do not create (ambiguous breakpoint; Phase 2 marks CONFLICT).
+     carton → mark conflict (AMBIGUOUS); do not create ACTIVE competitor.
 5. created_from_observation_id on INSERT = newest observation in this learn call
    (the pack that triggered create). On first threshold crossing that equals
    obs[threshold-1]; after reset with retained history it is the new pack.
@@ -27,7 +29,8 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from ....models.wms_smart_matching import WmsSmartMatchingObservationV2, WmsSmartMatchingRuleV2
-from .constants import SOURCE_AUTO, STATUS_ACTIVE, VALID_THRESHOLDS
+from .conflicts import insert_ambiguous_competitor, mark_ambiguous_pair, reconcile_product_breakpoint_conflicts
+from .constants import SOURCE_AUTO, STATUS_ACTIVE, STATUS_AMBIGUOUS, STATUS_BROKEN, VALID_THRESHOLDS
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +38,30 @@ logger = logging.getLogger(__name__)
 def _threshold(settings_row) -> int:
     th = int(getattr(settings_row, "identical_orders_threshold", None) or 3)
     return th if th in VALID_THRESHOLDS else 3
+
+
+def _competitor_at_min_qty(
+    db: Session,
+    *,
+    tid: int,
+    wid: int,
+    pid: int,
+    min_qty: int,
+    carton_id: str,
+) -> Optional[WmsSmartMatchingRuleV2]:
+    return (
+        db.query(WmsSmartMatchingRuleV2)
+        .filter(
+            WmsSmartMatchingRuleV2.tenant_id == tid,
+            WmsSmartMatchingRuleV2.warehouse_id == wid,
+            WmsSmartMatchingRuleV2.product_id == pid,
+            WmsSmartMatchingRuleV2.min_qty == min_qty,
+            WmsSmartMatchingRuleV2.carton_id != carton_id,
+            WmsSmartMatchingRuleV2.source == SOURCE_AUTO,
+            WmsSmartMatchingRuleV2.status.in_([STATUS_ACTIVE, STATUS_AMBIGUOUS]),
+        )
+        .first()
+    )
 
 
 def learn_auto_rules_for_product_carton(
@@ -90,61 +117,89 @@ def learn_auto_rules_for_product_carton(
             WmsSmartMatchingRuleV2.product_id == pid,
             WmsSmartMatchingRuleV2.carton_id == cid,
             WmsSmartMatchingRuleV2.source == SOURCE_AUTO,
-            WmsSmartMatchingRuleV2.status == STATUS_ACTIVE,
+            WmsSmartMatchingRuleV2.status.in_([STATUS_ACTIVE, STATUS_BROKEN, STATUS_AMBIGUOUS]),
         )
         .order_by(WmsSmartMatchingRuleV2.id.desc())
         .first()
     )
     if existing_same_carton is not None:
         existing_same_carton.hit_count = n
+        existing_same_carton.last_order_id = (
+            int(last_order_id) if last_order_id else existing_same_carton.last_order_id
+        )
+        existing_same_carton.last_used_at = now
+        existing_same_carton.updated_at = now
+
         if min_qty < int(existing_same_carton.min_qty):
-            # Move breakpoint down; check collision at new min_qty.
-            collision = (
-                db.query(WmsSmartMatchingRuleV2)
-                .filter(
-                    WmsSmartMatchingRuleV2.tenant_id == tid,
-                    WmsSmartMatchingRuleV2.warehouse_id == wid,
-                    WmsSmartMatchingRuleV2.product_id == pid,
-                    WmsSmartMatchingRuleV2.min_qty == min_qty,
-                    WmsSmartMatchingRuleV2.carton_id != cid,
-                    WmsSmartMatchingRuleV2.source == SOURCE_AUTO,
-                    WmsSmartMatchingRuleV2.status == STATUS_ACTIVE,
-                )
-                .first()
+            collision = _competitor_at_min_qty(
+                db, tid=tid, wid=wid, pid=pid, min_qty=min_qty, carton_id=cid
             )
             if collision is None:
                 existing_same_carton.min_qty = min_qty
-        existing_same_carton.last_order_id = int(last_order_id) if last_order_id else existing_same_carton.last_order_id
-        existing_same_carton.last_used_at = now
-        existing_same_carton.updated_at = now
+            # else keep old min_qty; do not steal conflicting breakpoint
+
+        # Re-activate BROKEN/AMBIGUOUS when no competing carton at breakpoint.
+        if str(existing_same_carton.status) in (STATUS_BROKEN, STATUS_AMBIGUOUS):
+            prev_status = str(existing_same_carton.status)
+            collision = _competitor_at_min_qty(
+                db,
+                tid=tid,
+                wid=wid,
+                pid=pid,
+                min_qty=int(existing_same_carton.min_qty),
+                carton_id=cid,
+            )
+            if collision is None:
+                existing_same_carton.status = STATUS_ACTIVE
+                existing_same_carton.override_streak = 0
+                logger.info(
+                    "smart_matching_v2 re-activate rule_id=%s product=%s carton=%s status_was=%s",
+                    existing_same_carton.id,
+                    pid,
+                    cid,
+                    prev_status,
+                )
+            else:
+                mark_ambiguous_pair(db, existing=collision, other_carton_id=cid)
+                existing_same_carton.status = STATUS_AMBIGUOUS
+
         db.add(existing_same_carton)
         db.flush()
+        reconcile_product_breakpoint_conflicts(db, tenant_id=tid, warehouse_id=wid, product_id=pid)
         return existing_same_carton
 
-    collision = (
-        db.query(WmsSmartMatchingRuleV2)
-        .filter(
-            WmsSmartMatchingRuleV2.tenant_id == tid,
-            WmsSmartMatchingRuleV2.warehouse_id == wid,
-            WmsSmartMatchingRuleV2.product_id == pid,
-            WmsSmartMatchingRuleV2.min_qty == min_qty,
-            WmsSmartMatchingRuleV2.carton_id != cid,
-            WmsSmartMatchingRuleV2.source == SOURCE_AUTO,
-            WmsSmartMatchingRuleV2.status == STATUS_ACTIVE,
-        )
-        .first()
-    )
+    collision = _competitor_at_min_qty(db, tid=tid, wid=wid, pid=pid, min_qty=min_qty, carton_id=cid)
     if collision is not None:
-        logger.info(
-            "smart_matching_v2 skip create ambiguous breakpoint tenant=%s wh=%s product=%s min_qty=%s "
-            "existing_carton=%s new_carton=%s",
-            tid,
-            wid,
-            pid,
-            min_qty,
-            collision.carton_id,
-            cid,
+        mark_ambiguous_pair(db, existing=collision, other_carton_id=cid)
+        existing_amb = (
+            db.query(WmsSmartMatchingRuleV2)
+            .filter(
+                WmsSmartMatchingRuleV2.tenant_id == tid,
+                WmsSmartMatchingRuleV2.warehouse_id == wid,
+                WmsSmartMatchingRuleV2.product_id == pid,
+                WmsSmartMatchingRuleV2.min_qty == min_qty,
+                WmsSmartMatchingRuleV2.carton_id == cid,
+                WmsSmartMatchingRuleV2.source == SOURCE_AUTO,
+            )
+            .first()
         )
+        if existing_amb is None:
+            insert_ambiguous_competitor(
+                db,
+                template=collision,
+                carton_id=cid,
+                hit_count=n,
+                created_from_observation_id=int(decisive.id),
+                created_threshold=threshold,
+                last_order_id=last_order_id,
+            )
+        else:
+            existing_amb.status = STATUS_AMBIGUOUS
+            existing_amb.hit_count = n
+            existing_amb.updated_at = now
+            db.add(existing_amb)
+            db.flush()
+        reconcile_product_breakpoint_conflicts(db, tenant_id=tid, warehouse_id=wid, product_id=pid)
         return None
 
     rule = WmsSmartMatchingRuleV2(
@@ -178,4 +233,5 @@ def learn_auto_rules_for_product_carton(
         n,
         decisive.id,
     )
+    reconcile_product_breakpoint_conflicts(db, tenant_id=tid, warehouse_id=wid, product_id=pid)
     return rule

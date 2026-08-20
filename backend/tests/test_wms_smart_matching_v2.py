@@ -279,3 +279,168 @@ def test_no_new_v1_rules_on_record_packing(db):
         db.commit()
     assert db.query(WmsSmartMatchingRule).count() == 0
     assert db.query(WmsSmartMatchingHistory).count() == 2
+
+
+def test_j_same_breakpoint_conflict_no_auto(db):
+    """Same min_qty competing cartons → AMBIGUOUS, zero suggestion."""
+    from datetime import datetime as dt
+
+    from backend.services.packaging_engine.smart_matching_v2.conflicts import (
+        reconcile_product_breakpoint_conflicts,
+    )
+    from backend.services.packaging_engine.smart_matching_v2.constants import (
+        SOURCE_AUTO,
+        STATUS_AMBIGUOUS,
+    )
+    from sqlalchemy.orm import noload
+
+    _set_threshold(db, 2)
+    now = dt.utcnow()
+    for cid in ("carton-x", "carton-y"):
+        db.add(
+            WmsSmartMatchingRuleV2(
+                tenant_id=1,
+                warehouse_id=1,
+                product_id=1,
+                min_qty=3,
+                carton_id=cid,
+                source=SOURCE_AUTO,
+                status=STATUS_ACTIVE,
+                is_locked=False,
+                hit_count=2,
+                override_streak=0,
+                created_threshold=2,
+                engine_version=2,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+    db.commit()
+    flipped = reconcile_product_breakpoint_conflicts(db, tenant_id=1, warehouse_id=1, product_id=1)
+    db.commit()
+    assert flipped == 2
+    statuses = {str(r.carton_id): str(r.status) for r in db.query(WmsSmartMatchingRuleV2).all()}
+    assert statuses.get("carton-x") == STATUS_AMBIGUOUS
+    assert statuses.get("carton-y") == STATUS_AMBIGUOUS
+    resolved = resolve_breakpoint_rule(db, tenant_id=1, warehouse_id=1, product_id=1, quantity=3)
+    assert resolved is None
+    order = _order(db, 50, product_id=1, qty=3, carton_id=None)
+    cartons = db.query(Carton).options(noload("*")).all()
+    drafts = suggest_smart_matching(db, order=order, tenant_id=1, warehouse_id=1, cartons=cartons)
+    assert drafts == []
+
+
+def test_j2_learning_same_min_qty_marks_ambiguous(db):
+    """Learning a second carton at the same min_qty marks conflict (no max(hit) tie-break)."""
+    from backend.services.packaging_engine.smart_matching_v2.constants import STATUS_AMBIGUOUS
+
+    _set_threshold(db, 2)
+    for oid in (1, 2):
+        o = _order(db, oid, product_id=1, qty=3, carton_id="carton-x")
+        record_v2_observation_and_learn(db, order=o, carton_id="carton-x")
+        db.commit()
+    for oid in (3, 4):
+        o = _order(db, oid, product_id=1, qty=3, carton_id="carton-y")
+        record_v2_observation_and_learn(db, order=o, carton_id="carton-y")
+        db.commit()
+    statuses = {str(r.carton_id): str(r.status) for r in db.query(WmsSmartMatchingRuleV2).all()}
+    assert statuses.get("carton-x") == STATUS_AMBIGUOUS
+    assert statuses.get("carton-y") == STATUS_AMBIGUOUS
+    assert resolve_breakpoint_rule(db, tenant_id=1, warehouse_id=1, product_id=1, quantity=3) is None
+
+
+def test_n_override_streak_below_threshold_keeps_rule(db):
+    _set_threshold(db, 3)
+    for oid in (1, 2, 3):
+        o = _order(db, oid, product_id=1, qty=2, carton_id="carton-x")
+        record_v2_observation_and_learn(db, order=o, carton_id="carton-x")
+        db.commit()
+    rule = db.query(WmsSmartMatchingRuleV2).one()
+    assert str(rule.status) == STATUS_ACTIVE
+    # Two overrides — below threshold 3
+    for oid in (4, 5):
+        o = _order(db, oid, product_id=1, qty=2, carton_id="carton-y")
+        record_v2_observation_and_learn(db, order=o, carton_id="carton-y")
+        db.commit()
+    db.refresh(rule)
+    assert str(rule.status) == STATUS_ACTIVE
+    assert int(rule.override_streak) == 2
+
+
+def test_o_override_threshold_breaks_auto_rule(db):
+    from backend.services.packaging_engine.smart_matching_v2.constants import STATUS_BROKEN
+
+    _set_threshold(db, 2)
+    for oid in (1, 2):
+        o = _order(db, oid, product_id=1, qty=2, carton_id="carton-x")
+        record_v2_observation_and_learn(db, order=o, carton_id="carton-x")
+        db.commit()
+    rule = db.query(WmsSmartMatchingRuleV2).filter(WmsSmartMatchingRuleV2.carton_id == "carton-x").one()
+    # Two overrides to *different* cartons — no competing series reaches threshold → BROKEN.
+    o = _order(db, 3, product_id=1, qty=2, carton_id="carton-y")
+    record_v2_observation_and_learn(db, order=o, carton_id="carton-y")
+    db.commit()
+    # Need a third carton for non-competing second override
+    db.add(
+        Carton(
+            id="carton-z",
+            tenant_id=1,
+            warehouse_id=1,
+            name="Karton Z",
+            length_cm=25,
+            width_cm=15,
+            height_cm=10,
+            is_active=True,
+        )
+    )
+    db.commit()
+    o = _order(db, 4, product_id=1, qty=2, carton_id="carton-z")
+    record_v2_observation_and_learn(db, order=o, carton_id="carton-z")
+    db.commit()
+    db.refresh(rule)
+    assert str(rule.status) == STATUS_BROKEN
+    assert int(rule.override_streak) >= 2
+    resolved = resolve_breakpoint_rule(db, tenant_id=1, warehouse_id=1, product_id=1, quantity=2)
+    assert resolved is None or str(resolved.rule.carton_id) != "carton-x"
+
+
+def test_p_matching_choice_resets_override_streak(db):
+    _set_threshold(db, 3)
+    for oid in (1, 2, 3):
+        o = _order(db, oid, product_id=1, qty=2, carton_id="carton-x")
+        record_v2_observation_and_learn(db, order=o, carton_id="carton-x")
+        db.commit()
+    # One override then match again
+    o = _order(db, 4, product_id=1, qty=2, carton_id="carton-y")
+    record_v2_observation_and_learn(db, order=o, carton_id="carton-y")
+    db.commit()
+    rule = db.query(WmsSmartMatchingRuleV2).filter(WmsSmartMatchingRuleV2.carton_id == "carton-x").one()
+    assert int(rule.override_streak) == 1
+    o = _order(db, 5, product_id=1, qty=2, carton_id="carton-x")
+    record_v2_observation_and_learn(db, order=o, carton_id="carton-x")
+    db.commit()
+    db.refresh(rule)
+    assert int(rule.override_streak) == 0
+    assert str(rule.status) == STATUS_ACTIVE
+
+
+def test_q_shipping_incompatible_smart_rejected(db):
+    from sqlalchemy.orm import noload
+
+    _set_threshold(db, 2)
+    db.add(ShippingMethod(id="ship-a", tenant_id=1, warehouse_id=1, name="Kurier A", is_active=True))
+    db.execute(
+        carton_shipping_method_links.insert().values(carton_id="carton-y", shipping_method_id="ship-a")
+    )
+    db.commit()
+    for oid in (1, 2):
+        o = _order(db, oid, product_id=1, qty=3, carton_id="carton-x")
+        record_v2_observation_and_learn(db, order=o, carton_id="carton-x")
+        db.commit()
+    order = _order(db, 50, product_id=1, qty=3, carton_id=None)
+    order.shipping_method_id = "ship-a"
+    db.add(order)
+    db.commit()
+    cartons = db.query(Carton).options(noload("*")).all()
+    drafts = suggest_smart_matching(db, order=order, tenant_id=1, warehouse_id=1, cartons=cartons)
+    assert drafts == []
