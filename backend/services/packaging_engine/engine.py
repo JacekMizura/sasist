@@ -1,4 +1,4 @@
-"""Orkiestracja: PHYSICAL FIT gate → eligible → Smart soft ranking → PRIMARY."""
+"""Orkiestracja: PHYSICAL FIT → SmartResult | ThreeDResult → StrategyResolver → PRIMARY."""
 
 from __future__ import annotations
 
@@ -16,10 +16,15 @@ from ...schemas.packaging_intelligence import (
 )
 from ..fit_engine.adapters import fit_container_from_carton
 from .cartonization_solver import items_from_order, solve_cartonization
-from .decision import _demand_volume_cm3, finalize_primary_packaging
 from .overrides import annotate_override_flags
 from .presentation import confidence_label, map_reject_reason_to_operator
-from .smart_matching import suggest_smart_matching
+from .smart_matching_v2 import evaluate_smart_matching_v2
+from .strategy_resolver import (
+    SmartResult,
+    normalize_strategy,
+    resolve_packaging_strategy,
+    three_d_result_from_drafts,
+)
 from .suggestions import PackagingEngineSource, PackagingSuggestionDraft
 from .three_d_matching import suggest_three_d_matching
 
@@ -31,25 +36,14 @@ def _carton_volume_sort_key(c: Carton) -> float:
         return float("inf")
 
 
-def _load_active_cartons(db: Session, *, tenant_id: int, warehouse_id: int, limit: int = 24) -> list[Carton]:
-    rows = (
-        db.query(Carton)
-        .filter(
-            Carton.tenant_id == int(tenant_id),
-            Carton.warehouse_id == int(warehouse_id),
-            Carton.is_active.is_(True),
-        )
-        .limit(max(4, min(int(limit), 48)))
-        .all()
-    )
-    rows.sort(key=_carton_volume_sort_key)
-    return rows
-
-
 def _merge_by_carton(
     smart: list[PackagingSuggestionDraft],
     three_d: list[PackagingSuggestionDraft],
 ) -> list[PackagingSuggestionDraft]:
+    """
+    Legacy soft merge (v1 / fit-engine regression tests only).
+    Runtime SSOT is resolve_packaging_strategy — do not use this for primary selection.
+    """
     m_s = {str(s.suggested_package_id): s for s in smart}
     m_t = {str(s.suggested_package_id): s for s in three_d}
     ids = sorted(set(m_s) | set(m_t), key=lambda cid: (cid not in m_s, cid not in m_t, cid))
@@ -95,6 +89,21 @@ def _merge_by_carton(
     return merged
 
 
+def _load_active_cartons(db: Session, *, tenant_id: int, warehouse_id: int, limit: int = 24) -> list[Carton]:
+    rows = (
+        db.query(Carton)
+        .filter(
+            Carton.tenant_id == int(tenant_id),
+            Carton.warehouse_id == int(warehouse_id),
+            Carton.is_active.is_(True),
+        )
+        .limit(max(4, min(int(limit), 48)))
+        .all()
+    )
+    rows.sort(key=_carton_volume_sort_key)
+    return rows
+
+
 def _usable_dims_str(carton: Carton) -> tuple[str, bool]:
     container = fit_container_from_carton(carton)
     dims = f"{container.length_cm:g}×{container.width_cm:g}×{container.height_cm:g} cm"
@@ -115,9 +124,8 @@ def _enrich_out(
     eligible_ok = cid in eligible and not rejected
     usable = None
     max_payload = None
-    has_usable = False
     if carton is not None:
-        usable, has_usable = _usable_dims_str(carton)
+        usable, _has_usable = _usable_dims_str(carton)
         mp = getattr(carton, "max_payload_kg", None)
         max_payload = float(mp) if mp is not None else None
     why = None
@@ -176,7 +184,9 @@ def _fit_plan_out(fit) -> PackagingFitPlanOut:
                 items=items,
                 placements=list(p.get("placements") or []),
                 weight=p.get("weight") if p.get("weight") is not None else p.get("total_weight_kg"),
-                volume_utilization=p.get("volume_utilization") if p.get("volume_utilization") is not None else p.get("fill_percent"),
+                volume_utilization=p.get("volume_utilization")
+                if p.get("volume_utilization") is not None
+                else p.get("fill_percent"),
                 confidence=p.get("confidence") or raw.get("confidence"),
                 warnings=list(p.get("warnings") or []),
             )
@@ -203,13 +213,14 @@ def build_packaging_suggestions_for_order(
 ) -> tuple[list[PackagingSuggestionOut], Optional[PackagingSuggestionOut], list[PackagingSuggestionOut], PackagingFitPlanOut]:
     """
     Pipeline:
-      candidates → PHYSICAL FIT (cartonization) → eligible only
-      → Smart soft scores → deterministic ranking → PRIMARY.
+      candidates → PHYSICAL FIT (plan) → SmartResult | ThreeDResult → StrategyResolver → PRIMARY.
+    Soft Smart+3D score merge is no longer the SSOT.
     """
     from .smart_matching_store import get_or_create_settings
 
     settings = get_or_create_settings(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
     suggestions_enabled = bool(settings.enabled)
+    strategy = normalize_strategy(getattr(settings, "packaging_strategy", None))
 
     cartons = _load_active_cartons(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
     by_id = {str(c.id): c for c in cartons}
@@ -238,42 +249,61 @@ def build_packaging_suggestions_for_order(
             eligible.add(str(plan.carton_id))
         if fit.recommended_carton_id:
             eligible.add(str(fit.recommended_carton_id))
-    td = (
+
+    run_smart = suggestions_enabled and strategy != "THREE_D_ONLY"
+    run_3d = suggestions_enabled and strategy != "SMART_ONLY"
+
+    smart = (
+        evaluate_smart_matching_v2(
+            db, order=order, tenant_id=tenant_id, warehouse_id=warehouse_id, cartons=cartons
+        )
+        if run_smart
+        else SmartResult(draft=None, ambiguous=False, reason="SKIPPED")
+    )
+
+    td_drafts = (
         suggest_three_d_matching(order, cartons=cartons, shipping_constraints=shipping_constraints)
-        if suggestions_enabled
+        if run_3d
         else []
     )
-    for d in td:
+    for d in td_drafts:
         if "Odrzucony:" not in (d.reason or ""):
             eligible.add(str(d.suggested_package_id))
     eligible -= rejected_ids
 
-    smart = (
-        suggest_smart_matching(db, order=order, tenant_id=tenant_id, warehouse_id=warehouse_id, cartons=cartons)
-        if suggestions_enabled
-        else []
+    packages_preview: list[dict] = []
+    if fit.fits and fit.cartons:
+        for plan in fit.cartons:
+            packages_preview.append(
+                {
+                    "carton_id": str(plan.carton_id),
+                    "carton_name": str(plan.carton_name or ""),
+                    "items": [
+                        {"product_id": int(it.product_id), "quantity": int(it.quantity)}
+                        for it in (plan.items or [])
+                    ],
+                }
+            )
+
+    three_d = three_d_result_from_drafts(
+        td_drafts,
+        fits=bool(fit.fits),
+        packages=packages_preview,
     )
-    smart_bonus = {
-        str(s.suggested_package_id): max(0.0, float(s.confidence_score) - 0.4)
-        for s in smart
-        if str(s.suggested_package_id) in eligible
+
+    outcome = resolve_packaging_strategy(strategy, smart=smart, three_d=three_d)
+    primary_draft = outcome.primary
+    alt_drafts = list(outcome.alternatives)
+
+    if primary_draft is not None:
+        annotate_override_flags([primary_draft] + alt_drafts, order)
+        tag = f"STRATEGY:{outcome.strategy}/{outcome.source}"
+        if tag not in (primary_draft.reason or ""):
+            primary_draft.reason = f"{primary_draft.reason} | {tag}"[:2000]
+
+    present_ids = {
+        str(x.suggested_package_id) for x in ([primary_draft] if primary_draft else []) + alt_drafts
     }
-
-    merged = _merge_by_carton(smart, td)
-    annotate_override_flags(merged, order)
-    demand, _ = _demand_volume_cm3(order)
-    primary_draft, alt_drafts = finalize_primary_packaging(
-        order,
-        cartons,
-        merged,
-        eligible_carton_ids=eligible if eligible else set(),
-        smart_bonus_by_id=smart_bonus,
-        demand_cm3=demand,
-        multi_carton=bool(fit.multi_carton_required),
-    )
-
-    # Append rejected cartons as trailing alternatives for operator transparency
-    present_ids = {str(x.suggested_package_id) for x in ([primary_draft] if primary_draft else []) + alt_drafts}
     for rej in fit.rejected_cartons:
         cid = str(rej.carton_id)
         if cid in present_ids:
@@ -321,20 +351,22 @@ def build_packaging_suggestions_for_order(
         )
         for x in alt_drafts
     ]
-    # Attach weight from plan if single carton
     if primary_out is not None and fit_plan.plan:
         primary_out.total_weight_kg = fit_plan.plan[0].weight
         if fit_plan.plan[0].usable_dimensions:
             ud = fit_plan.plan[0].usable_dimensions
-            primary_out.usable_dimensions = f"{ud.get('length_cm', 0):g}×{ud.get('width_cm', 0):g}×{ud.get('height_cm', 0):g} cm"
+            primary_out.usable_dimensions = (
+                f"{ud.get('length_cm', 0):g}×{ud.get('width_cm', 0):g}×{ud.get('height_cm', 0):g} cm"
+            )
         if fit_plan.plan[0].volume_utilization is not None and primary_out.fill_percentage is None:
             primary_out.fill_percentage = float(fit_plan.plan[0].volume_utilization)
 
-    # Missing dims / usable warnings on primary
     if primary_out is not None:
         for w in fit_plan.warnings:
             if "MISSING" in w.upper() and "MISSING_PRODUCT_DIMENSIONS" not in (primary_out.reason or ""):
-                primary_out.reason = f"{primary_out.reason} | Brak kompletnych wymiarów produktu.".strip(" |")[:2000]
+                primary_out.reason = f"{primary_out.reason} | Brak kompletnych wymiarów produktu.".strip(
+                    " |"
+                )[:2000]
             if "USABLE_DIMENSIONS" in w.upper():
                 primary_out.reason = (
                     f"{primary_out.reason} | Brak wymiarów użytkowych opakowania — dopasowanie szacunkowe."
@@ -344,5 +376,5 @@ def build_packaging_suggestions_for_order(
     if primary_out is not None:
         combined.append(primary_out)
     combined.extend(alt_outs)
-    _ = confidence_label  # used by FE via fit_confidence codes
+    _ = confidence_label
     return combined, primary_out, alt_outs, fit_plan

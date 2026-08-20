@@ -1,9 +1,7 @@
-"""
-Smart Matching suggest entrypoint — delegates to engine v2 (min-qty) + legacy v1 fallback.
-"""
+"""Smart Matching public entry — engine v2."""
 
-from __future__ import annotations
+from .smart_matching_v2 import evaluate_smart_matching_v2, suggest_smart_matching_v2
 
-from .smart_matching_v2 import suggest_smart_matching_v2 as suggest_smart_matching
+suggest_smart_matching = suggest_smart_matching_v2
 
-__all__ = ["suggest_smart_matching"]
+__all__ = ["suggest_smart_matching", "evaluate_smart_matching_v2"]
