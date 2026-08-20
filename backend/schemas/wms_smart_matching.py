@@ -67,7 +67,61 @@ class WmsSmartMatchingRuleOut(BaseModel):
     has_interrupted_series: bool = False
     last_order_id: Optional[int] = None
     last_used_at: Optional[str] = None
+    created_from_history_id: Optional[int] = None
+    created_threshold: Optional[int] = None
     latest_break: Optional[WmsSmartMatchingBreakOut] = None
+
+
+class WmsSmartMatchingCompositionItemOut(BaseModel):
+    product_id: int
+    product_name: str
+    quantity: int
+
+
+class WmsSmartMatchingSeriesHitOut(BaseModel):
+    history_id: int
+    hit_index: int
+    order_id: int
+    order_number: Optional[str] = None
+    operator: Optional[str] = None
+    created_at: Optional[str] = None
+    carton_id: Optional[str] = None
+    carton_name: Optional[str] = None
+    suggested_carton_id: Optional[str] = None
+    suggested_carton_name: Optional[str] = None
+    broke_series: bool = False
+    is_override: bool = False
+    is_decisive: bool = False
+
+
+class WmsSmartMatchingHistorySeriesItemOut(BaseModel):
+    composition_key: str
+    composition_preview: str
+    composition_extra_count: int = 0
+    composition_items: list[WmsSmartMatchingCompositionItemOut] = Field(default_factory=list)
+    composition_label_fallback: Optional[str] = None
+    carton_id: str
+    carton_name: Optional[str] = None
+    hit_count: int
+    threshold: int
+    current_threshold: int
+    created_threshold: Optional[int] = None
+    has_active_rule: bool = False
+    rule_id: Optional[int] = None
+    created_from_history_id: Optional[int] = None
+    last_operator: Optional[str] = None
+    last_at: Optional[str] = None
+    override_count: int = 0
+    has_overrides: bool = False
+    hits: list[WmsSmartMatchingSeriesHitOut] = Field(default_factory=list)
+
+
+class WmsSmartMatchingHistorySeriesPageOut(BaseModel):
+    page: int
+    limit: int
+    total: int
+    current_threshold: int
+    items: list[WmsSmartMatchingHistorySeriesItemOut] = Field(default_factory=list)
 
 
 class WmsSmartMatchingResetOut(BaseModel):

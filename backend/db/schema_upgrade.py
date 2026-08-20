@@ -2336,6 +2336,26 @@ def ensure_wms_smart_matching_tables(engine: Engine) -> None:
                     "ON wms_smart_matching_history(created_at)"
                 )
             )
+        # After history exists: add rule→history link columns (no backfill).
+        if _table_exists(conn, "wms_smart_matching_rules"):
+            rules_cols = _table_column_names(conn, "wms_smart_matching_rules")
+            if "created_from_history_id" not in rules_cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_smart_matching_rules ADD COLUMN created_from_history_id INTEGER "
+                        "REFERENCES wms_smart_matching_history(id) ON DELETE SET NULL"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_wms_sm_rules_created_from "
+                        "ON wms_smart_matching_rules(created_from_history_id)"
+                    )
+                )
+            if "created_threshold" not in rules_cols:
+                conn.execute(
+                    text("ALTER TABLE wms_smart_matching_rules ADD COLUMN created_threshold INTEGER")
+                )
         if not _table_exists(conn, "wms_smart_matching_breaks"):
             conn.execute(
                 text(

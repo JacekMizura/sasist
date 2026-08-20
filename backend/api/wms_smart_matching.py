@@ -13,11 +13,13 @@ from ..database import get_db
 from ..models.order_ui_status import OrderUiStatus
 from ..schemas.wms_smart_matching import (
     WmsSmartMatchingHistoryOut,
+    WmsSmartMatchingHistorySeriesPageOut,
     WmsSmartMatchingResetOut,
     WmsSmartMatchingRuleOut,
     WmsSmartMatchingSettingsOut,
     WmsSmartMatchingSettingsSave,
 )
+from ..services.packaging_engine.smart_matching_history_series import list_history_series
 from ..services.packaging_engine.smart_matching_store import (
     get_or_create_settings,
     list_history,
@@ -108,6 +110,21 @@ def get_smart_matching_history(
 ):
     rows = list_history(db, tenant_id=tenant_id, warehouse_id=warehouse_id, limit=limit)
     return [WmsSmartMatchingHistoryOut.model_validate(r) for r in rows]
+
+
+@router.get("/history-series", response_model=WmsSmartMatchingHistorySeriesPageOut)
+def get_smart_matching_history_series(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """Learning-series projection: one row per (composition_key, carton_id)."""
+    payload = list_history_series(
+        db, tenant_id=tenant_id, warehouse_id=warehouse_id, page=page, limit=limit
+    )
+    return WmsSmartMatchingHistorySeriesPageOut.model_validate(payload)
 
 
 @router.get("/rules", response_model=list[WmsSmartMatchingRuleOut])

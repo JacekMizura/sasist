@@ -290,6 +290,8 @@ def record_packing_carton_choice(
                 is_auto=True,
                 last_order_id=int(order.id),
                 last_used_at=now,
+                created_from_history_id=int(hist.id),
+                created_threshold=int(threshold),
                 created_at=now,
                 updated_at=now,
             )
@@ -411,6 +413,12 @@ def list_rules(
                 "has_interrupted_series": br_row is not None,
                 "last_order_id": int(r.last_order_id) if r.last_order_id else None,
                 "last_used_at": r.last_used_at.isoformat() if r.last_used_at else None,
+                "created_from_history_id": int(r.created_from_history_id)
+                if r.created_from_history_id is not None
+                else None,
+                "created_threshold": int(r.created_threshold)
+                if r.created_threshold is not None
+                else None,
                 "latest_break": _break_dict(db, br_row) if br_row else None,
             }
         )

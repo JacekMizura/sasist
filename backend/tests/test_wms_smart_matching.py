@@ -51,8 +51,8 @@ def db():
         Order,
         OrderItem,
         WmsSmartMatchingSettings,
-        WmsSmartMatchingRule,
         WmsSmartMatchingHistory,
+        WmsSmartMatchingRule,
         WmsSmartMatchingBreak,
     ):
         model.__table__.create(engine, checkfirst=True)
@@ -184,6 +184,243 @@ def test_learning_creates_rule_after_threshold(db):
     assert rules[0].carton_id == "carton-m"
     assert rules[0].is_auto is True
     assert rules[0].hit_count >= 2
+    hist2 = (
+        db.query(WmsSmartMatchingHistory)
+        .filter(WmsSmartMatchingHistory.order_id == 2)
+        .one()
+    )
+    assert rules[0].created_from_history_id == int(hist2.id)
+    assert rules[0].created_threshold == 2
+
+
+def test_created_from_history_stable_after_extra_hits(db):
+    save_settings(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        enabled=True,
+        identical_orders_threshold=3,
+        proposal_init_status_id=None,
+        auto_label_enabled=False,
+        auto_label_status_ids=[],
+    )
+    db.commit()
+    for oid in (1, 2):
+        record_packing_carton_choice(db, order=_make_order(db, oid), carton_id="carton-m")
+        db.commit()
+    assert db.query(WmsSmartMatchingRule).count() == 0
+    record_packing_carton_choice(db, order=_make_order(db, 3), carton_id="carton-m")
+    db.commit()
+    rule = db.query(WmsSmartMatchingRule).one()
+    decisive = int(rule.created_from_history_id)
+    assert decisive == (
+        db.query(WmsSmartMatchingHistory).filter(WmsSmartMatchingHistory.order_id == 3).one().id
+    )
+    record_packing_carton_choice(db, order=_make_order(db, 4), carton_id="carton-m")
+    db.commit()
+    db.refresh(rule)
+    assert int(rule.created_from_history_id) == decisive
+    assert int(rule.hit_count) == 4
+    assert int(rule.created_threshold) == 3
+
+
+def test_reset_recreate_sets_new_created_from(db):
+    save_settings(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        enabled=True,
+        identical_orders_threshold=2,
+        proposal_init_status_id=None,
+        auto_label_enabled=False,
+        auto_label_status_ids=[],
+    )
+    db.commit()
+    for oid in (1, 2):
+        record_packing_carton_choice(db, order=_make_order(db, oid), carton_id="carton-m")
+        db.commit()
+    first_decisive = db.query(WmsSmartMatchingRule).one().created_from_history_id
+    reset_auto_rules(db, tenant_id=1, warehouse_id=1)
+    db.commit()
+    assert db.query(WmsSmartMatchingRule).count() == 0
+    assert db.query(WmsSmartMatchingHistory).count() == 2
+    record_packing_carton_choice(db, order=_make_order(db, 10), carton_id="carton-m")
+    db.commit()
+    rule = db.query(WmsSmartMatchingRule).one()
+    new_hist = db.query(WmsSmartMatchingHistory).filter(WmsSmartMatchingHistory.order_id == 10).one()
+    assert int(rule.created_from_history_id) == int(new_hist.id)
+    assert int(rule.created_from_history_id) != int(first_decisive)
+
+
+def test_legacy_rule_null_created_from_no_decisive(db):
+    from backend.services.packaging_engine.smart_matching_history_series import list_history_series
+
+    save_settings(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        enabled=True,
+        identical_orders_threshold=2,
+        proposal_init_status_id=None,
+        auto_label_enabled=False,
+        auto_label_status_ids=[],
+    )
+    db.commit()
+    for oid in (1, 2):
+        record_packing_carton_choice(db, order=_make_order(db, oid), carton_id="carton-m")
+        db.commit()
+    rule = db.query(WmsSmartMatchingRule).one()
+    rule.created_from_history_id = None
+    rule.created_threshold = None
+    db.add(rule)
+    db.commit()
+    page = list_history_series(db, tenant_id=1, warehouse_id=1, page=1, limit=50)
+    assert page["total"] == 1
+    assert all(not h["is_decisive"] for h in page["items"][0]["hits"])
+    assert page["items"][0]["created_from_history_id"] is None
+
+
+def test_history_series_grouping_and_two_cartons(db):
+    from backend.services.packaging_engine.smart_matching_history_series import list_history_series
+
+    save_settings(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        enabled=True,
+        identical_orders_threshold=2,
+        proposal_init_status_id=None,
+        auto_label_enabled=False,
+        auto_label_status_ids=[],
+    )
+    db.commit()
+    record_packing_carton_choice(db, order=_make_order(db, 1), carton_id="carton-m")
+    db.commit()
+    record_packing_carton_choice(db, order=_make_order(db, 2), carton_id="carton-l")
+    db.commit()
+    page = list_history_series(db, tenant_id=1, warehouse_id=1, page=1, limit=50)
+    assert page["total"] == 2
+    cartons = {s["carton_id"] for s in page["items"]}
+    assert cartons == {"carton-m", "carton-l"}
+
+
+def test_history_series_override_and_composition_items(db):
+    from backend.services.packaging_engine.smart_matching_history_series import list_history_series
+
+    save_settings(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        enabled=True,
+        identical_orders_threshold=2,
+        proposal_init_status_id=None,
+        auto_label_enabled=False,
+        auto_label_status_ids=[],
+    )
+    db.commit()
+    for oid in (1, 2):
+        record_packing_carton_choice(db, order=_make_order(db, oid), carton_id="carton-m")
+        db.commit()
+    record_packing_carton_choice(db, order=_make_order(db, 3), carton_id="carton-l")
+    db.commit()
+    page = list_history_series(db, tenant_id=1, warehouse_id=1, page=1, limit=50)
+    series_l = next(s for s in page["items"] if s["carton_id"] == "carton-l")
+    assert series_l["has_overrides"] or any(h["is_override"] for h in series_l["hits"])
+    ov = next(h for h in series_l["hits"] if h["is_override"])
+    assert ov["suggested_carton_id"] == "carton-m"
+    assert ov["carton_id"] == "carton-l"
+    series_m = next(s for s in page["items"] if s["carton_id"] == "carton-m")
+    assert series_m["has_active_rule"] is True
+    assert any(h["is_decisive"] for h in series_m["hits"])
+    assert series_m["composition_items"]
+    assert series_m["composition_items"][0]["product_id"] == 1
+
+
+def test_history_series_tenant_warehouse_isolation(db):
+    from backend.services.packaging_engine.smart_matching_history_series import list_history_series
+
+    save_settings(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        enabled=True,
+        identical_orders_threshold=2,
+        proposal_init_status_id=None,
+        auto_label_enabled=False,
+        auto_label_status_ids=[],
+    )
+    db.commit()
+    record_packing_carton_choice(db, order=_make_order(db, 1), carton_id="carton-m")
+    db.commit()
+    assert list_history_series(db, tenant_id=2, warehouse_id=1)["total"] == 0
+    assert list_history_series(db, tenant_id=1, warehouse_id=2)["total"] == 0
+    assert list_history_series(db, tenant_id=1, warehouse_id=1)["total"] == 1
+
+
+def test_history_series_pagination_preserves_full_hit_count(db):
+    from backend.services.packaging_engine.smart_matching_history_series import list_history_series
+
+    save_settings(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        enabled=True,
+        identical_orders_threshold=2,
+        proposal_init_status_id=None,
+        auto_label_enabled=False,
+        auto_label_status_ids=[],
+    )
+    db.commit()
+    # Series A: 4 hits on carton-m
+    for oid in range(1, 5):
+        record_packing_carton_choice(db, order=_make_order(db, oid), carton_id="carton-m")
+        db.commit()
+    # Series B: 1 hit on carton-l (different composition would need different products;
+    # same composition + different carton = second series)
+    record_packing_carton_choice(db, order=_make_order(db, 50), carton_id="carton-l")
+    db.commit()
+    page1 = list_history_series(db, tenant_id=1, warehouse_id=1, page=1, limit=1)
+    assert page1["total"] == 2
+    assert len(page1["items"]) == 1
+    # Full hits for the returned series — not truncated by page size of series
+    assert page1["items"][0]["hit_count"] == len(page1["items"][0]["hits"])
+    if page1["items"][0]["carton_id"] == "carton-m":
+        assert page1["items"][0]["hit_count"] == 4
+
+
+def test_created_threshold_survives_settings_change(db):
+    from backend.services.packaging_engine.smart_matching_history_series import list_history_series
+
+    save_settings(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        enabled=True,
+        identical_orders_threshold=3,
+        proposal_init_status_id=None,
+        auto_label_enabled=False,
+        auto_label_status_ids=[],
+    )
+    db.commit()
+    for oid in (1, 2, 3):
+        record_packing_carton_choice(db, order=_make_order(db, oid), carton_id="carton-m")
+        db.commit()
+    save_settings(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        enabled=True,
+        identical_orders_threshold=5,
+        proposal_init_status_id=None,
+        auto_label_enabled=False,
+        auto_label_status_ids=[],
+    )
+    db.commit()
+    page = list_history_series(db, tenant_id=1, warehouse_id=1)
+    s = page["items"][0]
+    assert s["created_threshold"] == 3
+    assert s["threshold"] == 3
+    assert s["current_threshold"] == 5
 
 
 def test_historical_suggestion_and_manual_override_break(db):

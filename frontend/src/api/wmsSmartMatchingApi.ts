@@ -8,46 +8,56 @@ export type WmsSmartMatchingSettingsApi = {
   auto_label_status_ids: number[];
 };
 
-export type WmsSmartMatchingBreakApi = {
-  id: number;
-  order_id: number;
-  order_number?: string | null;
-  user_display?: string | null;
-  quantity_units?: number | null;
-  chosen_carton_id?: string | null;
-  chosen_carton_name?: string | null;
-  suggested_carton_id?: string | null;
-  created_at?: string | null;
+export type WmsSmartMatchingCompositionItemApi = {
+  product_id: number;
+  product_name: string;
+  quantity: number;
 };
 
-export type WmsSmartMatchingHistoryApi = {
-  id: number;
+export type WmsSmartMatchingSeriesHitApi = {
+  history_id: number;
+  hit_index: number;
   order_id: number;
   order_number?: string | null;
-  composition_key: string;
-  composition_label: string;
+  operator?: string | null;
+  created_at?: string | null;
   carton_id?: string | null;
   carton_name?: string | null;
   suggested_carton_id?: string | null;
-  user_display?: string | null;
-  quantity_units?: number | null;
+  suggested_carton_name?: string | null;
   broke_series: boolean;
-  created_at?: string | null;
-  latest_break?: WmsSmartMatchingBreakApi | null;
+  is_override: boolean;
+  is_decisive: boolean;
 };
 
-export type WmsSmartMatchingRuleApi = {
-  id: number;
+export type WmsSmartMatchingHistorySeriesItemApi = {
   composition_key: string;
-  composition_label: string;
+  composition_preview: string;
+  composition_extra_count: number;
+  composition_items: WmsSmartMatchingCompositionItemApi[];
+  composition_label_fallback?: string | null;
   carton_id: string;
   carton_name?: string | null;
   hit_count: number;
-  is_auto: boolean;
-  has_interrupted_series: boolean;
-  last_order_id?: number | null;
-  last_used_at?: string | null;
-  latest_break?: WmsSmartMatchingBreakApi | null;
+  threshold: number;
+  current_threshold: number;
+  created_threshold?: number | null;
+  has_active_rule: boolean;
+  rule_id?: number | null;
+  created_from_history_id?: number | null;
+  last_operator?: string | null;
+  last_at?: string | null;
+  override_count: number;
+  has_overrides: boolean;
+  hits: WmsSmartMatchingSeriesHitApi[];
+};
+
+export type WmsSmartMatchingHistorySeriesPageApi = {
+  page: number;
+  limit: number;
+  total: number;
+  current_threshold: number;
+  items: WmsSmartMatchingHistorySeriesItemApi[];
 };
 
 export async function getWmsSmartMatchingSettings(
@@ -69,24 +79,14 @@ export async function putWmsSmartMatchingSettings(
   return res.data;
 }
 
-export async function getWmsSmartMatchingHistory(
+export async function getWmsSmartMatchingHistorySeries(
   tenantId: number,
   warehouseId: number,
-  limit = 100,
-): Promise<WmsSmartMatchingHistoryApi[]> {
-  const res = await api.get<WmsSmartMatchingHistoryApi[]>("/wms/smart-matching/history", {
-    params: { tenant_id: tenantId, warehouse_id: warehouseId, limit },
-  });
-  return res.data;
-}
-
-export async function getWmsSmartMatchingRules(
-  tenantId: number,
-  warehouseId: number,
-  limit = 100,
-): Promise<WmsSmartMatchingRuleApi[]> {
-  const res = await api.get<WmsSmartMatchingRuleApi[]>("/wms/smart-matching/rules", {
-    params: { tenant_id: tenantId, warehouse_id: warehouseId, limit },
+  page = 1,
+  limit = 50,
+): Promise<WmsSmartMatchingHistorySeriesPageApi> {
+  const res = await api.get<WmsSmartMatchingHistorySeriesPageApi>("/wms/smart-matching/history-series", {
+    params: { tenant_id: tenantId, warehouse_id: warehouseId, page, limit },
   });
   return res.data;
 }

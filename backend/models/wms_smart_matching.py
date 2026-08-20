@@ -74,6 +74,15 @@ class WmsSmartMatchingRule(Base):
     is_auto = Column(Boolean, nullable=False, default=True)
     last_order_id = Column(Integer, ForeignKey("orders.id", ondelete="SET NULL"), nullable=True)
     last_used_at = Column(DateTime, nullable=True)
+    #: History row that INSERT-ed this rule (deterministic DECYDUJĄCY). Legacy = NULL.
+    created_from_history_id = Column(
+        Integer,
+        ForeignKey("wms_smart_matching_history.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    #: Threshold (2|3|5) at rule INSERT time. Legacy = NULL.
+    created_threshold = Column(Integer, nullable=True)
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=True, default=datetime.utcnow, onupdate=datetime.utcnow)
 

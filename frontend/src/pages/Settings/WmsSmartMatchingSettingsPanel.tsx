@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import {
-  getWmsSmartMatchingHistory,
-  getWmsSmartMatchingRules,
+  getWmsSmartMatchingHistorySeries,
   getWmsSmartMatchingSettings,
   postWmsSmartMatchingReset,
   putWmsSmartMatchingSettings,
-  type WmsSmartMatchingBreakApi,
-  type WmsSmartMatchingHistoryApi,
-  type WmsSmartMatchingRuleApi,
+  type WmsSmartMatchingHistorySeriesItemApi,
 } from "../../api/wmsSmartMatchingApi";
 import { getOrderPanelSubgroups, getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
@@ -24,6 +21,7 @@ import {
 } from "./wmsPackagingProposalLocalConfig";
 import { WmsPackagingProposalEngineConfigForm } from "./WmsPackagingProposalEngineConfigForm";
 import { ConfirmModal } from "../../components/ui/ConfirmModal";
+import { SmartMatchingHistorySeriesTable } from "./SmartMatchingHistorySeriesTable";
 
 function SectionCard({
   id,
@@ -51,66 +49,12 @@ function SectionCard({
   );
 }
 
-function formatWhen(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("pl-PL");
-  } catch {
-    return iso;
-  }
-}
-
-function BreakTooltip({ br }: { br: WmsSmartMatchingBreakApi }) {
-  return (
-    <div className="space-y-1 text-left text-xs leading-relaxed text-slate-700">
-      <p>
-        <span className="font-semibold">Zamówienie:</span> {br.order_number || `#${br.order_id}`}
-      </p>
-      <p>
-        <span className="font-semibold">Użytkownik:</span> {br.user_display || "—"}
-      </p>
-      <p>
-        <span className="font-semibold">Ilość:</span>{" "}
-        {br.quantity_units != null ? String(br.quantity_units) : "—"}
-      </p>
-      <p>
-        <span className="font-semibold">Sugerowane:</span> {br.suggested_carton_id || "—"}
-      </p>
-      <p>
-        <span className="font-semibold">Wybrane opakowanie:</span>{" "}
-        {br.chosen_carton_name || br.chosen_carton_id || "—"}
-      </p>
-      <p>
-        <span className="font-semibold">Data:</span> {formatWhen(br.created_at)}
-      </p>
-    </div>
-  );
-}
-
-function InterruptedCell({
-  hasBreak,
-  latestBreak,
-}: {
-  hasBreak: boolean;
-  latestBreak?: WmsSmartMatchingBreakApi | null;
-}) {
-  if (!hasBreak || !latestBreak) {
-    return <span className="text-slate-400">–</span>;
-  }
-  return (
-    <span className="group relative inline-flex cursor-help font-bold text-amber-600" title="Nadpisanie reguły">
-      !
-      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white p-3 shadow-lg group-hover:block">
-        <BreakTooltip br={latestBreak} />
-      </span>
-    </span>
-  );
-}
-
 type Props = {
   warehouseId: number | null;
   sectionNavObserve?: boolean;
 };
+
+const SERIES_PAGE_SIZE = 50;
 
 export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve = true }: Props) {
   const [panelSummary, setPanelSummary] = useState<OrderUiStatusPanelSummary | null>(null);
@@ -119,21 +63,28 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
   const [config, setConfig] = useState<WmsPackagingProposalLocalConfigV1>(DEFAULT_WMS_PACKAGING_PROPOSAL_LOCAL_CONFIG);
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
-  const [history, setHistory] = useState<WmsSmartMatchingHistoryApi[]>([]);
-  const [rules, setRules] = useState<WmsSmartMatchingRuleApi[]>([]);
+  const [series, setSeries] = useState<WmsSmartMatchingHistorySeriesItemApi[]>([]);
+  const [seriesTotal, setSeriesTotal] = useState(0);
+  const [seriesPage, setSeriesPage] = useState(1);
   const [dataLoading, setDataLoading] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
 
-  const reloadData = useCallback(async (wid: number) => {
-    const [s, h, r] = await Promise.all([
-      getWmsSmartMatchingSettings(DAMAGE_TENANT_ID, wid),
-      getWmsSmartMatchingHistory(DAMAGE_TENANT_ID, wid),
-      getWmsSmartMatchingRules(DAMAGE_TENANT_ID, wid),
-    ]);
+  const reloadSettings = useCallback(async (wid: number) => {
+    const s = await getWmsSmartMatchingSettings(DAMAGE_TENANT_ID, wid);
     setConfig(configFromApi(s));
-    setHistory(h);
-    setRules(r);
+  }, []);
+
+  const reloadSeries = useCallback(async (wid: number, page: number) => {
+    const pageData = await getWmsSmartMatchingHistorySeries(
+      DAMAGE_TENANT_ID,
+      wid,
+      page,
+      SERIES_PAGE_SIZE,
+    );
+    setSeries(pageData.items);
+    setSeriesTotal(pageData.total);
+    setSeriesPage(pageData.page);
   }, []);
 
   const persistConfig = useCallback(
@@ -166,18 +117,37 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
   );
 
   useEffect(() => {
-    if (warehouseId == null) {
-      setHistory([]);
-      setRules([]);
-      return;
-    }
+    let cancel = false;
+    void (async () => {
+      try {
+        const [sum, subs] = await Promise.all([
+          getOrderUiStatusSummary(DAMAGE_TENANT_ID, warehouseId ?? undefined),
+          getOrderPanelSubgroups(DAMAGE_TENANT_ID, warehouseId ?? undefined),
+        ]);
+        if (!cancel) {
+          setPanelSummary(sum);
+          setPanelSubgroups(subs);
+          setStatusLoadErr(null);
+        }
+      } catch {
+        if (!cancel) setStatusLoadErr("Nie udało się wczytać statusów zamówień.");
+      }
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [warehouseId]);
+
+  useEffect(() => {
+    if (warehouseId == null) return;
     let cancel = false;
     setDataLoading(true);
     void (async () => {
       try {
-        await reloadData(warehouseId);
+        await reloadSettings(warehouseId);
+        await reloadSeries(warehouseId, 1);
       } catch {
-        if (!cancel) setStatusLoadErr("Nie udało się wczytać Smart Matching.");
+        if (!cancel) setSaveMsg("Nie udało się wczytać Smart Matching.");
       } finally {
         if (!cancel) setDataLoading(false);
       }
@@ -185,38 +155,7 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
     return () => {
       cancel = true;
     };
-  }, [warehouseId, reloadData]);
-
-  useEffect(() => {
-    if (warehouseId == null) {
-      setPanelSummary(null);
-      setPanelSubgroups([]);
-      setStatusLoadErr(null);
-      return;
-    }
-    let cancel = false;
-    void (async () => {
-      try {
-        const [summary, subgroups] = await Promise.all([
-          getOrderUiStatusSummary(DAMAGE_TENANT_ID, warehouseId, { includeInactive: true }),
-          getOrderPanelSubgroups(DAMAGE_TENANT_ID, warehouseId),
-        ]);
-        if (!cancel) {
-          setPanelSummary(summary);
-          setPanelSubgroups(subgroups);
-        }
-      } catch {
-        if (!cancel) {
-          setPanelSummary(null);
-          setPanelSubgroups([]);
-          setStatusLoadErr("Nie udało się wczytać statusów panelu.");
-        }
-      }
-    })();
-    return () => {
-      cancel = true;
-    };
-  }, [warehouseId]);
+  }, [warehouseId, reloadSettings, reloadSeries]);
 
   const configRevision = useMemo(() => JSON.stringify(config), [config]);
 
@@ -225,7 +164,7 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
     setResetBusy(true);
     try {
       await postWmsSmartMatchingReset(DAMAGE_TENANT_ID, warehouseId);
-      await reloadData(warehouseId);
+      await reloadSeries(warehouseId, seriesPage);
       setResetOpen(false);
       setSaveMsg("Usunięto aktywne reguły dopasowania.");
     } catch {
@@ -243,10 +182,6 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
     );
   }
 
-  const th =
-    "border-b border-slate-200 bg-slate-50 px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500";
-  const td = "border-b border-slate-100 px-3 py-2 text-sm text-slate-800";
-
   return (
     <WmsSettingsTabFrame
       title="Smart Matching"
@@ -254,7 +189,7 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
       sections={WMS_SMART_MATCHING_NAV_SECTIONS}
       asideLabel="Sekcje Smart Matching"
       observeSections={sectionNavObserve}
-      observeRevision={dataLoading ? "loading" : `${configRevision}-${history.length}-${rules.length}`}
+      observeRevision={dataLoading ? "loading" : `${configRevision}-${seriesTotal}-${seriesPage}`}
     >
       {statusLoadErr ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-sm text-amber-950">{statusLoadErr}</p>
@@ -291,94 +226,18 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
       <SectionCard
         id="wms-smart-history"
         title="Historia doboru"
-        summary="Historia decyzji pakowania używana do budowania reguł Smart Matching."
+        summary="Serie decyzji pakowania budujące reguły Smart Matching — kliknij wiersz, aby zobaczyć przebieg 1→N."
       >
-        <div className="overflow-hidden rounded-lg border border-slate-200/90 bg-white shadow-sm">
-          <div className="max-h-96 overflow-auto">
-            <table className="w-full min-w-[880px] border-collapse">
-              <thead className="sticky top-0 bg-slate-50">
-                <tr>
-                  <th className={th}>Zamówienie</th>
-                  <th className={th}>Skład / fingerprint</th>
-                  <th className={th}>Sugerowane</th>
-                  <th className={th}>Wybrane</th>
-                  <th className={th}>Operator</th>
-                  <th className={th}>Data</th>
-                  <th className={`${th} text-center`}>Nadpisanie</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className={`${td} text-slate-500`}>
-                      Brak historii — pojawi się po spakowaniu zamówień z wybranym opakowaniem.
-                    </td>
-                  </tr>
-                ) : (
-                  history.map((h) => (
-                    <tr key={h.id} className="hover:bg-slate-50/80">
-                      <td className={td}>{h.order_number || `#${h.order_id}`}</td>
-                      <td className={`${td} max-w-[14rem]`}>
-                        <div className="font-medium text-slate-900">{h.composition_label || "—"}</div>
-                        <div className="truncate font-mono text-[10px] text-slate-400" title={h.composition_key}>
-                          {h.composition_key.slice(0, 12)}…
-                        </div>
-                      </td>
-                      <td className={td}>{h.suggested_carton_id || "—"}</td>
-                      <td className={td}>{h.carton_name || h.carton_id || "—"}</td>
-                      <td className={td}>{h.user_display || "—"}</td>
-                      <td className={`${td} whitespace-nowrap`}>{formatWhen(h.created_at)}</td>
-                      <td className={`${td} text-center`}>
-                        <InterruptedCell hasBreak={h.broke_series} latestBreak={h.latest_break} />
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="mt-6 overflow-hidden rounded-lg border border-slate-200/90 bg-white shadow-sm">
-          <p className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-            Aktywne reguły dopasowania
-          </p>
-          <div className="max-h-72 overflow-auto">
-            <table className="w-full min-w-[640px] border-collapse">
-              <thead className="sticky top-0 bg-slate-50">
-                <tr>
-                  <th className={th}>Zestawienie</th>
-                  <th className={th}>Opakowanie</th>
-                  <th className={`${th} text-right`}>Trafienia</th>
-                  <th className={`${th} text-center`}>Nadpisanie</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rules.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className={`${td} text-slate-500`}>
-                      Brak automatycznych reguł — pojawią się po osiągnięciu progu identycznych spakowań.
-                    </td>
-                  </tr>
-                ) : (
-                  rules.map((r) => (
-                    <tr key={r.id} className="hover:bg-slate-50/80">
-                      <td className={`${td} max-w-[16rem]`}>{r.composition_label || "—"}</td>
-                      <td className={td}>{r.carton_name || r.carton_id}</td>
-                      <td className={`${td} text-right tabular-nums`}>{r.hit_count}</td>
-                      <td className={`${td} text-center`}>
-                        <InterruptedCell
-                          hasBreak={r.has_interrupted_series}
-                          latestBreak={r.latest_break}
-                        />
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <SmartMatchingHistorySeriesTable
+          items={series}
+          total={seriesTotal}
+          page={seriesPage}
+          limit={SERIES_PAGE_SIZE}
+          loading={dataLoading}
+          onPageChange={(p) => {
+            void reloadSeries(warehouseId, p);
+          }}
+        />
       </SectionCard>
 
       {resetOpen ? (
