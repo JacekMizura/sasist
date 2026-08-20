@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
-import { Factory, FileText, Settings2, Printer } from "lucide-react";
 
 import api from "../../api/axios";
 import { getWmsReturnsModeSettings, setWmsReturnsModeSettings } from "../../api/wmsReturnsApi";
@@ -13,9 +12,6 @@ import type {
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { WmsSettingsTabFrame } from "./WmsSettingsTabFrame";
 import { WmsSettingsSection } from "./WmsSettingsSection";
-import { DocumentTemplateScopeSection } from "./document-templates/components/DocumentTemplateScopeSection";
-import { RETURNS_SCOPE_KINDS } from "./document-templates/documentTemplateScopeKinds";
-import type { WmsSettingsSectionConfig } from "./wmsSettingsSectionConfig";
 import {
   SettingInfoButton,
   WmsBoolSettingRow,
@@ -23,25 +19,17 @@ import {
   wmsSettingControlSelectClass,
   wmsSettingsRowsStackClass,
 } from "./wmsSettingsUi";
+import {
+  WMS_RETURNS_MFG_SECTION_ID,
+  WMS_RETURNS_MODE_SECTION_ID,
+  WMS_RETURNS_SETTINGS_NAV_SECTIONS,
+  WMS_RETURNS_ZPZ_SECTION_ID,
+} from "./wmsReturnsSettingsNavSections";
 
-const MODE_SECTION_ID = "wms-returns-workflow-mode";
-const ZPZ_LABEL_SECTION_ID = "wms-returns-z-pz-label";
-const MFG_SECTION_ID = "wms-returns-manufactured";
-const DOCS_SECTION_ID = "wms-returns-document-templates";
-
-const RETURNS_NAV: WmsSettingsSectionConfig[] = [
-  { id: MODE_SECTION_ID, label: "Ogólne", icon: Settings2, iconClassName: "bg-slate-100 text-slate-600" },
-  { id: ZPZ_LABEL_SECTION_ID, label: "Przyjęcie", icon: Printer, iconClassName: "bg-sky-50 text-sky-600", searchText: "etykieta Z-PZ" },
-  {
-    id: MFG_SECTION_ID,
-    label: "Produkty produkowane",
-    icon: Factory,
-    iconClassName: "bg-emerald-50 text-emerald-700",
-    searchText: "odzysk komponentów BOM",
-  },
-  { id: DOCS_SECTION_ID, label: "Dokumenty", icon: FileText, iconClassName: "bg-indigo-50 text-indigo-600" },
-];
-
+const MODE_SECTION_ID = WMS_RETURNS_MODE_SECTION_ID;
+const ZPZ_LABEL_SECTION_ID = WMS_RETURNS_ZPZ_SECTION_ID;
+const MFG_SECTION_ID = WMS_RETURNS_MFG_SECTION_ID;
+const RETURNS_NAV = WMS_RETURNS_SETTINGS_NAV_SECTIONS;
 type LabelTemplateOption = {
   id: number;
   name: string;
@@ -558,20 +546,6 @@ export default function WmsReturnsSettingsPanel({ warehouseId }: Props) {
             </div>
           </div>
         )}
-      </SettingsSectionCard>
-
-      <SettingsSectionCard
-        sectionId={DOCS_SECTION_ID}
-        title="Dokumenty"
-        summary="Szablony wydruków powiązane ze zwrotami."
-      >
-        <DocumentTemplateScopeSection
-          tenantId={DAMAGE_TENANT_ID}
-          scopeType="RETURNS"
-          scopeId={DAMAGE_TENANT_ID}
-          title="Szablony wydruków zwrotów"
-          kinds={RETURNS_SCOPE_KINDS}
-        />
       </SettingsSectionCard>
     </WmsSettingsTabFrame>
   );
