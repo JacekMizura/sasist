@@ -74,7 +74,11 @@ class ListIncompleteReceivingProductsTests(unittest.TestCase):
         q.all.return_value = [complete, incomplete, no_req]
         db.query.return_value = q
 
-        out = list_incomplete_receiving_products(db, tenant_id=1, warehouse_id=None, limit=50)
+        with patch(
+            "backend.services.wms_product_incomplete_service.load_wms_settings_for_product",
+            return_value=None,
+        ):
+            out = list_incomplete_receiving_products(db, tenant_id=1, warehouse_id=None, limit=50)
 
         self.assertEqual(out.total, 1)
         self.assertEqual(len(out.items), 1)

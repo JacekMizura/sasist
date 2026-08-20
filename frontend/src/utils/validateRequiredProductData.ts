@@ -48,10 +48,9 @@ function positive(v: unknown): boolean {
   return Number.isFinite(n) && n > 1e-9;
 }
 
-/** Master has an explicit weight including verified 0 kg (null/undefined = not provided). Sync with BE weight_provided. */
-function weightProvided(v: unknown): boolean {
-  if (v === null || v === undefined || v === "") return false;
-  return Number.isFinite(Number(v));
+/** Master has an explicit positive weight (> 0). Sync with BE master_weight_complete_for_receiving. */
+function weightComplete(v: unknown): boolean {
+  return positive(v);
 }
 
 function nonEmpty(v: unknown): boolean {
@@ -82,7 +81,6 @@ function badgeLabelsFromMissing(missing: MissingReceivingField[]): string[] {
   if (keys.has("height") || keys.has("width") || keys.has("length")) labels.push("Brak wymiarów");
   if (keys.has("weight")) labels.push("Brak wagi");
   if (keys.has("bulk_ean") && keys.size === 1) labels.push("Brak EAN kartonu");
-  else if (keys.has("master_carton")) labels.push("Brak kartonu");
   else if ([...keys].some((k) => k.startsWith("carton") || k === "bulk_ean" || k === "units_per_carton"))
     labels.push("Brak danych kartonu");
   return labels;
@@ -109,13 +107,9 @@ export function validateRequiredProductData(
     missing.push({ key: "width", label: "Szerokość", group: "basic" });
   if (req.require_recv_length && !positive(product.length))
     missing.push({ key: "length", label: "Długość", group: "basic" });
-  // Explicit 0 kg counts as provided (same as backend master_weight_complete_for_receiving).
-  if (req.require_recv_weight && !weightProvided(product.weight))
+  if (req.require_recv_weight && !weightComplete(product.weight))
     missing.push({ key: "weight", label: "Waga", group: "basic" });
 
-  const hasCarton = nonEmpty(product.bulk_ean) || positive(product.units_per_carton);
-  if (req.require_recv_master_carton && !hasCarton)
-    missing.push({ key: "master_carton", label: "Opakowanie zbiorcze", group: "carton" });
   if (req.require_recv_master_carton_ean && !nonEmpty(product.bulk_ean))
     missing.push({ key: "bulk_ean", label: "EAN opakowania zbiorczego", group: "carton" });
   if (req.require_recv_master_carton_qty && !positive(product.units_per_carton))
@@ -132,7 +126,6 @@ export function validateRequiredProductData(
       req.require_recv_width ||
       req.require_recv_length ||
       req.require_recv_weight ||
-      req.require_recv_master_carton ||
       req.require_recv_master_carton_ean ||
       req.require_recv_master_carton_qty ||
       req.require_recv_master_carton_dims ||

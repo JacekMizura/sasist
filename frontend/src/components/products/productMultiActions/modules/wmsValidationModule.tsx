@@ -13,7 +13,6 @@ const FIELDS: PatchFieldDef[] = [
   { key: "track_batch", label: "Wymagaj numeru partii", type: "boolean" },
   { key: "track_expiry", label: "Wymagaj daty ważności", type: "boolean" },
   { key: "track_serial", label: "Wymagaj numeru seryjnego", type: "boolean" },
-  { key: "require_recv_master_carton", label: "Produkt posiada opakowanie zbiorcze", type: "boolean" },
   { key: "require_recv_master_carton_ean", label: "Wymagaj EAN opakowania zbiorczego", type: "boolean" },
   { key: "require_recv_master_carton_qty", label: "Wymagaj ilości w opakowaniu zbiorczym", type: "boolean" },
   { key: "require_recv_master_carton_dims", label: "Wymagaj wymiarów opakowania zbiorczego", type: "boolean" },

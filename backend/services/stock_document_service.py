@@ -1927,6 +1927,12 @@ def accept_stock_document(db: Session, tenant_id: int, document_id: int) -> Stoc
 
     now = datetime.utcnow()
 
+    from .product_validation_policy import load_wms_settings_for_product, resolve_effective_receiving_requirements
+
+    wms_settings = load_wms_settings_for_product(
+        db, tenant_id=int(tenant_id), warehouse_id=getattr(doc, "warehouse_id", None)
+    )
+
     for sdi in items:
         rec = float(sdi.received_quantity or 0)
         sdi.quantity = rec
@@ -1995,8 +2001,12 @@ def accept_stock_document(db: Session, tenant_id: int, document_id: int) -> Stoc
             continue
 
         prod = db.query(Product).filter(Product.id == sdi.product_id).first()
-        tb = bool(getattr(prod, "track_batch", False)) if prod else False
-        te = bool(getattr(prod, "track_expiry", False)) if prod else False
+        if prod is not None:
+            eff = resolve_effective_receiving_requirements(prod, wms_settings)
+            tb = bool(eff.track_batch)
+            te = bool(eff.track_expiry)
+        else:
+            tb = te = False
         bn = "" if not tb else normalize_batch_number(getattr(sdi, "batch_number", None))
         if tb and not bn:
             raise ValueError(f"Brak numeru partii dla produktu #{sdi.product_id} (wymagane przy zatwierdzeniu)")

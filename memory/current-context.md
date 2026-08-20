@@ -1,4 +1,22 @@
-**Print-agent poll log noise cleanup (2026-08-20) — PASS, commit pending.**
+**Przyjęcia → Ogólne validation cleanup (2026-08-20) — PASS.**
+- UI: 3 blocks / 9 settings; removed dead `require_master_carton` feature flag
+- Soft master-data (dims/weight/carton completeness); hard traceability (batch/expiry/serial)
+- Weight must be > 0; carton EAN/qty/dims/weight unified in completeness helper
+- Migrated resolver forces `require_recv_master_carton=False`; mark_damaged + office accept use effective policy
+- Bulk EAN scan independent of validation settings 7–10; legacy DB/API keys preserved
+- Tests A–O + FE vitest + lifecycle + `npm run build` PASS
+
+**WMS Returns Dokumenty UI cleanup (2026-08-20) — shipped `1322570e`.**
+- Removed WMS → Zwroty → Dokumenty (misleading return_document DTE picker)
+- Nav: Ogólne / Przyjęcie / Produkty produkowane only; DTE/ERP return_document KEPT
+- Legacy RETURNS scope assignments left in DB
+
+**Circular import FIX (2026-08-20) — PASS, committed `a6fbb76b`.**
+- Cycle: main→cart→packing→wms_sale_document→buyer_snapshot→direct_sale.__init__→complete→worker→wms_sale_document
+- Fix: neutral `retail_customer_service.py`; slim `direct_sale/__init__`; facade via `direct_sale_service.py`
+- `import backend.main` OK; local `/healthz`+`/readyz` 200 on `run_server.py`
+
+**Print-agent poll log noise cleanup (2026-08-20) — PASS, committed `1eafa084`.**
 - `log_print_poll`: empty polls DEBUG, jobs>0 INFO (fields unchanged)
 - heartbeat success → DEBUG; errors unchanged
 - `QuietPrintingAgentAccessFilter` on `uvicorn.access`: suppress 2xx only for pending/heartbeat/devices sync; fail-open

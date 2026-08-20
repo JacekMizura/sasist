@@ -266,8 +266,7 @@ export function ProductEditBasicTab({
   const productSkipsVisible = Boolean(g?.require_dimensions || g?.require_weight);
   const batchSkipsVisible = Boolean(g?.require_batch || g?.require_expiry || g?.require_serial);
   const cartonSkipsVisible = Boolean(
-    g?.require_master_carton ||
-      g?.require_master_carton_ean ||
+    g?.require_master_carton_ean ||
       g?.require_master_carton_qty ||
       g?.require_master_carton_dims ||
       g?.require_master_carton_weight,
@@ -279,7 +278,6 @@ export function ProductEditBasicTab({
         g.require_batch ||
         g.require_expiry ||
         g.require_serial ||
-        g.require_master_carton ||
         g.require_master_carton_ean ||
         g.require_master_carton_qty ||
         g.require_master_carton_dims ||
@@ -947,13 +945,6 @@ export function ProductEditBasicTab({
                 <div>
                   <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Opakowanie</p>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <SkipCheck
-                      globalEnabled={g.require_master_carton}
-                      checked={validationSkips.validation_skip_master_carton}
-                      onChange={(v) => setValidationSkips((prev) => ({ ...prev, validation_skip_master_carton: v }))}
-                      label="Nie wymagaj opakowania zbiorczego"
-                      disabled={saving}
-                    />
                     <SkipCheck
                       globalEnabled={g.require_master_carton_ean}
                       checked={validationSkips.validation_skip_master_carton_ean}

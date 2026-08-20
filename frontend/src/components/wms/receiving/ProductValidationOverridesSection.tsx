@@ -118,13 +118,6 @@ export function ProductValidationOverridesSection({ global, skips, onChange, dis
             disabled={disabled}
           />
           <SkipRow
-            globalEnabled={g.require_master_carton}
-            checked={skips.validation_skip_master_carton}
-            onChange={(v) => onChange({ validation_skip_master_carton: v })}
-            label="Nie wymagaj opakowania zbiorczego dla tego produktu"
-            disabled={disabled}
-          />
-          <SkipRow
             globalEnabled={g.require_master_carton_ean}
             checked={skips.validation_skip_master_carton_ean}
             onChange={(v) => onChange({ validation_skip_master_carton_ean: v })}
@@ -161,7 +154,6 @@ export function ProductValidationOverridesSection({ global, skips, onChange, dis
       !g.require_batch &&
       !g.require_expiry &&
       !g.require_serial &&
-      !g.require_master_carton &&
       !g.require_master_carton_ean &&
       !g.require_master_carton_qty &&
       !g.require_master_carton_dims &&

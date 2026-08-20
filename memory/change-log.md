@@ -1,3 +1,10 @@
+## 2026-08-20 — Przyjęcia → Ogólne: clarify validation settings / remove dead carton flag
+
+- 9 live settings in 3 UI blocks; dropped misleading `require_master_carton` (scan uses product `bulk_ean`)
+- Weight completeness `> 0`; carton master-data rules unified; no new hard finish gate
+- Effective policy wired for mark_damaged + office accept; GET `require_master_carton=false`, PUT ignores
+- Gate tests A–O + FE settings vitest; vite build PASS
+
 ## 2026-08-20 — Returns: remove dead transition helpers (post-4dfa5a17)
 
 - Deleted unused API transition helpers + noop `commit_workflow` query/FE plumbing

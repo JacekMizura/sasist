@@ -237,5 +237,5 @@ def master_dimensions_complete_for_receiving(product: Any) -> bool:
 
 
 def master_weight_complete_for_receiving(product: Any) -> bool:
-    """Weight must be explicitly set on master (including verified 0)."""
-    return weight_provided(getattr(product, "weight", None))
+    """Weight must be explicitly set and positive (> 0 kg)."""
+    return dimension_provided(getattr(product, "weight", None))

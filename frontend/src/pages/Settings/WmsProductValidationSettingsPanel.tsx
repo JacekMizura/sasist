@@ -53,7 +53,6 @@ function toDraft(s: WmsProductValidationSettings) {
     requireBatch: s.require_batch,
     requireExpiry: s.require_expiry,
     requireSerial: s.require_serial,
-    requireMasterCarton: s.require_master_carton,
     requireMasterCartonEan: s.require_master_carton_ean,
     requireMasterCartonQty: s.require_master_carton_qty,
     requireMasterCartonDims: s.require_master_carton_dims,
@@ -108,7 +107,7 @@ export default function WmsProductValidationSettingsPanel({ warehouseId }: Props
         require_batch: draft.requireBatch,
         require_expiry: draft.requireExpiry,
         require_serial: draft.requireSerial,
-        require_master_carton: draft.requireMasterCarton,
+        require_master_carton: false,
         require_master_carton_ean: draft.requireMasterCartonEan,
         require_master_carton_qty: draft.requireMasterCartonQty,
         require_master_carton_dims: draft.requireMasterCartonDims,
@@ -143,11 +142,11 @@ export default function WmsProductValidationSettingsPanel({ warehouseId }: Props
     >
       <SectionCard sectionId={SECTION_ID}>
         <p className="text-sm text-slate-600">
-          Na karcie produktu można jedynie <strong>wyłączyć</strong> wybrane reguły dla konkretnego SKU (
+          Na karcie produktu można <strong>wyłączyć</strong> wybrane wymagania dla konkretnego SKU (
           <Link to="/products" className="text-indigo-800 underline hover:text-indigo-950">
             Produkty
           </Link>
-          → Ustawienia → Walidacja).
+          → Ustawienia → Walidacja). Wyjątek produktu jest globalny dla SKU, nie dla pojedynczego magazynu.
         </p>
 
         <div className="mt-2">
@@ -157,7 +156,6 @@ export default function WmsProductValidationSettingsPanel({ warehouseId }: Props
             requireBatch={draft.requireBatch}
             requireExpiry={draft.requireExpiry}
             requireSerial={draft.requireSerial}
-            requireMasterCarton={draft.requireMasterCarton}
             requireMasterCartonEan={draft.requireMasterCartonEan}
             requireMasterCartonQty={draft.requireMasterCartonQty}
             requireMasterCartonDims={draft.requireMasterCartonDims}

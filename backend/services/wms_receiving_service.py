@@ -2111,7 +2111,9 @@ def mark_wms_receiving_pz_item_damaged(
     prod = db.query(Product).filter(Product.id == anchor.product_id).first()
     if not prod:
         raise ValueError("Product not found")
-    bn, ed = _lot_from_wms_body(prod, anchor.batch_number, anchor.expiry_date)
+    bn, ed = _lot_from_wms_body(
+        prod, anchor.batch_number, anchor.expiry_date, _wms_settings_for_doc(db, doc)
+    )
 
     rows = (
         db.query(StockDocumentItem)

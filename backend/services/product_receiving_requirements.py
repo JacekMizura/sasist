@@ -65,7 +65,6 @@ RECEIVING_REQUIREMENT_FLAG_NAMES: tuple[str, ...] = (
     "require_recv_width",
     "require_recv_length",
     "require_recv_weight",
-    "require_recv_master_carton",
     "require_recv_master_carton_ean",
     "require_recv_master_carton_qty",
     "require_recv_master_carton_dims",
@@ -107,15 +106,10 @@ def validate_required_product_data(
         missing.append(MissingReceivingField("width", "Szerokość", "basic"))
     if eff.require_recv_length and not dimension_provided(getattr(product, "length", None)):
         missing.append(MissingReceivingField("length", "Długość", "basic"))
-    # Weight: must be explicitly set on master. Runtime technical default 0 kg does NOT count.
+    # Weight: must be explicitly set and > 0 kg (NULL / 0 = incomplete).
     if eff.require_recv_weight and not master_weight_complete_for_receiving(product):
         missing.append(MissingReceivingField("weight", "Waga", "basic"))
 
-    has_carton = _non_empty_str(getattr(product, "bulk_ean", None)) or _positive_float(
-        getattr(product, "units_per_carton", None)
-    )
-    if eff.require_recv_master_carton and not has_carton:
-        missing.append(MissingReceivingField("master_carton", "Opakowanie zbiorcze", "carton"))
     if eff.require_recv_master_carton_ean and not _non_empty_str(getattr(product, "bulk_ean", None)):
         missing.append(MissingReceivingField("bulk_ean", "EAN opakowania zbiorczego", "carton"))
     if eff.require_recv_master_carton_qty and not _positive_float(getattr(product, "units_per_carton", None)):
@@ -152,11 +146,9 @@ def _badge_labels_from_missing(missing: List[MissingReceivingField]) -> List[str
         labels.append("Brak wymiarów")
     if "weight" in keys:
         labels.append("Brak wagi")
-    if keys & {"master_carton", "bulk_ean", "units_per_carton", "carton_dimensions", "carton_weight_kg"}:
+    if keys & {"bulk_ean", "units_per_carton", "carton_dimensions", "carton_weight_kg"}:
         if "bulk_ean" in keys and len(keys) == 1:
             labels.append("Brak EAN kartonu")
-        elif "master_carton" in keys:
-            labels.append("Brak kartonu")
         else:
             labels.append("Brak danych kartonu")
     return labels

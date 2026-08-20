@@ -30,7 +30,7 @@ export function productLogisticsBadges(p: ProductListRow): ProductLogisticsBadge
     });
   }
 
-  if (p.require_recv_master_carton || p.bulk_ean?.trim()) {
+  if (p.bulk_ean?.trim()) {
     out.push({
       key: "carton",
       label: "Karton",

@@ -822,7 +822,8 @@ def _product_validation_row_to_read(row: WmsSettings) -> WmsProductValidationSet
         require_batch=bool(getattr(row, "validation_require_batch", False)),
         require_expiry=bool(getattr(row, "validation_require_expiry", False)),
         require_serial=bool(getattr(row, "validation_require_serial", False)),
-        require_master_carton=bool(getattr(row, "validation_require_master_carton", False)),
+        # Dead live flag — column retained; never expose as active requirement.
+        require_master_carton=False,
         require_master_carton_ean=bool(getattr(row, "validation_require_master_carton_ean", False)),
         require_master_carton_qty=bool(getattr(row, "validation_require_master_carton_qty", False)),
         require_master_carton_dims=bool(getattr(row, "validation_require_master_carton_dims", False)),
@@ -859,7 +860,7 @@ def save_wms_product_validation_settings(
     row.validation_require_batch = bool(body.require_batch)
     row.validation_require_expiry = bool(body.require_expiry)
     row.validation_require_serial = bool(body.require_serial)
-    row.validation_require_master_carton = bool(body.require_master_carton)
+    # Ignore require_master_carton — dead feature flag (legacy column preserved).
     row.validation_require_master_carton_ean = bool(body.require_master_carton_ean)
     row.validation_require_master_carton_qty = bool(body.require_master_carton_qty)
     row.validation_require_master_carton_dims = bool(body.require_master_carton_dims)

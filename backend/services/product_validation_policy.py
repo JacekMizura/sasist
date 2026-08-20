@@ -81,9 +81,8 @@ def resolve_effective_receiving_requirements(
         require_recv_width=req_dims,
         require_recv_length=req_dims,
         require_recv_weight=master("validation_require_weight", "validation_skip_weight"),
-        require_recv_master_carton=master(
-            "validation_require_master_carton", "validation_skip_master_carton"
-        ),
+        # Dead feature-flag: carton scan uses product.bulk_ean / units_per_carton, not this toggle.
+        require_recv_master_carton=False,
         require_recv_master_carton_ean=master(
             "validation_require_master_carton_ean", "validation_skip_master_carton_ean"
         ),
@@ -141,8 +140,7 @@ def build_receiving_validation_requirements_payload(
     dims_required = bool(eff.require_recv_height or eff.require_recv_width or eff.require_recv_length)
     dims_missing = bool(missing & {"height", "width", "length"})
     carton_required = bool(
-        eff.require_recv_master_carton
-        or eff.require_recv_master_carton_ean
+        eff.require_recv_master_carton_ean
         or eff.require_recv_master_carton_qty
         or eff.require_recv_master_carton_dims
         or eff.require_recv_master_carton_weight
@@ -150,7 +148,6 @@ def build_receiving_validation_requirements_payload(
     carton_missing = bool(
         missing
         & {
-            "master_carton",
             "bulk_ean",
             "units_per_carton",
             "carton_dimensions",
