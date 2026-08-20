@@ -1,11 +1,12 @@
 """
-Override streak + AUTO rule break/relearn (Phase 2).
+Override streak + AUTO rule break/relearn (Phase 2 + 5A linkage).
 
 break_threshold = learning threshold (settings identical_orders_threshold),
 preferring the rule's created_threshold when set.
 
 Matching choice → override_streak = 0.
-Override → override_streak += 1; at threshold → status BROKEN (AUTO only).
+Override → override_streak += 1; at threshold → status BROKEN (AUTO only)
+  and broken_by_observation_id = current observation (deterministic).
 MANUAL / is_locked rules are never auto-broken.
 
 Important: if order qty > suggested rule.min_qty, do NOT count as override.
@@ -42,11 +43,10 @@ def _competing_series_ready(
     warehouse_id: int,
     product_id: int,
     chosen_carton_id: str,
-    order_quantity: int,
     rule_min_qty: int,
     threshold: int,
 ) -> bool:
-    """True when this pack tips a competing same-min_qty series (conflict, not break)."""
+    """True when chosen carton already has enough obs at same min_qty (conflict, not break)."""
     obs = (
         db.query(WmsSmartMatchingObservationV2)
         .filter(
@@ -57,11 +57,11 @@ def _competing_series_ready(
         )
         .all()
     )
-    # Current pack not yet written — count + 1.
-    n = len(obs) + 1
+    # Caller flushes current observation first — count includes it.
+    n = len(obs)
     if n < threshold:
         return False
-    qtys = [int(o.quantity) for o in obs] + [int(order_quantity)]
+    qtys = [int(o.quantity) for o in obs]
     return min(qtys) == int(rule_min_qty)
 
 
@@ -72,10 +72,12 @@ def apply_override_streak_after_choice(
     chosen_carton_id: str,
     order_quantity: int,
     settings_row,
+    breaking_observation_id: Optional[int] = None,
 ) -> Optional[WmsSmartMatchingRuleV2]:
     """
     Update override_streak on the ACTIVE AUTO rule that would have been suggested.
     Returns the rule if it was BROKEN by this call.
+    When broken, sets broken_by_observation_id to breaking_observation_id (required for history).
     """
     if resolved is None or resolved.ambiguous:
         return None
@@ -118,7 +120,6 @@ def apply_override_streak_after_choice(
             warehouse_id=int(rule.warehouse_id),
             product_id=int(rule.product_id),
             chosen_carton_id=chosen,
-            order_quantity=int(order_quantity),
             rule_min_qty=int(rule.min_qty),
             threshold=threshold,
         ):
@@ -126,15 +127,18 @@ def apply_override_streak_after_choice(
             db.flush()
             return None
         rule.status = STATUS_BROKEN
+        if breaking_observation_id is not None:
+            rule.broken_by_observation_id = int(breaking_observation_id)
         broken = rule
         logger.info(
-            "smart_matching_v2 AUTO rule BROKEN id=%s product=%s min_qty=%s carton=%s streak=%s thr=%s",
+            "smart_matching_v2 AUTO rule BROKEN id=%s product=%s min_qty=%s carton=%s streak=%s thr=%s obs=%s",
             rule.id,
             rule.product_id,
             rule.min_qty,
             rule.carton_id,
             streak,
             threshold,
+            breaking_observation_id,
         )
     db.add(rule)
     db.flush()

@@ -183,3 +183,94 @@ class WmsSmartMatchingRuleLockSave(BaseModel):
     tenant_id: int = Field(..., ge=1)
     warehouse_id: int = Field(..., ge=1)
     is_locked: bool = True
+
+
+class WmsSmartMatchingNamedRefOut(BaseModel):
+    id: Optional[str] = None
+    name: Optional[str] = None
+
+
+class WmsSmartMatchingProductRefOut(BaseModel):
+    id: int
+    name: str
+
+
+class WmsSmartMatchingOperatorOut(BaseModel):
+    id: Optional[int] = None
+    display_name: Optional[str] = None
+
+
+class WmsSmartMatchingLinkedRuleOut(BaseModel):
+    id: int
+    min_qty: int
+    carton_id: str
+    carton_name: Optional[str] = None
+    source: str
+    status: str
+    is_locked: bool = False
+    created_threshold: Optional[int] = None
+    hit_count: int = 0
+
+
+class WmsSmartMatchingHistoryEventOut(BaseModel):
+    observation_id: int
+    order_id: int
+    order_number: Optional[str] = None
+    product: WmsSmartMatchingProductRefOut
+    quantity: int
+    carton: Optional[WmsSmartMatchingNamedRefOut] = None
+    suggested_carton: Optional[WmsSmartMatchingNamedRefOut] = None
+    operator: WmsSmartMatchingOperatorOut = Field(default_factory=WmsSmartMatchingOperatorOut)
+    created_at: Optional[str] = None
+    is_override: bool = False
+    is_decisive: bool = False
+    is_rule_created: bool = False
+    is_rule_broken: bool = False
+    linked_rule: Optional[WmsSmartMatchingLinkedRuleOut] = None
+    engine_version: int = 2
+
+
+class WmsSmartMatchingHistoryEventsPageOut(BaseModel):
+    page: int
+    limit: int
+    total: int
+    items: list[WmsSmartMatchingHistoryEventOut] = Field(default_factory=list)
+
+
+class WmsSmartMatchingLearningSeriesHitOut(BaseModel):
+    observation_id: int
+    hit_index: int
+    order_id: int
+    order_number: Optional[str] = None
+    quantity: int
+    operator: Optional[str] = None
+    created_at: Optional[str] = None
+    carton_id: Optional[str] = None
+    carton_name: Optional[str] = None
+    is_decisive: bool = False
+    is_rule_broken: bool = False
+    is_override: bool = False
+
+
+class WmsSmartMatchingLearningSeriesRuleOut(BaseModel):
+    id: int
+    product_id: int
+    product_name: str
+    min_qty: int
+    carton_id: str
+    carton_name: Optional[str] = None
+    source: str
+    status: str
+    is_locked: bool = False
+    created_threshold: Optional[int] = None
+    label: str
+
+
+class WmsSmartMatchingLearningSeriesOut(BaseModel):
+    product_id: int
+    product_name: str
+    carton_id: str
+    carton_name: Optional[str] = None
+    created_threshold: Optional[int] = None
+    hits: list[WmsSmartMatchingLearningSeriesHitOut] = Field(default_factory=list)
+    rule: Optional[WmsSmartMatchingLearningSeriesRuleOut] = None

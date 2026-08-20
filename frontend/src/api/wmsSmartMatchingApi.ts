@@ -230,3 +230,123 @@ export async function deleteProductManualRule(
     params: { tenant_id: tenantId, warehouse_id: warehouseId },
   });
 }
+
+export type WmsSmartMatchingHistoryEventApi = {
+  observation_id: number;
+  order_id: number;
+  order_number?: string | null;
+  product: { id: number; name: string };
+  quantity: number;
+  carton?: { id?: string | null; name?: string | null } | null;
+  suggested_carton?: { id?: string | null; name?: string | null } | null;
+  operator: { id?: number | null; display_name?: string | null };
+  created_at?: string | null;
+  is_override: boolean;
+  is_decisive: boolean;
+  is_rule_created: boolean;
+  is_rule_broken: boolean;
+  linked_rule?: {
+    id: number;
+    min_qty: number;
+    carton_id: string;
+    carton_name?: string | null;
+    source: string;
+    status: string;
+    is_locked: boolean;
+    created_threshold?: number | null;
+    hit_count: number;
+  } | null;
+  engine_version: number;
+};
+
+export type WmsSmartMatchingHistoryEventsPageApi = {
+  page: number;
+  limit: number;
+  total: number;
+  items: WmsSmartMatchingHistoryEventApi[];
+};
+
+export type WmsSmartMatchingLearningSeriesHitApi = {
+  observation_id: number;
+  hit_index: number;
+  order_id: number;
+  order_number?: string | null;
+  quantity: number;
+  operator?: string | null;
+  created_at?: string | null;
+  carton_id?: string | null;
+  carton_name?: string | null;
+  is_decisive: boolean;
+  is_rule_broken: boolean;
+  is_override: boolean;
+};
+
+export type WmsSmartMatchingLearningSeriesApi = {
+  product_id: number;
+  product_name: string;
+  carton_id: string;
+  carton_name?: string | null;
+  created_threshold?: number | null;
+  hits: WmsSmartMatchingLearningSeriesHitApi[];
+  rule?: {
+    id: number;
+    product_id: number;
+    product_name: string;
+    min_qty: number;
+    carton_id: string;
+    carton_name?: string | null;
+    source: string;
+    status: string;
+    is_locked: boolean;
+    created_threshold?: number | null;
+    label: string;
+  } | null;
+};
+
+export async function getSmartMatchingHistoryEvents(
+  tenantId: number,
+  warehouseId: number,
+  opts?: {
+    page?: number;
+    limit?: number;
+    product_id?: number;
+    carton_id?: string;
+    user_id?: number;
+    event_type?: string;
+    from?: string;
+    to?: string;
+  },
+): Promise<WmsSmartMatchingHistoryEventsPageApi> {
+  const res = await api.get<WmsSmartMatchingHistoryEventsPageApi>("/wms/smart-matching/history-events", {
+    params: {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId,
+      page: opts?.page ?? 1,
+      limit: opts?.limit ?? 50,
+      product_id: opts?.product_id,
+      carton_id: opts?.carton_id,
+      user_id: opts?.user_id,
+      event_type: opts?.event_type ?? "all",
+      from: opts?.from,
+      to: opts?.to,
+    },
+  });
+  return res.data;
+}
+
+export async function getSmartMatchingLearningSeries(
+  tenantId: number,
+  warehouseId: number,
+  productId: number,
+  cartonId: string,
+): Promise<WmsSmartMatchingLearningSeriesApi> {
+  const res = await api.get<WmsSmartMatchingLearningSeriesApi>("/wms/smart-matching/learning-series", {
+    params: {
+      tenant_id: tenantId,
+      warehouse_id: warehouseId,
+      product_id: productId,
+      carton_id: cartonId,
+    },
+  });
+  return res.data;
+}

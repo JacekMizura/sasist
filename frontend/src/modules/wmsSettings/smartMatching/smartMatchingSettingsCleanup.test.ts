@@ -7,7 +7,7 @@ import { WMS_SMART_MATCHING_NAV_SECTIONS } from "../../../pages/Settings/wmsSmar
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "../../..");
 
-describe("Smart Matching settings cleanup + history series UI", () => {
+describe("Smart Matching settings + history events v2 UI", () => {
   const navSrc = readFileSync(
     path.resolve(ROOT, "pages/Settings/wmsSmartMatchingSettingsNavSections.ts"),
     "utf8",
@@ -16,8 +16,8 @@ describe("Smart Matching settings cleanup + history series UI", () => {
     path.resolve(ROOT, "pages/Settings/WmsSmartMatchingSettingsPanel.tsx"),
     "utf8",
   );
-  const seriesTable = readFileSync(
-    path.resolve(ROOT, "pages/Settings/SmartMatchingHistorySeriesTable.tsx"),
+  const eventsTable = readFileSync(
+    path.resolve(ROOT, "pages/Settings/SmartMatchingHistoryEventsTable.tsx"),
     "utf8",
   );
   const engineForm = readFileSync(
@@ -41,6 +41,7 @@ describe("Smart Matching settings cleanup + history series UI", () => {
     "utf8",
   );
   const fitPanelPath = path.resolve(ROOT, "components/wms/packing/PackingFitRecommendationPanel.tsx");
+  const legacySeriesPath = path.resolve(ROOT, "pages/Settings/SmartMatchingHistorySeriesTable.tsx");
 
   it("A) nav has only Ogólne + Historia doboru", () => {
     expect(WMS_SMART_MATCHING_NAV_SECTIONS.map((s) => s.label)).toEqual(["Ogólne", "Historia doboru"]);
@@ -51,42 +52,38 @@ describe("Smart Matching settings cleanup + history series UI", () => {
     expect(navSrc).not.toContain('label: "Zaawansowane"');
   });
 
-  it("compact table: packaging / product / hit count — no algorithm status columns", () => {
-    expect(panel).toContain("SmartMatchingHistorySeriesTable");
-    expect(panel).toContain("getWmsSmartMatchingHistorySeries");
-    expect(panel).not.toContain("Aktywne reguły dopasowania");
-    expect(seriesTable).not.toContain("fingerprint");
-    expect(seriesTable).toContain("Opakowanie");
-    expect(seriesTable).toContain("Produkt / zestaw");
-    expect(seriesTable).toContain("Ilość doborów");
-    expect(seriesTable).toContain("Ostatni operator");
-    expect(seriesTable).not.toContain(">Status<");
-    expect(seriesTable).not.toContain(">Seria<");
-    expect(seriesTable).not.toContain("W trakcie");
-    expect(seriesTable).not.toContain("Reguła aktywna");
-    expect(seriesTable).not.toContain("/ {series.threshold}");
-    expect(seriesTable).toContain("hit_count");
-    expect(seriesTable).toContain("+{extraCount} innych produktów");
+  it("history v2 table: decision columns — no composition series / hash", () => {
+    expect(panel).toContain("SmartMatchingHistoryEventsTable");
+    expect(panel).not.toContain("SmartMatchingHistorySeriesTable");
+    expect(panel).not.toContain("getWmsSmartMatchingHistorySeries");
+    expect(existsSync(legacySeriesPath)).toBe(false);
+    expect(eventsTable).toContain("Opakowanie");
+    expect(eventsTable).toContain("Produkt / zestaw");
+    expect(eventsTable).toContain("Ilość");
+    expect(eventsTable).toContain("Dopasowanie");
+    expect(eventsTable).not.toContain("composition_key");
+    expect(eventsTable).not.toContain("fingerprint");
+    expect(eventsTable).not.toContain("W trakcie");
+    expect(eventsTable).not.toContain("Ilość doborów");
   });
 
-  it("popover: hit numbering, DECYDUJĄCY only via is_decisive, NADPISANIE in detail", () => {
-    expect(seriesTable).toContain("SeriesPopover");
-    expect(seriesTable).toContain("w-[28rem]");
-    expect(seriesTable).toContain("hit.hit_index");
-    expect(seriesTable).toContain("hit.is_decisive");
-    expect(seriesTable).toContain("Decydujący");
-    expect(seriesTable).toContain("Nadpisanie");
-    expect(seriesTable).toContain("TRYB:");
-    expect(seriesTable).toContain("AKTUALNY PRÓG:");
-    expect(seriesTable).not.toContain("created_at) as decisive");
+  it("popover: hit_index vs quantity separate; DECYDUJĄCY / PRZERWAŁ REGUŁĘ", () => {
+    expect(eventsTable).toContain("LearningPopover");
+    expect(eventsTable).toContain("hit.hit_index");
+    expect(eventsTable).toContain("Ilość:");
+    expect(eventsTable).toContain("hit.quantity");
+    expect(eventsTable).toContain("Decydujący");
+    expect(eventsTable).toContain("Przerwał regułę");
+    expect(eventsTable).toContain("TRYB:");
+    expect(eventsTable).toContain("series.rule.label");
   });
 
-  it("row height stays compact — no multi-line product dump / hash in main cell", () => {
-    expect(seriesTable).toContain("truncate");
-    expect(seriesTable).toContain("py-1.5");
-    expect(seriesTable).toContain("composition_preview");
-    expect(seriesTable).not.toContain("composition_key.slice");
-    expect(panel).not.toContain("font-mono text-[10px]");
+  it("match badges: utworzona / nadpisanie / przerwana / ręczna", () => {
+    expect(eventsTable).toContain("Reguła utworzona");
+    expect(eventsTable).toContain("Nadpisanie");
+    expect(eventsTable).toContain("Reguła przerwana");
+    expect(eventsTable).toContain("Ręczna");
+    expect(eventsTable).toContain("Konflikt");
   });
 
   it("E/F/G) Ogólne still wires enabled, threshold, proposal_init_status", () => {

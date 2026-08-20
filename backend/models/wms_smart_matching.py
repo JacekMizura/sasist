@@ -108,6 +108,13 @@ class WmsSmartMatchingRuleV2(Base):
         nullable=True,
         index=True,
     )
+    #: Observation that tipped AUTO ACTIVE → BROKEN (deterministic). Legacy / never-broken = NULL.
+    broken_by_observation_id = Column(
+        Integer,
+        ForeignKey("wms_smart_matching_observations_v2.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_threshold = Column(Integer, nullable=True)
     last_order_id = Column(Integer, ForeignKey("orders.id", ondelete="SET NULL"), nullable=True)
     last_used_at = Column(DateTime, nullable=True)

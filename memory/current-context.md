@@ -1,11 +1,25 @@
-**Smart Matching / 3D Matching v2 — Phase 1 PASS (gate; commit pending).**
-- Product decisions FINAL (break=threshold, min_qty, strategy enum, shipping hard, engine v1/v2)
-- Phase 1: v2 models + observations + min_qty learning + breakpoint resolver; new writes v2 only; v1 readonly
-- Learning: (product,carton) ≥ threshold → one rule `min_qty=MIN(qty)`; decisive = triggering obs
-- Tests: `test_wms_smart_matching_v2` + legacy suite 26 PASS; `import backend.main` OK
-- STOP — Phase 2 (break/conflict/shipping) only after Phase 1 commit
+**Smart Matching / 3D Matching v2 — Phase 5A PASS (commit pending).**
+- Historia SSOT = ObservationV2 (1 row = 1 packing decision)
+- `RuleV2.broken_by_observation_id` set only on AUTO ACTIVE→BROKEN (no inference)
+- GET `/history-events` + `/learning-series`; FE compact table + popover; dead series FE removed
+- Legacy `/history-series` kept; no v1↔v2 heuristic mix
+- Gate: BE 51 PASS (history+v2+legacy+strategy); FE vitest 8; npm build; import backend.main; schema OK
+- Do not start Phase 5B (multi-package / N labels / filler)
 
-**Smart Matching history series redesign — PASS `b8271b1e`.**
+**Smart Matching / 3D Matching v2 — Phase 4 PASS (gate; commit pending).**
+- BE: product enable SSOT, MANUAL rules, lock, panel API; FE replaces localStorage atrapa
+- Disabled product: obs logged, no AUTO learn/suggest; locked MANUAL survives overrides
+- Tests K/L/M + suites 41 PASS; startup OK
+- Phase 5 later: history projection v2 UI, multi-package, N labels, filler
+
+**Smart Matching / 3D Matching v2 — Phase 3 PASS `0748b954`.**
+- StrategyResolver SSOT; SmartResult|ThreeDResult; legacy_v1_fallback disable
+
+**Smart Matching / 3D Matching v2 — Phase 2 PASS `8e5b3e5e`.**
+- break/conflict/shipping hard filter
+
+**Smart Matching / 3D Matching v2 — Phase 1 PASS `aca85964`.**
+- v2 min_qty model + learning
 - Series UI: composition+carton tracks; popover 1→N; DECYDUJĄCY via `created_from_history_id` only
 - Also `created_threshold` on rule INSERT; legacy NULL = no decisive / „Aktualny próg”
 - GET `/wms/smart-matching/history-series`; no heuristic backfill; runtime algorithm unchanged

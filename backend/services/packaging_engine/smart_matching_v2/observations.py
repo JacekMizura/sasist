@@ -30,8 +30,8 @@ def record_v2_observation_and_learn(
     Write a v2 observation when the order is single-product eligible.
     Multi-SKU baskets: no v2 observation / no v2 learning (caller may still write v1 history).
 
-    Also applies AUTO override_streak / break before learning from the new choice.
-    Per-product disable: still writes observation/history; skips learning + streak when OFF.
+    Order: resolve suggestion → write observation → override/break (with broken_by_observation_id)
+    → learn. Per-product disable: still writes observation; skips learning + streak when OFF.
     """
     line = single_product_qty_from_order(db, order)
     if line is None:
@@ -62,14 +62,6 @@ def record_v2_observation_and_learn(
             if resolved is not None and not resolved.ambiguous:
                 suggested = str(resolved.rule.carton_id)
 
-        apply_override_streak_after_choice(
-            db,
-            resolved=resolved,
-            chosen_carton_id=cid,
-            order_quantity=int(line.quantity),
-            settings_row=settings,
-        )
-
     obs = WmsSmartMatchingObservationV2(
         tenant_id=tid,
         warehouse_id=wid,
@@ -86,6 +78,14 @@ def record_v2_observation_and_learn(
     db.flush()
 
     if product_on:
+        apply_override_streak_after_choice(
+            db,
+            resolved=resolved,
+            chosen_carton_id=cid,
+            order_quantity=int(line.quantity),
+            settings_row=settings,
+            breaking_observation_id=int(obs.id),
+        )
         learn_auto_rules_for_product_carton(
             db,
             tenant_id=tid,

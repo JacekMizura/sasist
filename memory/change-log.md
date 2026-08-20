@@ -1,9 +1,33 @@
+## 2026-08-20 — Smart Matching v2 Phase 5A (history-events)
+
+- `broken_by_observation_id` on RuleV2; set only at AUTO break tip observation
+- GET `/wms/smart-matching/history-events` + `/learning-series`; FE decision table + popover
+- Removed dead `SmartMatchingHistorySeriesTable`; legacy `/history-series` API kept
+- Tests A–U history-events + suites PASS; build/startup/schema OK
+
+## 2026-08-20 — Smart Matching v2 Phase 4 (manual / lock / product UI)
+
+- Product settings SSOT + MANUAL/lock APIs; FE panel replaces localStorage atrapa
+- Tests K/L/M PASS
+
+## 2026-08-20 — Smart Matching v2 Phase 3 (strategy resolver)
+
+- `strategy_resolver.py` SSOT; engine wires SmartResult|ThreeDResult (no soft merge primary)
+- `evaluate_smart_matching_v2`; legacy_v1_fallback disable; packages[] on ThreeDResult
+- Tests R–U/Z PASS
+
+## 2026-08-20 — Smart Matching v2 Phase 2 (break / conflict / shipping)
+
+- override_streak + BROKEN; skip streak when qty > rule.min_qty; competing series → AMBIGUOUS
+- Hard Carton↔ShippingMethod filter on suggest; no soft shipping bonus
+- Tests J/N/O/P/Q (+ J2 learning conflict) PASS
+
 ## 2026-08-20 — Smart Matching v2 Phase 1 (data model + min_qty)
 
 - Models: ObservationV2, RuleV2 (min_qty/source/status/lock), ProductSettings stub, strategy + legacy_v1 flags
 - Package `smart_matching_v2/`: eligibility, learning (MIN qty), breakpoint resolver, observations
 - Finish packing writes v2 obs+learn; no new v1 rules; suggest: v2 then legacy v1 if enabled
-- Tests A–I/G + legacy cutover 26 PASS; startup OK
+- Tests A–I/G + legacy cutover PASS; startup OK
 
 ## 2026-08-20 — Smart Matching history series redesign
 

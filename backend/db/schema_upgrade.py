@@ -2441,6 +2441,8 @@ def ensure_wms_smart_matching_tables(engine: Engine) -> None:
                         override_streak INTEGER NOT NULL DEFAULT 0,
                         created_from_observation_id INTEGER
                             REFERENCES wms_smart_matching_observations_v2(id) ON DELETE SET NULL,
+                        broken_by_observation_id INTEGER
+                            REFERENCES wms_smart_matching_observations_v2(id) ON DELETE SET NULL,
                         created_threshold INTEGER,
                         last_order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
                         last_used_at DATETIME,
@@ -2458,6 +2460,22 @@ def ensure_wms_smart_matching_tables(engine: Engine) -> None:
                     "ON wms_smart_matching_rules_v2(tenant_id, warehouse_id, product_id, status)"
                 )
             )
+        # Non-destructive: broken_by_observation_id for Phase 5A history linkage.
+        if _table_exists(conn, "wms_smart_matching_rules_v2"):
+            cols_v2 = _table_column_names(conn, "wms_smart_matching_rules_v2")
+            if "broken_by_observation_id" not in cols_v2:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_smart_matching_rules_v2 ADD COLUMN broken_by_observation_id INTEGER "
+                        "REFERENCES wms_smart_matching_observations_v2(id) ON DELETE SET NULL"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_wms_sm_rules_v2_broken_by "
+                        "ON wms_smart_matching_rules_v2(broken_by_observation_id)"
+                    )
+                )
         if not _table_exists(conn, "wms_smart_matching_product_settings"):
             conn.execute(
                 text(

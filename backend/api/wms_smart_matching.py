@@ -12,8 +12,10 @@ from ..auth.warehouse_deps import require_operable_warehouse
 from ..database import get_db
 from ..models.order_ui_status import OrderUiStatus
 from ..schemas.wms_smart_matching import (
+    WmsSmartMatchingHistoryEventsPageOut,
     WmsSmartMatchingHistoryOut,
     WmsSmartMatchingHistorySeriesPageOut,
+    WmsSmartMatchingLearningSeriesOut,
     WmsSmartMatchingManualRuleSave,
     WmsSmartMatchingProductPanelOut,
     WmsSmartMatchingProductSettingsSave,
@@ -23,6 +25,10 @@ from ..schemas.wms_smart_matching import (
     WmsSmartMatchingRuleV2Out,
     WmsSmartMatchingSettingsOut,
     WmsSmartMatchingSettingsSave,
+)
+from ..services.packaging_engine.smart_matching_history_events_v2 import (
+    learning_series_for_product_carton,
+    list_history_events_v2,
 )
 from ..services.packaging_engine.smart_matching_history_series import list_history_series
 from ..services.packaging_engine.smart_matching_store import (
@@ -135,11 +141,61 @@ def get_smart_matching_history_series(
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    """Learning-series projection: one row per (composition_key, carton_id)."""
+    """Legacy v1 learning-series projection (compatibility). Prefer /history-events for UI."""
     payload = list_history_series(
         db, tenant_id=tenant_id, warehouse_id=warehouse_id, page=page, limit=limit
     )
     return WmsSmartMatchingHistorySeriesPageOut.model_validate(payload)
+
+
+@router.get("/history-events", response_model=WmsSmartMatchingHistoryEventsPageOut)
+def get_smart_matching_history_events(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=100),
+    product_id: int | None = Query(None, ge=1),
+    carton_id: str | None = Query(None),
+    user_id: int | None = Query(None, ge=1),
+    event_type: str | None = Query("all"),
+    date_from: str | None = Query(None, alias="from"),
+    date_to: str | None = Query(None, alias="to"),
+    db: Session = Depends(get_db),
+):
+    """v2 decision history: one row per ObservationV2."""
+    payload = list_history_events_v2(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        page=page,
+        limit=limit,
+        product_id=product_id,
+        carton_id=carton_id,
+        user_id=user_id,
+        event_type=event_type,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return WmsSmartMatchingHistoryEventsPageOut.model_validate(payload)
+
+
+@router.get("/learning-series", response_model=WmsSmartMatchingLearningSeriesOut)
+def get_smart_matching_learning_series(
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: int = Depends(require_operable_warehouse),
+    product_id: int = Query(..., ge=1),
+    carton_id: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+):
+    """Popover series for (product, carton) — hit_index oldest→newest, render newest-first."""
+    payload = learning_series_for_product_carton(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        product_id=product_id,
+        carton_id=carton_id,
+    )
+    return WmsSmartMatchingLearningSeriesOut.model_validate(payload)
 
 
 @router.get("/rules", response_model=list[WmsSmartMatchingRuleOut])

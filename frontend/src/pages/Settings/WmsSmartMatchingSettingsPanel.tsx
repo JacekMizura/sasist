@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import {
-  getWmsSmartMatchingHistorySeries,
   getWmsSmartMatchingSettings,
   postWmsSmartMatchingReset,
   putWmsSmartMatchingSettings,
-  type WmsSmartMatchingHistorySeriesItemApi,
 } from "../../api/wmsSmartMatchingApi";
 import { getOrderPanelSubgroups, getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
@@ -21,7 +19,7 @@ import {
 } from "./wmsPackagingProposalLocalConfig";
 import { WmsPackagingProposalEngineConfigForm } from "./WmsPackagingProposalEngineConfigForm";
 import { ConfirmModal } from "../../components/ui/ConfirmModal";
-import { SmartMatchingHistorySeriesTable } from "./SmartMatchingHistorySeriesTable";
+import { SmartMatchingHistoryEventsTable } from "./SmartMatchingHistoryEventsTable";
 
 function SectionCard({
   id,
@@ -54,8 +52,6 @@ type Props = {
   sectionNavObserve?: boolean;
 };
 
-const SERIES_PAGE_SIZE = 50;
-
 export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve = true }: Props) {
   const [panelSummary, setPanelSummary] = useState<OrderUiStatusPanelSummary | null>(null);
   const [panelSubgroups, setPanelSubgroups] = useState<OrderUiPanelSubgroupRead[]>([]);
@@ -63,9 +59,7 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
   const [config, setConfig] = useState<WmsPackagingProposalLocalConfigV1>(DEFAULT_WMS_PACKAGING_PROPOSAL_LOCAL_CONFIG);
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
-  const [series, setSeries] = useState<WmsSmartMatchingHistorySeriesItemApi[]>([]);
-  const [seriesTotal, setSeriesTotal] = useState(0);
-  const [seriesPage, setSeriesPage] = useState(1);
+  const [historyKey, setHistoryKey] = useState(0);
   const [dataLoading, setDataLoading] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
@@ -73,18 +67,6 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
   const reloadSettings = useCallback(async (wid: number) => {
     const s = await getWmsSmartMatchingSettings(DAMAGE_TENANT_ID, wid);
     setConfig(configFromApi(s));
-  }, []);
-
-  const reloadSeries = useCallback(async (wid: number, page: number) => {
-    const pageData = await getWmsSmartMatchingHistorySeries(
-      DAMAGE_TENANT_ID,
-      wid,
-      page,
-      SERIES_PAGE_SIZE,
-    );
-    setSeries(pageData.items);
-    setSeriesTotal(pageData.total);
-    setSeriesPage(pageData.page);
   }, []);
 
   const persistConfig = useCallback(
@@ -145,7 +127,6 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
     void (async () => {
       try {
         await reloadSettings(warehouseId);
-        await reloadSeries(warehouseId, 1);
       } catch {
         if (!cancel) setSaveMsg("Nie udało się wczytać Smart Matching.");
       } finally {
@@ -155,7 +136,7 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
     return () => {
       cancel = true;
     };
-  }, [warehouseId, reloadSettings, reloadSeries]);
+  }, [warehouseId, reloadSettings]);
 
   const configRevision = useMemo(() => JSON.stringify(config), [config]);
 
@@ -164,7 +145,7 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
     setResetBusy(true);
     try {
       await postWmsSmartMatchingReset(DAMAGE_TENANT_ID, warehouseId);
-      await reloadSeries(warehouseId, seriesPage);
+      setHistoryKey((k) => k + 1);
       setResetOpen(false);
       setSaveMsg("Usunięto aktywne reguły dopasowania.");
     } catch {
@@ -189,7 +170,7 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
       sections={WMS_SMART_MATCHING_NAV_SECTIONS}
       asideLabel="Sekcje Smart Matching"
       observeSections={sectionNavObserve}
-      observeRevision={dataLoading ? "loading" : `${configRevision}-${seriesTotal}-${seriesPage}`}
+      observeRevision={dataLoading ? "loading" : `${configRevision}-${historyKey}`}
     >
       {statusLoadErr ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-sm text-amber-950">{statusLoadErr}</p>
@@ -226,17 +207,12 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
       <SectionCard
         id="wms-smart-history"
         title="Historia doboru"
-        summary="Historia decyzji pakowania używana do budowania reguł Smart Matching — kliknij wiersz, aby zobaczyć przebieg doborów."
+        summary="Decyzje pakowania (v2): produkt, ilość, opakowanie, nadpisania oraz utworzenie / przerwanie reguły — kliknij wiersz, aby zobaczyć serię uczenia."
       >
-        <SmartMatchingHistorySeriesTable
-          items={series}
-          total={seriesTotal}
-          page={seriesPage}
-          limit={SERIES_PAGE_SIZE}
-          loading={dataLoading}
-          onPageChange={(p) => {
-            void reloadSeries(warehouseId, p);
-          }}
+        <SmartMatchingHistoryEventsTable
+          key={historyKey}
+          tenantId={DAMAGE_TENANT_ID}
+          warehouseId={warehouseId}
         />
       </SectionCard>
 
