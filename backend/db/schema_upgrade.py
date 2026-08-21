@@ -2713,6 +2713,58 @@ def ensure_wms_smart_matching_tables(engine: Engine) -> None:
                     """
                 )
             )
+        if not _table_exists(conn, "wms_three_d_matching_events"):
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE wms_three_d_matching_events (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                        warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+                        order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+                        trigger VARCHAR(32) NOT NULL DEFAULT 'SYSTEM',
+                        strategy VARCHAR(32) NOT NULL DEFAULT 'SMART_THEN_3D',
+                        three_d_enabled_snapshot INTEGER NOT NULL DEFAULT 1,
+                        filler_percent_snapshot FLOAT NOT NULL DEFAULT 0,
+                        shipping_method_id VARCHAR(36),
+                        shipping_method_name_snapshot VARCHAR(255),
+                        result_status VARCHAR(32) NOT NULL,
+                        suggested_carton_id VARCHAR(36),
+                        suggested_carton_name_snapshot VARCHAR(255),
+                        selected_carton_id VARCHAR(36),
+                        selected_carton_name_snapshot VARCHAR(255),
+                        fill_percent FLOAT,
+                        candidate_count INTEGER NOT NULL DEFAULT 0,
+                        compatible_candidate_count INTEGER NOT NULL DEFAULT 0,
+                        error_code VARCHAR(64),
+                        error_message VARCHAR(2000),
+                        composition_snapshot_json TEXT,
+                        triggered_by_user_id INTEGER REFERENCES app_users(id) ON DELETE SET NULL,
+                        triggered_by_display_snapshot VARCHAR(255),
+                        created_at DATETIME,
+                        selected_at DATETIME
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_wms_3d_events_tenant_wh_created "
+                    "ON wms_three_d_matching_events(tenant_id, warehouse_id, created_at)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_wms_3d_events_order "
+                    "ON wms_three_d_matching_events(order_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_wms_3d_events_result "
+                    "ON wms_three_d_matching_events(tenant_id, warehouse_id, result_status)"
+                )
+            )
         conn.commit()
 
 

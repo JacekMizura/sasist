@@ -1295,6 +1295,7 @@ def _build_packing_order_card(
                     order,
                     tenant_id=int(tenant_id),
                     warehouse_id=int(warehouse_id),
+                    trigger="MANUAL",
                 )
             )
             recommended_carton_id = (

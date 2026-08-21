@@ -33,8 +33,13 @@ describe("3D Matching settings rebuild", () => {
     expect(catalog).toContain('three_d_matching: "3D Matching"');
   });
 
-  it("single Ustawienia section — no legacy 6-nav", () => {
-    expect(WMS_THREE_D_MATCHING_NAV_SECTIONS.map((s) => s.label)).toEqual(["Ustawienia"]);
+  it("Ustawienia + Historia doboru sections", () => {
+    expect(WMS_THREE_D_MATCHING_NAV_SECTIONS.map((s) => s.label)).toEqual([
+      "Ustawienia",
+      "Historia doboru",
+    ]);
+    expect(panel).toContain("wms-3d-history");
+    expect(panel).toContain("ThreeDMatchingHistoryTable");
     expect(panel).not.toContain("wms-3d-dashboard");
     expect(panel).not.toContain("PackagingIntelligenceKpi");
     expect(panel).not.toContain("dimensionToleranceMm");

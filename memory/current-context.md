@@ -1,35 +1,17 @@
-**Smart Matching / 3D Matching v2 — Phase 5A PASS (commit pending).**
-- Historia SSOT = ObservationV2 (1 row = 1 packing decision)
-- `RuleV2.broken_by_observation_id` set only on AUTO ACTIVE→BROKEN (no inference)
-- GET `/history-events` + `/learning-series`; FE compact table + popover; dead series FE removed
-- Legacy `/history-series` kept; no v1↔v2 heuristic mix
-- Gate: BE 51 PASS (history+v2+legacy+strategy); FE vitest 8; npm build; import backend.main; schema OK
-- Do not start Phase 5B (multi-package / N labels / filler)
+**3D Matching decision history — PASS (commit pending).**
+- SSOT `WmsThreeDMatchingEvent` — one event per real 3D solver run (not Smart learning)
+- Lazy SMART_THEN_3D (no run/event on Smart hit); write from engine; MANUAL/STATUS triggers
+- API `GET /wms/3d-matching/history`; FE Historia doboru table + detail popover
+- Snapshots: carton name, strategy, filler, result; fill_percent only when solver returns it
 
-**Smart Matching / 3D Matching v2 — Phase 4 PASS (gate; commit pending).**
-- BE: product enable SSOT, MANUAL rules, lock, panel API; FE replaces localStorage atrapa
-- Disabled product: obs logged, no AUTO learn/suggest; locked MANUAL survives overrides
-- Tests K/L/M + suites 41 PASS; startup OK
-- Phase 5 later: history projection v2 UI, multi-package, N labels, filler
+**3D Matching rebuild — PASS `605f847e`.**
+- Rename Dopasowanie przestrzenne → 3D Matching; single Ustawienia section
+- Independent smart_enabled / three_d_enabled; filler % (cbrt volume reserve); strategy FE SSOT in Smart workflow
+- Runtime: shipping hard-gate, no fake 1×1×1 MATCHED, all active cartons, filler in solver
+- Dead localStorage engine knobs removed; multi-package still deferred
 
-**Smart Matching / 3D Matching v2 — Phase 3 PASS `0748b954`.**
-- StrategyResolver SSOT; SmartResult|ThreeDResult; legacy_v1_fallback disable
-
-**Smart Matching / 3D Matching v2 — Phase 2 PASS `8e5b3e5e`.**
-- break/conflict/shipping hard filter
-
-**Smart Matching / 3D Matching v2 — Phase 1 PASS `aca85964`.**
-- v2 min_qty model + learning
-- Series UI: composition+carton tracks; popover 1→N; DECYDUJĄCY via `created_from_history_id` only
-- Also `created_threshold` on rule INSERT; legacy NULL = no decisive / „Aktualny próg”
-- GET `/wms/smart-matching/history-series`; no heuristic backfill; runtime algorithm unchanged
-
-**Smart Matching settings cleanup — CLOSED at `d128ea59` (accepted).**
-- Settings = Ogólne + Historia only; Widok/Zaawansowane gone; fake metrics gone
-- Dead UI/prop gone: `PackingFitRecommendationPanel`, gate `packagingSuggestions`
-- ACTIVE: enabled / threshold / proposal_init / auto-label; history = audit + training; reset = auto-rules only
-- PackingView `recommended_cartons` KEPT; gate REKOM. separate; fingerprint/scoring/cartonization untouched
-- Do not reopen this scope. Deferred (separate tasks): (1) SM → carton gate, (2) real analytics dashboard, (3) drop 3D placeholder „Błędy i brakujące wymiary”
+**3D Matching settings audit (READ-ONLY) — 2026-08-21 — COMPLETE.**
+- Implemented in rebuild above
 
 **Receiving Validation cleanup — CLOSED at `18b1fc64` (accepted).**
 - Migrated policy = SSOT; putaway = PZ line lot identity; no receiving/putaway runtime on `product.track_*`

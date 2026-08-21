@@ -22,6 +22,7 @@ import {
   wmsSettingControlInputClass,
   wmsSettingsRowsStackClass,
 } from "./wmsSettingsUi";
+import { ThreeDMatchingHistoryTable } from "./ThreeDMatchingHistoryTable";
 
 function SectionCard({
   id,
@@ -189,6 +190,14 @@ export function WmsThreeDMatchingSettingsPanel({ warehouseId, sectionNavObserve 
           <span className="font-semibold text-slate-700">Smart Matching → Ogólne → Automatyczny dobór opakowania</span>
           .
         </p>
+      </SectionCard>
+
+      <SectionCard
+        id="wms-3d-history"
+        title="Historia doboru"
+        summary="Audyt każdej realnej próby silnika 3D Matching (nie uczenie)."
+      >
+        <ThreeDMatchingHistoryTable tenantId={DAMAGE_TENANT_ID} warehouseId={warehouseId} />
       </SectionCard>
     </WmsSettingsTabFrame>
   );

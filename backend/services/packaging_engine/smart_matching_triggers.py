@@ -58,9 +58,14 @@ def _apply_proposal_init(
     db: Session, *, order: Order, tenant_id: int, warehouse_id: int
 ) -> dict[str, Any]:
     from .engine import build_packaging_suggestions_for_order
+    from .three_d_matching_history import attach_selected_carton_to_latest_attempt
 
     _combined, primary, _alts, _plan = build_packaging_suggestions_for_order(
-        db, order, tenant_id=tenant_id, warehouse_id=warehouse_id
+        db,
+        order,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        trigger="STATUS",
     )
     if primary is None:
         return {"ok": False, "message": "no_suggestion"}
@@ -79,6 +84,18 @@ def _apply_proposal_init(
     order.selected_carton_id = str(primary.suggested_package_id)
     db.add(order)
     db.flush()
+    if str(getattr(primary, "source_engine", "") or "") == "THREE_D_MATCHING":
+        try:
+            attach_selected_carton_to_latest_attempt(
+                db,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                order_id=int(order.id),
+                carton_id=str(primary.suggested_package_id),
+                carton_name=getattr(primary, "package_name", None),
+            )
+        except Exception:
+            logger.exception("attach_selected_carton_to_latest_attempt order_id=%s", order.id)
     logger.info(
         "smart_matching proposal_init assigned order_id=%s carton=%s engine=%s",
         order.id,

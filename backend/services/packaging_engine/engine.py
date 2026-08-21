@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -27,6 +28,8 @@ from .strategy_resolver import (
 )
 from .suggestions import PackagingEngineSource, PackagingSuggestionDraft
 from .three_d_matching import suggest_three_d_matching
+
+logger = logging.getLogger(__name__)
 
 
 def _carton_volume_sort_key(c: Carton) -> float:
@@ -218,17 +221,31 @@ def build_packaging_suggestions_for_order(
     *,
     tenant_id: int,
     warehouse_id: int,
+    trigger: str = "SYSTEM",
+    triggered_by_user_id: Optional[int] = None,
+    record_history: bool = True,
 ) -> tuple[list[PackagingSuggestionOut], Optional[PackagingSuggestionOut], list[PackagingSuggestionOut], PackagingFitPlanOut]:
     """
     Pipeline:
       candidates → PHYSICAL FIT (plan) → SmartResult | ThreeDResult → StrategyResolver → PRIMARY.
     Soft Smart+3D score merge is no longer the SSOT.
+
+    3D engine runs only when strategy actually needs it (lazy SMART_THEN_3D).
+    Each real 3D run writes one immutable history event when ``record_history``.
     """
     from .smart_matching_store import (
         effective_filler_percent,
         effective_smart_enabled,
         effective_three_d_enabled,
         get_or_create_settings,
+    )
+    from .three_d_matching_history import (
+        TRIGGER_MANUAL,
+        TRIGGER_STATUS,
+        TRIGGER_STRATEGY_FALLBACK,
+        TRIGGER_STRATEGY_OVERRIDE,
+        TRIGGER_SYSTEM,
+        record_three_d_attempt,
     )
 
     settings = get_or_create_settings(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
@@ -270,7 +287,6 @@ def build_packaging_suggestions_for_order(
             eligible.add(str(fit.recommended_carton_id))
 
     run_smart = smart_on and strategy != "THREE_D_ONLY"
-    run_3d = three_d_on and strategy != "SMART_ONLY"
 
     smart = (
         evaluate_smart_matching_v2(
@@ -279,6 +295,19 @@ def build_packaging_suggestions_for_order(
         if run_smart
         else SmartResult(draft=None, ambiguous=False, reason="SKIPPED")
     )
+
+    # Run 3D only when strategy needs geometry (no fake events for unused engine).
+    smart_hit = smart.draft is not None and not bool(smart.ambiguous)
+    if strategy == "SMART_ONLY" or not three_d_on:
+        run_3d = False
+    elif strategy == "THREE_D_ONLY":
+        run_3d = True
+    elif strategy == "THREE_D_OVERRIDE_SMART":
+        run_3d = True
+    elif strategy == "SMART_THEN_3D":
+        run_3d = not smart_hit
+    else:
+        run_3d = three_d_on and strategy != "SMART_ONLY"
 
     td_outcome = "SKIPPED"
     td_drafts: list[PackagingSuggestionDraft] = []
@@ -291,6 +320,58 @@ def build_packaging_suggestions_for_order(
             db=db,
             shipping_method_id=sm_id_s,
         )
+        if record_history:
+            from .smart_matching_v2.shipping import is_carton_compatible_with_shipping
+
+            compatible_n = sum(
+                1
+                for c in cartons
+                if is_carton_compatible_with_shipping(
+                    db, carton_id=str(c.id), shipping_method_id=sm_id_s
+                )
+            )
+            primary_td = next(
+                (d for d in td_drafts if "Odrzucony:" not in (d.reason or "") and d.suggested_package_id),
+                None,
+            )
+            hist_trigger = str(trigger or TRIGGER_SYSTEM).strip().upper() or TRIGGER_SYSTEM
+            if hist_trigger not in {
+                TRIGGER_MANUAL,
+                TRIGGER_STATUS,
+                TRIGGER_STRATEGY_FALLBACK,
+                TRIGGER_STRATEGY_OVERRIDE,
+                TRIGGER_SYSTEM,
+            }:
+                hist_trigger = TRIGGER_SYSTEM
+            if hist_trigger == TRIGGER_SYSTEM:
+                if strategy == "SMART_THEN_3D":
+                    hist_trigger = TRIGGER_STRATEGY_FALLBACK
+                elif strategy == "THREE_D_OVERRIDE_SMART":
+                    hist_trigger = TRIGGER_STRATEGY_OVERRIDE
+            try:
+                with db.begin_nested():
+                    record_three_d_attempt(
+                        db,
+                        order=order,
+                        tenant_id=tenant_id,
+                        warehouse_id=warehouse_id,
+                        trigger=hist_trigger,
+                        strategy=strategy,
+                        three_d_enabled=True,
+                        filler_percent=filler_pct,
+                        shipping_method_id=sm_id_s,
+                        td_outcome=td_outcome,
+                        suggested_carton_id=primary_td.suggested_package_id if primary_td else None,
+                        suggested_carton_name=primary_td.package_name if primary_td else None,
+                        fill_percent=primary_td.fill_percentage if primary_td else None,
+                        candidate_count=len(cartons),
+                        compatible_candidate_count=compatible_n,
+                        triggered_by_user_id=triggered_by_user_id,
+                    )
+            except Exception:
+                logger.exception(
+                    "record_three_d_attempt failed order_id=%s", getattr(order, "id", None)
+                )
     for d in td_drafts:
         if "Odrzucony:" not in (d.reason or "") and str(d.suggested_package_id or "").strip():
             eligible.add(str(d.suggested_package_id))

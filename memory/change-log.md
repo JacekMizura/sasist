@@ -1,3 +1,17 @@
+## 2026-08-21 — 3D Matching decision history
+
+- `WmsThreeDMatchingEvent` + schema upgrade; write only on real 3D engine run
+- Lazy SMART_THEN_3D; strategy semantics A–E; snapshots for carton/strategy/filler
+- `GET /wms/3d-matching/history`; FE Historia doboru under 3D Matching settings
+- Tests A–T style suite PASS; rebuild regression PASS
+
+## 2026-08-20 — Smart Matching v2 COMPOSITION EXTEND
+
+- pattern_type SINGLE_PRODUCT | COMPOSITION on ObservationV2 + RuleV2
+- Exact normalized multi-SKU learning/resolve/break/conflict; product disable applies to composition
+- History-events + learning-series support composition_items; empty-state copy updated
+- No new v1 rules; legacy v1 readonly fallback kept
+
 ## 2026-08-20 — Smart Matching v2 Phase 5A (history-events)
 
 - `broken_by_observation_id` on RuleV2; set only at AUTO break tip observation

@@ -25,6 +25,7 @@ from backend.models.wms_smart_matching import (
     WmsSmartMatchingRuleV2,
     WmsSmartMatchingSettings,
 )
+from backend.models.wms_three_d_matching import WmsThreeDMatchingEvent
 from backend.services.fit_engine.adapters import fit_container_from_carton
 from backend.services.fit_engine.models import FitItem
 from backend.services.packaging_engine.cartonization_solver import solve_cartonization
@@ -65,6 +66,7 @@ def db():
         WmsSmartMatchingObservationV2,
         WmsSmartMatchingRuleV2,
         WmsSmartMatchingProductSettings,
+        WmsThreeDMatchingEvent,
     ):
         model.__table__.create(engine, checkfirst=True)
     with engine.begin() as conn:

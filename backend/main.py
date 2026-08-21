@@ -417,6 +417,7 @@ from .api.warehouse_operations import router as warehouse_operations_router
 from .api.delivery_work_queue import router as delivery_work_queue_router
 from .api.packaging_intelligence import router as packaging_intelligence_router
 from .api.wms_smart_matching import router as wms_smart_matching_router
+from .api.wms_three_d_matching import router as wms_three_d_matching_router
 from .api.wms_products import router as wms_products_router
 from .api.wms_photo_upload import router as wms_photo_upload_router
 from .api.auth import router as auth_router
@@ -2310,6 +2311,7 @@ _API_ROUTERS = (
     delivery_work_queue_router,
     packaging_intelligence_router,
     wms_smart_matching_router,
+    wms_three_d_matching_router,
     wms_products_router,
     return_statuses_router,
     wms_receiving_router,
