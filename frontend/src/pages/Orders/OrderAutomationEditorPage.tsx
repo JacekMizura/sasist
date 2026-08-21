@@ -105,8 +105,10 @@ function payloadForKind(kind: AutomationEffectKind): Record<string, string | num
   switch (kind) {
     case "change_status":
       return { order_ui_status_id: "" };
+    case "send_email":
+      return { template_id: "", recipient_type: "CUSTOMER" };
     case "send_message":
-      return { template: "", message_channel: "email", delay_min: "0" };
+      return { template_id: "", recipient_type: "CUSTOMER" };
     case "print":
       return { printer: "", print_document: "", template: "", copies: "1" };
     case "assign_courier":

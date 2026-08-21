@@ -20,8 +20,7 @@ EFFECT_ADD_TAG = "add_tag"
 EFFECT_PRINT = "print"
 
 #: Runtime-executable.
-SUPPORTED_EFFECT_TYPES = frozenset({EFFECT_CHANGE_STATUS})
-
+SUPPORTED_EFFECT_TYPES = frozenset({EFFECT_CHANGE_STATUS, EFFECT_SEND_EMAIL})
 #: Persistable effect types (editor catalog + future adapters). Unsupported at runtime → FAILED.
 EFFECT_SEND_MESSAGE = "send_message"
 EFFECT_GENERATE_DOCUMENT = "generate_document"

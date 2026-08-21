@@ -9,7 +9,12 @@ from typing import Any, Optional, Protocol
 from sqlalchemy.orm import Session
 
 from ....models.automation import StatusTransitionEvent
-from ..constants import EFFECT_CHANGE_STATUS, SUPPORTED_EFFECT_TYPES
+from ..constants import (
+    EFFECT_CHANGE_STATUS,
+    EFFECT_SEND_EMAIL,
+    EFFECT_SEND_MESSAGE,
+    SUPPORTED_EFFECT_TYPES,
+)
 
 
 @dataclass(frozen=True)
@@ -29,7 +34,17 @@ class EffectAdapter(Protocol):
         config: dict[str, Any],
         event: StatusTransitionEvent,
         actor_user_id: Optional[int],
+        execution_id: Optional[int] = None,
+        effect_id: Optional[int] = None,
     ) -> EffectResult: ...
+
+
+def normalize_effect_type(effect_type: str) -> str:
+    """Map legacy FE send_message (email channel) → send_email."""
+    et = str(effect_type or "").strip()
+    if et == EFFECT_SEND_MESSAGE:
+        return EFFECT_SEND_EMAIL
+    return et
 
 
 class UnsupportedEffectAdapter:
@@ -43,6 +58,8 @@ class UnsupportedEffectAdapter:
         config: dict[str, Any],
         event: StatusTransitionEvent,
         actor_user_id: Optional[int],
+        execution_id: Optional[int] = None,
+        effect_id: Optional[int] = None,
     ) -> EffectResult:
         return EffectResult(
             ok=False,
@@ -61,6 +78,8 @@ class ChangeStatusEffectAdapter:
         config: dict[str, Any],
         event: StatusTransitionEvent,
         actor_user_id: Optional[int],
+        execution_id: Optional[int] = None,
+        effect_id: Optional[int] = None,
     ) -> EffectResult:
         from .change_status import execute_change_status
 
@@ -72,10 +91,37 @@ class ChangeStatusEffectAdapter:
         )
 
 
+class SendEmailEffectAdapter:
+    effect_type = EFFECT_SEND_EMAIL
+
+    def execute(
+        self,
+        db: Session,
+        *,
+        config: dict[str, Any],
+        event: StatusTransitionEvent,
+        actor_user_id: Optional[int],
+        execution_id: Optional[int] = None,
+        effect_id: Optional[int] = None,
+    ) -> EffectResult:
+        from .send_email import execute_send_email
+
+        return execute_send_email(
+            db,
+            config=config,
+            event=event,
+            actor_user_id=actor_user_id,
+            execution_id=execution_id,
+            effect_id=effect_id,
+        )
+
+
 def get_adapter(effect_type: str) -> EffectAdapter:
-    et = str(effect_type or "").strip()
+    et = normalize_effect_type(effect_type)
     if et == EFFECT_CHANGE_STATUS:
         return ChangeStatusEffectAdapter()
+    if et == EFFECT_SEND_EMAIL:
+        return SendEmailEffectAdapter()
     return UnsupportedEffectAdapter(et)
 
 
@@ -92,4 +138,4 @@ def parse_config(raw: object) -> dict[str, Any]:
 
 
 def is_supported_effect(effect_type: str) -> bool:
-    return str(effect_type or "").strip() in SUPPORTED_EFFECT_TYPES
+    return normalize_effect_type(effect_type) in SUPPORTED_EFFECT_TYPES

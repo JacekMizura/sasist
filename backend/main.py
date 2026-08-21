@@ -202,6 +202,7 @@ from .db.schema_upgrade import (
     ensure_wms_packing_replacement_labels_table,
     ensure_wms_smart_matching_tables,
     ensure_automation_engine_tables,
+    ensure_messaging_email_tables,
     ensure_shipping_methods_table_and_order_fk,
     ensure_warehouse_materials_tables,
     ensure_warehouse_materials_bdo_columns,
@@ -1901,6 +1902,7 @@ def _upgrade_schema_background() -> None:
         ensure_wms_packing_replacement_labels_table(engine)
         ensure_wms_smart_matching_tables(engine)
         ensure_automation_engine_tables(engine)
+        ensure_messaging_email_tables(engine)
         ensure_shipping_methods_table_and_order_fk(engine)
         ensure_warehouse_materials_tables(engine)
         ensure_warehouse_materials_bdo_columns(engine)

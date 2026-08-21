@@ -22,6 +22,7 @@ export const EFFECT_BUSINESS_SIDEBAR: Record<
 > = {
   change_status: { title: "Status", Icon: CircleDot },
   generate_document: { title: "Dokument", Icon: FileText },
+  send_email: { title: "E-mail", Icon: Mail },
   send_message: { title: "Wiadomość", Icon: Mail },
   print: { title: "Druk", Icon: Printer },
   assign_courier: { title: "Kurier", Icon: Truck },
@@ -149,68 +150,33 @@ export function renderGenerateDocumentEffectEditor({ effect, patchPayload }: Eff
   );
 }
 
-const MESSAGE_TEMPLATES: { value: string; label: string }[] = [
-  { value: "order_shipped", label: "Zamówienie wysłane" },
-  { value: "payment_reminder", label: "Przypomnienie o płatności" },
-  { value: "order_confirmation", label: "Potwierdzenie zamówienia" },
-  { value: "pickup_ready", label: "Odbiór gotowy" },
-];
-
-const MESSAGE_CHANNELS: { value: string; label: string }[] = [
-  { value: "email", label: "E-mail" },
-  { value: "sms", label: "SMS" },
-  { value: "panel", label: "Panel" },
-];
-
-const DELAY_OPTS: { value: string; label: string }[] = [
-  { value: "0", label: "Natychmiast" },
-  { value: "5", label: "5 min" },
-  { value: "10", label: "10 min" },
-  { value: "30", label: "30 min" },
-  { value: "60", label: "60 min" },
-];
-
-export function renderSendMessageEffectEditor({ effect, patchPayload }: EffectEditorBaseProps) {
-  const template = String(effect.payload.template ?? "");
-  const channel = String(effect.payload.message_channel ?? "email");
-  const delay = String(effect.payload.delay_min ?? "0");
+export function renderSendEmailEffectEditor({ effect, patchPayload }: EffectEditorBaseProps) {
+  const templateId = String(effect.payload.template_id ?? effect.payload.template ?? "");
   return (
     <div className="grid min-w-0 gap-y-0">
       <div className={erpRow}>
-        <span className={erpLbl}>Szablon</span>
-        <select className={erpInp} value={template} onChange={(e) => patchPayload({ template: e.target.value })}>
-          <option value="">—</option>
-          {MESSAGE_TEMPLATES.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+        <span className={erpLbl}>Odbiorca</span>
+        <span className={`${erpInp} flex items-center bg-slate-50 text-slate-700`}>Klient</span>
       </div>
       <div className={erpRow}>
-        <span className={erpLbl}>Kanał</span>
-        <select
+        <span className={erpLbl}>Szablon (ID)</span>
+        <input
           className={erpInp}
-          value={channel}
-          onChange={(e) => patchPayload({ message_channel: e.target.value })}
-        >
-          {MESSAGE_CHANNELS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+          type="number"
+          min={1}
+          placeholder="np. 1"
+          value={templateId}
+          onChange={(e) =>
+            patchPayload({
+              template_id: e.target.value === "" ? "" : Number(e.target.value),
+              recipient_type: "CUSTOMER",
+            })
+          }
+        />
       </div>
-      <div className={erpRow}>
-        <span className={erpLbl}>Opóźnienie</span>
-        <select className={erpInp} value={delay} onChange={(e) => patchPayload({ delay_min: e.target.value })}>
-          {DELAY_OPTS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </div>
+      <p className="px-1 pt-1 text-[11px] text-slate-500">
+        Wybierz aktywny szablon e-mail z modułu szablonów wiadomości (tenant).
+      </p>
     </div>
   );
 }
@@ -386,8 +352,10 @@ export function renderAutomationEffectConfigEditor(
       });
     case "generate_document":
       return renderGenerateDocumentEffectEditor(props);
+    case "send_email":
+      return renderSendEmailEffectEditor(props);
     case "send_message":
-      return renderSendMessageEffectEditor(props);
+      return renderSendEmailEffectEditor(props);
     case "print":
       return renderPrintEffectEditor(props);
     case "assign_courier":

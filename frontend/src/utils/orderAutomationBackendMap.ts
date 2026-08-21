@@ -17,11 +17,15 @@ export function backendRuleToFe(dto: AutomationRuleDto): OrderAutomationRule {
       joinToNext: i < conditionsRaw.length - 1 ? (n.joinToNext ?? "and") : undefined,
     };
   });
-  const effects: AutomationEffect[] = (dto.effects ?? []).map((e, i) => ({
-    uid: e.id != null ? `eff-${e.id}` : `eff-pos-${i}`,
-    kind: e.effect_type as AutomationEffect["kind"],
-    payload: { ...(e.config ?? {}) } as AutomationEffect["payload"],
-  }));
+  const effects: AutomationEffect[] = (dto.effects ?? []).map((e, i) => {
+    const kindRaw = String(e.effect_type || "");
+    const kind = (kindRaw === "send_message" ? "send_email" : kindRaw) as AutomationEffect["kind"];
+    return {
+      uid: e.id != null ? `eff-${e.id}` : `eff-pos-${i}`,
+      kind,
+      payload: { ...(e.config ?? {}) } as AutomationEffect["payload"],
+    };
+  });
   const manualTrigger = migrateManualTrigger(
     (meta.manualTrigger as OrderAutomationRule["manualTrigger"]) ?? defaultManualTrigger(),
   );
@@ -69,6 +73,7 @@ export function feRuleToCreateBody(
 ): AutomationRuleCreateBody {
   const effects: Omit<AutomationEffectDto, "id">[] = (rule.effects ?? []).map((e, i) => {
     const config: Record<string, unknown> = { ...(e.payload ?? {}) };
+    let effectType: string = e.kind;
     if (e.kind === "change_status") {
       const sid = Number(config.status_id ?? config.order_ui_status_id);
       if (Number.isFinite(sid) && sid > 0) {
@@ -76,9 +81,18 @@ export function feRuleToCreateBody(
         config.order_ui_status_id = sid;
       }
     }
+    if (e.kind === "send_email" || e.kind === "send_message") {
+      effectType = "send_email";
+      const tid = Number(config.template_id ?? config.template);
+      if (Number.isFinite(tid) && tid > 0) config.template_id = tid;
+      config.recipient_type = String(config.recipient_type || "CUSTOMER");
+      delete config.template;
+      delete config.message_channel;
+      delete config.delay_min;
+    }
     return {
       position: i,
-      effect_type: e.kind,
+      effect_type: effectType,
       config,
       enabled: true,
     };

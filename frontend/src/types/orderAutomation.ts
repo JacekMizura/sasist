@@ -19,6 +19,7 @@ export type AutomationCondition = {
 
 export type AutomationEffectKind =
   | "change_status"
+  | "send_email"
   | "send_message"
   | "generate_document"
   | "assign_courier"

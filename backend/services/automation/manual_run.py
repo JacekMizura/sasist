@@ -196,6 +196,8 @@ def run_rule_on_entity(
             config=parse_config(effect.config_json),
             event=evt,  # type: ignore[arg-type]
             actor_user_id=actor_user_id,
+            execution_id=int(execution.id),
+            effect_id=int(effect.id) if effect.id is not None else None,
         )
         ee.completed_at = datetime.utcnow()
         if result.ok:

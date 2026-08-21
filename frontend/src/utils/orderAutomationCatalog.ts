@@ -180,11 +180,17 @@ export type EffectKindMeta = {
 export const ORDER_AUTOMATION_EFFECT_KINDS: EffectKindMeta[] = [
   { kind: "change_status", label: "Zmień status", category: "Zamówienie", backendSupported: true },
   {
+    kind: "send_email",
+    label: "Wyślij e-mail",
+    category: "Komunikacja",
+    backendSupported: true,
+  },
+  {
     kind: "send_message",
-    label: "Wyślij wiadomość",
+    label: "Wyślij wiadomość (legacy)",
     category: "Komunikacja",
     disabled: true,
-    disabledReason: "Jeszcze nieobsługiwane przez backend",
+    disabledReason: "Użyj „Wyślij e-mail” — send_message mapuje się na send_email",
   },
   {
     kind: "generate_document",

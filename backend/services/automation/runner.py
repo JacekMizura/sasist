@@ -350,6 +350,8 @@ def _execute_one_effect(
             config=config,
             event=event,
             actor_user_id=event.actor_user_id,
+            execution_id=int(execution.id),
+            effect_id=int(effect.id) if effect.id is not None else None,
         )
     except Exception as exc:
         logger.exception(

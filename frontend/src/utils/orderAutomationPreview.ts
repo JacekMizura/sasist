@@ -67,7 +67,9 @@ export function formatEffectPill(e: AutomationEffect, statusNameById?: Map<numbe
     const name = Number.isFinite(id) && statusNameById?.get(id);
     return name ? `${base} → ${name}` : `${base} → #${e.payload.order_ui_status_id ?? "?"}`;
   }
-  if (e.kind === "send_message") return `${base}: ${String(e.payload.template ?? "szablon")}`;
+  if (e.kind === "send_message" || e.kind === "send_email") {
+    return `${base}: szablon #${String(e.payload.template_id ?? e.payload.template ?? "?")}`;
+  }
   if (e.kind === "assign_courier") return `${base}: ${String(e.payload.courier ?? "—")}`;
   if (e.kind === "add_tag") return `${base}: ${String(e.payload.tag ?? "—")}`;
   return base;
@@ -227,7 +229,7 @@ export function formatEffectListBlock(e: AutomationEffect, statusNameById?: Map<
     };
   }
 
-  if (e.kind === "send_message") {
+  if (e.kind === "send_message" || e.kind === "send_email") {
     const channel = String(e.payload.message_channel ?? "email");
     const leadIn =
       channel === "sms" ? "Wyślij SMS — szablon " : channel === "panel" ? "Wyślij wiadomość — szablon " : "Wyślij e-mail — szablon ";

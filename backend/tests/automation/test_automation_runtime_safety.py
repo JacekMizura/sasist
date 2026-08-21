@@ -20,7 +20,7 @@ from backend.models.warehouse import Warehouse
 from backend.services.automation.conditions import evaluate_conditions
 from backend.services.automation.constants import (
     EFFECT_CHANGE_STATUS,
-    EFFECT_SEND_MESSAGE,
+    EFFECT_SEND_SMS,
     ENTITY_ORDER,
     EXEC_BLOCKED,
     EXEC_SKIPPED,
@@ -225,7 +225,7 @@ def test_i_j_unsupported_effect_preflight_zero_effects(db):
         entity_type=ENTITY_ORDER,
         name="fx",
         effects=[
-            {"position": 0, "effect_type": EFFECT_SEND_MESSAGE, "config": {}, "enabled": True},
+            {"position": 0, "effect_type": EFFECT_SEND_SMS, "config": {}, "enabled": True},
             _change_to_20(position=1),
         ],
     )
@@ -243,7 +243,7 @@ def test_i_j_unsupported_effect_preflight_zero_effects(db):
         name="fx2",
         effects=[
             _change_to_20(position=0),
-            {"position": 1, "effect_type": EFFECT_SEND_MESSAGE, "config": {}, "enabled": True},
+            {"position": 1, "effect_type": EFFECT_SEND_SMS, "config": {}, "enabled": True},
         ],
     )
     db.commit()

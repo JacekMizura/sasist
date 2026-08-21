@@ -10627,6 +10627,15 @@ def ensure_automation_engine_tables(engine: Engine) -> None:
         sync_model_schema(engine, model, log_prefix="schema.automation")
 
 
+def ensure_messaging_email_tables(engine: Engine) -> None:
+    """Message templates + idempotent outbound email outbox for Automation send_email."""
+    from ..models.messaging import MessageTemplate, OutboundEmailMessage
+
+    for model in (MessageTemplate, OutboundEmailMessage):
+        ensure_model_table_from_orm(engine, model, log_prefix="schema.messaging")
+        sync_model_schema(engine, model, log_prefix="schema.messaging")
+
+
 def ensure_postgres_serial_sequences_synced(engine: Engine) -> int:
     """
     Idempotent: align PostgreSQL SERIAL/IDENTITY sequences with MAX(pk).

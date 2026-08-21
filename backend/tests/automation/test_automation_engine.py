@@ -18,7 +18,7 @@ from backend.models.tenant import Tenant
 from backend.models.warehouse import Warehouse
 from backend.services.automation.constants import (
     EFFECT_CHANGE_STATUS,
-    EFFECT_SEND_EMAIL,
+    EFFECT_SEND_SMS,
     ENTITY_ORDER,
     EXEC_BLOCKED,
     EXEC_FAILED,
@@ -238,7 +238,7 @@ def test_I_J_ordered_effects_and_stop_on_failure(db):
                 "enabled": True,
             },
             {
-                "effect_type": EFFECT_SEND_EMAIL,
+                "effect_type": EFFECT_SEND_SMS,
                 "position": 1,
                 "config": {},
                 "enabled": True,
@@ -354,7 +354,7 @@ def test_O_resume_skips_completed_effect(db):
                 "enabled": True,
             },
             {
-                "effect_type": EFFECT_SEND_EMAIL,
+                "effect_type": EFFECT_SEND_SMS,
                 "position": 1,
                 "config": {},
                 "enabled": True,
@@ -395,7 +395,7 @@ def test_P_unsupported_effect_rejected(db):
         entity_type=ENTITY_ORDER,
         name="Email only",
         trigger_config={"status_id": 20},
-        effects=[{"effect_type": EFFECT_SEND_EMAIL, "position": 0, "config": {}, "enabled": True}],
+        effects=[{"effect_type": EFFECT_SEND_SMS, "position": 0, "config": {}, "enabled": True}],
     )
     db.commit()
     order = db.query(Order).filter(Order.id == 100).first()

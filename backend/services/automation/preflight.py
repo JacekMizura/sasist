@@ -12,7 +12,7 @@ from .constants import (
     SUPPORTED_EFFECT_TYPES,
     TRIGGER_ENTITY_STATUS_ENTERED,
 )
-from .effects import parse_config
+from .effects import normalize_effect_type, parse_config
 
 
 @dataclass
@@ -117,18 +117,19 @@ def validate_automation_runtime(
         issues.append(ValidationIssue(code="no_effects", message="Rule has no enabled effects"))
 
     for e in effects:
-        etype = str(e.effect_type or "").strip()
+        etype_raw = str(e.effect_type or "").strip()
+        etype = normalize_effect_type(etype_raw)
         if etype not in SUPPORTED_EFFECT_TYPES:
             issues.append(
                 ValidationIssue(
                     code="unsupported_effect",
-                    effect_type=etype or "unknown",
-                    message=f"Effect '{etype}' is not supported by the Automation Engine runtime",
+                    effect_type=etype_raw or "unknown",
+                    message=f"Effect '{etype_raw}' is not supported by the Automation Engine runtime",
                 )
             )
             continue
+        cfg = parse_config(getattr(e, "config_json", None))
         if etype == "change_status":
-            cfg = parse_config(getattr(e, "config_json", None))
             raw = cfg.get("status_id", cfg.get("order_ui_status_id"))
             try:
                 sid = int(raw) if raw is not None else 0
@@ -140,6 +141,39 @@ def validate_automation_runtime(
                         code="invalid_effect",
                         effect_type=etype,
                         message="change_status requires status_id",
+                    )
+                )
+        elif etype == "send_email":
+            raw_tid = cfg.get("template_id", cfg.get("templateId"))
+            try:
+                tid = int(raw_tid) if raw_tid is not None else 0
+            except (TypeError, ValueError):
+                tid = 0
+            if tid <= 0:
+                issues.append(
+                    ValidationIssue(
+                        code="invalid_effect",
+                        effect_type=etype,
+                        message="send_email requires template_id",
+                    )
+                )
+            rtype = str(cfg.get("recipient_type") or cfg.get("recipient") or "CUSTOMER").strip().upper()
+            if rtype and rtype != "CUSTOMER":
+                issues.append(
+                    ValidationIssue(
+                        code="invalid_effect",
+                        effect_type=etype,
+                        message="send_email v1 supports recipient_type=CUSTOMER only",
+                    )
+                )
+            # entity compatibility: rule.entity_type must be known
+            rule_et = str(entity_type or rule.entity_type or "").strip().upper()
+            if rule_et and rule_et not in ENTITY_TYPES:
+                issues.append(
+                    ValidationIssue(
+                        code="invalid_effect",
+                        effect_type=etype,
+                        message=f"send_email not compatible with entity_type={rule_et}",
                     )
                 )
 

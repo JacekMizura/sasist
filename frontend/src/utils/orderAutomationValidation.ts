@@ -47,8 +47,10 @@ export function validateEffect(e: AutomationEffect): string | null {
       if (!String(e.payload.doc_type ?? "").trim()) return "Nie wybrano typu dokumentu";
       return null;
     }
+    case "send_email":
     case "send_message": {
-      if (!String(e.payload.template ?? "").trim()) return "Nie wybrano szablonu wiadomości";
+      const tid = Number(e.payload.template_id ?? e.payload.template);
+      if (!Number.isFinite(tid) || tid <= 0) return "Nie wybrano szablonu e-mail";
       return null;
     }
     case "assign_courier": {
