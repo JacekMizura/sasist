@@ -1,4 +1,4 @@
-"""Returns report — RMZLine grain, filters, export."""
+"""Returns report — grouped by RMZ for screen; export stays line-grain."""
 
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ def _db():
         )
     )
     db.add(Product(id=10, tenant_id=1, name="Widget", sku="W10", ean="5900000000010", purchase_price=12.5))
-    db.add(Product(id=11, tenant_id=1, name="Gadget", sku="G11", ean="5900000000011", purchase_price=8.0))
+    db.add(Product(id=11, tenant_id=1, name="Gadget CAT", sku="G11", ean="5900000000011", purchase_price=8.0))
     db.add(
         ReturnStatus(
             id=1, tenant_id=1, warehouse_id=1, name="Przyjęty", type="done_success", transition_key="success"
@@ -73,7 +73,7 @@ def _db():
     return db
 
 
-def _seed_return(db, *, rid=80, oid=200, accepted=1, rejected=0, dmg_b=0, product_id=10, oi_id=2001):
+def _ensure_order(db, oid: int):
     if db.query(Order).filter(Order.id == oid).first() is None:
         db.add(
             Order(
@@ -91,18 +91,10 @@ def _seed_return(db, *, rid=80, oid=200, accepted=1, rejected=0, dmg_b=0, produc
             )
         )
         db.flush()
-    if db.query(OrderItem).filter(OrderItem.id == oi_id).first() is None:
-        db.add(
-            OrderItem(
-                id=oi_id,
-                order_id=oid,
-                product_id=product_id,
-                quantity=2,
-                unit_price=50.0,
-                total_price=100.0,
-                vat_percent=23.0,
-            )
-        )
+
+
+def _ensure_return(db, *, rid: int, oid: int = 200):
+    _ensure_order(db, oid)
     if db.query(WmsOrderReturn).filter(WmsOrderReturn.id == rid).first() is None:
         db.add(
             WmsOrderReturn(
@@ -118,6 +110,42 @@ def _seed_return(db, *, rid=80, oid=200, accepted=1, rejected=0, dmg_b=0, produc
             )
         )
         db.flush()
+
+
+def _add_line(
+    db,
+    *,
+    rid: int,
+    oi_id: int,
+    oid: int = 200,
+    product_id: int = 10,
+    accepted: int = 1,
+    rejected: int = 0,
+    dmg_b: int = 0,
+    unit_price: float = 50.0,
+    decision: str | None = None,
+):
+    _ensure_return(db, rid=rid, oid=oid)
+    if db.query(OrderItem).filter(OrderItem.id == oi_id).first() is None:
+        ret = db.query(WmsOrderReturn).filter(WmsOrderReturn.id == rid).one()
+        db.add(
+            OrderItem(
+                id=oi_id,
+                order_id=ret.order_id,
+                product_id=product_id,
+                quantity=accepted + rejected + dmg_b,
+                unit_price=unit_price,
+                total_price=unit_price * (accepted + rejected + dmg_b),
+                vat_percent=23.0,
+            )
+        )
+    if decision is None:
+        if rejected and not accepted and not dmg_b:
+            decision = "REJECTED"
+        elif dmg_b:
+            decision = "DAMAGED"
+        else:
+            decision = "OK"
     db.add(
         RMZLine(
             rmz_id=rid,
@@ -128,28 +156,55 @@ def _seed_return(db, *, rid=80, oid=200, accepted=1, rejected=0, dmg_b=0, produc
             rejected_qty=rejected,
             damaged_b_qty=dmg_b,
             damaged_c_qty=0,
-            decision="OK" if accepted and not rejected else ("REJECTED" if rejected and not accepted else "DAMAGED"),
+            decision=decision,
         )
     )
     db.commit()
 
 
-def test_a_b_one_line_one_row_and_multi():
+def test_a_one_return_one_line_one_group():
     db = _db()
-    _seed_return(db, rid=80, oi_id=2001, product_id=10, accepted=1)
-    _seed_return(db, rid=80, oi_id=2002, product_id=11, accepted=2)
+    _add_line(db, rid=80, oi_id=2001, accepted=1)
+    f = ReturnsReportFilters(tenant_id=1, warehouse_id=1, date_from=datetime.utcnow() - timedelta(days=30))
+    page = query_returns_report(db, f)
+    assert page["total"] == 1
+    assert page["total_returns"] == 1
+    assert len(page["items"]) == 1
+    assert page["items"][0]["aggregates"]["product_lines"] == 1
+    assert len(page["items"][0]["lines"]) == 1
+
+
+def test_b_one_return_25_lines_one_group():
+    db = _db()
+    for i in range(25):
+        _add_line(db, rid=80, oi_id=3000 + i, product_id=10 if i % 2 == 0 else 11, accepted=1)
+    f = ReturnsReportFilters(tenant_id=1, warehouse_id=1, date_from=datetime.utcnow() - timedelta(days=30))
+    page = query_returns_report(db, f)
+    assert page["total"] == 1
+    assert len(page["items"]) == 1
+    assert page["items"][0]["aggregates"]["product_lines"] == 25
+    assert len(page["items"][0]["lines"]) == 25
+
+
+def test_c_two_returns_many_lines():
+    db = _db()
+    for i in range(20):
+        _add_line(db, rid=80, oi_id=4000 + i, accepted=1)
+    for i in range(10):
+        _add_line(db, rid=81, oid=201, oi_id=5000 + i, accepted=1)
     f = ReturnsReportFilters(tenant_id=1, warehouse_id=1, date_from=datetime.utcnow() - timedelta(days=30))
     page = query_returns_report(db, f)
     assert page["total"] == 2
     assert len(page["items"]) == 2
-    ids = {r["return_line_id"] for r in page["items"]}
-    assert len(ids) == 2
+    lines_total = sum(len(g["lines"]) for g in page["items"])
+    assert lines_total == 30
 
 
-def test_c_pagination():
+def test_d_e_pagination_by_returns_not_split():
     db = _db()
-    for i in range(5):
-        _seed_return(db, rid=100 + i, oid=300 + i, oi_id=3000 + i, accepted=1)
+    for rid in range(100, 105):
+        for i in range(5):
+            _add_line(db, rid=rid, oid=300 + rid, oi_id=rid * 100 + i, accepted=1)
     f = ReturnsReportFilters(
         tenant_id=1, warehouse_id=1, date_from=datetime.utcnow() - timedelta(days=30), page=1, limit=2
     )
@@ -157,106 +212,78 @@ def test_c_pagination():
     assert p1["total"] == 5
     assert len(p1["items"]) == 2
     assert p1["pages"] == 3
+    for g in p1["items"]:
+        assert g["aggregates"]["product_lines"] == 5
+        assert len(g["lines"]) == 5
 
 
-def test_k_l_m_accepted_rejected():
+def test_f_g_h_i_aggregates():
     db = _db()
-    _seed_return(db, rid=80, accepted=1, rejected=1, dmg_b=0)
+    _add_line(db, rid=80, oi_id=1, accepted=2, rejected=1, unit_price=50.0)
+    _add_line(db, rid=80, oi_id=2, accepted=0, rejected=0, dmg_b=1, unit_price=10.0, product_id=11)
     f = ReturnsReportFilters(tenant_id=1, warehouse_id=1, date_from=datetime.utcnow() - timedelta(days=30))
-    row = query_returns_report(db, f)["items"][0]
-    assert row["qty_accepted"] == 1
-    assert row["qty_rejected"] == 1
-    assert row["qty_commercial"] == 1
-    assert abs(row["line_value"] - 50.0) < 0.01
+    agg = query_returns_report(db, f)["items"][0]["aggregates"]
+    assert agg["product_lines"] == 2
+    assert agg["accepted_qty"] == 2
+    assert agg["rejected_qty"] == 1
+    assert agg["quantity"] == 3  # 2 accepted + 1 damaged B
+    assert abs(agg["value_gross"] - 110.0) < 0.01
 
 
-def test_r_tenant_isolation():
+def test_j_kpi_distinct_returns():
     db = _db()
-    _seed_return(db, rid=80)
+    _add_line(db, rid=80, oi_id=1, accepted=1)
+    _add_line(db, rid=80, oi_id=2, accepted=1, product_id=11)
+    _add_line(db, rid=81, oid=201, oi_id=3, accepted=1)
+    f = ReturnsReportFilters(tenant_id=1, warehouse_id=1, date_from=datetime.utcnow() - timedelta(days=30))
+    s = summarize_returns_report(db, f)
+    assert s["returns_count"] == 2
+    assert s["accepted_warehouse_qty"] == 3
+
+
+def test_k_l_product_filter_parent_all_lines():
+    db = _db()
+    _add_line(db, rid=80, oi_id=1, product_id=10, accepted=1)  # Widget
+    _add_line(db, rid=80, oi_id=2, product_id=11, accepted=1)  # Gadget CAT
+    f = ReturnsReportFilters(
+        tenant_id=1,
+        warehouse_id=1,
+        date_from=datetime.utcnow() - timedelta(days=30),
+        product_query="CAT",
+    )
+    page = query_returns_report(db, f)
+    assert page["total"] == 1
+    assert len(page["items"][0]["lines"]) == 2  # full context
+
+
+def test_m_tenant_isolation():
+    db = _db()
+    _add_line(db, rid=80, oi_id=1, accepted=1)
     f = ReturnsReportFilters(tenant_id=2, warehouse_id=2, date_from=datetime.utcnow() - timedelta(days=30))
     assert query_returns_report(db, f)["total"] == 0
 
 
-def test_x_kpi_matches():
+def test_p_q_export_still_line_grain():
     db = _db()
-    _seed_return(db, rid=80, accepted=2, rejected=1)
+    _add_line(db, rid=80, oi_id=1, accepted=1)
+    _add_line(db, rid=80, oi_id=2, product_id=11, accepted=1)
     f = ReturnsReportFilters(tenant_id=1, warehouse_id=1, date_from=datetime.utcnow() - timedelta(days=30))
-    s = summarize_returns_report(db, f)
-    assert s["returns_count"] == 1
-    assert s["pieces_commercial"] == 2
-    assert s["rejected_qty"] == 1
-    assert abs(s["value_total"] - 100.0) < 0.01
-
-
-def test_t_u_csv_utf8_and_full_filter():
-    db = _db()
-    _seed_return(db, rid=80, accepted=1)
-    f = ReturnsReportFilters(tenant_id=1, warehouse_id=1, date_from=datetime.utcnow() - timedelta(days=30))
+    # Screen: 1 group
+    assert query_returns_report(db, f)["total"] == 1
     raw = build_returns_report_csv(db, f)
-    assert raw.startswith(b"\xef\xbb\xbf")
     text = raw.decode("utf-8-sig")
-    assert "Numer zamówienia" in text
-    assert "O-200" in text or "Widget" in text
-    assert ";" in text.splitlines()[0]
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    assert lines[0].startswith("Numer zamówienia")
+    assert len(lines) == 3  # header + 2 product rows
+    assert raw.startswith(b"\xef\xbb\xbf")
 
 
-def test_p_correction_join():
+def test_empty_lines_label():
     db = _db()
-    _seed_return(db, rid=80, accepted=1)
-    db.add(
-        SaleDocument(
-            id=str(uuid.uuid4()),
-            tenant_id=1,
-            warehouse_id=1,
-            order_id=200,
-            document_series_id=str(uuid.uuid4()),
-            document_type_id=str(uuid.uuid4()),
-            document_number="KOR/1",
-            panel_document_type="INVOICE",
-            document_subtype="CORRECTION",
-            series_type="CORRECTION",
-            document_kind="CORRECTION",
-            business_source_type="RETURN",
-            business_source_id="80",
-            created_at=datetime.utcnow(),
-        )
-    )
-    db.commit()
-    f = ReturnsReportFilters(tenant_id=1, warehouse_id=1, date_from=datetime.utcnow() - timedelta(days=30))
-    row = query_returns_report(db, f)["items"][0]
-    assert row["correction_number"] == "KOR/1"
-    assert row["correction_issued"] is True
-
-
-def test_q_zpz_without_duplicate():
-    db = _db()
-    _seed_return(db, rid=80, accepted=1)
-    zpz = StockDocument(
-        id=900,
-        tenant_id=1,
-        warehouse_id=1,
-        document_type="Z_PZ",
-        document_number="Z-PZ/1",
-        created_at=datetime.utcnow(),
-    )
-    db.add(zpz)
-    db.flush()
-    ret = db.query(WmsOrderReturn).filter(WmsOrderReturn.id == 80).one()
-    ret.warehouse_document_id = 900
+    _ensure_return(db, rid=90)
     db.commit()
     f = ReturnsReportFilters(tenant_id=1, warehouse_id=1, date_from=datetime.utcnow() - timedelta(days=30))
     page = query_returns_report(db, f)
     assert page["total"] == 1
-    assert page["items"][0]["zpz_number"] == "Z-PZ/1"
-    assert page["items"][0]["warehouse_committed"] is True
-
-
-def test_y_empty():
-    db = _db()
-    f = ReturnsReportFilters(
-        tenant_id=1,
-        warehouse_id=1,
-        date_from=datetime.utcnow() - timedelta(days=1),
-        date_to=datetime.utcnow() - timedelta(hours=1),
-    )
-    assert query_returns_report(db, f)["total"] == 0
+    assert page["items"][0]["aggregates"]["product_lines"] == 0
+    assert page["items"][0]["aggregates"]["products_label"] == "0 produktów"

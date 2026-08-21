@@ -57,9 +57,23 @@ def _filters_from_query(
     if df not in ("created", "warehouse_commit", "refund"):
         df = "created"
     s = str(sort or "date").strip().lower()
-    allowed_sort = {"date", "return_number", "order_number", "product", "qty", "line_value", "status"}
+    allowed_sort = {
+        "date",
+        "return_number",
+        "order_number",
+        "product_lines",
+        "qty",
+        "accepted",
+        "rejected",
+        "line_value",
+        "status",
+        # legacy aliases from flat report
+        "product",
+    }
     if s not in allowed_sort:
         s = "date"
+    if s == "product":
+        s = "product_lines"
     d = str(direction or "desc").strip().lower()
     if d not in ("asc", "desc"):
         d = "desc"

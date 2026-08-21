@@ -1,4 +1,4 @@
-/** Returns report API client. */
+/** Returns report API client — grouped by RMZ for screen; export stays line-grain. */
 
 import api from "./axios";
 
@@ -7,8 +7,10 @@ export type ReturnsReportSort =
   | "date"
   | "return_number"
   | "order_number"
-  | "product"
+  | "product_lines"
   | "qty"
+  | "accepted"
+  | "rejected"
   | "line_value"
   | "status";
 
@@ -30,12 +32,8 @@ export type ReturnsReportFilters = {
   limit?: number;
 };
 
-export type ReturnsReportRow = {
+export type ReturnsReportLine = {
   return_line_id: number;
-  return_id: number;
-  return_number: string;
-  order_id: number;
-  order_number: string;
   product_id: number | null;
   product_name: string;
   sku: string;
@@ -50,26 +48,41 @@ export type ReturnsReportRow = {
   decision_label: string;
   line_value: number;
   currency: string;
-  exchange_rate: number | null;
   purchase_cost_net: number | null;
   purchase_cost_is_current: boolean;
-  status_id: number | null;
-  status_name: string;
-  customer_name: string;
-  customer_phone: string;
-  customer_email: string;
-  return_date: string | null;
-  source: string | null;
-  order_channel: string | null;
-  country: string | null;
-  warehouse_id: number | null;
-  warehouse_name: string;
-  warehouse_committed: boolean;
-  zpz_number: string | null;
-  correction_number: string | null;
-  correction_issued: boolean;
-  refund_amount_header: number | null;
-  refund_shipping: boolean;
+};
+
+export type ReturnsReportGroup = {
+  return: {
+    return_id: number;
+    return_number: string;
+    order_id: number;
+    order_number: string;
+    return_date: string | null;
+    status_id: number | null;
+    status_name: string;
+    customer_name: string;
+    source: string | null;
+    country: string | null;
+    warehouse_id: number | null;
+    warehouse_name: string;
+    warehouse_committed: boolean;
+    zpz_number: string | null;
+    correction_number: string | null;
+    correction_issued: boolean;
+    currency: string;
+  };
+  aggregates: {
+    product_lines: number;
+    quantity: number;
+    accepted_qty: number;
+    rejected_qty: number;
+    damaged_b_qty: number;
+    damaged_c_qty: number;
+    value_gross: number;
+    products_label: string;
+  };
+  lines: ReturnsReportLine[];
 };
 
 export type ReturnsReportSummary = {
@@ -82,10 +95,11 @@ export type ReturnsReportSummary = {
 };
 
 export type ReturnsReportResponse = {
-  items: ReturnsReportRow[];
+  items: ReturnsReportGroup[];
   page: number;
   limit: number;
   total: number;
+  total_returns: number;
   pages: number;
   summary: ReturnsReportSummary;
 };
