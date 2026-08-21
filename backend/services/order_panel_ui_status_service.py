@@ -26,7 +26,7 @@ from .cart_picking_lifecycle_service import (
 logger = logging.getLogger(__name__)
 
 
-def _run_smart_matching_status_hook(
+def _run_packaging_status_hook(
     db: Session,
     *,
     order: Order,
@@ -36,9 +36,9 @@ def _run_smart_matching_status_hook(
     try:
         nested = db.begin_nested()
         try:
-            from .packaging_engine.smart_matching_triggers import on_order_status_changed_smart_matching
+            from .packaging_engine.smart_matching_triggers import on_order_status_changed_packaging
 
-            on_order_status_changed_smart_matching(
+            on_order_status_changed_packaging(
                 db,
                 order=order,
                 new_status_id=int(sub_status_id) if sub_status_id is not None else None,
@@ -49,7 +49,7 @@ def _run_smart_matching_status_hook(
             nested.rollback()
             raise
     except Exception:
-        logger.exception("smart_matching trigger after status order_id=%s", getattr(order, "id", None))
+        logger.exception("packaging trigger after status order_id=%s", getattr(order, "id", None))
 
 
 def _run_production_status_hook(
@@ -113,7 +113,7 @@ def _run_post_status_hooks(
 ) -> None:
     if not _should_run_wms_fulfillment_status_hooks(order):
         return
-    _run_smart_matching_status_hook(
+    _run_packaging_status_hook(
         db, order=order, sub_status_id=new_status_id, operator_user_id=operator_user_id
     )
     _run_production_status_hook(
@@ -206,7 +206,7 @@ def apply_order_panel_ui_status(
         if not _should_run_wms_fulfillment_status_hooks(order):
             return
         if skip_production_trigger:
-            _run_smart_matching_status_hook(
+            _run_packaging_status_hook(
                 db, order=order, sub_status_id=sub_status_id, operator_user_id=operator_user_id
             )
             _run_picking_entry_readiness_dry_run_hook(

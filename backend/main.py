@@ -869,6 +869,7 @@ def _ensure_order_columns():
                 ("import_metadata_json", "TEXT"),
                 ("addresses_json", "TEXT"),
                 ("selected_carton_id", "VARCHAR(36)"),
+                ("selected_carton_source", "VARCHAR(16)"),
                 ("discount_type", "VARCHAR(16)"),
                 ("discount_value", "REAL"),
             ]:

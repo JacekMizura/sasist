@@ -224,14 +224,17 @@ def build_packaging_suggestions_for_order(
     trigger: str = "SYSTEM",
     triggered_by_user_id: Optional[int] = None,
     record_history: bool = True,
+    want_smart: Optional[bool] = None,
+    want_3d: Optional[bool] = None,
 ) -> tuple[list[PackagingSuggestionOut], Optional[PackagingSuggestionOut], list[PackagingSuggestionOut], PackagingFitPlanOut]:
     """
     Pipeline:
       candidates → PHYSICAL FIT (plan) → SmartResult | ThreeDResult → StrategyResolver → PRIMARY.
-    Soft Smart+3D score merge is no longer the SSOT.
 
-    3D engine runs only when strategy actually needs it (lazy SMART_THEN_3D).
-    Each real 3D run writes one immutable history event when ``record_history``.
+    ``want_smart`` / ``want_3d`` (optional): status-orchestrator intents.
+    None = derive from strategy + enable flags (manual packing / legacy callers).
+    False = force-skip that engine for this call.
+    True = allow if enabled (still constrained by strategy).
     """
     from .smart_matching_store import (
         effective_filler_percent,
@@ -287,6 +290,10 @@ def build_packaging_suggestions_for_order(
             eligible.add(str(fit.recommended_carton_id))
 
     run_smart = smart_on and strategy != "THREE_D_ONLY"
+    if want_smart is False:
+        run_smart = False
+    elif want_smart is True:
+        run_smart = bool(smart_on)
 
     smart = (
         evaluate_smart_matching_v2(
@@ -308,6 +315,17 @@ def build_packaging_suggestions_for_order(
         run_3d = not smart_hit
     else:
         run_3d = three_d_on and strategy != "SMART_ONLY"
+
+    if want_3d is False:
+        run_3d = False
+    elif want_3d is True:
+        # Intent allows 3D; still respect strategy hard-offs and SMART_THEN lazy skip when Smart ran this call.
+        if not three_d_on or strategy == "SMART_ONLY":
+            run_3d = False
+        elif strategy == "SMART_THEN_3D" and run_smart and smart_hit:
+            run_3d = False
+        else:
+            run_3d = True
 
     td_outcome = "SKIPPED"
     td_drafts: list[PackagingSuggestionDraft] = []

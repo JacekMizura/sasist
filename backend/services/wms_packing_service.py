@@ -1875,7 +1875,9 @@ def apply_order_selected_carton(
     except Exception:
         logger.exception("physical fit check on select-carton order_id=%s", order_id)
 
-    order.selected_carton_id = cid
+    from .packaging_engine.packaging_assign import CARTON_SOURCE_MANUAL, set_order_selected_carton
+
+    set_order_selected_carton(order, carton_id=cid, source=CARTON_SOURCE_MANUAL)
     db.add(order)
     if prev_s != cid:
         emit_wms_carton_selected_or_changed(
@@ -2765,7 +2767,9 @@ def _apply_packing_carton_ids_to_order(order: Order, packaging_carton_ids: list[
         ids.append(cid)
     if not ids:
         return
-    order.selected_carton_id = ids[-1]
+    from .packaging_engine.packaging_assign import CARTON_SOURCE_MANUAL, set_order_selected_carton
+
+    set_order_selected_carton(order, carton_id=ids[-1], source=CARTON_SOURCE_MANUAL)
     order.packing_consumables_json = json.dumps(
         [{"wm_kind": "carton", "wm_id": cid, "qty": 1} for cid in ids],
         ensure_ascii=False,

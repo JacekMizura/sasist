@@ -89,7 +89,7 @@ def put_smart_matching_settings(
         )
         if st is None:
             raise HTTPException(status_code=400, detail="proposal_init_status_id not found")
-    for sid in body.auto_label_status_ids:
+    for sid in list(body.auto_label_status_ids or []):
         st = (
             db.query(OrderUiStatus)
             .filter(
@@ -101,6 +101,47 @@ def put_smart_matching_settings(
         )
         if st is None:
             raise HTTPException(status_code=400, detail=f"auto_label status {sid} not found")
+    for attr, label in (
+        ("smart_proposal_init_status_id", "smart_proposal_init_status_id"),
+        ("three_d_proposal_init_status_id", "three_d_proposal_init_status_id"),
+    ):
+        sid = getattr(body, attr, None)
+        if sid is not None:
+            st = (
+                db.query(OrderUiStatus)
+                .filter(
+                    OrderUiStatus.id == int(sid),
+                    OrderUiStatus.tenant_id == int(body.tenant_id),
+                    OrderUiStatus.warehouse_id == int(warehouse_id),
+                )
+                .first()
+            )
+            if st is None:
+                raise HTTPException(status_code=400, detail=f"{label} not found")
+    for sid in list(body.smart_auto_label_status_ids or []) + list(body.three_d_auto_label_status_ids or []):
+        st = (
+            db.query(OrderUiStatus)
+            .filter(
+                OrderUiStatus.id == int(sid),
+                OrderUiStatus.tenant_id == int(body.tenant_id),
+                OrderUiStatus.warehouse_id == int(warehouse_id),
+            )
+            .first()
+        )
+        if st is None:
+            raise HTTPException(status_code=400, detail=f"auto_label status {sid} not found")
+    fields_set = getattr(body, "model_fields_set", set()) or set()
+    use_split = any(
+        f in fields_set
+        for f in (
+            "smart_proposal_init_status_id",
+            "three_d_proposal_init_status_id",
+            "smart_auto_label_enabled",
+            "three_d_auto_label_enabled",
+            "smart_auto_label_status_ids",
+            "three_d_auto_label_status_ids",
+        )
+    )
     try:
         row = save_settings(
             db,
@@ -113,6 +154,13 @@ def put_smart_matching_settings(
             proposal_init_status_id=body.proposal_init_status_id,
             auto_label_enabled=body.auto_label_enabled,
             auto_label_status_ids=list(body.auto_label_status_ids or []),
+            smart_proposal_init_status_id=body.smart_proposal_init_status_id,
+            smart_auto_label_enabled=body.smart_auto_label_enabled,
+            smart_auto_label_status_ids=list(body.smart_auto_label_status_ids or []),
+            three_d_proposal_init_status_id=body.three_d_proposal_init_status_id,
+            three_d_auto_label_enabled=body.three_d_auto_label_enabled,
+            three_d_auto_label_status_ids=list(body.three_d_auto_label_status_ids or []),
+            use_split_workflow=use_split,
             packaging_strategy=body.packaging_strategy,
             legacy_v1_fallback_enabled=body.legacy_v1_fallback_enabled,
             three_d_filler_percent=body.three_d_filler_percent,

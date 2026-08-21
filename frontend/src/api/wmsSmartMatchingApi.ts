@@ -9,6 +9,12 @@ export type WmsSmartMatchingSettingsApi = {
   proposal_init_status_id: number | null;
   auto_label_enabled: boolean;
   auto_label_status_ids: number[];
+  smart_proposal_init_status_id?: number | null;
+  smart_auto_label_enabled?: boolean;
+  smart_auto_label_status_ids?: number[];
+  three_d_proposal_init_status_id?: number | null;
+  three_d_auto_label_enabled?: boolean;
+  three_d_auto_label_status_ids?: number[];
   packaging_strategy: string;
   legacy_v1_fallback_enabled?: boolean;
 };

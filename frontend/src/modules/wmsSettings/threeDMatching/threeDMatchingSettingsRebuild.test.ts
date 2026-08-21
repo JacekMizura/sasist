@@ -56,8 +56,10 @@ describe("3D Matching settings rebuild", () => {
 
   it("strategy lives once in Smart workflow form", () => {
     expect(engineForm).toContain('settingId="packaging.strategy"');
-    expect(engineForm).toContain("Automatyczny dobór opakowania");
+    expect(engineForm).toContain("Strategia jest wspólna dla Smart Matching i 3D Matching");
     expect(panel).not.toContain('settingId="packaging.strategy"');
+    expect(panel).toContain("Status inicjujący 3D Matching");
+    expect(panel).not.toContain("Strategia i statusy workflow są wspólne z Smart Matching");
   });
 
   it("config round-trip includes independent enables + filler + strategy", () => {

@@ -72,6 +72,50 @@ def effective_filler_percent(row: WmsSmartMatchingSettings) -> float:
     return _clamp_filler_percent(getattr(row, "three_d_filler_percent", 0) or 0)
 
 
+def effective_smart_proposal_init_status_id(row: WmsSmartMatchingSettings) -> Optional[int]:
+    v = getattr(row, "smart_proposal_init_status_id", None)
+    if v is not None and int(v) > 0:
+        return int(v)
+    legacy = getattr(row, "proposal_init_status_id", None)
+    return int(legacy) if legacy is not None and int(legacy) > 0 else None
+
+
+def effective_three_d_proposal_init_status_id(row: WmsSmartMatchingSettings) -> Optional[int]:
+    v = getattr(row, "three_d_proposal_init_status_id", None)
+    if v is not None and int(v) > 0:
+        return int(v)
+    legacy = getattr(row, "proposal_init_status_id", None)
+    return int(legacy) if legacy is not None and int(legacy) > 0 else None
+
+
+def effective_smart_auto_label_enabled(row: WmsSmartMatchingSettings) -> bool:
+    v = getattr(row, "smart_auto_label_enabled", None)
+    if v is not None:
+        return bool(v)
+    return bool(getattr(row, "auto_label_enabled", False))
+
+
+def effective_three_d_auto_label_enabled(row: WmsSmartMatchingSettings) -> bool:
+    v = getattr(row, "three_d_auto_label_enabled", None)
+    if v is not None:
+        return bool(v)
+    return bool(getattr(row, "auto_label_enabled", False))
+
+
+def effective_smart_auto_label_status_ids(row: WmsSmartMatchingSettings) -> list[int]:
+    raw = getattr(row, "smart_auto_label_status_ids_json", None)
+    if raw is not None and str(raw).strip() not in ("", "null"):
+        return _loads_ids(raw)
+    return _loads_ids(getattr(row, "auto_label_status_ids_json", None))
+
+
+def effective_three_d_auto_label_status_ids(row: WmsSmartMatchingSettings) -> list[int]:
+    raw = getattr(row, "three_d_auto_label_status_ids_json", None)
+    if raw is not None and str(raw).strip() not in ("", "null"):
+        return _loads_ids(raw)
+    return _loads_ids(getattr(row, "auto_label_status_ids_json", None))
+
+
 def get_or_create_settings(db: Session, *, tenant_id: int, warehouse_id: int) -> WmsSmartMatchingSettings:
     row = (
         db.query(WmsSmartMatchingSettings)
@@ -107,6 +151,12 @@ def get_or_create_settings(db: Session, *, tenant_id: int, warehouse_id: int) ->
         proposal_init_status_id=None,
         auto_label_enabled=False,
         auto_label_status_ids_json="[]",
+        smart_proposal_init_status_id=None,
+        smart_auto_label_enabled=False,
+        smart_auto_label_status_ids_json="[]",
+        three_d_proposal_init_status_id=None,
+        three_d_auto_label_enabled=False,
+        three_d_auto_label_status_ids_json="[]",
         packaging_strategy="SMART_THEN_3D",
         legacy_v1_fallback_enabled=True,
         three_d_filler_percent=0.0,
@@ -122,16 +172,27 @@ def settings_to_out(row: WmsSmartMatchingSettings) -> WmsSmartMatchingSettingsOu
         th = 3
     smart_on = effective_smart_enabled(row)
     three_d_on = effective_three_d_enabled(row)
+    smart_init = effective_smart_proposal_init_status_id(row)
+    three_d_init = effective_three_d_proposal_init_status_id(row)
+    smart_al = effective_smart_auto_label_enabled(row)
+    three_d_al = effective_three_d_auto_label_enabled(row)
+    smart_al_ids = effective_smart_auto_label_status_ids(row)
+    three_d_al_ids = effective_three_d_auto_label_status_ids(row)
     return WmsSmartMatchingSettingsOut(
         enabled=smart_on,
         smart_enabled=smart_on,
         three_d_enabled=three_d_on,
         identical_orders_threshold=th,  # type: ignore[arg-type]
-        proposal_init_status_id=int(row.proposal_init_status_id)
-        if row.proposal_init_status_id is not None
-        else None,
-        auto_label_enabled=bool(row.auto_label_enabled),
-        auto_label_status_ids=_loads_ids(row.auto_label_status_ids_json),
+        # Legacy mirrors Smart (compat for older clients / migration window).
+        proposal_init_status_id=smart_init,
+        auto_label_enabled=smart_al,
+        auto_label_status_ids=list(smart_al_ids),
+        smart_proposal_init_status_id=smart_init,
+        smart_auto_label_enabled=smart_al,
+        smart_auto_label_status_ids=list(smart_al_ids),
+        three_d_proposal_init_status_id=three_d_init,
+        three_d_auto_label_enabled=three_d_al,
+        three_d_auto_label_status_ids=list(three_d_al_ids),
         packaging_strategy=str(getattr(row, "packaging_strategy", None) or "SMART_THEN_3D"),
         legacy_v1_fallback_enabled=bool(getattr(row, "legacy_v1_fallback_enabled", True)),
         three_d_filler_percent=effective_filler_percent(row),
@@ -144,9 +205,16 @@ def save_settings(
     tenant_id: int,
     warehouse_id: int,
     identical_orders_threshold: int,
-    proposal_init_status_id: Optional[int],
-    auto_label_enabled: bool,
-    auto_label_status_ids: list[int],
+    proposal_init_status_id: Optional[int] = None,
+    auto_label_enabled: Optional[bool] = None,
+    auto_label_status_ids: Optional[list[int]] = None,
+    smart_proposal_init_status_id: Optional[int] = None,
+    smart_auto_label_enabled: Optional[bool] = None,
+    smart_auto_label_status_ids: Optional[list[int]] = None,
+    three_d_proposal_init_status_id: Optional[int] = None,
+    three_d_auto_label_enabled: Optional[bool] = None,
+    three_d_auto_label_status_ids: Optional[list[int]] = None,
+    use_split_workflow: bool = False,
     enabled: Optional[bool] = None,
     smart_enabled: Optional[bool] = None,
     three_d_enabled: Optional[bool] = None,
@@ -168,10 +236,37 @@ def save_settings(
 
     th = int(identical_orders_threshold)
     row.identical_orders_threshold = th if th in VALID_THRESHOLDS else 3
-    row.proposal_init_status_id = int(proposal_init_status_id) if proposal_init_status_id else None
-    row.auto_label_enabled = bool(auto_label_enabled)
-    ids = sorted({int(x) for x in auto_label_status_ids if int(x) > 0})
-    row.auto_label_status_ids_json = json.dumps(ids)
+
+    if use_split_workflow:
+        row.smart_proposal_init_status_id = (
+            int(smart_proposal_init_status_id) if smart_proposal_init_status_id else None
+        )
+        row.three_d_proposal_init_status_id = (
+            int(three_d_proposal_init_status_id) if three_d_proposal_init_status_id else None
+        )
+        row.smart_auto_label_enabled = bool(smart_auto_label_enabled)
+        row.three_d_auto_label_enabled = bool(three_d_auto_label_enabled)
+        s_ids = sorted({int(x) for x in (smart_auto_label_status_ids or []) if int(x) > 0})
+        t_ids = sorted({int(x) for x in (three_d_auto_label_status_ids or []) if int(x) > 0})
+        row.smart_auto_label_status_ids_json = json.dumps(s_ids)
+        row.three_d_auto_label_status_ids_json = json.dumps(t_ids)
+    else:
+        pid = int(proposal_init_status_id) if proposal_init_status_id else None
+        row.smart_proposal_init_status_id = pid
+        row.three_d_proposal_init_status_id = pid
+        al = bool(auto_label_enabled) if auto_label_enabled is not None else False
+        row.smart_auto_label_enabled = al
+        row.three_d_auto_label_enabled = al
+        ids = sorted({int(x) for x in (auto_label_status_ids or []) if int(x) > 0})
+        payload = json.dumps(ids)
+        row.smart_auto_label_status_ids_json = payload
+        row.three_d_auto_label_status_ids_json = payload
+
+    # Legacy columns mirror Smart (compat readers).
+    row.proposal_init_status_id = effective_smart_proposal_init_status_id(row)
+    row.auto_label_enabled = effective_smart_auto_label_enabled(row)
+    row.auto_label_status_ids_json = json.dumps(effective_smart_auto_label_status_ids(row))
+
     if packaging_strategy is not None:
         from .smart_matching_v2.constants import DEFAULT_PACKAGING_STRATEGY, PACKAGING_STRATEGIES
 

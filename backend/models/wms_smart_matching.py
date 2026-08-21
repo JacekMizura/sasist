@@ -37,14 +37,28 @@ class WmsSmartMatchingSettings(Base):
     three_d_enabled = Column(Boolean, nullable=False, default=True)
     #: Tryb / próg uczenia: 2 | 3 | 5 identycznych spakowanych zamówień.
     identical_orders_threshold = Column(Integer, nullable=False, default=3)
-    #: Status inicjujący propozycję opakowania (jeden) — wspólny packaging pipeline.
+    #: Status inicjujący propozycję opakowania (jeden) — legacy shared; prefer smart_/three_d_ columns.
     proposal_init_status_id = Column(
         Integer, ForeignKey("order_ui_statuses.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    #: Automatyczne generowanie etykiet (listów) po dopasowaniu opakowania.
+    #: Automatyczne generowanie etykiet (listów) po dopasowaniu opakowania — legacy shared.
     auto_label_enabled = Column(Boolean, nullable=False, default=False)
-    #: JSON array of order_ui_status ids.
+    #: JSON array of order_ui_status ids — legacy shared.
     auto_label_status_ids_json = Column(Text, nullable=False, default="[]")
+
+    #: Independent Smart proposal-init status (NULL → fallback to proposal_init_status_id).
+    smart_proposal_init_status_id = Column(
+        Integer, ForeignKey("order_ui_statuses.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    smart_auto_label_enabled = Column(Boolean, nullable=True)
+    smart_auto_label_status_ids_json = Column(Text, nullable=True)
+
+    #: Independent 3D proposal-init status (NULL → fallback to proposal_init_status_id).
+    three_d_proposal_init_status_id = Column(
+        Integer, ForeignKey("order_ui_statuses.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    three_d_auto_label_enabled = Column(Boolean, nullable=True)
+    three_d_auto_label_status_ids_json = Column(Text, nullable=True)
 
     #: Packaging strategy SSOT (Phase 3 uses fully; default SMART_THEN_3D).
     packaging_strategy = Column(String(32), nullable=False, default="SMART_THEN_3D")

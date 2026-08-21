@@ -16,9 +16,17 @@ class WmsSmartMatchingSettingsOut(BaseModel):
     smart_enabled: bool = True
     three_d_enabled: bool = True
     identical_orders_threshold: SmartMatchingThreshold = 3
+    #: Legacy mirror of smart_proposal_init_status_id (compat).
     proposal_init_status_id: Optional[int] = None
+    #: Legacy mirror of smart_auto_label_* (compat).
     auto_label_enabled: bool = False
     auto_label_status_ids: list[int] = Field(default_factory=list)
+    smart_proposal_init_status_id: Optional[int] = None
+    smart_auto_label_enabled: bool = False
+    smart_auto_label_status_ids: list[int] = Field(default_factory=list)
+    three_d_proposal_init_status_id: Optional[int] = None
+    three_d_auto_label_enabled: bool = False
+    three_d_auto_label_status_ids: list[int] = Field(default_factory=list)
     packaging_strategy: str = "SMART_THEN_3D"
     legacy_v1_fallback_enabled: bool = True
     #: 0–99; percent of carton volume reserved for filler (geometry shrink).
@@ -33,9 +41,16 @@ class WmsSmartMatchingSettingsSave(BaseModel):
     smart_enabled: Optional[bool] = None
     three_d_enabled: Optional[bool] = None
     identical_orders_threshold: SmartMatchingThreshold = 3
+    #: Legacy: when split fields omitted, copies to both Smart and 3D triggers.
     proposal_init_status_id: Optional[int] = None
-    auto_label_enabled: bool = False
-    auto_label_status_ids: list[int] = Field(default_factory=list)
+    auto_label_enabled: Optional[bool] = None
+    auto_label_status_ids: Optional[list[int]] = None
+    smart_proposal_init_status_id: Optional[int] = None
+    smart_auto_label_enabled: Optional[bool] = None
+    smart_auto_label_status_ids: Optional[list[int]] = None
+    three_d_proposal_init_status_id: Optional[int] = None
+    three_d_auto_label_enabled: Optional[bool] = None
+    three_d_auto_label_status_ids: Optional[list[int]] = None
     packaging_strategy: Optional[str] = None
     legacy_v1_fallback_enabled: Optional[bool] = None
     three_d_filler_percent: Optional[float] = Field(default=None, ge=0, le=99)

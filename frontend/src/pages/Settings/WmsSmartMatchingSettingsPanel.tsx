@@ -180,7 +180,7 @@ export function WmsSmartMatchingSettingsPanel({ warehouseId, sectionNavObserve =
       <SectionCard
         id="wms-smart-config"
         title="Ogólne"
-        summary="Włączenie Smart Matching, próg uczenia oraz wspólny automatyczny dobór opakowania (strategia, status, etykiety)."
+        summary="Włączenie Smart Matching, próg uczenia, wspólna strategia doboru oraz niezależne statusy workflow Smart."
       >
         <WmsPackagingProposalEngineConfigForm
           showSmartLearningThreshold

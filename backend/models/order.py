@@ -84,6 +84,8 @@ class Order(Base):
     basket_id = Column(Integer, ForeignKey("cart_baskets.id", ondelete="SET NULL"), nullable=True)
     #: Karton wybrany na stanowisku pakowania WMS (słownik cartons).
     selected_carton_id = Column(String(36), ForeignKey("cartons.id", ondelete="SET NULL"), nullable=True, index=True)
+    #: SMART | THREE_D | MANUAL — źródło przypisania; NULL = legacy / nieznane (chronione jak MANUAL).
+    selected_carton_source = Column(String(16), nullable=True, index=True)
     #: Jednorazowa zgoda kierownika na przekroczenie limitu paczek (umowa własna) — per zamówienie.
     packing_multi_parcel_manager_approved_at = Column(DateTime, nullable=True)
     packing_multi_parcel_manager_approved_by_user_id = Column(

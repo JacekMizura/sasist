@@ -2431,6 +2431,121 @@ def ensure_wms_smart_matching_tables(engine: Engine) -> None:
                         "smart_enabled = enabled, three_d_enabled = enabled"
                     )
                 )
+            # Split Smart / 3D workflow triggers (non-destructive; copy legacy shared).
+            scols = _table_column_names(conn, "wms_smart_matching_settings")
+            if "smart_proposal_init_status_id" not in scols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_smart_matching_settings "
+                        "ADD COLUMN smart_proposal_init_status_id INTEGER "
+                        "REFERENCES order_ui_statuses(id) ON DELETE SET NULL"
+                    )
+                )
+            if "three_d_proposal_init_status_id" not in scols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_smart_matching_settings "
+                        "ADD COLUMN three_d_proposal_init_status_id INTEGER "
+                        "REFERENCES order_ui_statuses(id) ON DELETE SET NULL"
+                    )
+                )
+            if "smart_auto_label_enabled" not in scols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_smart_matching_settings "
+                        "ADD COLUMN smart_auto_label_enabled BOOLEAN"
+                    )
+                )
+            if "three_d_auto_label_enabled" not in scols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_smart_matching_settings "
+                        "ADD COLUMN three_d_auto_label_enabled BOOLEAN"
+                    )
+                )
+            if "smart_auto_label_status_ids_json" not in scols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_smart_matching_settings "
+                        "ADD COLUMN smart_auto_label_status_ids_json TEXT"
+                    )
+                )
+            if "three_d_auto_label_status_ids_json" not in scols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_smart_matching_settings "
+                        "ADD COLUMN three_d_auto_label_status_ids_json TEXT"
+                    )
+                )
+            # Backfill only rows still NULL on the new columns (idempotent).
+            conn.execute(
+                text(
+                    """
+                    UPDATE wms_smart_matching_settings
+                    SET smart_proposal_init_status_id = proposal_init_status_id
+                    WHERE smart_proposal_init_status_id IS NULL
+                      AND proposal_init_status_id IS NOT NULL
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    UPDATE wms_smart_matching_settings
+                    SET three_d_proposal_init_status_id = proposal_init_status_id
+                    WHERE three_d_proposal_init_status_id IS NULL
+                      AND proposal_init_status_id IS NOT NULL
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    UPDATE wms_smart_matching_settings
+                    SET smart_auto_label_enabled = auto_label_enabled
+                    WHERE smart_auto_label_enabled IS NULL
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    UPDATE wms_smart_matching_settings
+                    SET three_d_auto_label_enabled = auto_label_enabled
+                    WHERE three_d_auto_label_enabled IS NULL
+                    """
+                )
+            )
+            # SQLite/Postgres: copy JSON when new columns empty.
+            conn.execute(
+                text(
+                    """
+                    UPDATE wms_smart_matching_settings
+                    SET smart_auto_label_status_ids_json = auto_label_status_ids_json
+                    WHERE (smart_auto_label_status_ids_json IS NULL
+                           OR smart_auto_label_status_ids_json = '')
+                      AND auto_label_status_ids_json IS NOT NULL
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    UPDATE wms_smart_matching_settings
+                    SET three_d_auto_label_status_ids_json = auto_label_status_ids_json
+                    WHERE (three_d_auto_label_status_ids_json IS NULL
+                           OR three_d_auto_label_status_ids_json = '')
+                      AND auto_label_status_ids_json IS NOT NULL
+                    """
+                )
+            )
+        # orders.selected_carton_source for assign policy (MANUAL | SMART | THREE_D).
+        if _table_exists(conn, "orders"):
+            ocols = _table_column_names(conn, "orders")
+            if "selected_carton_source" not in ocols:
+                conn.execute(
+                    text("ALTER TABLE orders ADD COLUMN selected_carton_source VARCHAR(16)")
+                )
         # Smart Matching engine v2 tables.
         if not _table_exists(conn, "wms_smart_matching_observations_v2"):
             conn.execute(

@@ -5,6 +5,7 @@ import {
   getWmsSmartMatchingSettings,
   putWmsSmartMatchingSettings,
 } from "../../api/wmsSmartMatchingApi";
+import { OrderUiStatusField } from "../../components/orders/OrderUiStatusField";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
 import { WmsSettingsTabFrame } from "./WmsSettingsTabFrame";
@@ -51,6 +52,8 @@ export function WmsThreeDMatchingSettingsPanel({ warehouseId, sectionNavObserve 
   const [config, setConfig] = useState<WmsPackagingProposalLocalConfigV1>(
     DEFAULT_WMS_PACKAGING_PROPOSAL_LOCAL_CONFIG,
   );
+  const [panelSummary, setPanelSummary] = useState<OrderUiStatusPanelSummary | null>(null);
+  const [panelSubgroups, setPanelSubgroups] = useState<OrderUiPanelSubgroupRead[]>([]);
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [dataLoading, setDataLoading] = useState(false);
@@ -113,16 +116,34 @@ export function WmsThreeDMatchingSettingsPanel({ warehouseId, sectionNavObserve 
     };
   }, [warehouseId]);
 
-  // Prefetch panel statuses only to keep warehouse context warm (workflow lives in Smart).
   useEffect(() => {
     if (warehouseId == null) return;
-    void Promise.all([
-      getOrderUiStatusSummary(DAMAGE_TENANT_ID, warehouseId, { includeInactive: true }),
-      getOrderPanelSubgroups(DAMAGE_TENANT_ID, warehouseId),
-    ]).catch(() => undefined);
+    let cancel = false;
+    void (async () => {
+      try {
+        const [summary, subgroups] = await Promise.all([
+          getOrderUiStatusSummary(DAMAGE_TENANT_ID, warehouseId, { includeInactive: true }),
+          getOrderPanelSubgroups(DAMAGE_TENANT_ID, warehouseId),
+        ]);
+        if (!cancel) {
+          setPanelSummary(summary);
+          setPanelSubgroups(subgroups);
+        }
+      } catch {
+        if (!cancel) {
+          setPanelSummary(null);
+          setPanelSubgroups([]);
+        }
+      }
+    })();
+    return () => {
+      cancel = true;
+    };
   }, [warehouseId]);
 
   const revision = useMemo(() => JSON.stringify(config), [config]);
+  const hasStatuses =
+    panelSummary != null && panelSummary.groups.some((g) => (g.sub_statuses?.length ?? 0) > 0);
 
   if (warehouseId == null) {
     return (
@@ -151,7 +172,7 @@ export function WmsThreeDMatchingSettingsPanel({ warehouseId, sectionNavObserve 
       <SectionCard
         id="wms-3d-settings"
         title="Ustawienia"
-        summary="Włączenie silnika 3D oraz rezerwa przestrzeni na wypełnienie. Strategia i statusy workflow są wspólne z Smart Matching."
+        summary="Włączenie silnika 3D, filler oraz niezależne statusy workflow 3D Matching."
       >
         <div className={wmsSettingsRowsStackClass}>
           <WmsBoolSettingRow
@@ -184,11 +205,61 @@ export function WmsThreeDMatchingSettingsPanel({ warehouseId, sectionNavObserve 
               <span className="text-sm font-medium text-slate-600">%</span>
             </div>
           </WmsControlSettingRow>
+
+          <WmsControlSettingRow
+            settingId="three_d.proposal_init_status"
+            label="Status inicjujący 3D Matching"
+            hint="Po wejściu zamówienia w ten status system uruchamia 3D Matching (zgodnie ze wspólną strategią doboru)."
+          >
+            {hasStatuses ? (
+              <OrderUiStatusField
+                panelSummary={panelSummary}
+                panelSubgroups={panelSubgroups}
+                selectedStatusId={config.threeDProposalInitStatusId}
+                allowClear
+                clearLabel="— brak —"
+                placeholder="Wybierz status…"
+                onPick={(id) => patchConfig({ threeDProposalInitStatusId: id })}
+              />
+            ) : (
+              <p className="text-sm text-slate-500">Brak statusów panelu.</p>
+            )}
+          </WmsControlSettingRow>
+
+          <WmsBoolSettingRow
+            settingId="three_d.auto_label_enabled"
+            label="Automatyczne generowanie etykiet"
+            hint="W wybranych statusach system może automatycznie spróbować wygenerować list — wyłącznie gdy zamówienie ma już przypisane opakowanie."
+            checked={config.threeDAutoLabelEnabled}
+            onChange={(threeDAutoLabelEnabled) => patchConfig({ threeDAutoLabelEnabled })}
+          />
+
+          {config.threeDAutoLabelEnabled ? (
+            <WmsControlSettingRow
+              settingId="three_d.auto_label_statuses"
+              label="Statusy automatycznego generowania etykiet"
+              hint="Statusy, w których 3D Matching może wyzwolić auto-label (wymaga przypisanego opakowania)."
+            >
+              {hasStatuses ? (
+                <OrderUiStatusField
+                  panelSummary={panelSummary}
+                  panelSubgroups={panelSubgroups}
+                  selectedStatusIds={config.threeDAutoLabelStatusIds}
+                  placeholder="Wybierz statusy…"
+                  onSelectedIdsChange={(ids) =>
+                    patchConfig({ threeDAutoLabelStatusIds: [...ids].sort((a, b) => a - b) })
+                  }
+                />
+              ) : (
+                <p className="text-sm text-slate-500">Brak statusów panelu.</p>
+              )}
+            </WmsControlSettingRow>
+          ) : null}
         </div>
         <p className="mt-4 text-xs leading-relaxed text-slate-500">
-          Strategię doboru, status inicjujący oraz automatyczne etykiety skonfigurujesz w{" "}
-          <span className="font-semibold text-slate-700">Smart Matching → Ogólne → Automatyczny dobór opakowania</span>
-          .
+          Wspólną strategię doboru opakowania (Smart ↔ 3D) skonfigurujesz w{" "}
+          <span className="font-semibold text-slate-700">Smart Matching → Ogólne</span>
+          . Statusy workflow Smart i 3D są niezależne.
         </p>
       </SectionCard>
 

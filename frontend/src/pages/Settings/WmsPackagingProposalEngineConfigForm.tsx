@@ -16,12 +16,12 @@ import {
 const STRATEGY_OPTIONS: { value: PackagingStrategyApi; label: string; hint: string }[] = [
   {
     value: "SMART_ONLY",
-    label: "Smart Matching",
+    label: "Tylko Smart Matching",
     hint: "Tylko reguły Smart Matching. Bez automatycznego 3D.",
   },
   {
     value: "THREE_D_ONLY",
-    label: "3D Matching",
+    label: "Tylko 3D Matching",
     hint: "Tylko dobór geometryczny 3D. Bez Smart Matching.",
   },
   {
@@ -41,7 +41,9 @@ type Props = {
   showSmartLearningThreshold: boolean;
   /** Smart Matching: toggle Smart engine. */
   showSmartEnable?: boolean;
-  /** Shared strategy + status init + auto-label (show once — not in both panels). */
+  /** Shared strategy (single select) + Smart workflow triggers. */
+  showSmartWorkflow?: boolean;
+  /** @deprecated use showSmartWorkflow */
   showPackagingWorkflow?: boolean;
   config: WmsPackagingProposalLocalConfigV1;
   patchConfig: (patch: Partial<WmsPackagingProposalLocalConfigV1>) => void;
@@ -53,6 +55,7 @@ type Props = {
 export function WmsPackagingProposalEngineConfigForm({
   showSmartLearningThreshold,
   showSmartEnable = true,
+  showSmartWorkflow,
   showPackagingWorkflow = true,
   config,
   patchConfig,
@@ -60,6 +63,7 @@ export function WmsPackagingProposalEngineConfigForm({
   panelSubgroups,
   wiredToBackend = true,
 }: Props) {
+  const showWorkflow = showSmartWorkflow ?? showPackagingWorkflow;
   const hasStatuses =
     panelSummary != null && panelSummary.groups.some((g) => (g.sub_statuses?.length ?? 0) > 0);
   void wiredToBackend;
@@ -107,15 +111,16 @@ export function WmsPackagingProposalEngineConfigForm({
         </SettingsSubsection>
       ) : null}
 
-      {showPackagingWorkflow ? (
-        <SettingsSubsection title="Automatyczny dobór opakowania">
+      {showWorkflow ? (
+        <SettingsSubsection title="Workflow Smart Matching">
           <div className={wmsSettingsRowsStackClass}>
             <WmsControlSettingRow
               settingId="packaging.strategy"
               label="Strategia doboru opakowania"
               hint={
-                strategyMeta?.hint ??
-                "Wspólna kolejność Smart Matching i 3D Matching. Flagi włączenia silników decydują o dostępności, strategia o priorytecie."
+                (strategyMeta?.hint ??
+                  "Wspólna kolejność Smart Matching i 3D Matching.") +
+                " Strategia jest wspólna dla Smart Matching i 3D Matching."
               }
             >
               <select
@@ -135,19 +140,20 @@ export function WmsPackagingProposalEngineConfigForm({
 
             <WmsControlSettingRow
               settingId="smart.proposal_init_status"
-              label="Status inicjujący dobór opakowania"
-              hint="Po wejściu zamówienia w ten status system uruchamia dobór opakowania zgodnie z wybraną strategią (Smart i/lub 3D). Gdy brak wybranego kartonu — miękko przypisuje rekomendację."
+              label="Status inicjujący Smart Matching"
+              hint="Po wejściu zamówienia w ten status system uruchamia Smart Matching (zgodnie ze strategią). Gdy brak wybranego kartonu — miękko przypisuje rekomendację."
             >
               {hasStatuses ? (
                 <OrderUiStatusField
                   panelSummary={panelSummary}
                   panelSubgroups={panelSubgroups}
-                  selectedStatusId={config.proposalInitStatusId}
+                  selectedStatusId={config.smartProposalInitStatusId}
                   allowClear
                   clearLabel="— brak —"
                   placeholder="Wybierz status…"
                   onPick={(id) =>
                     patchConfig({
+                      smartProposalInitStatusId: id,
                       proposalInitStatusId: id,
                       proposalInitStatusIds: id != null && id > 0 ? [id] : [],
                     })
@@ -161,25 +167,33 @@ export function WmsPackagingProposalEngineConfigForm({
             <WmsBoolSettingRow
               settingId="smart.auto_label_enabled"
               label="Automatyczne generowanie etykiet"
-              hint="Gdy włączone, w wybranych statusach system może automatycznie spróbować wygenerować list przewozowy — wyłącznie gdy zamówienie ma już przypisane opakowanie (niezależnie od źródła: Smart, 3D lub wybór ręczny)."
-              checked={config.autoLabelAfterMatchEnabled}
-              onChange={(autoLabelAfterMatchEnabled) => patchConfig({ autoLabelAfterMatchEnabled })}
+              hint="W wybranych statusach system może automatycznie spróbować wygenerować list przewozowy — wyłącznie gdy zamówienie ma już przypisane opakowanie."
+              checked={config.smartAutoLabelEnabled}
+              onChange={(smartAutoLabelEnabled) =>
+                patchConfig({
+                  smartAutoLabelEnabled,
+                  autoLabelAfterMatchEnabled: smartAutoLabelEnabled,
+                })
+              }
             />
 
-            {config.autoLabelAfterMatchEnabled ? (
+            {config.smartAutoLabelEnabled ? (
               <WmsControlSettingRow
                 settingId="smart.auto_label_statuses"
                 label="Statusy automatycznego generowania etykiet"
-                hint="W wielu statusach, przy obecnym opakowaniu, system może spróbować wygenerować list przewozowy. Bez opakowania generowanie jest pomijane."
+                hint="Statusy, w których Smart Matching może wyzwolić auto-label (wymaga przypisanego opakowania)."
               >
                 {hasStatuses ? (
                   <OrderUiStatusField
                     panelSummary={panelSummary}
                     panelSubgroups={panelSubgroups}
-                    selectedStatusIds={config.autoLabelWorkflowStatusIds}
+                    selectedStatusIds={config.smartAutoLabelStatusIds}
                     placeholder="Wybierz statusy…"
                     onSelectedIdsChange={(ids) =>
-                      patchConfig({ autoLabelWorkflowStatusIds: [...ids].sort((a, b) => a - b) })
+                      patchConfig({
+                        smartAutoLabelStatusIds: [...ids].sort((a, b) => a - b),
+                        autoLabelWorkflowStatusIds: [...ids].sort((a, b) => a - b),
+                      })
                     }
                   />
                 ) : (
