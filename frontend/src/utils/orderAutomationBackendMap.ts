@@ -85,10 +85,20 @@ export function feRuleToCreateBody(
       effectType = "send_email";
       const tid = Number(config.template_id ?? config.template);
       if (Number.isFinite(tid) && tid > 0) config.template_id = tid;
-      config.recipient_type = String(config.recipient_type || "CUSTOMER");
+      const rtype = String(config.recipient_type || "CUSTOMER").toUpperCase();
+      config.recipient_type = rtype === "INTERNAL" ? "INTERNAL" : "CUSTOMER";
+      if (config.recipient_type === "INTERNAL") {
+        const uid = Number(config.user_id);
+        if (Number.isFinite(uid) && uid > 0) config.user_id = uid;
+      } else {
+        delete config.user_id;
+      }
       delete config.template;
       delete config.message_channel;
       delete config.delay_min;
+    }
+    if (e.kind === "warehouse_commit") {
+      effectType = "warehouse_commit";
     }
     return {
       position: i,

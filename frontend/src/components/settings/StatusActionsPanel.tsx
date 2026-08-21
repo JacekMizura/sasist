@@ -1,6 +1,6 @@
 /**
  * Shared status-action editor — projection of backend AutomationRule (source=STATUS_ACTION).
- * Runtime-supported effects: change_status, send_email.
+ * Runtime-supported effects: change_status, send_email (CUSTOMER|INTERNAL), warehouse_commit (RETURN).
  */
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -16,6 +16,7 @@ import {
   type StatusActionRuleDto,
 } from "../../api/automationsApi";
 import { MessageTemplatePicker } from "../messaging/MessageTemplatePicker";
+import { InternalUserPicker } from "../messaging/InternalUserPicker";
 
 export type StatusOption = { id: number; name: string; disabled?: boolean };
 
@@ -23,13 +24,12 @@ type Props = {
   tenantId: number;
   warehouseId?: number | null;
   entityType: AutomationEntityType;
-  /** Trigger status (must exist — edit mode only). */
   statusId: number | null;
   statusOptions: StatusOption[];
   canWrite?: boolean;
 };
 
-type AddKind = "change_status" | "send_email" | null;
+type AddKind = "change_status" | "send_email" | "send_email_internal" | "warehouse_commit" | null;
 
 function changeStatusTargetId(rule: StatusActionRuleDto): number | null {
   const fx = (rule.effects ?? []).find((e) => e.effect_type === "change_status" && e.enabled !== false);
@@ -46,6 +46,13 @@ function sendEmailTemplateId(rule: StatusActionRuleDto): number | null {
   if (!fx) return null;
   const n = Number(fx.config?.template_id);
   return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function sendEmailRecipientType(rule: StatusActionRuleDto): string {
+  const fx = (rule.effects ?? []).find(
+    (e) => (e.effect_type === "send_email" || e.effect_type === "send_message") && e.enabled !== false,
+  );
+  return String(fx?.config?.recipient_type || "CUSTOMER").toUpperCase();
 }
 
 function primaryEffectType(rule: StatusActionRuleDto): string {
@@ -67,6 +74,7 @@ export function StatusActionsPanel({
   const [addKind, setAddKind] = useState<AddKind>(null);
   const [targetId, setTargetId] = useState<number | "">("");
   const [templateId, setTemplateId] = useState<number | "">("");
+  const [internalUserId, setInternalUserId] = useState<number | "">("");
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -109,6 +117,7 @@ export function StatusActionsPanel({
     setAddKind(null);
     setTargetId("");
     setTemplateId("");
+    setInternalUserId("");
   };
 
   const onAdd = async () => {
@@ -140,17 +149,39 @@ export function StatusActionsPanel({
             },
           ],
         });
-      } else {
-        const tid = Number(templateId);
-        if (!Number.isFinite(tid) || tid <= 0) {
-          toast.error("Wybierz szablon e-mail");
+      } else if (addKind === "warehouse_commit") {
+        if (entityType !== "RETURN") {
+          toast.error("Commit magazynowy tylko dla zwrotów");
           return;
         }
         await createAutomation({
           tenant_id: tenantId,
           warehouse_id: warehouseId ?? null,
           entity_type: entityType,
-          name: `E-mail #${tid}`,
+          name: "Zatwierdź zwrot w magazynie",
+          enabled: true,
+          trigger_type: "entity_status_entered",
+          trigger_config: { status_id: statusId },
+          source: "STATUS_ACTION",
+          effects: [{ position: 0, effect_type: "warehouse_commit", config: {}, enabled: true }],
+        });
+      } else {
+        const tid = Number(templateId);
+        if (!Number.isFinite(tid) || tid <= 0) {
+          toast.error("Wybierz szablon e-mail");
+          return;
+        }
+        const isInternal = addKind === "send_email_internal";
+        const uid = Number(internalUserId);
+        if (isInternal && (!Number.isFinite(uid) || uid <= 0)) {
+          toast.error("Wybierz użytkownika");
+          return;
+        }
+        await createAutomation({
+          tenant_id: tenantId,
+          warehouse_id: warehouseId ?? null,
+          entity_type: entityType,
+          name: isInternal ? `E-mail wewnętrzny #${tid}` : `E-mail klient #${tid}`,
           enabled: true,
           trigger_type: "entity_status_entered",
           trigger_config: { status_id: statusId },
@@ -159,7 +190,9 @@ export function StatusActionsPanel({
             {
               position: 0,
               effect_type: "send_email",
-              config: { recipient_type: "CUSTOMER", template_id: tid },
+              config: isInternal
+                ? { recipient_type: "INTERNAL", template_id: tid, user_id: uid }
+                : { recipient_type: "CUSTOMER", template_id: tid },
               enabled: true,
             },
           ],
@@ -213,6 +246,11 @@ export function StatusActionsPanel({
 
   const onChangeTemplate = async (rule: StatusActionRuleDto, nextTemplate: number) => {
     if (!canWrite || busy || nextTemplate <= 0) return;
+    const rtype = sendEmailRecipientType(rule);
+    const fx = (rule.effects ?? []).find(
+      (e) => (e.effect_type === "send_email" || e.effect_type === "send_message") && e.enabled !== false,
+    );
+    const uid = Number(fx?.config?.user_id);
     setBusy(true);
     try {
       await updateAutomation(rule.id, tenantId, {
@@ -220,7 +258,10 @@ export function StatusActionsPanel({
           {
             position: 0,
             effect_type: "send_email",
-            config: { recipient_type: "CUSTOMER", template_id: nextTemplate },
+            config:
+              rtype === "INTERNAL"
+                ? { recipient_type: "INTERNAL", template_id: nextTemplate, user_id: uid }
+                : { recipient_type: "CUSTOMER", template_id: nextTemplate },
             enabled: true,
           },
         ],
@@ -254,7 +295,8 @@ export function StatusActionsPanel({
         <div>
           <h3 className="text-sm font-semibold text-slate-800">Automatyczne akcje po wejściu w status</h3>
           <p className="mt-0.5 text-xs text-slate-500">
-            Reguły backendowe (źródło: akcja statusu). Efekty: zmiana statusu, e-mail do klienta.
+            Reguły backendowe. Efekty: status, e-mail, {entityType === "RETURN" ? "commit magazynowy. " : ""}
+            Bez atrap — tylko działające adaptery.
           </p>
         </div>
         {canWrite ? (
@@ -282,17 +324,27 @@ export function StatusActionsPanel({
         {rules.map((rule) => {
           const kind = primaryEffectType(rule);
           const isEmail = kind === "send_email" || kind === "send_message";
+          const isWh = kind === "warehouse_commit";
           const cur = changeStatusTargetId(rule);
           const tmplId = sendEmailTemplateId(rule);
+          const rtype = sendEmailRecipientType(rule);
           return (
             <li
               key={rule.id}
               className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2"
             >
               <span className="text-xs font-medium text-slate-700">
-                {isEmail ? "Wyślij e-mail" : "Zmień status →"}
+                {isWh
+                  ? "Zatwierdź zwrot w magazynie"
+                  : isEmail
+                    ? rtype === "INTERNAL"
+                      ? "E-mail wewnętrzny"
+                      : "E-mail do klienta"
+                    : "Zmień status →"}
               </span>
-              {isEmail ? (
+              {isWh ? (
+                <span className="text-[11px] text-slate-500">Z-PZ / przyjęcie (bez refund)</span>
+              ) : isEmail ? (
                 <MessageTemplatePicker
                   tenantId={tenantId}
                   warehouseId={warehouseId}
@@ -359,8 +411,24 @@ export function StatusActionsPanel({
                 className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
                 onClick={() => setAddKind("send_email")}
               >
-                Wyślij e-mail
+                E-mail do klienta
               </button>
+              <button
+                type="button"
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
+                onClick={() => setAddKind("send_email_internal")}
+              >
+                E-mail wewnętrzny
+              </button>
+              {entityType === "RETURN" ? (
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
+                  onClick={() => setAddKind("warehouse_commit")}
+                >
+                  Zatwierdź zwrot w magazynie
+                </button>
+              ) : null}
               <button type="button" className="text-xs text-slate-500 hover:underline" onClick={resetAdd}>
                 Anuluj
               </button>
@@ -374,7 +442,7 @@ export function StatusActionsPanel({
                   value={targetId}
                   onChange={(e) => setTargetId(e.target.value === "" ? "" : Number(e.target.value))}
                 >
-                  <option value="">— wybierz —</option>
+                  <option value="">—</option>
                   {targets.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
@@ -394,14 +462,38 @@ export function StatusActionsPanel({
                 Anuluj
               </button>
             </div>
+          ) : addKind === "warehouse_commit" ? (
+            <div className="flex flex-wrap items-end gap-2">
+              <p className="w-full text-xs text-slate-600">
+                Przy wejściu w status wywoła commit magazynowy (Z-PZ). Jeśli RMZ nie jest gotowy — efekt FAILED z
+                kodem domenowym (bez zgadywania).
+              </p>
+              <button
+                type="button"
+                disabled={busy}
+                className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+                onClick={() => void onAdd()}
+              >
+                Zapisz
+              </button>
+              <button type="button" className="text-xs text-slate-500 hover:underline" onClick={resetAdd}>
+                Anuluj
+              </button>
+            </div>
           ) : (
             <div className="flex flex-wrap items-end gap-2">
               <div className="text-xs text-slate-600">
                 <span className="block font-medium text-slate-800">Odbiorca</span>
                 <span className="mt-1 inline-block rounded border border-slate-200 bg-slate-50 px-2 py-1.5">
-                  Klient
+                  {addKind === "send_email_internal" ? "Użytkownik wewnętrzny" : "Klient"}
                 </span>
               </div>
+              {addKind === "send_email_internal" ? (
+                <label className="text-xs text-slate-600">
+                  Użytkownik
+                  <InternalUserPicker value={internalUserId} disabled={busy} onChange={setInternalUserId} />
+                </label>
+              ) : null}
               <label className="text-xs text-slate-600">
                 Szablon
                 <MessageTemplatePicker
@@ -415,7 +507,11 @@ export function StatusActionsPanel({
               </label>
               <button
                 type="button"
-                disabled={busy || templateId === ""}
+                disabled={
+                  busy ||
+                  templateId === "" ||
+                  (addKind === "send_email_internal" && internalUserId === "")
+                }
                 className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
                 onClick={() => void onAdd()}
               >

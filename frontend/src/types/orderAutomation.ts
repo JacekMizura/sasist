@@ -21,6 +21,7 @@ export type AutomationEffectKind =
   | "change_status"
   | "send_email"
   | "send_message"
+  | "warehouse_commit"
   | "generate_document"
   | "assign_courier"
   | "add_tag"

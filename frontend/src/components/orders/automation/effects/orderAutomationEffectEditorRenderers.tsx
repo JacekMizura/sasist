@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { MessageTemplatePicker } from "../../../messaging/MessageTemplatePicker";
+import { InternalUserPicker } from "../../../messaging/InternalUserPicker";
 import { DAMAGE_TENANT_ID } from "../../../../pages/damage/damageShared";
 import { useWarehouse } from "../../../../context/WarehouseContext";
 import { PanelStatusHierarchyPicker } from "../../../panel/PanelStatusHierarchyPicker";
@@ -27,6 +28,7 @@ export const EFFECT_BUSINESS_SIDEBAR: Record<
   generate_document: { title: "Dokument", Icon: FileText },
   send_email: { title: "E-mail", Icon: Mail },
   send_message: { title: "Wiadomość", Icon: Mail },
+  warehouse_commit: { title: "Zwrot WMS", Icon: Package },
   print: { title: "Druk", Icon: Printer },
   assign_courier: { title: "Kurier", Icon: Truck },
   add_tag: { title: "Tag", Icon: Tag },
@@ -158,12 +160,42 @@ export function SendEmailEffectEditor({ effect, patchPayload }: EffectEditorBase
   const raw = effect.payload.template_id ?? effect.payload.template;
   const selected =
     raw === "" || raw == null ? ("" as const) : Number.isFinite(Number(raw)) && Number(raw) > 0 ? Number(raw) : ("" as const);
+  const recipientType = String(effect.payload.recipient_type || "CUSTOMER").toUpperCase() === "INTERNAL" ? "INTERNAL" : "CUSTOMER";
+  const userIdRaw = effect.payload.user_id;
+  const userId =
+    userIdRaw === "" || userIdRaw == null
+      ? ("" as const)
+      : Number.isFinite(Number(userIdRaw)) && Number(userIdRaw) > 0
+        ? Number(userIdRaw)
+        : ("" as const);
   return (
     <div className="grid min-w-0 gap-y-0">
       <div className={erpRow}>
         <span className={erpLbl}>Odbiorca</span>
-        <span className={`${erpInp} flex items-center bg-slate-50 text-slate-700`}>Klient</span>
+        <select
+          className={erpInp}
+          value={recipientType}
+          onChange={(e) =>
+            patchPayload({
+              recipient_type: e.target.value,
+              ...(e.target.value === "CUSTOMER" ? { user_id: "" } : {}),
+            })
+          }
+        >
+          <option value="CUSTOMER">Klient</option>
+          <option value="INTERNAL">Użytkownik wewnętrzny</option>
+        </select>
       </div>
+      {recipientType === "INTERNAL" ? (
+        <div className={erpRow}>
+          <span className={erpLbl}>Użytkownik</span>
+          <InternalUserPicker
+            value={userId}
+            inputClassName={erpInp}
+            onChange={(id) => patchPayload({ user_id: id === "" ? "" : id, recipient_type: "INTERNAL" })}
+          />
+        </div>
+      ) : null}
       <div className={erpRow}>
         <span className={erpLbl}>Szablon</span>
         <div className="min-w-0 flex-1">
@@ -176,7 +208,7 @@ export function SendEmailEffectEditor({ effect, patchPayload }: EffectEditorBase
             onChange={(id) =>
               patchPayload({
                 template_id: id === "" ? "" : id,
-                recipient_type: "CUSTOMER",
+                recipient_type: recipientType,
               })
             }
           />
@@ -188,6 +220,19 @@ export function SendEmailEffectEditor({ effect, patchPayload }: EffectEditorBase
 
 export function renderSendEmailEffectEditor(props: EffectEditorBaseProps) {
   return <SendEmailEffectEditor {...props} />;
+}
+
+export function WarehouseCommitEffectEditor(_props: EffectEditorBaseProps) {
+  return (
+    <p className="px-1 py-2 text-xs text-slate-600">
+      Wywołuje legalny commit magazynowy zwrotu (Z-PZ / przyjęcie). Działa tylko dla reguł RETURN, gdy linie RMZ są
+      gotowe. Nie wykonuje zwrotu płatności.
+    </p>
+  );
+}
+
+export function renderWarehouseCommitEffectEditor(props: EffectEditorBaseProps) {
+  return <WarehouseCommitEffectEditor {...props} />;
 }
 
 const PRINTERS: { value: string; label: string }[] = [
@@ -365,6 +410,8 @@ export function renderAutomationEffectConfigEditor(
       return renderSendEmailEffectEditor(props);
     case "send_message":
       return renderSendEmailEffectEditor(props);
+    case "warehouse_commit":
+      return renderWarehouseCommitEffectEditor(props);
     case "print":
       return renderPrintEffectEditor(props);
     case "assign_courier":

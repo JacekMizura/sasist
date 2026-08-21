@@ -13,6 +13,7 @@ from ..constants import (
     EFFECT_CHANGE_STATUS,
     EFFECT_SEND_EMAIL,
     EFFECT_SEND_MESSAGE,
+    EFFECT_WAREHOUSE_COMMIT,
     SUPPORTED_EFFECT_TYPES,
 )
 
@@ -116,12 +117,38 @@ class SendEmailEffectAdapter:
         )
 
 
+class WarehouseCommitEffectAdapter:
+    effect_type = EFFECT_WAREHOUSE_COMMIT
+
+    def execute(
+        self,
+        db: Session,
+        *,
+        config: dict[str, Any],
+        event: StatusTransitionEvent,
+        actor_user_id: Optional[int],
+        execution_id: Optional[int] = None,
+        effect_id: Optional[int] = None,
+    ) -> EffectResult:
+        del execution_id, effect_id
+        from .warehouse_commit import execute_warehouse_commit
+
+        return execute_warehouse_commit(
+            db,
+            config=config,
+            event=event,
+            actor_user_id=actor_user_id,
+        )
+
+
 def get_adapter(effect_type: str) -> EffectAdapter:
     et = normalize_effect_type(effect_type)
     if et == EFFECT_CHANGE_STATUS:
         return ChangeStatusEffectAdapter()
     if et == EFFECT_SEND_EMAIL:
         return SendEmailEffectAdapter()
+    if et == EFFECT_WAREHOUSE_COMMIT:
+        return WarehouseCommitEffectAdapter()
     return UnsupportedEffectAdapter(et)
 
 

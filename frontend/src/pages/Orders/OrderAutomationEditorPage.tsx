@@ -109,6 +109,8 @@ function payloadForKind(kind: AutomationEffectKind): Record<string, string | num
       return { template_id: "", recipient_type: "CUSTOMER" };
     case "send_message":
       return { template_id: "", recipient_type: "CUSTOMER" };
+    case "warehouse_commit":
+      return {};
     case "print":
       return { printer: "", print_document: "", template: "", copies: "1" };
     case "assign_courier":

@@ -163,3 +163,28 @@ def resolve_customer_email(
         error_code="unsupported_entity",
         message=f"Unsupported entity_type={et}",
     )
+
+
+def resolve_internal_user_email(db: Session, *, user_id: int) -> RecipientResolution:
+    """INTERNAL recipient SSOT — AppUser.email by id (no free-text address)."""
+    from ...models.app_user import AppUser
+
+    if int(user_id) <= 0:
+        return RecipientResolution(
+            ok=False,
+            error_code="invalid_user_id",
+            message="INTERNAL send_email requires user_id",
+        )
+    user = db.query(AppUser).filter(AppUser.id == int(user_id)).first()
+    if user is None:
+        return RecipientResolution(ok=False, error_code="user_not_found", message="User not found")
+    if not bool(getattr(user, "is_active", True)):
+        return RecipientResolution(ok=False, error_code="user_inactive", message="User is inactive")
+    em = _clean_email(getattr(user, "email", None))
+    if not em:
+        return RecipientResolution(
+            ok=False,
+            error_code="recipient_email_missing",
+            message="User has no email",
+        )
+    return RecipientResolution(ok=True, email=em, source="app_user.email")

@@ -158,14 +158,28 @@ def validate_automation_runtime(
                     )
                 )
             rtype = str(cfg.get("recipient_type") or cfg.get("recipient") or "CUSTOMER").strip().upper()
-            if rtype and rtype != "CUSTOMER":
+            if rtype and rtype not in ("CUSTOMER", "INTERNAL"):
                 issues.append(
                     ValidationIssue(
                         code="invalid_effect",
                         effect_type=etype,
-                        message="send_email v1 supports recipient_type=CUSTOMER only",
+                        message="send_email supports recipient_type=CUSTOMER|INTERNAL only",
                     )
                 )
+            if rtype == "INTERNAL":
+                raw_uid = cfg.get("user_id", cfg.get("userId"))
+                try:
+                    uid = int(raw_uid) if raw_uid is not None else 0
+                except (TypeError, ValueError):
+                    uid = 0
+                if uid <= 0:
+                    issues.append(
+                        ValidationIssue(
+                            code="invalid_effect",
+                            effect_type=etype,
+                            message="send_email INTERNAL requires user_id",
+                        )
+                    )
             # entity compatibility: rule.entity_type must be known
             rule_et = str(entity_type or rule.entity_type or "").strip().upper()
             if rule_et and rule_et not in ENTITY_TYPES:
@@ -174,6 +188,16 @@ def validate_automation_runtime(
                         code="invalid_effect",
                         effect_type=etype,
                         message=f"send_email not compatible with entity_type={rule_et}",
+                    )
+                )
+        elif etype == "warehouse_commit":
+            rule_et = str(entity_type or rule.entity_type or "").strip().upper()
+            if rule_et and rule_et != "RETURN":
+                issues.append(
+                    ValidationIssue(
+                        code="invalid_effect",
+                        effect_type=etype,
+                        message="warehouse_commit only compatible with entity_type=RETURN",
                     )
                 )
 

@@ -186,6 +186,12 @@ export const ORDER_AUTOMATION_EFFECT_KINDS: EffectKindMeta[] = [
     backendSupported: true,
   },
   {
+    kind: "warehouse_commit",
+    label: "Zatwierdź zwrot w magazynie",
+    category: "Zwroty",
+    backendSupported: true,
+  },
+  {
     kind: "send_message",
     label: "Wyślij wiadomość (legacy)",
     category: "Komunikacja",

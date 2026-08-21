@@ -51,8 +51,15 @@ export function validateEffect(e: AutomationEffect): string | null {
     case "send_message": {
       const tid = Number(e.payload.template_id ?? e.payload.template);
       if (!Number.isFinite(tid) || tid <= 0) return "Nie wybrano szablonu e-mail";
+      const rtype = String(e.payload.recipient_type || "CUSTOMER").toUpperCase();
+      if (rtype === "INTERNAL") {
+        const uid = Number(e.payload.user_id);
+        if (!Number.isFinite(uid) || uid <= 0) return "Nie wybrano użytkownika";
+      }
       return null;
     }
+    case "warehouse_commit":
+      return null;
     case "assign_courier": {
       const courier = String(e.payload.courier ?? "").trim();
       const preset = String(e.payload.courier_preset ?? "").trim();
