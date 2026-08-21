@@ -43,6 +43,7 @@ TIER0_TABLES: frozenset[str] = frozenset(
         "stock_documents",
         "stock_document_items",
         "sale_documents",
+        "sale_document_items",
         "sale_document_stock_links",
         "document_series",
         "order_documents",

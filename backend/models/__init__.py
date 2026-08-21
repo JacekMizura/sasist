@@ -179,6 +179,7 @@ from .order_ui_panel_subgroup import OrderUiPanelSubgroup  # noqa: F401
 from .return_ui_panel_subgroup import ReturnUiPanelSubgroup  # noqa: F401
 from .document_series import DocumentSeries  # noqa: F401
 from .sale_document import SaleDocument  # noqa: F401
+from .sale_document_item import SaleDocumentItem  # noqa: F401
 from .picking_config import PickingConfig  # noqa: F401
 from .wms_picking_shortage_report import WmsPickingShortageReport  # noqa: F401
 from .order_issue_task import OrderIssueTask  # noqa: F401

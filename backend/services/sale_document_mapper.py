@@ -25,6 +25,8 @@ from ..models.warehouse_inventory_movement import WarehouseInventoryMovement
 from .document_number_service import stock_document_display_label
 from .sale_document_financials import compute_sale_totals_from_order
 from .sale_document_buyer_snapshot import buyer_snapshot_to_display, parse_buyer_snapshot
+from .sale_documents.correction_financials import compute_totals_from_sale_document_items
+from .sale_documents.items_snapshot import list_sale_document_items
 
 _LEGACY_NUMBER_RE = re.compile(r"\{[A-Z_]+\}")
 
@@ -79,8 +81,44 @@ def compute_canonical_financials(order: Order) -> dict[str, Any]:
     }
 
 
+def resolve_sale_document_financials(db: Session, doc: SaleDocument, order: Order) -> dict[str, Any]:
+    """
+    Prefer persisted sale_document_items (immutable snapshot / correction deltas).
+    Fall back to live order only for legacy PRIMARY docs without items.
+    """
+    items = list_sale_document_items(db, str(doc.id))
+    if items:
+        totals = compute_totals_from_sale_document_items(items)
+        return {
+            "total_net": float(totals["total_net"]),
+            "total_gross": float(totals["total_gross"]),
+            "total_vat": float(totals["total_vat"]),
+            "lines": totals["lines"],
+            "vat_rows": totals["vat_rows"],
+            "from_persisted_items": True,
+        }
+    kind = str(getattr(doc, "document_kind", None) or "PRIMARY").strip().upper()
+    if kind == "CORRECTION":
+        return {
+            "total_net": float(doc.total_net or 0.0),
+            "total_gross": float(doc.total_gross or 0.0),
+            "total_vat": float(doc.total_vat or 0.0),
+            "lines": [],
+            "vat_rows": [],
+            "from_persisted_items": False,
+        }
+    fin = compute_canonical_financials(order)
+    fin["from_persisted_items"] = False
+    return fin
+
+
 def refresh_persisted_financials(db: Session, doc: SaleDocument, financials: dict[str, Any]) -> None:
     """Keep DB cache aligned with canonical engine (silent repair on read)."""
+    # Never overwrite correction totals from live order recompute.
+    if str(getattr(doc, "document_kind", None) or "").upper() == "CORRECTION":
+        return
+    if financials.get("from_persisted_items"):
+        return
     changed = False
     net = float(financials["total_net"])
     gross = float(financials["total_gross"])
@@ -406,15 +444,19 @@ def map_sale_document(
         if loaded is not None:
             order_full = loaded
 
-    financials = compute_canonical_financials(order_full)
+    financials = resolve_sale_document_financials(db, doc, order_full)
     if refresh_db:
         refresh_persisted_financials(db, doc, financials)
 
-    payment = _resolve_payment(db, doc, order_full, gross=float(financials["total_gross"]))
+    payment = _resolve_payment(db, doc, order_full, gross=abs(float(financials["total_gross"])))
     number_fields = resolve_document_number_fields(doc.document_number)
 
     panel_type = str(doc.panel_document_type or "").upper()
-    doc_type = "FV" if panel_type == "INVOICE" else "PA"
+    doc_kind = str(getattr(doc, "document_kind", None) or "PRIMARY").strip().upper()
+    if doc_kind == "CORRECTION" or str(doc.series_type or "").upper() == "CORRECTION":
+        doc_type = "KOR"
+    else:
+        doc_type = "FV" if panel_type == "INVOICE" else "PA"
     buyer = _resolve_buyer_display(doc, customer, order_full)
     client = buyer["name"]
 
@@ -428,6 +470,11 @@ def map_sale_document(
         "document_type_id": str(doc.document_type_id or doc.document_series_id or ""),
         "document_subtype": str(doc.document_subtype or "").strip().upper()
         or ("INVOICE" if panel_type == "INVOICE" else "RECEIPT"),
+        "document_kind": doc_kind,
+        "source_sale_document_id": (
+            str(doc.source_sale_document_id) if getattr(doc, "source_sale_document_id", None) else None
+        ),
+        "correction_reason": str(getattr(doc, "correction_reason", None) or "").strip() or None,
         "panel_document_type": panel_type,
         "doc_type": doc_type,
         "series_type": str(doc.series_type or "SALE"),
@@ -500,6 +547,11 @@ def map_sale_document(
                 "order_path": f"/orders/{order_full.id}",
                 "warehouse_documents": linked_wz,
                 "sale_document_id": str(doc.id),
+                "source_sale_document_id": (
+                    str(doc.source_sale_document_id) if getattr(doc, "source_sale_document_id", None) else None
+                ),
+                "source_document_number": None,
+                "corrections": [],
             },
             "history": [
                 {
@@ -544,4 +596,36 @@ def map_sale_document(
             },
         }
     )
+    if getattr(doc, "source_sale_document_id", None):
+        src = (
+            db.query(SaleDocument)
+            .filter(
+                SaleDocument.id == str(doc.source_sale_document_id),
+                SaleDocument.tenant_id == int(doc.tenant_id),
+            )
+            .first()
+        )
+        if src is not None:
+            base["related"]["source_document_number"] = str(src.document_number or "")
+            base["related"]["source_sale_document_id"] = str(src.id)
+    else:
+        corr_rows = (
+            db.query(SaleDocument)
+            .filter(
+                SaleDocument.source_sale_document_id == str(doc.id),
+                SaleDocument.tenant_id == int(doc.tenant_id),
+                SaleDocument.document_kind == "CORRECTION",
+            )
+            .order_by(SaleDocument.created_at.asc())
+            .all()
+        )
+        base["related"]["corrections"] = [
+            {
+                "id": str(c.id),
+                "document_number": str(c.document_number or ""),
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+                "detail_path": f"/documents/sales/{c.id}",
+            }
+            for c in corr_rows
+        ]
     return base

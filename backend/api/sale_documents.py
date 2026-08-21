@@ -13,9 +13,23 @@ from ..database import get_db
 from ..schemas.sale_document import SaleDocumentDetailRead
 from ..services.document_print_template_catalog import list_print_template_presets
 from ..services.sale_document_detail_service import get_sale_document_detail
+from ..services.sale_documents import (
+    SaleCorrectionError,
+    issue_sale_correction_for_return,
+    list_corrections_for_source,
+)
 from ..services.sale_documents_list_service import list_sale_documents
+from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/sale-documents", tags=["Sale documents"])
+
+
+class IssueSaleCorrectionFromReturnBody(BaseModel):
+    tenant_id: int = Field(..., ge=1)
+    return_id: int = Field(..., ge=1)
+    warehouse_id: int | None = Field(None, ge=1)
+    source_sale_document_id: str | None = None
+    reason: str | None = None
 
 
 @router.get("/")
@@ -44,6 +58,75 @@ def get_sale_documents(
 @router.get("/print-template-presets")
 def get_print_template_presets():
     return {"items": list_print_template_presets()}
+
+
+@router.post("/corrections/from-return")
+def post_sale_correction_from_return(body: IssueSaleCorrectionFromReturnBody, db: Session = Depends(get_db)):
+    """Issue invoice correction (KOR) from a finalized RMZ return — domain pipeline, not automation."""
+    try:
+        doc, reused = issue_sale_correction_for_return(
+            db,
+            tenant_id=int(body.tenant_id),
+            return_id=int(body.return_id),
+            source_sale_document_id=body.source_sale_document_id,
+            reason=body.reason,
+            warehouse_id=body.warehouse_id,
+        )
+        db.commit()
+    except SaleCorrectionError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail={"code": exc.code, "message": exc.message}) from exc
+    except Exception:
+        db.rollback()
+        _logger.exception("post_sale_correction_from_return failed")
+        raise HTTPException(status_code=500, detail="Nie udało się wystawić korekty.") from None
+
+    source = None
+    if doc.source_sale_document_id:
+        from ..models.sale_document import SaleDocument
+
+        source = (
+            db.query(SaleDocument)
+            .filter(
+                SaleDocument.id == str(doc.source_sale_document_id),
+                SaleDocument.tenant_id == int(body.tenant_id),
+            )
+            .first()
+        )
+    return {
+        "correction_document_id": str(doc.id),
+        "correction_number": str(doc.document_number or ""),
+        "source_document_id": str(doc.source_sale_document_id or ""),
+        "source_document_number": str(source.document_number or "") if source else None,
+        "reused_existing": bool(reused),
+        "total_net": doc.total_net,
+        "total_vat": doc.total_vat,
+        "total_gross": doc.total_gross,
+    }
+
+
+@router.get("/{document_id}/corrections")
+def get_sale_document_corrections(
+    document_id: str,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    rows = list_corrections_for_source(db, tenant_id=int(tenant_id), source_sale_document_id=document_id)
+    return {
+        "items": [
+            {
+                "id": str(r.id),
+                "document_number": str(r.document_number or ""),
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "total_gross": r.total_gross,
+                "business_source_type": r.business_source_type,
+                "business_source_id": r.business_source_id,
+                "correction_scope_hash": r.correction_scope_hash,
+            }
+            for r in rows
+        ],
+        "total": len(rows),
+    }
 
 
 @router.get("/{document_id}", response_model=SaleDocumentDetailRead)

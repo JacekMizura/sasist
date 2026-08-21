@@ -42,16 +42,26 @@ def _build_sale_context(dto: dict[str, Any]) -> dict[str, Any]:
     payment = dto.get("payment") or {}
     buyer = dto.get("buyer") or {}
     seller = dto.get("seller") or {}
+    related = dto.get("related") or {}
+    is_correction = str(dto.get("document_kind") or "").upper() == "CORRECTION" or str(
+        dto.get("document_subtype") or ""
+    ).upper() == "CORRECTION"
+    type_label = "Korekta faktury" if is_correction else document_subtype_label_pl(dto.get("document_subtype"))
     return {
         "document": {
             "number": dto.get("document_number"),
             "date": _fmt_date(dto.get("created_at")),
-            "type_label": document_subtype_label_pl(dto.get("document_subtype")),
+            "type_label": type_label,
             "subtype": dto.get("document_subtype"),
+            "kind": dto.get("document_kind") or "PRIMARY",
+            "reason": dto.get("correction_reason") or "—",
+            "source_number": related.get("source_document_number") or "—",
+            "source_id": related.get("source_sale_document_id") or dto.get("source_sale_document_id"),
         },
         "customer": {
             "name": buyer.get("name") or dto.get("client") or "—",
             "address": buyer.get("address") or "—",
+            "nip": buyer.get("nip") or "—",
         },
         "seller": {
             "name": seller.get("name") or "—",
@@ -81,6 +91,7 @@ def _build_sale_context(dto: dict[str, Any]) -> dict[str, Any]:
             "amount": _fmt_money(payment.get("amount")),
         },
         "currency": dto.get("currency") or "PLN",
+        "is_correction": is_correction,
     }
 
 

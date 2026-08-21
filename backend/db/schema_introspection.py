@@ -941,6 +941,22 @@ def ensure_sale_documents_orm_columns(engine: Engine) -> int:
     return _ensure_orm_columns_for_model(engine, SaleDocument)
 
 
+def ensure_sale_document_items_table(engine: Engine) -> int:
+    """Create ``sale_document_items`` when missing."""
+    if has_table(engine, "sale_document_items"):
+        from ..models.sale_document_item import SaleDocumentItem
+
+        return _ensure_orm_columns_for_model(engine, SaleDocumentItem)
+    from ..models.sale_document_item import SaleDocumentItem
+
+    SaleDocumentItem.__table__.create(engine, checkfirst=True)
+    logger.info(
+        "[schema.tier0] sale_document_items table created dialect=%s",
+        engine.dialect.name,
+    )
+    return 1
+
+
 def ensure_stock_documents_orm_columns(engine: Engine) -> int:
     """Sync ``stock_documents`` ORM columns (WZ numbering, direct-sale linkage)."""
     from ..models.stock_document import StockDocument
@@ -1047,6 +1063,7 @@ def ensure_tier0_document_warehouse_schema(engine: Engine) -> int:
     added += ensure_sale_document_stock_links_table(engine)
     added += ensure_document_series_orm_columns(engine)
     added += ensure_sale_documents_orm_columns(engine)
+    added += ensure_sale_document_items_table(engine)
     added += ensure_stock_documents_orm_columns(engine)
     added += ensure_stock_document_items_orm_columns(engine)
     from .z_pz_schema import ensure_z_pz_schema
@@ -1065,6 +1082,7 @@ def verify_tier0_sql_probes(engine: Engine) -> list[dict[str, Any]]:
     optional_tables = frozenset(
         {
             "sale_documents",
+            "sale_document_items",
             "stock_documents",
             "stock_document_items",
             "document_series",

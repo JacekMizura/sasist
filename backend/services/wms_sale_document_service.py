@@ -109,7 +109,11 @@ def create_sale_document(
 
     existing = (
         db.query(SaleDocument)
-        .filter(SaleDocument.order_id == int(order.id))
+        .filter(
+            SaleDocument.order_id == int(order.id),
+            SaleDocument.document_kind == "PRIMARY",
+            SaleDocument.series_type == "SALE",
+        )
         .order_by(SaleDocument.created_at.desc())
         .first()
     )
@@ -169,6 +173,7 @@ def create_sale_document(
         document_subtype=_document_subtype_for_panel(panel),
         document_type_id=sid,
         series_type="SALE",
+        document_kind="PRIMARY",
         created_at=datetime.utcnow(),
     )
 
@@ -203,6 +208,9 @@ def create_sale_document(
     _order_set_import_meta(order, meta)
 
     db.flush()
+    from .sale_documents.items_snapshot import snapshot_primary_items_from_order
+
+    snapshot_primary_items_from_order(db, doc=row, order=order_for_snapshot)
     logger.info("Document created ID: %s number=%s", row.id, doc_number)
     return row
 

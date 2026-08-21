@@ -55,17 +55,18 @@ class SaleDocumentPartyRead(BaseModel):
 
 
 class SaleDocumentLineRead(BaseModel):
-    order_item_id: int
-    product_id: int
+    order_item_id: Optional[int] = None
+    product_id: Optional[int] = None
     name: str
     sku: Optional[str] = None
-    quantity: int
+    quantity: float
     unit_net: Optional[float] = None
     unit_gross: Optional[float] = None
     vat_percent: float
     line_net: float
     line_vat: float
     line_gross: float
+    position: Optional[int] = None
 
 
 class SaleDocumentVatRowRead(BaseModel):
@@ -86,6 +87,9 @@ class SaleDocumentBaseRead(BaseModel):
     document_series_id: str
     document_type_id: str
     document_subtype: str
+    document_kind: str = "PRIMARY"
+    source_sale_document_id: Optional[str] = None
+    correction_reason: Optional[str] = None
     panel_document_type: str
     doc_type: str
     series_type: str
