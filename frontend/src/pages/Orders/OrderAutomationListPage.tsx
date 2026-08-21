@@ -17,7 +17,10 @@ import { useOrderAutomationStore } from "../../hooks/useOrderAutomationStore";
 import type { OrderAutomationRule } from "../../types/orderAutomation";
 import type { OrderAutomationScope } from "../../hooks/useOrderAutomationStore";
 import { getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
+import { getReturnUiStatusSummary } from "../../api/returnUiStatusApi";
+import { getComplaintUiStatusSummary } from "../../api/complaintUiStatusApi";
 import type { OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
+import { statusNameMapKey } from "../../utils/statusActionDeepLink";
 import {
   formatConditionDisplayParts,
   formatEffectPill,
@@ -53,6 +56,7 @@ export default function OrderAutomationListPage() {
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [idSort, setIdSort] = useState<"asc" | "desc">("asc");
   const [statusSummary, setStatusSummary] = useState<OrderUiStatusPanelSummary | null>(null);
+  const [statusNameByKey, setStatusNameByKey] = useState<Map<string, string>>(() => new Map());
 
   useEffect(() => {
     void reload();
@@ -62,10 +66,32 @@ export default function OrderAutomationListPage() {
     if (wid == null) return;
     void (async () => {
       try {
-        const s = await getOrderUiStatusSummary(DAMAGE_TENANT_ID, wid, { includeInactive: true });
-        setStatusSummary(s);
+        const [orderS, returnS, complaintS] = await Promise.all([
+          getOrderUiStatusSummary(DAMAGE_TENANT_ID, wid, { includeInactive: true }),
+          getReturnUiStatusSummary(DAMAGE_TENANT_ID, wid, { includeInactive: true }).catch(() => null),
+          getComplaintUiStatusSummary(DAMAGE_TENANT_ID, wid).catch(() => null),
+        ]);
+        setStatusSummary(orderS);
+        const m = new Map<string, string>();
+        for (const g of orderS?.groups ?? []) {
+          for (const s of g.sub_statuses ?? []) {
+            m.set(statusNameMapKey("ORDER", s.id), s.name);
+          }
+        }
+        for (const g of returnS?.groups ?? []) {
+          for (const s of g.sub_statuses ?? []) {
+            m.set(statusNameMapKey("RETURN", s.id), s.name);
+          }
+        }
+        for (const g of complaintS?.groups ?? []) {
+          for (const s of g.sub_statuses ?? []) {
+            m.set(statusNameMapKey("COMPLAINT", s.id), s.name);
+          }
+        }
+        setStatusNameByKey(m);
       } catch {
         setStatusSummary(null);
+        setStatusNameByKey(new Map());
       }
     })();
   }, [wid]);
@@ -238,6 +264,7 @@ export default function OrderAutomationListPage() {
                     <AutomationRulesTable
                       rules={list}
                       statusNameById={statusNameById}
+                      statusNameByKey={statusNameByKey}
                       statusBriefById={statusBriefById}
                       warehouseOptions={warehouseOptions}
                       basePath={basePath}

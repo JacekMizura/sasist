@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, ChevronUp, Edit2, Trash2, Plus } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
+import toast from "react-hot-toast";
+import { STATUS_ACTION_EDIT_QUERY } from "../../utils/statusActionDeepLink";
 
 import {
   createOrderUiStatus,
@@ -158,7 +160,7 @@ export default function OrderPanelUiStatusesSettingsPage() {
   };
 
   useEffect(() => {
-    const raw = searchParams.get("editStatusId");
+    const raw = searchParams.get(STATUS_ACTION_EDIT_QUERY);
     if (!raw || !summary) return;
     const sid = Number(raw);
     if (!Number.isFinite(sid) || sid <= 0) return;
@@ -167,6 +169,9 @@ export default function OrderPanelUiStatusesSettingsPage() {
       .find((s) => s.id === sid);
     if (hit) {
       startEdit(hit);
+      setSearchParams({}, { replace: true });
+    } else {
+      toast.error("Status zamówienia z automatyzacji nie istnieje — wybierz status ręcznie.");
       setSearchParams({}, { replace: true });
     }
   }, [summary, searchParams, setSearchParams]);

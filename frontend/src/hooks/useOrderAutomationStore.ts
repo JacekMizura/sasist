@@ -86,7 +86,8 @@ export function useOrderAutomationStore(
       const dtos = await listAutomations({
         tenantId,
         warehouseId,
-        entityType: scope === "inventory" ? undefined : "ORDER",
+        // Include ORDER + RETURN + COMPLAINT STATUS_ACTION on the shared list.
+        entityType: undefined,
       });
       // Inventory scope: still ORDER entity for now; filter by metadata later if needed
       setBackendDtos(dtos);

@@ -57,6 +57,7 @@ export function backendRuleToFe(dto: AutomationRuleDto): OrderAutomationRule {
       runCount: Number(statsRaw.runCount) || 0,
     },
     source: dto.source,
+    entityType: String(dto.entity_type || "ORDER").toUpperCase(),
     triggerStatusId,
   };
 }

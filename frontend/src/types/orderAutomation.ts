@@ -149,6 +149,8 @@ export type OrderAutomationRule = {
   stats: OrderAutomationStats;
   /** Backend source (STATUS_ACTION | USER | …) — optional projection. */
   source?: string;
+  /** Backend entity_type — ORDER | RETURN | COMPLAINT. */
+  entityType?: string;
   /** Trigger status_id for STATUS_ACTION rules. */
   triggerStatusId?: number | null;
 };

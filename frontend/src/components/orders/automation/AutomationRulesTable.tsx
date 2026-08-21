@@ -11,6 +11,12 @@ import {
 } from "../../../utils/orderAutomationPreview";
 import type { ConditionOption } from "../../../utils/orderAutomationConditionOptions";
 import { formatExecutionListDisplay } from "../../../utils/orderAutomationExecution";
+import {
+  resolveStatusActionDeepLink,
+  statusActionDomainLabel,
+  statusNameMapKey,
+} from "../../../utils/statusActionDeepLink";
+import toast from "react-hot-toast";
 import { AutomationConditionSummary } from "./AutomationConditionSummary";
 import { AutomationEffectSummary } from "./AutomationEffectSummary";
 import type { OrderUiStatusBriefById } from "./buildOrderUiStatusNameById";
@@ -83,28 +89,52 @@ function ConditionsCell({
   );
 }
 
+function resolveStatusActionLabel(
+  rule: OrderAutomationRule,
+  statusNameById: Map<number, string>,
+  statusNameByKey?: Map<string, string>,
+): { label: string; missing: boolean } {
+  const sid = rule.triggerStatusId;
+  if (sid == null) return { label: "—", missing: true };
+  const et = rule.entityType || "ORDER";
+  const keyed = statusNameByKey?.get(statusNameMapKey(et, sid));
+  if (keyed) return { label: keyed, missing: false };
+  // ORDER-only numeric map fallback (conditions / legacy)
+  if (et === "ORDER" && statusNameById.get(sid)) {
+    return { label: statusNameById.get(sid)!, missing: false };
+  }
+  return { label: `#${sid}`, missing: true };
+}
+
 function EffectsCell({
   rule,
   statusNameById,
+  statusNameByKey,
   statusBriefById,
   expanded,
   isStatusAction,
 }: {
   rule: OrderAutomationRule;
   statusNameById: Map<number, string>;
+  statusNameByKey?: Map<string, string>;
   statusBriefById?: OrderUiStatusBriefById;
   expanded: boolean;
   isStatusAction?: boolean;
 }) {
   if (isStatusAction) {
     const n = rule.effects.filter((e) => e.kind).length;
-    const sid = rule.triggerStatusId;
-    const statusLabel =
-      sid != null && statusNameById.get(sid) ? statusNameById.get(sid)! : sid != null ? `#${sid}` : "—";
+    const { label, missing } = resolveStatusActionLabel(rule, statusNameById, statusNameByKey);
     return (
       <div className="min-w-0 text-sm text-slate-700">
-        <p className="font-medium">{n} {n === 1 ? "akcja" : n < 5 ? "akcje" : "akcji"}</p>
-        <p className="mt-0.5 text-xs text-slate-500">Po wejściu w status: {statusLabel}</p>
+        <p className="font-medium">
+          {n} {n === 1 ? "akcja" : n < 5 ? "akcje" : "akcji"}
+        </p>
+        <p className="mt-0.5 text-xs text-slate-500">
+          {statusActionDomainLabel(rule.entityType)} · Po wejściu w status: {label}
+        </p>
+        {missing ? (
+          <p className="mt-0.5 text-[11px] font-medium text-amber-800">Status nie znaleziony — wymaga poprawy</p>
+        ) : null}
       </div>
     );
   }
@@ -153,6 +183,7 @@ function ExecutionCell({ rule }: { rule: OrderAutomationRule }) {
 type RuleRowProps = {
   rule: OrderAutomationRule;
   statusNameById: Map<number, string>;
+  statusNameByKey?: Map<string, string>;
   statusBriefById?: OrderUiStatusBriefById;
   warehouseOptions?: ConditionOption[];
   basePath: string;
@@ -168,6 +199,7 @@ type RuleRowProps = {
 function AutomationRuleTableRow({
   rule,
   statusNameById,
+  statusNameByKey,
   statusBriefById,
   warehouseOptions,
   basePath,
@@ -182,20 +214,32 @@ function AutomationRuleTableRow({
   const navigate = useNavigate();
   const displayId = formatRuleDisplayId(rule);
   const isStatusAction = (sourceBadge || rule.source || "").toUpperCase() === "STATUS_ACTION" || sourceBadge === "Akcja statusu";
+  const { label: statusLabel, missing: statusMissing } = resolveStatusActionLabel(
+    rule,
+    statusNameById,
+    statusNameByKey,
+  );
   const ruleName = isStatusAction
     ? rule.name.startsWith("Po wejściu")
       ? rule.name
-      : `Po wejściu w status: ${
-          rule.triggerStatusId != null && statusNameById.get(rule.triggerStatusId)
-            ? statusNameById.get(rule.triggerStatusId)
-            : rule.name
-        }`
+      : `Po wejściu w status: ${statusLabel}`
     : formatRuleListName(rule);
   const canExpand = !isStatusAction && (rule.conditions.length > COLLAPSED_LIMIT || rule.effects.length > COLLAPSED_LIMIT);
 
   const openEditor = () => {
-    if (isStatusAction && rule.triggerStatusId != null) {
-      navigate(`/orders/statuses?editStatusId=${rule.triggerStatusId}`);
+    if (isStatusAction) {
+      const link = resolveStatusActionDeepLink({
+        entityType: rule.entityType,
+        triggerStatusId: rule.triggerStatusId,
+      });
+      if (!link.ok) {
+        toast.error(link.message);
+        return;
+      }
+      if (statusMissing) {
+        toast.error("Status powiązany z tą akcją nie istnieje — otwieram konfigurator domeny.");
+      }
+      navigate(link.path);
       return;
     }
     navigate(`${basePath}/${rule.id}/edit`);
@@ -233,6 +277,16 @@ function AutomationRuleTableRow({
             {sourceBadge}
           </span>
         ) : null}
+        {isStatusAction ? (
+          <span className="mt-1 inline-flex rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-700">
+            {statusActionDomainLabel(rule.entityType)}
+          </span>
+        ) : null}
+        {isStatusAction && statusMissing ? (
+          <span className="mt-1 inline-flex rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-950">
+            Wymaga poprawy
+          </span>
+        ) : null}
         {!isStatusAction ? (
           <span
             className={`mt-1 inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
@@ -264,6 +318,7 @@ function AutomationRuleTableRow({
         <EffectsCell
           rule={rule}
           statusNameById={statusNameById}
+          statusNameByKey={statusNameByKey}
           statusBriefById={statusBriefById}
           expanded={expanded}
           isStatusAction={isStatusAction}
@@ -323,6 +378,8 @@ function AutomationRuleTableRow({
 export type AutomationRulesTableProps = {
   rules: OrderAutomationRule[];
   statusNameById: Map<number, string>;
+  /** Cross-domain STATUS_ACTION labels: key = `${entityType}:${statusId}`. */
+  statusNameByKey?: Map<string, string>;
   statusBriefById?: OrderUiStatusBriefById;
   warehouseOptions?: ConditionOption[];
   basePath: string;
@@ -338,6 +395,7 @@ export type AutomationRulesTableProps = {
 export function AutomationRulesTable({
   rules,
   statusNameById,
+  statusNameByKey,
   statusBriefById,
   warehouseOptions,
   basePath,
@@ -405,6 +463,7 @@ export function AutomationRulesTable({
                 key={r.id}
                 rule={r}
                 statusNameById={statusNameById}
+                statusNameByKey={statusNameByKey}
                 statusBriefById={statusBriefById}
                 warehouseOptions={warehouseOptions}
                 basePath={basePath}

@@ -1,8 +1,11 @@
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { useSearchParams } from "react-router-dom";
+import toast from "react-hot-toast";
 
 import { flatSectionsStackClass } from "../../../components/layout/flatSectionTokens";
 import type { ReturnModuleConfigDto } from "../../../types/returnModuleConfig";
 import type { ReturnUiMainGroup, ReturnUiStatusWithCount } from "../../../types/wmsReturn";
+import { STATUS_ACTION_EDIT_QUERY } from "../../../utils/statusActionDeepLink";
 import { DamageCardsSection } from "./DamageCardsSection";
 import { ListLabelsSection } from "./ListLabelsSection";
 import { ProductDecisionsCardsSection } from "./ProductDecisionsCardsSection";
@@ -19,6 +22,7 @@ type Props = {
 
 export function ReturnsStatusesConfigurator({ warehouseId, cfg, setDraft }: Props) {
   const panel = useReturnPanelStatusesConfig(warehouseId);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [subgroupModal, setSubgroupModal] = useState<ReturnUiMainGroup | null>(null);
   const [statusModal, setStatusModal] = useState<
     | { mode: "create"; mainGroup: ReturnUiMainGroup }
@@ -26,6 +30,22 @@ export function ReturnsStatusesConfigurator({ warehouseId, cfg, setDraft }: Prop
     | null
   >(null);
   const [statusBusy, setStatusBusy] = useState(false);
+
+  useEffect(() => {
+    const raw = searchParams.get(STATUS_ACTION_EDIT_QUERY);
+    if (!raw || !panel.summary) return;
+    const sid = Number(raw);
+    if (!Number.isFinite(sid) || sid <= 0) return;
+    const hit = (panel.summary.groups ?? [])
+      .flatMap((g) => g.sub_statuses ?? [])
+      .find((s) => s.id === sid);
+    if (hit) {
+      setStatusModal({ mode: "edit", status: hit });
+    } else {
+      toast.error("Status zwrotu z automatyzacji nie istnieje — wybierz status ręcznie.");
+    }
+    setSearchParams({}, { replace: true });
+  }, [panel.summary, searchParams, setSearchParams]);
 
   if (warehouseId == null) {
     return (

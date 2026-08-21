@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import toast from "react-hot-toast";
 
 import {
   createComplaintUiStatus,
@@ -22,6 +23,7 @@ import PageLayout from "../../components/layout/PageLayout";
 import { DocumentTemplateScopeSection } from "../Settings/document-templates/components/DocumentTemplateScopeSection";
 import { COMPLAINTS_SCOPE_KINDS } from "../Settings/document-templates/documentTemplateScopeKinds";
 import { StatusActionsPanel } from "../../components/settings/StatusActionsPanel";
+import { STATUS_ACTION_EDIT_QUERY } from "../../utils/statusActionDeepLink";
 
 const GROUP_ORDER: ComplaintUiMainGroup[] = ["NEW", "IN_PROGRESS", "DONE"];
 
@@ -41,6 +43,7 @@ const SECTION_HEAD: Record<ComplaintUiMainGroup, string> = {
 export default function ComplaintPanelUiStatusesSettingsPage() {
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [summary, setSummary] = useState<Awaited<ReturnType<typeof getComplaintUiStatusSummary>> | null>(null);
   const [loading, setLoading] = useState(false);
@@ -90,6 +93,22 @@ export default function ComplaintPanelUiStatusesSettingsPage() {
       main_group: r.main_group,
     });
   };
+
+  useEffect(() => {
+    const raw = searchParams.get(STATUS_ACTION_EDIT_QUERY);
+    if (!raw || !summary) return;
+    const sid = Number(raw);
+    if (!Number.isFinite(sid) || sid <= 0) return;
+    const hit = (summary.groups ?? [])
+      .flatMap((g) => g.sub_statuses ?? [])
+      .find((s) => s.id === sid);
+    if (hit) {
+      startEdit(hit);
+    } else {
+      toast.error("Status reklamacji z automatyzacji nie istnieje — wybierz status ręcznie.");
+    }
+    setSearchParams({}, { replace: true });
+  }, [summary, searchParams, setSearchParams]);
 
   const cancelEdit = () => {
     setEditingId(null);
