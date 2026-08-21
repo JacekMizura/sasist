@@ -1,6 +1,9 @@
 /**
  * Sellasist-style status action panel — projection of one STATUS_ACTION rule + ordered effects.
- * Backend SSOT via listStatusActions / upsertStatusActions. No fake effect types.
+ * Backend SSOT via listStatusActions / upsertStatusActions.
+ *
+ * Edited status = trigger. Checkboxes = side-effects after entering that status.
+ * Does NOT expose change_status (advanced; managed in Automation Editor only).
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
@@ -26,40 +29,40 @@ type Props = {
   statusName?: string;
   /** When false, panel is read-only (inactive status). */
   statusActive?: boolean;
+  /** Used for status name fallback when statusName omitted. */
   statusOptions: StatusOption[];
   canWrite?: boolean;
 };
 
-type ActionKey = "change_status" | "send_email_customer" | "send_email_internal" | "warehouse_commit";
+/** Panel-owned (managed) action keys — must match backend MANAGED_STATUS_ACTION_KEYS. */
+type ActionKey = "send_email_customer" | "send_email_internal" | "warehouse_commit";
 
 type ActionDraft = {
   key: ActionKey;
   enabled: boolean;
-  targetStatusId: number | "";
   templateId: number | "";
   userId: number | "";
 };
 
 const LABELS: Record<ActionKey, string> = {
-  change_status: "Zmień status",
   send_email_customer: "Wyślij e-mail klientowi",
   send_email_internal: "Wyślij e-mail wewnętrzny",
   warehouse_commit: "Zatwierdź przyjęcie zwrotu w magazynie",
 };
 
 function availableKeys(entityType: AutomationEntityType): ActionKey[] {
-  const base: ActionKey[] = ["change_status", "send_email_customer", "send_email_internal"];
-  if (entityType === "RETURN") base.push("warehouse_commit");
-  return base;
+  if (entityType === "RETURN") {
+    return ["warehouse_commit", "send_email_customer", "send_email_internal"];
+  }
+  return ["send_email_customer", "send_email_internal"];
 }
 
 function emptyDraft(key: ActionKey): ActionDraft {
-  return { key, enabled: false, targetStatusId: "", templateId: "", userId: "" };
+  return { key, enabled: false, templateId: "", userId: "" };
 }
 
-function effectLogicalKey(e: AutomationEffectDto): ActionKey | null {
+function effectManagedKey(e: AutomationEffectDto): ActionKey | null {
   const t = String(e.effect_type || "");
-  if (t === "change_status") return "change_status";
   if (t === "warehouse_commit") return "warehouse_commit";
   if (t === "send_email" || t === "send_message") {
     const r = String(e.config?.recipient_type || "CUSTOMER").toUpperCase();
@@ -68,22 +71,27 @@ function effectLogicalKey(e: AutomationEffectDto): ActionKey | null {
   return null;
 }
 
+function hasEnabledAdvancedChangeStatus(rules: StatusActionRuleDto[]): boolean {
+  const ordered = [...rules].sort((a, b) => a.id - b.id);
+  for (const rule of ordered) {
+    for (const eff of rule.effects ?? []) {
+      if (String(eff.effect_type || "") !== "change_status") continue;
+      if (Boolean(eff.enabled)) return true;
+    }
+  }
+  return false;
+}
+
 function hydrateFromRules(rules: StatusActionRuleDto[], keys: ActionKey[]): ActionDraft[] {
   const byKey = new Map<ActionKey, { draft: ActionDraft; position: number }>();
-  // Prefer primary (lowest id) rule; merge first occurrence of each logical key by position.
   const ordered = [...rules].sort((a, b) => a.id - b.id);
   for (const rule of ordered) {
     const effects = [...(rule.effects ?? [])].sort((a, b) => a.position - b.position);
     for (const eff of effects) {
-      const key = effectLogicalKey(eff);
+      const key = effectManagedKey(eff);
       if (!key || !keys.includes(key) || byKey.has(key)) continue;
       const draft = emptyDraft(key);
       draft.enabled = Boolean(eff.enabled) && Boolean(rule.enabled);
-      if (key === "change_status") {
-        const raw = eff.config?.status_id ?? eff.config?.order_ui_status_id ?? eff.config?.return_ui_status_id;
-        const n = Number(raw);
-        draft.targetStatusId = Number.isFinite(n) && n > 0 ? n : "";
-      }
       if (key === "send_email_customer" || key === "send_email_internal") {
         const n = Number(eff.config?.template_id);
         draft.templateId = Number.isFinite(n) && n > 0 ? n : "";
@@ -105,21 +113,13 @@ function hydrateFromRules(rules: StatusActionRuleDto[], keys: ActionKey[]): Acti
   return [...enabledOrdered, ...disabledRest];
 }
 
+/** Managed effects only — never seeds change_status. */
 function draftsToEffects(drafts: ActionDraft[]): Omit<AutomationEffectDto, "id">[] {
-  // Persist enabled first (order), then disabled (config preserved for re-toggle).
   const enabled = drafts.filter((d) => d.enabled);
   const disabled = drafts.filter((d) => !d.enabled);
   const out: Omit<AutomationEffectDto, "id">[] = [];
   for (const d of [...enabled, ...disabled]) {
-    if (d.key === "change_status") {
-      const sid = Number(d.targetStatusId);
-      out.push({
-        position: out.length,
-        effect_type: "change_status",
-        enabled: d.enabled,
-        config: Number.isFinite(sid) && sid > 0 ? { status_id: sid } : {},
-      });
-    } else if (d.key === "send_email_customer") {
+    if (d.key === "send_email_customer") {
       const tid = Number(d.templateId);
       out.push({
         position: out.length,
@@ -157,10 +157,6 @@ function draftsToEffects(drafts: ActionDraft[]): Omit<AutomationEffectDto, "id">
 
 function validateDraft(d: ActionDraft): string | null {
   if (!d.enabled) return null;
-  if (d.key === "change_status") {
-    const sid = Number(d.targetStatusId);
-    if (!Number.isFinite(sid) || sid <= 0) return "Wybierz status docelowy";
-  }
   if (d.key === "send_email_customer" || d.key === "send_email_internal") {
     const tid = Number(d.templateId);
     if (!Number.isFinite(tid) || tid <= 0) return "Wybierz szablon e-mail";
@@ -184,6 +180,7 @@ export function StatusActionsPanel({
 }: Props) {
   const keys = useMemo(() => availableKeys(entityType), [entityType]);
   const [drafts, setDrafts] = useState<ActionDraft[]>(() => keys.map(emptyDraft));
+  const [advancedChangeStatusHint, setAdvancedChangeStatusHint] = useState(false);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const readOnly = !canWrite || !statusActive || statusId == null;
@@ -191,6 +188,7 @@ export function StatusActionsPanel({
   const load = useCallback(async () => {
     if (statusId == null) {
       setDrafts(keys.map(emptyDraft));
+      setAdvancedChangeStatusHint(false);
       return;
     }
     setLoading(true);
@@ -202,9 +200,11 @@ export function StatusActionsPanel({
         warehouseId,
       });
       setDrafts(hydrateFromRules(rows, keys));
+      setAdvancedChangeStatusHint(hasEnabledAdvancedChangeStatus(rows));
     } catch {
       toast.error("Nie udało się wczytać akcji statusu");
       setDrafts(keys.map(emptyDraft));
+      setAdvancedChangeStatusHint(false);
     } finally {
       setLoading(false);
     }
@@ -235,7 +235,6 @@ export function StatusActionsPanel({
         effects: draftsToEffects(next),
       });
       setDrafts(next);
-      // Re-hydrate to confirm single-rule SSOT
       const rows = await listStatusActions({
         tenantId,
         entityType,
@@ -243,18 +242,13 @@ export function StatusActionsPanel({
         warehouseId,
       });
       setDrafts(hydrateFromRules(rows, keys));
+      setAdvancedChangeStatusHint(hasEnabledAdvancedChangeStatus(rows));
     } catch {
       toast.error("Nie udało się zapisać akcji");
       await load();
     } finally {
       setBusy(false);
     }
-  };
-
-  const patchDraft = (key: ActionKey, partial: Partial<ActionDraft>, save = true) => {
-    const next = drafts.map((d) => (d.key === key ? { ...d, ...partial } : d));
-    setDrafts(next);
-    if (save) void persist(next);
   };
 
   const moveEnabled = (key: ActionKey, dir: -1 | 1) => {
@@ -277,7 +271,6 @@ export function StatusActionsPanel({
     );
   }
 
-  const targets = statusOptions.filter((s) => s.id !== statusId && !s.disabled);
   const enabledKeys = drafts.filter((d) => d.enabled).map((d) => d.key);
 
   return (
@@ -286,8 +279,17 @@ export function StatusActionsPanel({
         <h3 className="text-sm font-semibold text-slate-800">Automatyczne akcje po wejściu w status</h3>
         {loading ? <span className="text-[11px] text-slate-400">Ładowanie…</span> : null}
       </div>
+      <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
+        Zaznaczone akcje zostaną wykonane automatycznie, gdy obiekt otrzyma ten status.
+      </p>
       {!statusActive ? (
         <p className="mt-1 text-[11px] text-amber-800">Status nieaktywny — akcje tylko do podglądu.</p>
+      ) : null}
+      {advancedChangeStatusHint ? (
+        <p className="mt-1.5 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] leading-snug text-amber-900">
+          Ten status zawiera zaawansowaną akcję zmiany statusu utworzoną wcześniej. Możesz zarządzać nią w Akcjach
+          automatycznych.
+        </p>
       ) : null}
 
       <ul className="mt-2 divide-y divide-slate-100">
@@ -330,9 +332,8 @@ export function StatusActionsPanel({
                       const on = e.target.checked;
                       if (on) {
                         const err = validateDraft({ ...d, enabled: true });
-                        if (err && (d.key === "change_status" || d.key.startsWith("send_email"))) {
-                          // Allow ON then require config — but block persist if invalid
-                          patchDraft(d.key, { enabled: true }, false);
+                        if (err && d.key.startsWith("send_email")) {
+                          setDrafts(drafts.map((x) => (x.key === d.key ? { ...x, enabled: true } : x)));
                           return;
                         }
                       }
@@ -347,32 +348,6 @@ export function StatusActionsPanel({
 
               {d.enabled ? (
                 <div className="ml-9 mt-1.5 space-y-1.5 border-l-2 border-slate-100 pl-3">
-                  {d.key === "change_status" ? (
-                    <label className="block text-[11px] text-slate-500">
-                      Status
-                      <select
-                        className="mt-0.5 block w-full max-w-xs rounded border border-slate-200 bg-white px-2 py-1 text-sm text-slate-800"
-                        disabled={readOnly || busy}
-                        value={d.targetStatusId === "" ? "" : String(d.targetStatusId)}
-                        onChange={(e) => {
-                          const v = e.target.value === "" ? "" : Number(e.target.value);
-                          void persist(
-                            drafts.map((x) =>
-                              x.key === d.key ? { ...x, targetStatusId: v, enabled: true } : x,
-                            ),
-                          );
-                        }}
-                      >
-                        <option value="">— wybierz —</option>
-                        {targets.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : null}
-
                   {d.key === "send_email_customer" ? (
                     <label className="block text-[11px] text-slate-500">
                       Szablon

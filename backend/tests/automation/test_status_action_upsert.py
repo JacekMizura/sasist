@@ -1,4 +1,4 @@
-"""STATUS_ACTION one-rule upsert — no duplicates on toggle cycles."""
+"""STATUS_ACTION one-rule upsert — managed merge + advanced effect preservation."""
 
 from __future__ import annotations
 
@@ -10,8 +10,10 @@ from backend.models.automation import AutomationEffect, AutomationRule, StatusTr
 from backend.models.tenant import Tenant
 from backend.models.warehouse import Warehouse
 from backend.services.automation.constants import SOURCE_STATUS_ACTION
+from backend.services.automation.effects import parse_config
 from backend.services.automation.status_actions import (
     list_status_action_rules,
+    logical_status_action_key,
     upsert_status_action_bundle,
 )
 from backend.services.automation.store import create_rule
@@ -30,6 +32,15 @@ def db():
     session.commit()
     yield session
     session.close()
+
+
+def _effect_types(rule: AutomationRule) -> list[tuple[str, bool]]:
+    out = []
+    for e in sorted(rule.effects or [], key=lambda x: (int(x.position), int(x.id or 0))):
+        cfg = parse_config(e.config_json)
+        key = logical_status_action_key(str(e.effect_type), cfg)
+        out.append((key, bool(e.enabled)))
+    return out
 
 
 def test_upsert_creates_one_rule(db):
@@ -57,6 +68,223 @@ def test_upsert_creates_one_rule(db):
     assert len(rows) == 1
 
 
+def test_d_return_warehouse_commit_without_target_status(db):
+    r = upsert_status_action_bundle(
+        db,
+        tenant_id=1,
+        entity_type="RETURN",
+        status_id=7,
+        warehouse_id=1,
+        status_name="Magazyn",
+        effects=[{"position": 0, "effect_type": "warehouse_commit", "config": {}, "enabled": True}],
+    )
+    db.commit()
+    assert r.enabled is True
+    keys = _effect_types(r)
+    assert ("warehouse_commit", True) in keys
+    assert not any(k == "change_status" for k, _ in keys)
+
+
+def test_g_all_managed_off_disables_rule(db):
+    upsert_status_action_bundle(
+        db,
+        tenant_id=1,
+        entity_type="ORDER",
+        status_id=10,
+        warehouse_id=1,
+        status_name="Nowy",
+        effects=[
+            {
+                "position": 0,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "CUSTOMER", "template_id": 1},
+                "enabled": True,
+            }
+        ],
+    )
+    db.commit()
+    r = upsert_status_action_bundle(
+        db,
+        tenant_id=1,
+        entity_type="ORDER",
+        status_id=10,
+        warehouse_id=1,
+        status_name="Nowy",
+        effects=[
+            {
+                "position": 0,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "CUSTOMER", "template_id": 1},
+                "enabled": False,
+            },
+            {
+                "position": 1,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "INTERNAL", "template_id": 2, "user_id": 1},
+                "enabled": False,
+            },
+        ],
+    )
+    db.commit()
+    assert r.enabled is False
+
+
+def test_h_preserve_change_status_when_panel_saves_managed_off(db):
+    """H: existing change_status ON + email OFF → panel save must keep change_status + rule enabled."""
+    create_rule(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        entity_type="ORDER",
+        name="legacy sa",
+        source=SOURCE_STATUS_ACTION,
+        trigger_config={"status_id": 10},
+        enabled=True,
+        effects=[
+            {
+                "position": 0,
+                "effect_type": "change_status",
+                "config": {"status_id": 20},
+                "enabled": True,
+            }
+        ],
+    )
+    db.commit()
+    r = upsert_status_action_bundle(
+        db,
+        tenant_id=1,
+        entity_type="ORDER",
+        status_id=10,
+        warehouse_id=1,
+        status_name="Nowy",
+        effects=[
+            {
+                "position": 0,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "CUSTOMER", "template_id": 1},
+                "enabled": False,
+            },
+            {
+                "position": 1,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "INTERNAL", "template_id": 2, "user_id": 1},
+                "enabled": False,
+            },
+        ],
+    )
+    db.commit()
+    assert r.enabled is True
+    keys = dict(_effect_types(r))
+    assert keys.get("change_status") is True
+    assert keys.get("send_email_customer") is False
+
+
+def test_i_toggle_email_preserves_change_status(db):
+    """I: change_status ON + email ON → disable email keeps change_status."""
+    create_rule(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        entity_type="RETURN",
+        name="sa",
+        source=SOURCE_STATUS_ACTION,
+        trigger_config={"status_id": 5},
+        enabled=True,
+        effects=[
+            {
+                "position": 0,
+                "effect_type": "change_status",
+                "config": {"status_id": 9},
+                "enabled": True,
+            },
+            {
+                "position": 1,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "CUSTOMER", "template_id": 1},
+                "enabled": True,
+            },
+        ],
+    )
+    db.commit()
+    r = upsert_status_action_bundle(
+        db,
+        tenant_id=1,
+        entity_type="RETURN",
+        status_id=5,
+        warehouse_id=1,
+        status_name="Magazyn",
+        effects=[
+            {"position": 0, "effect_type": "warehouse_commit", "config": {}, "enabled": False},
+            {
+                "position": 1,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "CUSTOMER", "template_id": 1},
+                "enabled": False,
+            },
+            {
+                "position": 2,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "INTERNAL", "template_id": 2, "user_id": 1},
+                "enabled": False,
+            },
+        ],
+    )
+    db.commit()
+    assert r.enabled is True
+    keys = dict(_effect_types(r))
+    assert keys.get("change_status") is True
+    assert keys.get("send_email_customer") is False
+
+
+def test_payload_change_status_ignored_does_not_wipe_preserved(db):
+    """Panel must not seed/replace change_status via payload; existing preserved."""
+    create_rule(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        entity_type="ORDER",
+        name="sa",
+        source=SOURCE_STATUS_ACTION,
+        trigger_config={"status_id": 10},
+        effects=[
+            {
+                "position": 0,
+                "effect_type": "change_status",
+                "config": {"status_id": 20},
+                "enabled": True,
+            }
+        ],
+    )
+    db.commit()
+    r = upsert_status_action_bundle(
+        db,
+        tenant_id=1,
+        entity_type="ORDER",
+        status_id=10,
+        warehouse_id=1,
+        status_name="Nowy",
+        effects=[
+            {
+                "position": 0,
+                "effect_type": "change_status",
+                "config": {"status_id": 99},
+                "enabled": False,
+            },
+            {
+                "position": 1,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "CUSTOMER", "template_id": 1},
+                "enabled": True,
+            },
+        ],
+    )
+    db.commit()
+    cs = [e for e in r.effects if str(e.effect_type) == "change_status"]
+    assert len(cs) == 1
+    assert bool(cs[0].enabled) is True
+    assert parse_config(cs[0].config_json).get("status_id") == 20
+
+
 def test_upsert_toggle_cycle_no_duplicates(db):
     upsert_status_action_bundle(
         db,
@@ -76,7 +304,6 @@ def test_upsert_toggle_cycle_no_duplicates(db):
         ],
     )
     db.commit()
-    # OFF all
     upsert_status_action_bundle(
         db,
         tenant_id=1,
@@ -95,7 +322,6 @@ def test_upsert_toggle_cycle_no_duplicates(db):
         ],
     )
     db.commit()
-    # ON again
     r = upsert_status_action_bundle(
         db,
         tenant_id=1,
@@ -112,7 +338,6 @@ def test_upsert_toggle_cycle_no_duplicates(db):
     enabled_rules = [x for x in rows if x.enabled]
     assert len(enabled_rules) == 1
     assert enabled_rules[0].id == r.id
-    # Extra legacy rules get disabled
     create_rule(
         db,
         tenant_id=1,
@@ -137,3 +362,28 @@ def test_upsert_toggle_cycle_no_duplicates(db):
     rows = list_status_action_rules(db, tenant_id=1, entity_type="RETURN", status_id=5, warehouse_id=1)
     assert sum(1 for x in rows if x.enabled) == 1
     assert primary.id == min(x.id for x in rows)
+    # Primary keeps its managed warehouse_commit; change_status from primary (if any) preserved —
+    # duplicate rule's change_status is on the disabled extra, not merged into primary.
+    assert primary.enabled is True
+
+
+def test_k_tenant_isolation_list(db):
+    upsert_status_action_bundle(
+        db,
+        tenant_id=1,
+        entity_type="ORDER",
+        status_id=10,
+        warehouse_id=1,
+        status_name="A",
+        effects=[
+            {
+                "position": 0,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "CUSTOMER", "template_id": 1},
+                "enabled": True,
+            }
+        ],
+    )
+    db.commit()
+    other = list_status_action_rules(db, tenant_id=2, entity_type="ORDER", status_id=10, warehouse_id=1)
+    assert other == []

@@ -1,3 +1,11 @@
+## 2026-08-21 — Fix STATUS_ACTION Sellasist semantics (no change_status in panel)
+
+- StatusActionsPanel: edited status = trigger; checkboxes = side-effects only
+- Removed change_status from ORDER/RETURN/COMPLAINT panel; no seed on save
+- upsert_status_action_bundle: managed merge (emails + warehouse_commit) preserves unmanaged (legacy change_status)
+- rule.enabled = any enabled effect after merge; advanced hint in panel
+- add_tag / preflight / main Automation Editor untouched
+
 ## 2026-08-21 — Complete real email delivery pipeline for automations
 
 - Outbox lifecycle PENDING→SENDING→SENT|FAILED; enqueue never fake SENT

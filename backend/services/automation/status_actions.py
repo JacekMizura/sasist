@@ -19,6 +19,15 @@ from .constants import (
 from .effects import parse_config
 from .store import create_rule, rule_to_dict, update_rule
 
+#: Effects owned by StatusActionsPanel (Sellasist simple checkboxes).
+MANAGED_STATUS_ACTION_KEYS = frozenset(
+    {
+        "send_email_customer",
+        "send_email_internal",
+        "warehouse_commit",
+    }
+)
+
 
 def list_status_action_rules(
     db: Session,
@@ -138,6 +147,63 @@ def logical_status_action_key(effect_type: str, config: Optional[dict[str, Any]]
     return f"other:{et}"
 
 
+def is_managed_status_action_key(key: str) -> bool:
+    return str(key or "") in MANAGED_STATUS_ACTION_KEYS
+
+
+def _normalize_managed_effects(effects: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Normalize panel payload to managed effects only. Ignores change_status / unknown."""
+    seen: set[str] = set()
+    normalized: list[dict[str, Any]] = []
+    for eff in effects:
+        etype = str(eff.get("effect_type") or "").strip()
+        if not etype:
+            continue
+        cfg = dict(eff.get("config") or {})
+        key = logical_status_action_key(etype, cfg)
+        if not is_managed_status_action_key(key):
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        if key == "send_email_customer":
+            cfg["recipient_type"] = "CUSTOMER"
+            etype = EFFECT_SEND_EMAIL
+        elif key == "send_email_internal":
+            cfg["recipient_type"] = "INTERNAL"
+            etype = EFFECT_SEND_EMAIL
+        elif key == "warehouse_commit":
+            etype = EFFECT_WAREHOUSE_COMMIT
+        normalized.append(
+            {
+                "position": len(normalized),
+                "effect_type": etype,
+                "config": cfg,
+                "enabled": bool(eff.get("enabled", True)),
+            }
+        )
+    return normalized
+
+
+def _preserve_unmanaged_effects(rule: AutomationRule) -> list[dict[str, Any]]:
+    """Keep advanced effects (e.g. change_status) that StatusActionsPanel does not own."""
+    preserved: list[dict[str, Any]] = []
+    for e in sorted(rule.effects or [], key=lambda x: (int(x.position), int(x.id or 0))):
+        cfg = parse_config(getattr(e, "config_json", None))
+        key = logical_status_action_key(str(e.effect_type or ""), cfg)
+        if is_managed_status_action_key(key):
+            continue
+        preserved.append(
+            {
+                "position": 0,  # re-indexed by caller
+                "effect_type": str(e.effect_type or "").strip(),
+                "config": cfg,
+                "enabled": bool(getattr(e, "enabled", True)),
+            }
+        )
+    return preserved
+
+
 def upsert_status_action_bundle(
     db: Session,
     *,
@@ -151,8 +217,11 @@ def upsert_status_action_bundle(
     """
     Ensure exactly one STATUS_ACTION rule for (tenant, entity, warehouse, status).
 
-    Deterministic merge: keep lowest rule id; disable extras (history preserved).
-    Effects list is replaced on the primary rule. Rule.enabled = any effect enabled.
+    Merge contract:
+    - Payload updates **managed** effects only (emails, warehouse_commit).
+    - **Unmanaged** effects (e.g. legacy change_status) are preserved on the primary rule.
+    - Deterministic: keep lowest rule id; disable extras (history preserved).
+    - rule.enabled = any enabled effect after merge (managed or preserved).
     """
     et = str(entity_type).strip().upper()
     sid = int(status_id)
@@ -166,36 +235,18 @@ def upsert_status_action_bundle(
     label = (status_name or "").strip() or str(sid)
     rule_name = f"Po wejściu w status: {label}"
 
-    # Normalize effects: unique logical keys, re-index positions.
-    seen: set[str] = set()
-    normalized: list[dict[str, Any]] = []
-    for i, eff in enumerate(effects):
-        etype = str(eff.get("effect_type") or "").strip()
-        if not etype:
-            continue
-        cfg = dict(eff.get("config") or {})
-        key = logical_status_action_key(etype, cfg)
-        if key.startswith("other:"):
-            continue
-        if key in seen:
-            continue
-        seen.add(key)
-        if key == "send_email_customer":
-            cfg["recipient_type"] = "CUSTOMER"
-            etype = EFFECT_SEND_EMAIL
-        elif key == "send_email_internal":
-            cfg["recipient_type"] = "INTERNAL"
-            etype = EFFECT_SEND_EMAIL
-        normalized.append(
-            {
-                "position": len(normalized),
-                "effect_type": etype,
-                "config": cfg,
-                "enabled": bool(eff.get("enabled", True)),
-            }
-        )
+    managed = _normalize_managed_effects(effects)
+    preserved: list[dict[str, Any]] = []
+    if rows:
+        preserved = _preserve_unmanaged_effects(rows[0])
 
-    any_on = any(bool(e.get("enabled")) for e in normalized)
+    merged: list[dict[str, Any]] = []
+    for e in managed:
+        merged.append({**e, "position": len(merged)})
+    for e in preserved:
+        merged.append({**e, "position": len(merged)})
+
+    any_on = any(bool(e.get("enabled")) for e in merged)
     trigger_config = {"status_id": sid}
 
     if not rows:
@@ -209,7 +260,7 @@ def upsert_status_action_bundle(
             trigger_type=TRIGGER_ENTITY_STATUS_ENTERED,
             trigger_config=trigger_config,
             source=SOURCE_STATUS_ACTION,
-            effects=normalized,
+            effects=merged,
         )
         db.flush()
         return rule
@@ -229,7 +280,7 @@ def upsert_status_action_bundle(
         enabled=any_on,
         trigger_type=TRIGGER_ENTITY_STATUS_ENTERED,
         trigger_config=trigger_config,
-        effects=normalized,
+        effects=merged,
     )
     db.flush()
     db.expire(primary)

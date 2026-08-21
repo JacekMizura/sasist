@@ -1,3 +1,8 @@
+**STATUS_ACTION Sellasist UX — PASS (pending commit).**
+- Panel: no change_status; ORDER/COMPLAINT emails; RETURN warehouse_commit + emails
+- BE merge preserves advanced change_status; enabled if any effect on
+- add_tag / legacy cleanup still deferred
+
 **Email delivery pipeline — PASS (pending commit).**
 - Outbox: PENDING → SENDING → SENT|FAILED; enqueue never marks SENT
 - Provider: SMTP via EMAIL_SMTP_* / EMAIL_FROM ENV; memory for tests; unconfigured → FAILED configuration_error
