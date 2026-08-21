@@ -87,6 +87,8 @@ def get_status_actions_overview(
 def put_status_actions(body: StatusActionUpsertIn, db: Session = Depends(get_db)):
     """Upsert one STATUS_ACTION rule per status with ordered effects (no duplicates)."""
     from ..services.automation.status_actions import upsert_status_action_bundle
+    from ..models.automation import AutomationRule
+    from sqlalchemy.orm import joinedload
 
     try:
         rule = upsert_status_action_bundle(
@@ -99,7 +101,16 @@ def put_status_actions(body: StatusActionUpsertIn, db: Session = Depends(get_db)
             effects=[e.model_dump() for e in body.effects],
         )
         db.commit()
-        db.refresh(rule)
+        # Re-load with effects — bare refresh() does not reliably rehydrate the collection.
+        rule_id = int(rule.id)
+        rule = (
+            db.query(AutomationRule)
+            .options(joinedload(AutomationRule.effects))
+            .filter(AutomationRule.id == rule_id)
+            .first()
+        )
+        if rule is None:
+            raise HTTPException(status_code=500, detail="status action rule missing after upsert")
         d = rule_to_dict(rule)
         d["last_execution_status"] = None
         d["last_run_at"] = None

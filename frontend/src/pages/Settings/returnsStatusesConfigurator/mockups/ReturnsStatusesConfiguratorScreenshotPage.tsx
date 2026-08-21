@@ -87,9 +87,16 @@ export default function ReturnsStatusesConfiguratorScreenshotPage() {
           <ListLabelsSection
             summary={MOCK_SUMMARY}
             panelSubgroups={MOCK_SUBGROUPS}
+            actionsByStatusId={{
+              "4": { warehouse_commit: { enabled: true } },
+              "6": { send_email_customer: { enabled: true, template_id: 1 } },
+            }}
+            warehouseId={1}
             onAddSubgroup={noop}
             onAddStatus={noop}
             onEditStatus={noop}
+            onActionsPatched={noop}
+            onActionsOverviewChanged={noop}
           />
         </ScreenshotBlock>
 

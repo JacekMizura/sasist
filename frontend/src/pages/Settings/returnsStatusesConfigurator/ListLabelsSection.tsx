@@ -1,7 +1,7 @@
 import { Plus } from "lucide-react";
 
 import type { StatusActionOverviewEffectDto } from "../../../api/automationsApi";
-import { FlatColumnHeader } from "../../../components/layout/FlatPageSection";
+import { IconButton } from "../../../design-system";
 import { StatusActionsMatrix } from "../../../components/settings/statusActionsMatrix/StatusActionsMatrix";
 import type { ReturnUiMainGroup, ReturnUiPanelSubgroupRead, ReturnUiStatusPanelSummary, ReturnUiStatusWithCount } from "../../../types/wmsReturn";
 import { partitionStatusesBySubgroupForSettings } from "../../../utils/panelUiStatusSettingsTree";
@@ -18,6 +18,7 @@ type Props = {
   onAddStatus: (mainGroup: ReturnUiMainGroup) => void;
   onEditStatus: (status: ReturnUiStatusWithCount) => void;
   onDeleteStatus?: (id: number) => void;
+  onActionsPatched: (statusId: number, row: Record<string, StatusActionOverviewEffectDto>) => void;
   onActionsOverviewChanged: () => void | Promise<void>;
 };
 
@@ -30,6 +31,7 @@ export function ListLabelsSection({
   onAddStatus,
   onEditStatus,
   onDeleteStatus,
+  onActionsPatched,
   onActionsOverviewChanged,
 }: Props) {
   const findStatus = (id: number): ReturnUiStatusWithCount | undefined =>
@@ -50,7 +52,7 @@ export function ListLabelsSection({
         </button>
       }
     >
-      <div className="space-y-10">
+      <div className="space-y-8">
         {RETURN_MAIN_GROUP_ORDER.map((mg) => (
           <ListLabelGroupBlock
             key={mg}
@@ -65,6 +67,7 @@ export function ListLabelsSection({
               if (s) onEditStatus(s);
             }}
             onDeleteStatus={onDeleteStatus}
+            onActionsPatched={onActionsPatched}
             onActionsOverviewChanged={onActionsOverviewChanged}
           />
         ))}
@@ -82,6 +85,7 @@ function ListLabelGroupBlock({
   onAddStatus,
   onEditStatusId,
   onDeleteStatus,
+  onActionsPatched,
   onActionsOverviewChanged,
 }: {
   mainGroup: ReturnUiMainGroup;
@@ -92,6 +96,7 @@ function ListLabelGroupBlock({
   onAddStatus: () => void;
   onEditStatusId: (id: number) => void;
   onDeleteStatus?: (id: number) => void;
+  onActionsPatched: (statusId: number, row: Record<string, StatusActionOverviewEffectDto>) => void;
   onActionsOverviewChanged: () => void | Promise<void>;
 }) {
   const block = summary?.groups.find((g) => g.main_group === mainGroup);
@@ -104,18 +109,21 @@ function ListLabelGroupBlock({
   const emptySubgroups = subgroupsInGroup.filter((sg) => !subgroupNamesWithStatuses.has(sg.name));
 
   return (
-    <section className="space-y-4">
-      <FlatColumnHeader
-        title={LIST_LABEL_CARD_TITLE[mainGroup]}
-        action={
-          block?.total_count != null ? (
-            <span className="text-xs tabular-nums text-slate-400">{block.total_count}</span>
-          ) : null
-        }
-      />
+    <section className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-slate-900">{LIST_LABEL_CARD_TITLE[mainGroup]}</h3>
+        <IconButton
+          density="compact"
+          title={`Dodaj status — ${LIST_LABEL_CARD_TITLE[mainGroup]}`}
+          aria-label={`Dodaj status — ${LIST_LABEL_CARD_TITLE[mainGroup]}`}
+          onClick={onAddStatus}
+        >
+          <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
+        </IconButton>
+      </div>
 
       {subgroupBuckets.map((bucket) => (
-        <div key={bucket.subgroupKey} className="space-y-2">
+        <div key={bucket.subgroupKey} className="space-y-1">
           <p className="text-xs font-semibold text-slate-500">{bucket.subgroupKey}</p>
           <StatusActionsMatrix
             tenantId={DAMAGE_TENANT_ID}
@@ -125,6 +133,7 @@ function ListLabelGroupBlock({
             actionsByStatusId={actionsByStatusId}
             onEditStatus={onEditStatusId}
             onDeleteStatus={onDeleteStatus}
+            onActionsPatched={onActionsPatched}
             onOverviewChanged={onActionsOverviewChanged}
           />
         </div>
@@ -138,7 +147,7 @@ function ListLabelGroupBlock({
       ))}
 
       {ungrouped.length > 0 ? (
-        <div className="space-y-2">
+        <div className="space-y-1">
           {subgroupBuckets.length > 0 ? (
             <p className="text-xs font-semibold text-slate-500">Bez podgrupy</p>
           ) : null}
@@ -150,6 +159,7 @@ function ListLabelGroupBlock({
             actionsByStatusId={actionsByStatusId}
             onEditStatus={onEditStatusId}
             onDeleteStatus={onDeleteStatus}
+            onActionsPatched={onActionsPatched}
             onOverviewChanged={onActionsOverviewChanged}
           />
         </div>
@@ -158,15 +168,6 @@ function ListLabelGroupBlock({
       {statuses.length === 0 && subgroupsInGroup.length === 0 ? (
         <p className="text-sm text-slate-400">Brak etykiet</p>
       ) : null}
-
-      <button
-        type="button"
-        className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 hover:text-slate-900"
-        onClick={onAddStatus}
-      >
-        <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
-        Dodaj etykietę
-      </button>
     </section>
   );
 }

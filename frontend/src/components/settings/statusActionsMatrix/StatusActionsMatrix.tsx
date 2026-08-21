@@ -1,6 +1,6 @@
 /**
- * Sellasist-like action matrix for statuses within one subgroup.
- * STATUS_ACTION SSOT via upsert; overview map provides row state.
+ * Sellasist-like editable STATUS_ACTION matrix within one subgroup.
+ * List and modal share AutomationRule SSOT — no local boolean SSOT.
  */
 import { useCallback, useState } from "react";
 import { Info, Pencil, Trash2 } from "lucide-react";
@@ -11,11 +11,11 @@ import {
   type AutomationEntityType,
   type StatusActionOverviewEffectDto,
 } from "../../../api/automationsApi";
+import { IconButton, Tooltip } from "../../../design-system";
 import {
   STATUS_ACTION_COLUMN_HEADERS,
   STATUS_ACTION_COLUMN_TOOLTIPS,
   managedKeysForEntity,
-  type StatusActionManagedKey,
 } from "../../../utils/statusActionManagedCatalog";
 import {
   buildManagedEffectsPayload,
@@ -23,6 +23,7 @@ import {
   patchRowEffect,
   type StatusActionsRowState,
 } from "../../../utils/statusActionMatrixPayload";
+import { overviewRowFromRule, rowStateFromOverviewMap } from "../../../utils/statusActionOverviewMap";
 import { StatusActionCell } from "./StatusActionCell";
 
 export type StatusMatrixRow = {
@@ -43,23 +44,10 @@ type Props = {
   canWrite?: boolean;
   onEditStatus: (statusId: number) => void;
   onDeleteStatus?: (statusId: number) => void;
+  /** Immediate reconciliation from PUT response (before overview refetch). */
+  onActionsPatched: (statusId: number, row: Record<string, StatusActionOverviewEffectDto>) => void;
   onOverviewChanged: () => void | Promise<void>;
 };
-
-function rowFromOverview(
-  map: Record<string, StatusActionOverviewEffectDto> | undefined,
-): StatusActionsRowState {
-  if (!map) return {};
-  const out: StatusActionsRowState = {};
-  for (const [k, v] of Object.entries(map)) {
-    out[k as StatusActionManagedKey] = {
-      enabled: Boolean(v?.enabled),
-      template_id: v?.template_id ?? null,
-      user_id: v?.user_id ?? null,
-    };
-  }
-  return out;
-}
 
 export function StatusActionsMatrix({
   tenantId,
@@ -70,6 +58,7 @@ export function StatusActionsMatrix({
   canWrite = true,
   onEditStatus,
   onDeleteStatus,
+  onActionsPatched,
   onOverviewChanged,
 }: Props) {
   const keys = managedKeysForEntity(entityType);
@@ -79,7 +68,7 @@ export function StatusActionsMatrix({
   const resolveRow = useCallback(
     (statusId: number): StatusActionsRowState => {
       const sid = String(statusId);
-      return optimistic[sid] ?? rowFromOverview(actionsByStatusId[sid]);
+      return optimistic[sid] ?? rowStateFromOverviewMap(actionsByStatusId[sid]);
     },
     [actionsByStatusId, optimistic],
   );
@@ -89,7 +78,7 @@ export function StatusActionsMatrix({
     setOptimistic((prev) => ({ ...prev, [sid]: next }));
     setBusyId(status.id);
     try {
-      await upsertStatusActions({
+      const saved = await upsertStatusActions({
         tenant_id: tenantId,
         entity_type: entityType,
         status_id: status.id,
@@ -97,7 +86,13 @@ export function StatusActionsMatrix({
         status_name: status.name,
         effects: buildManagedEffectsPayload(entityType, next),
       });
-      await onOverviewChanged();
+      // Reconcile from PUT first — do not depend solely on overview timing.
+      onActionsPatched(status.id, overviewRowFromRule(saved));
+      try {
+        await onOverviewChanged();
+      } catch {
+        // Keep patched state; overview failure must not wipe the row.
+      }
       setOptimistic((prev) => {
         const copy = { ...prev };
         delete copy[sid];
@@ -116,32 +111,43 @@ export function StatusActionsMatrix({
   };
 
   if (statuses.length === 0) {
-    return <p className="text-xs italic text-slate-400">Brak etykiet</p>;
+    return <p className="py-2 text-xs italic text-slate-400">Brak etykiet</p>;
   }
 
   return (
-    <div className="w-full overflow-x-auto rounded-lg border border-slate-200/80 bg-white">
-      <table className="w-full min-w-[40rem] border-collapse text-sm">
+    <div className="w-full overflow-x-auto border-t border-slate-100">
+      <table className="w-full min-w-[36rem] border-collapse text-sm">
         <thead>
-          <tr className="border-b border-slate-100 bg-slate-50/80 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-            <th className="px-3 py-2 font-semibold normal-case tracking-normal text-slate-600">Status</th>
+          <tr className="border-b border-slate-100 text-left text-[11px] font-semibold text-slate-500">
+            <th className="px-2 py-1.5 font-semibold text-slate-600">Status</th>
             {keys.map((key) => (
               <th
                 key={key}
-                className="w-28 px-2 py-2 text-center font-semibold normal-case tracking-normal text-slate-600"
-                title={STATUS_ACTION_COLUMN_TOOLTIPS[key]}
+                className="w-24 px-1 py-1.5 text-center font-semibold text-slate-600"
               >
-                <span className="inline-flex items-center justify-center gap-1">
+                <span className="inline-flex items-center justify-center gap-0.5">
                   {STATUS_ACTION_COLUMN_HEADERS[key]}
                   {key === "warehouse_commit" ? (
-                    <Info className="h-3 w-3 text-slate-400" strokeWidth={2} aria-hidden />
+                    <Tooltip
+                      content={
+                        <span className="block max-w-xs whitespace-normal text-left leading-snug">
+                          {STATUS_ACTION_COLUMN_TOOLTIPS.warehouse_commit}
+                        </span>
+                      }
+                    >
+                      <button
+                        type="button"
+                        className="inline-flex rounded p-0.5 text-slate-400 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                        aria-label={STATUS_ACTION_COLUMN_TOOLTIPS.warehouse_commit}
+                      >
+                        <Info className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                      </button>
+                    </Tooltip>
                   ) : null}
                 </span>
               </th>
             ))}
-            <th className="w-28 px-2 py-2 text-right font-semibold normal-case tracking-normal text-slate-600">
-              Akcje
-            </th>
+            <th className="w-16 px-1 py-1.5 text-center font-semibold text-slate-600">Akcje</th>
           </tr>
         </thead>
         <tbody>
@@ -159,27 +165,29 @@ export function StatusActionsMatrix({
             return (
               <tr
                 key={status.id}
-                className={`border-b border-slate-50 last:border-0 ${inactive ? "opacity-55" : "hover:bg-slate-50/60"}`}
+                className={`border-b border-slate-50 last:border-0 ${inactive ? "opacity-55" : "hover:bg-slate-50/70"}`}
                 title={
                   inactive
                     ? "Nieaktywny status — automatyczne akcje nie będą uruchamiane."
                     : undefined
                 }
               >
-                <td className="px-3 py-2 align-middle">
+                <td className="px-2 py-1.5 align-middle">
                   <div className="flex min-w-0 items-center gap-2">
                     <span
-                      className="h-2.5 w-1 shrink-0 rounded-sm"
+                      className="h-3 w-1 shrink-0 rounded-sm"
                       style={{ backgroundColor: dot }}
                       aria-hidden
                     />
                     <span
-                      className={`min-w-0 flex-1 truncate font-medium ${inactive ? "text-slate-400 line-through" : "text-slate-800"}`}
+                      className={`min-w-0 flex-1 truncate ${inactive ? "text-slate-400 line-through" : "font-medium text-slate-800"}`}
                     >
                       {status.name}
                     </span>
                     {typeof status.count === "number" ? (
-                      <span className="shrink-0 text-xs tabular-nums text-slate-400">{status.count}</span>
+                      <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] tabular-nums text-slate-500">
+                        {status.count}
+                      </span>
                     ) : null}
                   </div>
                 </td>
@@ -211,25 +219,26 @@ export function StatusActionsMatrix({
                     }}
                   />
                 ))}
-                <td className="px-2 py-2 text-right align-middle">
-                  <div className="inline-flex items-center justify-end gap-1">
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                <td className="px-1 py-1.5 text-center align-middle">
+                  <div className="inline-flex items-center justify-center gap-0.5">
+                    <IconButton
+                      title="Edytuj status"
+                      aria-label="Edytuj status"
+                      density="compact"
                       onClick={() => onEditStatus(status.id)}
                     >
-                      <Pencil className="h-3 w-3" strokeWidth={2} aria-hidden />
-                      Edytuj
-                    </button>
+                      <Pencil className="h-4 w-4" strokeWidth={2} aria-hidden />
+                    </IconButton>
                     {onDeleteStatus ? (
-                      <button
-                        type="button"
-                        className="inline-flex items-center rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                      <IconButton
+                        tone="danger"
+                        title="Usuń status"
                         aria-label={`Usuń ${status.name}`}
+                        density="compact"
                         onClick={() => onDeleteStatus(status.id)}
                       >
-                        <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
-                      </button>
+                        <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden />
+                      </IconButton>
                     ) : null}
                   </div>
                 </td>

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <title>QA — Return statuses configurator</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #f8fafc; color: #0f172a; margin: 24px; max-width: 1100px; }
+    h1 { font-size: 16px; margin: 0 0 16px; }
+    .section { margin-bottom: 28px; }
+    .section-title { font-size: 13px; font-weight: 700; margin-bottom: 12px; }
+    .group-head { display: flex; align-items: center; justify-content: space-between; margin: 14px 0 6px; }
+    .group-head h2 { font-size: 14px; margin: 0; }
+    .plus { border: 1px solid #e2e8f0; background: #fff; border-radius: 6px; width: 32px; height: 32px; cursor: pointer; }
+    .sg { color: #64748b; font-size: 12px; font-weight: 600; margin: 8px 0 4px; }
+    table { width: 100%; border-collapse: collapse; border-top: 1px solid #f1f5f9; }
+    th { font-size: 11px; text-align: left; color: #475569; padding: 6px 8px; border-bottom: 1px solid #f1f5f9; }
+    th.ctr, td.ctr { text-align: center; width: 96px; }
+    th.act, td.act { text-align: center; width: 64px; }
+    td { padding: 6px 8px; border-bottom: 1px solid #f8fafc; font-size: 13px; }
+    .status-cell { display: flex; align-items: center; gap: 8px; }
+    .dot { width: 4px; height: 12px; border-radius: 2px; background: #3b82f6; flex-shrink: 0; }
+    .name { flex: 1; font-weight: 500; }
+    .cnt { background: #f1f5f9; color: #64748b; font-size: 11px; padding: 2px 6px; border-radius: 4px; }
+    .info { color: #94a3b8; font-size: 11px; margin-left: 2px; cursor: help; }
+    .icon-btn { border: 0; background: transparent; color: #475569; cursor: pointer; padding: 4px; }
+    .pass { margin-top: 20px; padding: 10px 12px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; font-size: 13px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Etykiety listy</h1>
+
+  <div class="section">
+    <div class="group-head">
+      <h2>Nowe</h2>
+      <button class="plus" type="button" aria-label="Dodaj status — Nowe">+</button>
+    </div>
+    <div class="sg">Sklep</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Status</th>
+          <th class="ctr">Magazyn <span class="info" title="Finalizuje przyjęcie zwrotu przez workflow RMZ i tworzy dokument Z-PZ, jeśli zwrot jest gotowy do przyjęcia.">ⓘ</span></th>
+          <th class="ctr">E-mail klient</th>
+          <th class="ctr">E-mail wewn.</th>
+          <th class="act">Akcje</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><div class="status-cell"><span class="dot"></span><span class="name">Sklep</span><span class="cnt">0</span></div></td>
+          <td class="ctr"><input type="checkbox" /></td>
+          <td class="ctr"><input type="checkbox" /></td>
+          <td class="ctr"><input type="checkbox" /></td>
+          <td class="act"><button class="icon-btn" title="Edytuj status" aria-label="Edytuj status">✎</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="group-head">
+      <h2>W toku</h2>
+      <button class="plus" type="button" aria-label="Dodaj status — W toku">+</button>
+    </div>
+    <div class="sg">Do weryfikacji</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Status</th>
+          <th class="ctr">Magazyn <span class="info" title="…">ⓘ</span></th>
+          <th class="ctr">E-mail klient</th>
+          <th class="ctr">E-mail wewn.</th>
+          <th class="act">Akcje</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><div class="status-cell"><span class="dot" style="background:#10b981"></span><span class="name">Magazyn</span><span class="cnt">4</span></div></td>
+          <td class="ctr"><input type="checkbox" checked /></td>
+          <td class="ctr"><input type="checkbox" /></td>
+          <td class="ctr"><input type="checkbox" /></td>
+          <td class="act"><button class="icon-btn" title="Edytuj status">✎</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="group-head">
+      <h2>Zakończone</h2>
+      <button class="plus" type="button">+</button>
+    </div>
+    <div class="sg">Zrealizowane</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Status</th>
+          <th class="ctr">Magazyn</th>
+          <th class="ctr">E-mail klient</th>
+          <th class="ctr">E-mail wewn.</th>
+          <th class="act">Akcje</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><div class="status-cell"><span class="dot" style="background:#64748b"></span><span class="name">Przyjęte</span><span class="cnt">12</span></div></td>
+          <td class="ctr"><input type="checkbox" /></td>
+          <td class="ctr"><input type="checkbox" checked /></td>
+          <td class="ctr"><input type="checkbox" /></td>
+          <td class="act"><button class="icon-btn" title="Edytuj status">✎</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h1>Decyzje produktowe</h1>
+  <div class="section">
+    <div class="group-head"><h2>PRZYJĘCIA</h2><button class="plus" type="button">+</button></div>
+    <table>
+      <thead>
+        <tr><th>Decyzja</th><th class="ctr">Aktywna</th><th class="ctr">Powrót na magazyn</th><th class="act">Akcje</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Zaakceptowany</td><td class="ctr"><input type="checkbox" checked /></td><td class="ctr"><input type="checkbox" checked /></td><td class="act"><button class="icon-btn">✎</button></td></tr>
+        <tr><td>Zwrot środków</td><td class="ctr"><input type="checkbox" checked /></td><td class="ctr"><input type="checkbox" /></td><td class="act"><button class="icon-btn">✎</button></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="section">
+    <div class="group-head"><h2>ODRZUCENIA</h2><button class="plus" type="button">+</button></div>
+    <table>
+      <thead>
+        <tr><th>Decyzja</th><th class="ctr">Aktywna</th><th class="ctr">Powrót na magazyn</th><th class="act">Akcje</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Produkt uszkodzony</td><td class="ctr"><input type="checkbox" checked /></td><td class="ctr"><input type="checkbox" checked /></td><td class="act"><button class="icon-btn">✎</button></td></tr>
+        <tr><td>Niekompletny</td><td class="ctr"><input type="checkbox" checked /></td><td class="ctr"><input type="checkbox" /></td><td class="act"><button class="icon-btn">✎</button></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pass">
+    Visual QA layout contract: group + headers, counter in Status cell, icon-only edit,
+    Magazyn tooltip, decision matrices with inline Aktywna / Powrót — no „Dodaj etykietę”, no „Edytuj” text.
+  </div>
+</body>
+</html>

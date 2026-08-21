@@ -1,3 +1,9 @@
-# Project context
+# Project context (short)
 
-WMS + operational extensions (direct sales, runtime, replenishment). Classic WMS is primary; operational modules are optional feature-flagged extensions.
+WMS / Sasist — warehouse operations, returns, automation engine.
+
+## Active: Return statuses configurator (Zamówienia → Zwroty → Statusy)
+
+- Dense STATUS_ACTION matrix + product decisions matrices
+- SSOT: AutomationRule / AutomationEffect source=STATUS_ACTION
+- List ↔ modal sync via PUT reconcile + overview (no local boolean SSOT)

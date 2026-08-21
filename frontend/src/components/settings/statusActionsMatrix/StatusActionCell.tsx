@@ -21,6 +21,16 @@ type Props = {
   onDisableEmail: () => void;
 };
 
+function hasEmailConfig(actionKey: StatusActionManagedKey, state: StatusActionEffectState): boolean {
+  const tid = Number(state.template_id);
+  if (!Number.isFinite(tid) || tid <= 0) return false;
+  if (actionKey === "send_email_internal") {
+    const uid = Number(state.user_id);
+    return Number.isFinite(uid) && uid > 0;
+  }
+  return true;
+}
+
 export function StatusActionCell({
   actionKey,
   state,
@@ -39,7 +49,7 @@ export function StatusActionCell({
 
   if (actionKey === "warehouse_commit") {
     return (
-      <td className="px-2 py-2 text-center align-middle">
+      <td className="px-1 py-1.5 text-center align-middle">
         <input
           type="checkbox"
           className="h-4 w-4 rounded border-slate-300 accent-emerald-600 disabled:opacity-40"
@@ -55,9 +65,10 @@ export function StatusActionCell({
   const mode = actionKey === "send_email_internal" ? "internal" : "customer";
   const aria =
     actionKey === "send_email_internal" ? "E-mail wewnętrzny" : "E-mail klientowi";
+  const configured = hasEmailConfig(actionKey, state);
 
   return (
-    <td className="relative px-2 py-2 text-center align-middle">
+    <td className="relative px-1 py-1.5 text-center align-middle">
       <input
         type="checkbox"
         className="h-4 w-4 cursor-pointer rounded border-slate-300 accent-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
@@ -68,6 +79,20 @@ export function StatusActionCell({
         onClick={(e) => {
           e.preventDefault();
           if (locked) return;
+          if (checked) {
+            // Configured ON → quick OFF (keep template_id / user_id in payload via patch enabled:false).
+            onDisableEmail();
+            setPopoverOpen(false);
+            return;
+          }
+          if (configured) {
+            onSaveEmail({
+              enabled: true,
+              template_id: Number(state.template_id),
+              ...(mode === "internal" ? { user_id: Number(state.user_id) } : {}),
+            });
+            return;
+          }
           setPopoverOpen(true);
         }}
       />

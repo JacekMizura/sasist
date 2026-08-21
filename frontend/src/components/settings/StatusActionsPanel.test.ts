@@ -7,6 +7,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
+import { overviewRowFromRule, rowStateFromOverviewMap } from "../../utils/statusActionOverviewMap";
+import { buildManagedEffectsPayload, patchRowEffect } from "../../utils/statusActionMatrixPayload";
+import { decisionReturnsToStock } from "../../pages/Settings/returnsStatusesConfigurator/businessLabels";
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SRC = readFileSync(path.join(HERE, "StatusActionsPanel.tsx"), "utf8");
 const MATRIX = readFileSync(path.join(HERE, "statusActionsMatrix/StatusActionsMatrix.tsx"), "utf8");
@@ -15,6 +19,14 @@ const CATALOG = readFileSync(path.join(HERE, "../../utils/statusActionManagedCat
 const API = readFileSync(path.join(HERE, "../../api/automationsApi.ts"), "utf8");
 const LIST = readFileSync(
   path.join(HERE, "../../pages/Settings/returnsStatusesConfigurator/ListLabelsSection.tsx"),
+  "utf8",
+);
+const DECISIONS = readFileSync(
+  path.join(HERE, "../../pages/Settings/returnsStatusesConfigurator/ProductDecisionsCardsSection.tsx"),
+  "utf8",
+);
+const HOOK = readFileSync(
+  path.join(HERE, "../../pages/Settings/returnsStatusesConfigurator/useReturnPanelStatusesConfig.ts"),
   "utf8",
 );
 const EFFECT_CATALOG = readFileSync(path.join(HERE, "../../utils/orderAutomationCatalog.ts"), "utf8");
@@ -26,22 +38,44 @@ describe("Status actions matrix UX", () => {
     expect(LIST).toContain("StatusActionsMatrix");
   });
 
-  it("matrix has action columns + inline upsert", () => {
-    expect(MATRIX).toContain("STATUS_ACTION_COLUMN_HEADERS");
-    expect(MATRIX).toContain("upsertStatusActions");
-    expect(MATRIX).toContain("onOverviewChanged");
-    expect(CATALOG).toContain('warehouse_commit: "Magazyn"');
+  it("group headers have +; no Dodaj etykietę under tables", () => {
+    expect(LIST).toContain("LIST_LABEL_CARD_TITLE[mainGroup]");
+    expect(LIST).toContain('aria-label={`Dodaj status — ${LIST_LABEL_CARD_TITLE[mainGroup]}`}');
+    expect(LIST).not.toContain("Dodaj etykietę");
+    expect(LIST).toContain("<Plus");
   });
 
-  it("F/G — email uses popover; warehouse is direct toggle", () => {
+  it("matrix has action columns + PUT reconcile + overview", () => {
+    expect(MATRIX).toContain("STATUS_ACTION_COLUMN_HEADERS");
+    expect(MATRIX).toContain("upsertStatusActions");
+    expect(MATRIX).toContain("onActionsPatched");
+    expect(MATRIX).toContain("overviewRowFromRule");
+    expect(MATRIX).toContain("Edytuj status");
+    expect(MATRIX).not.toMatch(/>\s*Edytuj\s*</);
+    expect(MATRIX).toContain("IconButton");
+    expect(MATRIX).toContain("Tooltip");
+    expect(CATALOG).toContain('warehouse_commit: "Magazyn"');
+    expect(CATALOG).toContain("dokument Z-PZ");
+  });
+
+  it("counter stays in Status cell (no anonymous count column)", () => {
+    expect(MATRIX).toContain("status.count");
+    expect(MATRIX).not.toContain(">Licznik<");
+  });
+
+  it("F/G — email uses popover; warehouse is direct toggle; OFF keeps config", () => {
     expect(CELL).toContain("StatusEmailActionPopover");
     expect(CELL).toContain("onToggleWarehouse");
     expect(CELL).toContain("onSaveEmail");
+    expect(CELL).toContain("hasEmailConfig");
+    expect(CELL).toContain("onDisableEmail");
   });
 
-  it("batch overview API", () => {
+  it("batch overview API + hook does not wipe on error", () => {
     expect(API).toContain("status-actions/overview");
     expect(API).toContain("listStatusActionsOverview");
+    expect(HOOK).toContain("patchActionsForStatus");
+    expect(HOOK).toContain("Do not wipe existing projection");
   });
 
   it("modal panel remains compact secondary editor", () => {
@@ -57,5 +91,86 @@ describe("Status actions matrix UX", () => {
 
   it("main Automation Editor still supports change_status", () => {
     expect(EFFECT_CATALOG).toContain('kind: "change_status"');
+  });
+});
+
+describe("STATUS_ACTION list↔modal sync helpers", () => {
+  it("PUT rule → overview row → matrix state stays ON", () => {
+    const row = overviewRowFromRule({
+      enabled: true,
+      effects: [
+        { position: 0, effect_type: "warehouse_commit", enabled: true, config: {} },
+        {
+          position: 1,
+          effect_type: "send_email",
+          enabled: false,
+          config: { recipient_type: "CUSTOMER", template_id: 9 },
+        },
+      ],
+    });
+    expect(row.warehouse_commit?.enabled).toBe(true);
+    expect(row.send_email_customer?.enabled).toBe(false);
+    expect(row.send_email_customer?.template_id).toBe(9);
+    const state = rowStateFromOverviewMap(row);
+    expect(state.warehouse_commit?.enabled).toBe(true);
+  });
+
+  it("email OFF preserves template_id in payload", () => {
+    const off = patchRowEffect(
+      { send_email_customer: { enabled: true, template_id: 12 } },
+      "send_email_customer",
+      { enabled: false },
+    );
+    const effects = buildManagedEffectsPayload("RETURN", off);
+    const cust = effects.find((e) => e.config.recipient_type === "CUSTOMER");
+    expect(cust?.enabled).toBe(false);
+    expect(cust?.config.template_id).toBe(12);
+  });
+});
+
+describe("Product decisions matrix UX", () => {
+  it("Przyjęcia/Odrzucenia matrices with inline Aktywna + Powrót", () => {
+    expect(DECISIONS).toContain("Przyjęcia");
+    expect(DECISIONS).toContain("Odrzucenia");
+    expect(DECISIONS).toContain("Powrót na magazyn");
+    expect(DECISIONS).toContain("decisionReturnsToStock");
+    expect(DECISIONS).toContain("creates_stock_document");
+    expect(DECISIONS).toContain('title={`Dodaj decyzję — ${title}`}');
+    expect(DECISIONS).not.toMatch(/Dodaj decyzję<\/button>/);
+    expect(DECISIONS).not.toContain("Produkt wraca na magazyn</p>");
+  });
+
+  it("decisionReturnsToStock uses creates_stock_document SSOT", () => {
+    expect(
+      decisionReturnsToStock({
+        category: "ACCEPTED",
+        code: "ok",
+        label: "Zaakceptowany",
+        visible_wms: true,
+        sort_order: 1,
+        is_active: true,
+      }),
+    ).toBe(true);
+    expect(
+      decisionReturnsToStock({
+        category: "ACCEPTED",
+        code: "refund",
+        label: "Zwrot środków",
+        visible_wms: true,
+        sort_order: 1,
+        is_active: true,
+      }),
+    ).toBe(false);
+    expect(
+      decisionReturnsToStock({
+        category: "REJECTED",
+        code: "dmg",
+        label: "Uszkodzony",
+        visible_wms: true,
+        sort_order: 1,
+        is_active: true,
+        creates_stock_document: true,
+      }),
+    ).toBe(true);
   });
 });

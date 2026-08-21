@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import toast from "react-hot-toast";
 
 import { listStatusActionsOverview, type StatusActionOverviewEffectDto } from "../../../api/automationsApi";
 import {
@@ -43,9 +44,20 @@ export function useReturnPanelStatusesConfig(warehouseId: number | null) {
       });
       setActionsByStatusId(overview.by_status_id ?? {});
     } catch {
-      setActionsByStatusId({});
+      // Do not wipe existing projection — keeps list/modal sync after a transient GET failure.
+      toast.error("Nie udało się odświeżyć akcji statusów");
     }
   }, [warehouseId]);
+
+  const patchActionsForStatus = useCallback(
+    (statusId: number, row: Record<string, StatusActionOverviewEffectDto>) => {
+      setActionsByStatusId((prev) => ({
+        ...prev,
+        [String(statusId)]: row,
+      }));
+    },
+    [],
+  );
 
   const load = useCallback(async () => {
     if (warehouseId == null) {
@@ -225,6 +237,7 @@ export function useReturnPanelStatusesConfig(warehouseId: number | null) {
     setErr,
     reload: load,
     reloadActionsOverview: loadActionsOverview,
+    patchActionsForStatus,
     saveStatus,
     createStatus,
     removeStatus,

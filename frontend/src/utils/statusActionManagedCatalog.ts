@@ -26,7 +26,7 @@ export const STATUS_ACTION_COLUMN_HEADERS: Record<StatusActionManagedKey, string
 /** Full titles for column header tooltips. */
 export const STATUS_ACTION_COLUMN_TOOLTIPS: Record<StatusActionManagedKey, string> = {
   warehouse_commit:
-    "Finalizuje przyjęcie zwrotu przez workflow RMZ i tworzy Z-PZ, jeśli zwrot jest gotowy.",
+    "Finalizuje przyjęcie zwrotu przez workflow RMZ i tworzy dokument Z-PZ, jeśli zwrot jest gotowy do przyjęcia.",
   send_email_customer: "Wyślij e-mail klientowi po wejściu w ten status",
   send_email_internal: "Wyślij e-mail wewnętrzny po wejściu w ten status",
 };

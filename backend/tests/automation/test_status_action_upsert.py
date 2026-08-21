@@ -437,3 +437,192 @@ def test_overview_batch_projection(db):
     # Status 8: rule disabled — still present with enabled=false for matrix OFF state
     assert overview["8"]["warehouse_commit"]["enabled"] is False
     assert status_actions_overview(db, tenant_id=2, entity_type="RETURN", warehouse_id=1) == {}
+
+
+def test_list_modal_warehouse_commit_roundtrip_survives_reload(db):
+    """
+    Regression: Magazyn OFF → ON → overview ON → modal ON → OFF → overview OFF.
+    Covers the list↔modal sync contract (same STATUS_ACTION SSOT).
+    """
+    from backend.services.automation.status_actions import status_actions_overview
+
+    sid = 42
+    # Start OFF
+    upsert_status_action_bundle(
+        db,
+        tenant_id=1,
+        entity_type="RETURN",
+        status_id=sid,
+        warehouse_id=1,
+        status_name="Sklep",
+        effects=[
+            {"position": 0, "effect_type": "warehouse_commit", "config": {}, "enabled": False},
+            {
+                "position": 1,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "CUSTOMER"},
+                "enabled": False,
+            },
+            {
+                "position": 2,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "INTERNAL"},
+                "enabled": False,
+            },
+        ],
+    )
+    db.commit()
+    ov = status_actions_overview(db, tenant_id=1, entity_type="RETURN", warehouse_id=1)
+    assert ov[str(sid)]["warehouse_commit"]["enabled"] is False
+
+    # Inline ON (matrix PUT)
+    rule = upsert_status_action_bundle(
+        db,
+        tenant_id=1,
+        entity_type="RETURN",
+        status_id=sid,
+        warehouse_id=1,
+        status_name="Sklep",
+        effects=[
+            {"position": 0, "effect_type": "warehouse_commit", "config": {}, "enabled": True},
+            {
+                "position": 1,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "CUSTOMER"},
+                "enabled": False,
+            },
+            {
+                "position": 2,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "INTERNAL"},
+                "enabled": False,
+            },
+        ],
+    )
+    db.commit()
+    assert rule.enabled is True
+    ov2 = status_actions_overview(db, tenant_id=1, entity_type="RETURN", warehouse_id=1)
+    assert ov2[str(sid)]["warehouse_commit"]["enabled"] is True
+
+    # Modal projection (same primary rule)
+    rows = list_status_action_rules(db, tenant_id=1, entity_type="RETURN", status_id=sid, warehouse_id=1)
+    assert len(rows) >= 1
+    modal_keys = _effect_types(rows[0])
+    assert ("warehouse_commit", True) in modal_keys
+
+    # Modal OFF → save
+    upsert_status_action_bundle(
+        db,
+        tenant_id=1,
+        entity_type="RETURN",
+        status_id=sid,
+        warehouse_id=1,
+        status_name="Sklep",
+        effects=[
+            {"position": 0, "effect_type": "warehouse_commit", "config": {}, "enabled": False},
+            {
+                "position": 1,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "CUSTOMER"},
+                "enabled": False,
+            },
+            {
+                "position": 2,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "INTERNAL"},
+                "enabled": False,
+            },
+        ],
+    )
+    db.commit()
+    ov3 = status_actions_overview(db, tenant_id=1, entity_type="RETURN", warehouse_id=1)
+    assert ov3[str(sid)]["warehouse_commit"]["enabled"] is False
+
+
+def test_email_toggle_preserves_template_and_rejects_invalid_enable(db):
+    """Email OFF keeps template_id; enabling without template stays disabled in overview."""
+    from backend.services.automation.status_actions import status_actions_overview
+
+    sid = 99
+    upsert_status_action_bundle(
+        db,
+        tenant_id=1,
+        entity_type="RETURN",
+        status_id=sid,
+        warehouse_id=1,
+        status_name="Mail",
+        effects=[
+            {"position": 0, "effect_type": "warehouse_commit", "config": {}, "enabled": False},
+            {
+                "position": 1,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "CUSTOMER", "template_id": 55},
+                "enabled": True,
+            },
+            {
+                "position": 2,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "INTERNAL"},
+                "enabled": False,
+            },
+        ],
+    )
+    db.commit()
+
+    # OFF — preserve template in config
+    upsert_status_action_bundle(
+        db,
+        tenant_id=1,
+        entity_type="RETURN",
+        status_id=sid,
+        warehouse_id=1,
+        status_name="Mail",
+        effects=[
+            {"position": 0, "effect_type": "warehouse_commit", "config": {}, "enabled": False},
+            {
+                "position": 1,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "CUSTOMER", "template_id": 55},
+                "enabled": False,
+            },
+            {
+                "position": 2,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "INTERNAL"},
+                "enabled": False,
+            },
+        ],
+    )
+    db.commit()
+    ov = status_actions_overview(db, tenant_id=1, entity_type="RETURN", warehouse_id=1)
+    assert ov[str(sid)]["send_email_customer"]["enabled"] is False
+    assert ov[str(sid)]["send_email_customer"]["template_id"] == 55
+
+    # ON again — template preserved
+    upsert_status_action_bundle(
+        db,
+        tenant_id=1,
+        entity_type="RETURN",
+        status_id=sid,
+        warehouse_id=1,
+        status_name="Mail",
+        effects=[
+            {"position": 0, "effect_type": "warehouse_commit", "config": {}, "enabled": False},
+            {
+                "position": 1,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "CUSTOMER", "template_id": 55},
+                "enabled": True,
+            },
+            {
+                "position": 2,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "INTERNAL"},
+                "enabled": False,
+            },
+        ],
+    )
+    db.commit()
+    ov2 = status_actions_overview(db, tenant_id=1, entity_type="RETURN", warehouse_id=1)
+    assert ov2[str(sid)]["send_email_customer"]["enabled"] is True
+    assert ov2[str(sid)]["send_email_customer"]["template_id"] == 55

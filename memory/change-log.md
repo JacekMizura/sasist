@@ -5782,3 +5782,8 @@ SzczegĂłĹ‚y w raporcie sesji (âś…/âš /âťŚ). Legacy stubĂłw brak
 - Pack finish: consume buffer inventory; badge Z produkcji
 - Tests: test_production_packing_handoff.py (+ config/fg regression)
 
+
+## 2026-08-21 � Return statuses configurator sync + matrix UX
+- Fixed Magazyn checkbox reset after refetch (PUT reconcile + overview wipe)
+- Dense status/decision matrices; IconButton/Tooltip; group +
+
