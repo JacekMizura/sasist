@@ -52,6 +52,10 @@ def _run_packaging_status_hook(
         logger.exception("packaging trigger after status order_id=%s", getattr(order, "id", None))
 
 
+# Legacy alias — production/tests may still monkeypatch this name.
+_run_smart_matching_status_hook = _run_packaging_status_hook
+
+
 def _run_production_status_hook(
     db: Session,
     *,
@@ -87,6 +91,40 @@ def _run_production_status_hook(
         logger.exception(
             "production trigger after status order_id=%s prev=%s new=%s",
             order_id,
+            previous_status_id,
+            new_status_id,
+        )
+
+
+def _run_automation_status_entered(
+    db: Session,
+    *,
+    order: Order,
+    previous_status_id: Optional[int],
+    new_status_id: Optional[int],
+    operator_user_id: Optional[int],
+) -> None:
+    """Soft-fail Automation Engine trigger after domain hooks (status-enter only)."""
+    try:
+        nested = db.begin_nested()
+        try:
+            from .automation.runner import emit_order_status_entered_and_run
+
+            emit_order_status_entered_and_run(
+                db,
+                order=order,
+                previous_status_id=previous_status_id,
+                new_status_id=new_status_id,
+                actor_user_id=operator_user_id,
+            )
+            nested.commit()
+        except Exception:
+            nested.rollback()
+            raise
+    except Exception:
+        logger.exception(
+            "automation trigger after status order_id=%s prev=%s new=%s",
+            getattr(order, "id", None),
             previous_status_id,
             new_status_id,
         )
@@ -225,10 +263,21 @@ def apply_order_panel_ui_status(
             operator_user_id=operator_user_id,
         )
 
+    def _after_status_persisted() -> None:
+        """Frozen order: 1) status written 2) domain hooks 3) automation status-enter."""
+        _hooks()
+        _run_automation_status_entered(
+            db,
+            order=order,
+            previous_status_id=previous_sid,
+            new_status_id=new_sid,
+            operator_user_id=operator_user_id,
+        )
+
     cart_id = getattr(order, "cart_id", None)
     if cart_id is None or int(cart_id) <= 0:
         db.add(order)
-        _hooks()
+        _after_status_persisted()
         return {"status_updated": True, "detached": False}
 
     tid = int(order.tenant_id)
@@ -254,13 +303,13 @@ def apply_order_panel_ui_status(
         )
         clear_order_picking_session_context(order)
         db.add(order)
-        _hooks()
+        _after_status_persisted()
         return {"status_updated": True, "detached": False, "healed_orphan_cart": True}
 
     allowed, block_reason = can_detach_order_from_cart(db, cart=cart, order=order)
     if not allowed:
         db.add(order)
-        _hooks()
+        _after_status_persisted()
         logger.info(
             "[panel.ui_status] status saved without detach order_id=%s cart_id=%s reason=%s",
             int(order.id),
@@ -290,5 +339,5 @@ def apply_order_panel_ui_status(
     except Exception:
         pass
     db.add(order)
-    _hooks()
+    _after_status_persisted()
     return {"status_updated": True, "detached": True, "cart_id": cid}

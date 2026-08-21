@@ -1,6 +1,7 @@
 /**
- * Persystencja reguł i dziennika testów — wyłącznie frontend (localStorage).
- * Po dodaniu endpointów backendu zamień warstwę zapisu na API, zachowując kształt {@link OrderAutomationRule}.
+ * LEGACY: Persystencja reguł i dziennika testów — wyłącznie frontend (localStorage).
+ * Backend Automation Engine (`/api/automations`) is the SSOT going forward.
+ * Po migracji zamień warstwę zapisu na API, zachowując kształt {@link OrderAutomationRule}.
  */
 import type {
   OrderAutomationChangeLogEntry,

@@ -272,3 +272,10 @@ from .printing import (  # noqa: F401 — Sasist Printer Agent MVP
     PrinterAgent,
     PrintingDefault,
 )
+from .automation import (  # noqa: F401 — Automation Engine v1
+    AutomationEffect,
+    AutomationEffectExecution,
+    AutomationExecution,
+    AutomationRule,
+    StatusTransitionEvent,
+)

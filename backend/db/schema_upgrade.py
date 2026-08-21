@@ -10606,6 +10606,27 @@ from .tenant_warehouse_fulfillment_schema import ensure_tenant_warehouse_fulfill
 from .supply_flow_schema import ensure_supply_flow_schema  # noqa: E402
 
 
+def ensure_automation_engine_tables(engine: Engine) -> None:
+    """Backend Automation Engine v1: rules, effects, executions, status transition events."""
+    from ..models.automation import (
+        AutomationEffect,
+        AutomationEffectExecution,
+        AutomationExecution,
+        AutomationRule,
+        StatusTransitionEvent,
+    )
+
+    for model in (
+        StatusTransitionEvent,
+        AutomationRule,
+        AutomationEffect,
+        AutomationExecution,
+        AutomationEffectExecution,
+    ):
+        ensure_model_table_from_orm(engine, model, log_prefix="schema.automation")
+        sync_model_schema(engine, model, log_prefix="schema.automation")
+
+
 def ensure_postgres_serial_sequences_synced(engine: Engine) -> int:
     """
     Idempotent: align PostgreSQL SERIAL/IDENTITY sequences with MAX(pk).
