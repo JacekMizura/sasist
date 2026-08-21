@@ -1,3 +1,9 @@
+## 2026-08-21 — Return status list STATUS_ACTION overview UX
+
+- Compact StatusActionsPanel (property checkboxes; email config only when ON; warehouse_commit tooltip)
+- Batch GET `/automations/status-actions/overview` → status_id → business action labels
+- ListLabelsSection shows ✓ actions per status; SSOT remains AutomationRule (no ReturnUiStatus booleans)
+
 ## 2026-08-21 — Fix STATUS_ACTION Sellasist semantics (no change_status in panel)
 
 - StatusActionsPanel: edited status = trigger; checkboxes = side-effects only

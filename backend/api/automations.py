@@ -20,6 +20,7 @@ from ..schemas.automation import (
     LegacyImportRequest,
     LegacyImportResult,
     StatusActionRuleOut,
+    StatusActionsOverviewOut,
     StatusActionUpsertIn,
 )
 from ..services.automation.store import (
@@ -61,6 +62,25 @@ def get_status_actions(
         warehouse_id=warehouse_id,
     )
     return [StatusActionRuleOut.model_validate(r) for r in rows]
+
+
+@router.get("/status-actions/overview", response_model=StatusActionsOverviewOut)
+def get_status_actions_overview(
+    tenant_id: int = Query(..., ge=1),
+    entity_type: str = Query(..., min_length=1),
+    warehouse_id: Optional[int] = Query(None, ge=1),
+    db: Session = Depends(get_db),
+):
+    """Batch projection for status list UI — one request for all statuses of an entity."""
+    from ..services.automation.status_actions import status_actions_overview
+
+    by_status = status_actions_overview(
+        db,
+        tenant_id=tenant_id,
+        entity_type=entity_type,
+        warehouse_id=warehouse_id,
+    )
+    return StatusActionsOverviewOut.model_validate({"by_status_id": by_status})
 
 
 @router.put("/status-actions", response_model=StatusActionRuleOut)

@@ -1,4 +1,8 @@
-**STATUS_ACTION Sellasist UX — PASS (pending commit).**
+**Return status STATUS_ACTION list overview — PASS (pending commit).**
+- Batch overview endpoint; ListLabelsSection ✓ hints; compact modal panel
+- No ReturnUiStatus action booleans; AutomationRule SSOT unchanged
+
+**STATUS_ACTION Sellasist UX — PASS `2cc3cfce`.**
 - Panel: no change_status; ORDER/COMPLAINT emails; RETURN warehouse_commit + emails
 - BE merge preserves advanced change_status; enabled if any effect on
 - add_tag / legacy cleanup still deferred

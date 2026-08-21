@@ -1,12 +1,9 @@
 /**
- * Sellasist-style status action panel — projection of one STATUS_ACTION rule + ordered effects.
- * Backend SSOT via listStatusActions / upsertStatusActions.
- *
- * Edited status = trigger. Checkboxes = side-effects after entering that status.
- * Does NOT expose change_status (advanced; managed in Automation Editor only).
+ * Compact Sellasist-style status action panel.
+ * Edited status = trigger; checkboxes = side-effects. No change_status here.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { Info } from "lucide-react";
 import toast from "react-hot-toast";
 
 import {
@@ -16,6 +13,12 @@ import {
   type AutomationEntityType,
   type StatusActionRuleDto,
 } from "../../api/automationsApi";
+import {
+  STATUS_ACTION_CHECKBOX_LABELS,
+  WAREHOUSE_COMMIT_TOOLTIP,
+  managedKeysForEntity,
+  type StatusActionManagedKey,
+} from "../../utils/statusActionManagedCatalog";
 import { MessageTemplatePicker } from "../messaging/MessageTemplatePicker";
 import { InternalUserPicker } from "../messaging/InternalUserPicker";
 
@@ -27,41 +30,25 @@ type Props = {
   entityType: AutomationEntityType;
   statusId: number | null;
   statusName?: string;
-  /** When false, panel is read-only (inactive status). */
   statusActive?: boolean;
-  /** Used for status name fallback when statusName omitted. */
   statusOptions: StatusOption[];
   canWrite?: boolean;
+  /** Fired after successful upsert so parent list overview can refetch. */
+  onChanged?: () => void;
 };
 
-/** Panel-owned (managed) action keys — must match backend MANAGED_STATUS_ACTION_KEYS. */
-type ActionKey = "send_email_customer" | "send_email_internal" | "warehouse_commit";
-
 type ActionDraft = {
-  key: ActionKey;
+  key: StatusActionManagedKey;
   enabled: boolean;
   templateId: number | "";
   userId: number | "";
 };
 
-const LABELS: Record<ActionKey, string> = {
-  send_email_customer: "Wyślij e-mail klientowi",
-  send_email_internal: "Wyślij e-mail wewnętrzny",
-  warehouse_commit: "Zatwierdź przyjęcie zwrotu w magazynie",
-};
-
-function availableKeys(entityType: AutomationEntityType): ActionKey[] {
-  if (entityType === "RETURN") {
-    return ["warehouse_commit", "send_email_customer", "send_email_internal"];
-  }
-  return ["send_email_customer", "send_email_internal"];
-}
-
-function emptyDraft(key: ActionKey): ActionDraft {
+function emptyDraft(key: StatusActionManagedKey): ActionDraft {
   return { key, enabled: false, templateId: "", userId: "" };
 }
 
-function effectManagedKey(e: AutomationEffectDto): ActionKey | null {
+function effectManagedKey(e: AutomationEffectDto): StatusActionManagedKey | null {
   const t = String(e.effect_type || "");
   if (t === "warehouse_commit") return "warehouse_commit";
   if (t === "send_email" || t === "send_message") {
@@ -72,22 +59,18 @@ function effectManagedKey(e: AutomationEffectDto): ActionKey | null {
 }
 
 function hasEnabledAdvancedChangeStatus(rules: StatusActionRuleDto[]): boolean {
-  const ordered = [...rules].sort((a, b) => a.id - b.id);
-  for (const rule of ordered) {
+  for (const rule of [...rules].sort((a, b) => a.id - b.id)) {
     for (const eff of rule.effects ?? []) {
-      if (String(eff.effect_type || "") !== "change_status") continue;
-      if (Boolean(eff.enabled)) return true;
+      if (String(eff.effect_type || "") === "change_status" && Boolean(eff.enabled)) return true;
     }
   }
   return false;
 }
 
-function hydrateFromRules(rules: StatusActionRuleDto[], keys: ActionKey[]): ActionDraft[] {
-  const byKey = new Map<ActionKey, { draft: ActionDraft; position: number }>();
-  const ordered = [...rules].sort((a, b) => a.id - b.id);
-  for (const rule of ordered) {
-    const effects = [...(rule.effects ?? [])].sort((a, b) => a.position - b.position);
-    for (const eff of effects) {
+function hydrateFromRules(rules: StatusActionRuleDto[], keys: StatusActionManagedKey[]): ActionDraft[] {
+  const byKey = new Map<StatusActionManagedKey, ActionDraft>();
+  for (const rule of [...rules].sort((a, b) => a.id - b.id)) {
+    for (const eff of [...(rule.effects ?? [])].sort((a, b) => a.position - b.position)) {
       const key = effectManagedKey(eff);
       if (!key || !keys.includes(key) || byKey.has(key)) continue;
       const draft = emptyDraft(key);
@@ -100,25 +83,15 @@ function hydrateFromRules(rules: StatusActionRuleDto[], keys: ActionKey[]): Acti
         const u = Number(eff.config?.user_id);
         draft.userId = Number.isFinite(u) && u > 0 ? u : "";
       }
-      byKey.set(key, { draft, position: Number(eff.position) || 0 });
+      byKey.set(key, draft);
     }
   }
-  const enabledOrdered = [...byKey.values()]
-    .filter((x) => x.draft.enabled)
-    .sort((a, b) => a.position - b.position)
-    .map((x) => x.draft);
-  const disabledRest = keys
-    .filter((k) => !enabledOrdered.some((d) => d.key === k))
-    .map((k) => byKey.get(k)?.draft ?? emptyDraft(k));
-  return [...enabledOrdered, ...disabledRest];
+  return keys.map((k) => byKey.get(k) ?? emptyDraft(k));
 }
 
-/** Managed effects only — never seeds change_status. */
 function draftsToEffects(drafts: ActionDraft[]): Omit<AutomationEffectDto, "id">[] {
-  const enabled = drafts.filter((d) => d.enabled);
-  const disabled = drafts.filter((d) => !d.enabled);
   const out: Omit<AutomationEffectDto, "id">[] = [];
-  for (const d of [...enabled, ...disabled]) {
+  for (const d of drafts) {
     if (d.key === "send_email_customer") {
       const tid = Number(d.templateId);
       out.push({
@@ -177,8 +150,9 @@ export function StatusActionsPanel({
   statusActive = true,
   statusOptions,
   canWrite = true,
+  onChanged,
 }: Props) {
-  const keys = useMemo(() => availableKeys(entityType), [entityType]);
+  const keys = useMemo(() => managedKeysForEntity(entityType), [entityType]);
   const [drafts, setDrafts] = useState<ActionDraft[]>(() => keys.map(emptyDraft));
   const [advancedChangeStatusHint, setAdvancedChangeStatusHint] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -234,7 +208,6 @@ export function StatusActionsPanel({
         status_name: statusName ?? statusOptions.find((s) => s.id === statusId)?.name,
         effects: draftsToEffects(next),
       });
-      setDrafts(next);
       const rows = await listStatusActions({
         tenantId,
         entityType,
@@ -243,6 +216,7 @@ export function StatusActionsPanel({
       });
       setDrafts(hydrateFromRules(rows, keys));
       setAdvancedChangeStatusHint(hasEnabledAdvancedChangeStatus(rows));
+      onChanged?.();
     } catch {
       toast.error("Nie udało się zapisać akcji");
       await load();
@@ -251,182 +225,136 @@ export function StatusActionsPanel({
     }
   };
 
-  const moveEnabled = (key: ActionKey, dir: -1 | 1) => {
-    const enabled = drafts.filter((d) => d.enabled);
-    const idx = enabled.findIndex((d) => d.key === key);
-    const j = idx + dir;
-    if (idx < 0 || j < 0 || j >= enabled.length) return;
-    const swapped = [...enabled];
-    [swapped[idx], swapped[j]] = [swapped[j], swapped[idx]];
-    const disabled = drafts.filter((d) => !d.enabled);
-    void persist([...swapped, ...disabled]);
-  };
-
   if (statusId == null) {
     return (
-      <section className="rounded border border-slate-200 bg-slate-50 px-3 py-2.5">
+      <section className="border-t border-slate-100 pt-3">
         <h3 className="text-sm font-semibold text-slate-800">Automatyczne akcje po wejściu w status</h3>
         <p className="mt-0.5 text-xs text-slate-500">Zapisz status, aby skonfigurować akcje.</p>
       </section>
     );
   }
 
-  const enabledKeys = drafts.filter((d) => d.enabled).map((d) => d.key);
-
   return (
-    <section className="rounded border border-slate-200 bg-white px-3 py-2.5">
+    <section className="border-t border-slate-100 pt-3">
       <div className="flex items-baseline justify-between gap-2">
         <h3 className="text-sm font-semibold text-slate-800">Automatyczne akcje po wejściu w status</h3>
         {loading ? <span className="text-[11px] text-slate-400">Ładowanie…</span> : null}
       </div>
-      <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
+      <p className="mt-0.5 text-[11px] text-slate-500">
         Zaznaczone akcje zostaną wykonane automatycznie, gdy obiekt otrzyma ten status.
       </p>
       {!statusActive ? (
         <p className="mt-1 text-[11px] text-amber-800">Status nieaktywny — akcje tylko do podglądu.</p>
       ) : null}
       {advancedChangeStatusHint ? (
-        <p className="mt-1.5 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] leading-snug text-amber-900">
+        <p className="mt-1.5 text-[11px] leading-snug text-amber-900">
           Ten status zawiera zaawansowaną akcję zmiany statusu utworzoną wcześniej. Możesz zarządzać nią w Akcjach
           automatycznych.
         </p>
       ) : null}
 
-      <ul className="mt-2 divide-y divide-slate-100">
-        {drafts.map((d) => {
-          const enIdx = enabledKeys.indexOf(d.key);
-          return (
-            <li key={d.key} className="py-2">
-              <div className="flex items-start gap-2">
-                {d.enabled && !readOnly ? (
-                  <div className="mt-0.5 flex flex-col gap-0">
-                    <button
-                      type="button"
-                      className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30"
-                      disabled={busy || enIdx <= 0}
-                      aria-label="Przenieś wyżej"
-                      onClick={() => moveEnabled(d.key, -1)}
-                    >
-                      <ChevronUp className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30"
-                      disabled={busy || enIdx < 0 || enIdx >= enabledKeys.length - 1}
-                      aria-label="Przenieś niżej"
-                      onClick={() => moveEnabled(d.key, 1)}
-                    >
-                      <ChevronDown className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ) : (
-                  <span className="w-5 shrink-0" />
-                )}
-                <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-emerald-600"
-                    checked={d.enabled}
-                    disabled={readOnly || busy}
-                    onChange={(e) => {
-                      const on = e.target.checked;
-                      if (on) {
-                        const err = validateDraft({ ...d, enabled: true });
-                        if (err && d.key.startsWith("send_email")) {
-                          setDrafts(drafts.map((x) => (x.key === d.key ? { ...x, enabled: true } : x)));
-                          return;
-                        }
+      <ul className="mt-2 space-y-1.5">
+        {drafts.map((d) => (
+          <li key={d.key}>
+            <div className="flex items-center gap-2">
+              <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 shrink-0 rounded border-slate-300 accent-emerald-600"
+                  checked={d.enabled}
+                  disabled={readOnly || busy}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    if (on) {
+                      const err = validateDraft({ ...d, enabled: true });
+                      if (err && d.key.startsWith("send_email")) {
+                        setDrafts(drafts.map((x) => (x.key === d.key ? { ...x, enabled: true } : x)));
+                        return;
                       }
-                      void persist(
-                        drafts.map((x) => (x.key === d.key ? { ...x, enabled: on } : x)),
-                      );
-                    }}
-                  />
-                  <span className="text-sm font-medium text-slate-800">{LABELS[d.key]}</span>
+                    }
+                    void persist(drafts.map((x) => (x.key === d.key ? { ...x, enabled: on } : x)));
+                  }}
+                />
+                <span className="text-sm text-slate-800">{STATUS_ACTION_CHECKBOX_LABELS[d.key]}</span>
+              </label>
+              {d.key === "warehouse_commit" ? (
+                <span
+                  className="inline-flex shrink-0 text-slate-400"
+                  title={WAREHOUSE_COMMIT_TOOLTIP}
+                  aria-label={WAREHOUSE_COMMIT_TOOLTIP}
+                >
+                  <Info className="h-3.5 w-3.5" strokeWidth={2} />
+                </span>
+              ) : null}
+            </div>
+
+            {d.enabled && d.key === "send_email_customer" ? (
+              <div className="ml-6 mt-1">
+                <label className="block text-[11px] text-slate-500">
+                  Szablon
+                  <div className="mt-0.5">
+                    <MessageTemplatePicker
+                      tenantId={tenantId}
+                      warehouseId={warehouseId}
+                      entityType={entityType}
+                      value={d.templateId}
+                      disabled={readOnly || busy}
+                      inputClassName="block w-full max-w-xs rounded border border-slate-200 bg-white px-2 py-1 text-sm"
+                      onChange={(id) => {
+                        void persist(
+                          drafts.map((x) => (x.key === d.key ? { ...x, templateId: id, enabled: true } : x)),
+                        );
+                      }}
+                    />
+                  </div>
                 </label>
               </div>
+            ) : null}
 
-              {d.enabled ? (
-                <div className="ml-9 mt-1.5 space-y-1.5 border-l-2 border-slate-100 pl-3">
-                  {d.key === "send_email_customer" ? (
-                    <label className="block text-[11px] text-slate-500">
-                      Szablon
-                      <div className="mt-0.5">
-                        <MessageTemplatePicker
-                          tenantId={tenantId}
-                          warehouseId={warehouseId}
-                          entityType={entityType}
-                          value={d.templateId}
-                          disabled={readOnly || busy}
-                          inputClassName="block w-full max-w-xs rounded border border-slate-200 bg-white px-2 py-1 text-sm"
-                          onChange={(id) => {
-                            void persist(
-                              drafts.map((x) =>
-                                x.key === d.key ? { ...x, templateId: id, enabled: true } : x,
-                              ),
-                            );
-                          }}
-                        />
-                      </div>
-                    </label>
-                  ) : null}
-
-                  {d.key === "send_email_internal" ? (
-                    <>
-                      <label className="block text-[11px] text-slate-500">
-                        Odbiorca
-                        <div className="mt-0.5">
-                          <InternalUserPicker
-                            value={d.userId}
-                            disabled={readOnly || busy}
-                            inputClassName="block w-full max-w-xs rounded border border-slate-200 bg-white px-2 py-1 text-sm"
-                            onChange={(id) => {
-                              const next = drafts.map((x) =>
-                                x.key === d.key ? { ...x, userId: id, enabled: true } : x,
-                              );
-                              setDrafts(next);
-                              const cur = next.find((x) => x.key === d.key)!;
-                              if (cur.templateId !== "" && id !== "") void persist(next);
-                            }}
-                          />
-                        </div>
-                      </label>
-                      <label className="block text-[11px] text-slate-500">
-                        Szablon
-                        <div className="mt-0.5">
-                          <MessageTemplatePicker
-                            tenantId={tenantId}
-                            warehouseId={warehouseId}
-                            entityType={entityType}
-                            value={d.templateId}
-                            disabled={readOnly || busy}
-                            inputClassName="block w-full max-w-xs rounded border border-slate-200 bg-white px-2 py-1 text-sm"
-                            onChange={(id) => {
-                              void persist(
-                                drafts.map((x) =>
-                                  x.key === d.key
-                                    ? { ...x, templateId: id, userId: d.userId, enabled: true }
-                                    : x,
-                                ),
-                              );
-                            }}
-                          />
-                        </div>
-                      </label>
-                    </>
-                  ) : null}
-
-                  {d.key === "warehouse_commit" ? (
-                    <p className="text-[11px] leading-snug text-slate-500">
-                      Akcja wykona przyjęcie zwrotu przez istniejący workflow RMZ. Jeśli zwrot nie jest gotowy do
-                      przyjęcia, automatyzacja zakończy się błędem. Utworzy Z-PZ — nie jest to „przywrócenie stanu”.
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-            </li>
-          );
-        })}
+            {d.enabled && d.key === "send_email_internal" ? (
+              <div className="ml-6 mt-1 space-y-1">
+                <label className="block text-[11px] text-slate-500">
+                  Odbiorca
+                  <div className="mt-0.5">
+                    <InternalUserPicker
+                      value={d.userId}
+                      disabled={readOnly || busy}
+                      inputClassName="block w-full max-w-xs rounded border border-slate-200 bg-white px-2 py-1 text-sm"
+                      onChange={(id) => {
+                        const next = drafts.map((x) =>
+                          x.key === d.key ? { ...x, userId: id, enabled: true } : x,
+                        );
+                        setDrafts(next);
+                        const cur = next.find((x) => x.key === d.key)!;
+                        if (cur.templateId !== "" && id !== "") void persist(next);
+                      }}
+                    />
+                  </div>
+                </label>
+                <label className="block text-[11px] text-slate-500">
+                  Szablon
+                  <div className="mt-0.5">
+                    <MessageTemplatePicker
+                      tenantId={tenantId}
+                      warehouseId={warehouseId}
+                      entityType={entityType}
+                      value={d.templateId}
+                      disabled={readOnly || busy}
+                      inputClassName="block w-full max-w-xs rounded border border-slate-200 bg-white px-2 py-1 text-sm"
+                      onChange={(id) => {
+                        void persist(
+                          drafts.map((x) =>
+                            x.key === d.key ? { ...x, templateId: id, userId: d.userId, enabled: true } : x,
+                          ),
+                        );
+                      }}
+                    />
+                  </div>
+                </label>
+              </div>
+            ) : null}
+          </li>
+        ))}
       </ul>
     </section>
   );

@@ -93,6 +93,17 @@ class StatusActionUpsertIn(BaseModel):
     effects: list[AutomationEffectIn] = Field(default_factory=list)
 
 
+class StatusActionOverviewItem(BaseModel):
+    key: str
+    label: str
+
+
+class StatusActionsOverviewOut(BaseModel):
+    """Batch map: status_id (string) → enabled managed actions for list UI."""
+
+    by_status_id: dict[str, list[StatusActionOverviewItem]] = Field(default_factory=dict)
+
+
 class AutomationEffectExecutionOut(BaseModel):
     id: int
     effect_id: Optional[int] = None

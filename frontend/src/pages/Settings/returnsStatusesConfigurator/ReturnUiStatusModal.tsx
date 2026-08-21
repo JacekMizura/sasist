@@ -36,6 +36,8 @@ type Props = {
   onSaveEdit: (id: number, draft: ReturnUiStatusUpdatePayload) => Promise<boolean>;
   onUploadImage?: (statusId: number, file: File) => Promise<boolean>;
   onClearImage?: (statusId: number) => Promise<boolean>;
+  /** Refresh list STATUS_ACTION overview after panel toggles. */
+  onStatusActionsChanged?: () => void;
 };
 
 function emptyCreate(mainGroup: ReturnUiMainGroup): ReturnUiStatusCreatePayload {
@@ -70,6 +72,7 @@ export function ReturnUiStatusModal({
   onSaveEdit,
   onUploadImage,
   onClearImage,
+  onStatusActionsChanged,
 }: Props) {
   const [createDraft, setCreateDraft] = useState(() => emptyCreate(initialMainGroup));
   const [editDraft, setEditDraft] = useState<ReturnUiStatusUpdatePayload>({});
@@ -355,6 +358,7 @@ export function ReturnUiStatusModal({
             statusName={status.name}
             statusActive={status.is_active !== false}
             statusOptions={statusOptions}
+            onChanged={onStatusActionsChanged}
           />
         ) : null}
       </div>

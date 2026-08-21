@@ -79,6 +79,14 @@ def latest_execution_for_rule(db: Session, rule_id: int) -> Optional[AutomationE
     )
 
 
+#: Business labels for status-list overview (not technical effect_type).
+MANAGED_STATUS_ACTION_LABELS: dict[str, str] = {
+    "warehouse_commit": "Przyjęcie magazynowe",
+    "send_email_customer": "E-mail klientowi",
+    "send_email_internal": "E-mail wewnętrzny",
+}
+
+
 def status_action_projection(
     db: Session,
     *,
@@ -104,6 +112,78 @@ def status_action_projection(
         )
         result.append(d)
     return result
+
+
+def _trigger_status_ids(rule: AutomationRule) -> list[int]:
+    cfg = parse_config(rule.trigger_config_json)
+    ids = cfg.get("status_ids")
+    if ids is None and cfg.get("status_id") is not None:
+        ids = [cfg.get("status_id")]
+    out: list[int] = []
+    for x in ids or []:
+        try:
+            n = int(x)
+        except (TypeError, ValueError):
+            continue
+        if n > 0:
+            out.append(n)
+    return out
+
+
+def status_actions_overview(
+    db: Session,
+    *,
+    tenant_id: int,
+    entity_type: str,
+    warehouse_id: Optional[int] = None,
+) -> dict[str, list[dict[str, str]]]:
+    """
+    Batch projection: status_id → enabled managed actions (business labels).
+    One query for all STATUS_ACTION rules of the entity — no N+1 per status.
+    """
+    et = str(entity_type).strip().upper()
+    q = (
+        db.query(AutomationRule)
+        .options(joinedload(AutomationRule.effects))
+        .filter(
+            AutomationRule.tenant_id == int(tenant_id),
+            AutomationRule.entity_type == et,
+            AutomationRule.source == SOURCE_STATUS_ACTION,
+            AutomationRule.trigger_type == TRIGGER_ENTITY_STATUS_ENTERED,
+            AutomationRule.enabled.is_(True),
+        )
+    )
+    if warehouse_id is not None:
+        q = q.filter(
+            (AutomationRule.warehouse_id.is_(None)) | (AutomationRule.warehouse_id == int(warehouse_id))
+        )
+    by_status: dict[str, list[dict[str, str]]] = {}
+    # Prefer lowest rule id per status (same as upsert primary).
+    seen_status_rule: dict[str, int] = {}
+    for rule in q.order_by(AutomationRule.id.asc()).all():
+        for sid in _trigger_status_ids(rule):
+            key = str(sid)
+            if key in seen_status_rule:
+                continue
+            seen_status_rule[key] = int(rule.id)
+            actions: list[dict[str, str]] = []
+            seen_keys: set[str] = set()
+            for e in sorted(rule.effects or [], key=lambda x: (int(x.position), int(x.id or 0))):
+                if not bool(getattr(e, "enabled", True)):
+                    continue
+                cfg = parse_config(getattr(e, "config_json", None))
+                logical = logical_status_action_key(str(e.effect_type or ""), cfg)
+                if not is_managed_status_action_key(logical) or logical in seen_keys:
+                    continue
+                seen_keys.add(logical)
+                actions.append(
+                    {
+                        "key": logical,
+                        "label": MANAGED_STATUS_ACTION_LABELS.get(logical, logical),
+                    }
+                )
+            by_status[key] = actions
+    return by_status
 
 
 def disable_status_action_rules_for_status(

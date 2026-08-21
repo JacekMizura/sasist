@@ -67,6 +67,7 @@ export function ReturnsStatusesConfigurator({ warehouseId, cfg, setDraft }: Prop
         <ListLabelsSection
           summary={panel.summary}
           panelSubgroups={panel.panelSubgroups}
+          actionsByStatusId={panel.actionsByStatusId}
           onAddSubgroup={(mg) => setSubgroupModal(mg)}
           onAddStatus={(mg) => setStatusModal({ mode: "create", mainGroup: mg })}
           onEditStatus={(s) => setStatusModal({ mode: "edit", status: s })}
@@ -114,6 +115,7 @@ export function ReturnsStatusesConfigurator({ warehouseId, cfg, setDraft }: Prop
           }}
           onUploadImage={panel.uploadImage}
           onClearImage={panel.clearImage}
+          onStatusActionsChanged={() => void panel.reloadActionsOverview()}
         />
       ) : null}
     </div>

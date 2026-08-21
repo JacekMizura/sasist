@@ -387,3 +387,53 @@ def test_k_tenant_isolation_list(db):
     db.commit()
     other = list_status_action_rules(db, tenant_id=2, entity_type="ORDER", status_id=10, warehouse_id=1)
     assert other == []
+
+
+def test_overview_batch_projection(db):
+    from backend.services.automation.status_actions import status_actions_overview
+
+    upsert_status_action_bundle(
+        db,
+        tenant_id=1,
+        entity_type="RETURN",
+        status_id=7,
+        warehouse_id=1,
+        status_name="Magazyn",
+        effects=[
+            {"position": 0, "effect_type": "warehouse_commit", "config": {}, "enabled": True},
+            {
+                "position": 1,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "CUSTOMER", "template_id": 1},
+                "enabled": True,
+            },
+            {
+                "position": 2,
+                "effect_type": "send_email",
+                "config": {"recipient_type": "INTERNAL", "template_id": 2, "user_id": 1},
+                "enabled": False,
+            },
+        ],
+    )
+    upsert_status_action_bundle(
+        db,
+        tenant_id=1,
+        entity_type="RETURN",
+        status_id=8,
+        warehouse_id=1,
+        status_name="Nowy",
+        effects=[
+            {"position": 0, "effect_type": "warehouse_commit", "config": {}, "enabled": False},
+        ],
+    )
+    db.commit()
+    overview = status_actions_overview(db, tenant_id=1, entity_type="RETURN", warehouse_id=1)
+    assert "7" in overview
+    labels = [a["label"] for a in overview["7"]]
+    assert "Przyjęcie magazynowe" in labels
+    assert "E-mail klientowi" in labels
+    assert "E-mail wewnętrzny" not in labels
+    # Status 8: rule enabled=False when all managed off → omitted from overview
+    assert overview.get("8", []) == []
+    # Tenant isolation
+    assert status_actions_overview(db, tenant_id=2, entity_type="RETURN", warehouse_id=1) == {}

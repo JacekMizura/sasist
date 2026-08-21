@@ -200,6 +200,12 @@ export type StatusActionRuleDto = AutomationRuleDto & {
   last_run_at?: string | null;
 };
 
+export type StatusActionOverviewItemDto = { key: string; label: string };
+
+export type StatusActionsOverviewDto = {
+  by_status_id: Record<string, StatusActionOverviewItemDto[]>;
+};
+
 export async function listStatusActions(params: {
   tenantId: number;
   entityType: AutomationEntityType;
@@ -211,6 +217,22 @@ export async function listStatusActions(params: {
       tenant_id: params.tenantId,
       entity_type: params.entityType,
       status_id: params.statusId,
+      warehouse_id: params.warehouseId ?? undefined,
+    },
+  });
+  return res.data;
+}
+
+/** One request: map of status_id → enabled managed actions for list overview. */
+export async function listStatusActionsOverview(params: {
+  tenantId: number;
+  entityType: AutomationEntityType;
+  warehouseId?: number | null;
+}): Promise<StatusActionsOverviewDto> {
+  const res = await api.get<StatusActionsOverviewDto>("automations/status-actions/overview", {
+    params: {
+      tenant_id: params.tenantId,
+      entity_type: params.entityType,
       warehouse_id: params.warehouseId ?? undefined,
     },
   });
