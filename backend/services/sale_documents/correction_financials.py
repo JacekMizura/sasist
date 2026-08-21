@@ -15,6 +15,7 @@ def compute_totals_from_sale_document_items(items: Sequence[SaleDocumentItem | d
 
     Correction lines use **signed delta** quantities/amounts (typically negative).
     Totals are the algebraic sum of line_* fields (already signed).
+    Includes PRODUCT and SHIPPING lines alike.
     """
     lines_out: list[dict[str, Any]] = []
     total_net = 0.0
@@ -36,6 +37,7 @@ def compute_totals_from_sale_document_items(items: Sequence[SaleDocumentItem | d
             unit_net = float(raw.unit_net) if raw.unit_net is not None else None
             unit_gross = float(raw.unit_gross) if raw.unit_gross is not None else None
             position = int(raw.position or idx)
+            line_kind = str(getattr(raw, "line_kind", None) or "PRODUCT").strip().upper() or "PRODUCT"
         else:
             qty = float(raw.get("quantity") or 0.0)
             vp = float(raw.get("vat_percent") if raw.get("vat_percent") is not None else DEFAULT_VAT_PERCENT)
@@ -49,6 +51,7 @@ def compute_totals_from_sale_document_items(items: Sequence[SaleDocumentItem | d
             unit_net = float(raw["unit_net"]) if raw.get("unit_net") is not None else None
             unit_gross = float(raw["unit_gross"]) if raw.get("unit_gross") is not None else None
             position = int(raw.get("position") if raw.get("position") is not None else idx)
+            line_kind = str(raw.get("line_kind") or "PRODUCT").strip().upper() or "PRODUCT"
 
         total_net += ln
         total_vat += lv
@@ -59,6 +62,7 @@ def compute_totals_from_sale_document_items(items: Sequence[SaleDocumentItem | d
         vat_buckets[key]["gross"] += lg
         lines_out.append(
             {
+                "line_kind": line_kind,
                 "order_item_id": oid,
                 "product_id": pid,
                 "name": name or (f"Produkt #{pid}" if pid else "—"),

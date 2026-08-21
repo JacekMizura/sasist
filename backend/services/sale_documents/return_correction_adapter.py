@@ -9,7 +9,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from ...models.sale_document import SaleDocument
-from ...models.sale_document_item import SaleDocumentItem
+from ...models.sale_document_item import LINE_KIND_PRODUCT, SaleDocumentItem
 from ...models.wms_order_return import WmsOrderReturn
 from ...models.wms_rmz_line import RMZLine
 from .correction_financials import signed_delta_amounts
@@ -73,6 +73,9 @@ def build_return_correction_lines(
 
     by_order_item: dict[int, SaleDocumentItem] = {}
     for it in source_items:
+        kind = str(getattr(it, "line_kind", None) or LINE_KIND_PRODUCT).strip().upper()
+        if kind != LINE_KIND_PRODUCT:
+            continue  # SHIPPING (and future kinds) are not product-correction-mapped
         if it.order_item_id is None:
             continue
         oid = int(it.order_item_id)
@@ -116,6 +119,7 @@ def build_return_correction_lines(
         )
         out.append(
             {
+                "line_kind": LINE_KIND_PRODUCT,
                 "order_item_id": oid,
                 "product_id": int(src.product_id) if src.product_id is not None else int(rl.product_id),
                 "name": str(src.name or ""),

@@ -55,6 +55,7 @@ class SaleDocumentPartyRead(BaseModel):
 
 
 class SaleDocumentLineRead(BaseModel):
+    line_kind: str = "PRODUCT"
     order_item_id: Optional[int] = None
     product_id: Optional[int] = None
     name: str

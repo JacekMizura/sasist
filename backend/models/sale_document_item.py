@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint, text
 from sqlalchemy.orm import relationship
 
 from ..database import Base
+
+LINE_KIND_PRODUCT = "PRODUCT"
+LINE_KIND_SHIPPING = "SHIPPING"
 
 
 class SaleDocumentItem(Base):
@@ -17,6 +20,10 @@ class SaleDocumentItem(Base):
     Value model for CORRECTION rows: **signed delta**
     (quantity/line_* negative = credit reducing the original sale).
     PRIMARY rows use positive quantities matching the original invoice.
+
+    ``line_kind``:
+    - PRODUCT — commercial product line (may have order_item_id)
+    - SHIPPING — immutable shipping cost snapshot (no order_item_id)
     """
 
     __tablename__ = "sale_document_items"
@@ -36,7 +43,16 @@ class SaleDocumentItem(Base):
         nullable=False,
         index=True,
     )
-    #: Stable link to original order line (required for correction mapping).
+    #: PRODUCT | SHIPPING — legacy rows without column migrate to PRODUCT.
+    line_kind = Column(
+        String(16),
+        nullable=False,
+        default=LINE_KIND_PRODUCT,
+        server_default=text("'PRODUCT'"),
+        index=True,
+    )
+    #: Stable link to original order line (required for product correction mapping).
+    #: NULL for SHIPPING lines.
     order_item_id = Column(Integer, ForeignKey("order_items.id", ondelete="SET NULL"), nullable=True, index=True)
     product_id = Column(Integer, ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True)
     position = Column(Integer, nullable=False, default=0)

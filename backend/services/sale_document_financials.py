@@ -347,6 +347,7 @@ def compute_sale_totals_from_order(order: Order) -> dict[str, Any]:
             sku = str(getattr(product, "sku", None) or getattr(product, "symbol", None) or "").strip()
         lines_out.append(
             {
+                "line_kind": "PRODUCT",
                 "order_item_id": int(item.id),
                 "product_id": int(item.product_id),
                 "name": pname or f"Produkt #{item.product_id}",

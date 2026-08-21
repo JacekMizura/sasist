@@ -210,7 +210,14 @@ def create_sale_document(
     db.flush()
     from .sale_documents.items_snapshot import snapshot_primary_items_from_order
 
-    snapshot_primary_items_from_order(db, doc=row, order=order_for_snapshot)
+    # Shipping snapshot only on legal create (series flag). Never on early-return reuse.
+    snapshot_primary_items_from_order(
+        db,
+        doc=row,
+        order=order_for_snapshot,
+        series=ds,
+        include_shipping=True,
+    )
     logger.info("Document created ID: %s number=%s", row.id, doc_number)
     return row
 
