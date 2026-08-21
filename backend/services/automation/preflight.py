@@ -53,6 +53,8 @@ _SAFETY_BLOCKING = frozenset(
         "invalid_condition",
         "unsupported_effect",
         "invalid_effect",
+        "unsupported_entity_for_effect",
+        "invalid_effect_order",
         "unsupported_trigger",
         "invalid_entity_type",
     }
@@ -195,11 +197,47 @@ def validate_automation_runtime(
             if rule_et and rule_et != "RETURN":
                 issues.append(
                     ValidationIssue(
-                        code="invalid_effect",
+                        code="unsupported_entity_for_effect",
                         effect_type=etype,
                         message="warehouse_commit only compatible with entity_type=RETURN",
                     )
                 )
+        elif etype == "generate_sale_correction":
+            rule_et = str(entity_type or rule.entity_type or "").strip().upper()
+            if rule_et and rule_et != "RETURN":
+                issues.append(
+                    ValidationIssue(
+                        code="unsupported_entity_for_effect",
+                        effect_type=etype,
+                        message="generate_sale_correction only compatible with entity_type=RETURN",
+                    )
+                )
+
+    # RETURN: when both warehouse_commit and generate_sale_correction are enabled,
+    # warehouse must run first (no silent reorder).
+    enabled_effects = sorted(
+        [e for e in (rule.effects or []) if bool(getattr(e, "enabled", True))],
+        key=lambda e: (int(e.position), int(e.id or 0)),
+    )
+    wh_pos: Optional[int] = None
+    corr_pos: Optional[int] = None
+    for e in enabled_effects:
+        et = normalize_effect_type(str(e.effect_type or "").strip())
+        if et == "warehouse_commit":
+            wh_pos = int(e.position)
+        elif et == "generate_sale_correction":
+            corr_pos = int(e.position)
+    if wh_pos is not None and corr_pos is not None and wh_pos >= corr_pos:
+        issues.append(
+            ValidationIssue(
+                code="invalid_effect_order",
+                effect_type="generate_sale_correction",
+                message=(
+                    "generate_sale_correction must run after warehouse_commit "
+                    "(warehouse_commit.position < generate_sale_correction.position)"
+                ),
+            )
+        )
 
     seen: set[tuple] = set()
     uniq: list[ValidationIssue] = []
@@ -219,8 +257,10 @@ def validate_automation_runtime(
         for code in (
             "unsupported_condition",
             "unsupported_effect",
+            "unsupported_entity_for_effect",
             "invalid_condition",
             "invalid_effect",
+            "invalid_effect_order",
             "unsupported_trigger",
             "invalid_entity_type",
         ):

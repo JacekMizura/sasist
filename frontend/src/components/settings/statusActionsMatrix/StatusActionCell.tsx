@@ -1,10 +1,14 @@
 /**
- * Single matrix cell: warehouse toggle or email checkbox + config popover.
+ * Single matrix cell: simple toggle (Magazyn/Korekta) or email checkbox + config popover.
  */
 import { useState } from "react";
 
 import type { AutomationEntityType } from "../../../api/automationsApi";
-import type { StatusActionManagedKey } from "../../../utils/statusActionManagedCatalog";
+import {
+  STATUS_ACTION_COLUMN_HEADERS,
+  STATUS_ACTION_SIMPLE_TOGGLE_KEYS,
+  type StatusActionManagedKey,
+} from "../../../utils/statusActionManagedCatalog";
 import type { StatusActionEffectState } from "../../../utils/statusActionMatrixPayload";
 import { StatusEmailActionPopover } from "./StatusEmailActionPopover";
 
@@ -16,7 +20,7 @@ type Props = {
   tenantId: number;
   warehouseId?: number | null;
   entityType: AutomationEntityType;
-  onToggleWarehouse: (enabled: boolean) => void;
+  onToggleSimple: (enabled: boolean) => void;
   onSaveEmail: (next: { enabled: true; template_id: number; user_id?: number }) => void;
   onDisableEmail: () => void;
 };
@@ -39,7 +43,7 @@ export function StatusActionCell({
   tenantId,
   warehouseId = null,
   entityType,
-  onToggleWarehouse,
+  onToggleSimple,
   onSaveEmail,
   onDisableEmail,
 }: Props) {
@@ -47,7 +51,7 @@ export function StatusActionCell({
   const checked = Boolean(state.enabled);
   const locked = disabled || busy;
 
-  if (actionKey === "warehouse_commit") {
+  if (STATUS_ACTION_SIMPLE_TOGGLE_KEYS.has(actionKey)) {
     return (
       <td className="px-1 py-1.5 text-center align-middle">
         <input
@@ -55,8 +59,8 @@ export function StatusActionCell({
           className="h-4 w-4 rounded border-slate-300 accent-emerald-600 disabled:opacity-40"
           checked={checked}
           disabled={locked}
-          aria-label="Przyjęcie magazynowe"
-          onChange={(e) => onToggleWarehouse(e.target.checked)}
+          aria-label={STATUS_ACTION_COLUMN_HEADERS[actionKey]}
+          onChange={(e) => onToggleSimple(e.target.checked)}
         />
       </td>
     );

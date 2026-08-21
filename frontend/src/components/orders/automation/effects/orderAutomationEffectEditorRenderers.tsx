@@ -29,6 +29,7 @@ export const EFFECT_BUSINESS_SIDEBAR: Record<
   send_email: { title: "E-mail", Icon: Mail },
   send_message: { title: "Wiadomość", Icon: Mail },
   warehouse_commit: { title: "Zwrot WMS", Icon: Package },
+  generate_sale_correction: { title: "Korekta FV", Icon: FileText },
   print: { title: "Druk", Icon: Printer },
   assign_courier: { title: "Kurier", Icon: Truck },
   add_tag: { title: "Tag", Icon: Tag },
@@ -235,6 +236,19 @@ export function renderWarehouseCommitEffectEditor(props: EffectEditorBaseProps) 
   return <WarehouseCommitEffectEditor {...props} />;
 }
 
+export function GenerateSaleCorrectionEffectEditor(_props: EffectEditorBaseProps) {
+  return (
+    <p className="px-1 py-2 text-xs text-slate-600">
+      Wystawia korektę faktury na podstawie finalnie przyjętych pozycji zwrotu. Wymaga wcześniejszego przyjęcia w
+      magazynie. Bez dodatkowej konfiguracji.
+    </p>
+  );
+}
+
+export function renderGenerateSaleCorrectionEffectEditor(props: EffectEditorBaseProps) {
+  return <GenerateSaleCorrectionEffectEditor {...props} />;
+}
+
 const PRINTERS: { value: string; label: string }[] = [
   { value: "zebra_1", label: "Zebra #1" },
   { value: "zebra_2", label: "Zebra #2" },
@@ -412,6 +426,8 @@ export function renderAutomationEffectConfigEditor(
       return renderSendEmailEffectEditor(props);
     case "warehouse_commit":
       return renderWarehouseCommitEffectEditor(props);
+    case "generate_sale_correction":
+      return renderGenerateSaleCorrectionEffectEditor(props);
     case "print":
       return renderPrintEffectEditor(props);
     case "assign_courier":

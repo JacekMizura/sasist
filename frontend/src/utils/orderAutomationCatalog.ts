@@ -192,6 +192,12 @@ export const ORDER_AUTOMATION_EFFECT_KINDS: EffectKindMeta[] = [
     backendSupported: true,
   },
   {
+    kind: "generate_sale_correction",
+    label: "Wystaw korektę faktury",
+    category: "Zwroty",
+    backendSupported: true,
+  },
+  {
     kind: "send_message",
     label: "Wyślij wiadomość (legacy)",
     category: "Komunikacja",
@@ -292,12 +298,16 @@ export function buildConditionCategorySteps(): AutomationPickerCategory[] {
 }
 
 /** Kolejność kategorii w pickerze akcji. */
-export const EFFECT_CATEGORY_ORDER = ["Zamówienie", "Komunikacja", "Dokumenty", "Wysyłka", "WMS"] as const;
+export const EFFECT_CATEGORY_ORDER = ["Zamówienie", "Komunikacja", "Zwroty", "Dokumenty", "Wysyłka", "WMS"] as const;
 
-export function buildEffectCategorySteps(): AutomationPickerCategory[] {
+const RETURN_ONLY_EFFECT_KINDS = new Set(["warehouse_commit", "generate_sale_correction"]);
+
+export function buildEffectCategorySteps(entityType?: string): AutomationPickerCategory[] {
+  const et = String(entityType || "ORDER").trim().toUpperCase();
   const byCat = new Map<string, AutomationPickerCategory["items"]>();
   for (const e of ORDER_AUTOMATION_EFFECT_KINDS) {
     if (e.disabled) continue;
+    if (RETURN_ONLY_EFFECT_KINDS.has(e.kind) && et !== "RETURN") continue;
     if (!byCat.has(e.category)) byCat.set(e.category, []);
     byCat.get(e.category)!.push({ id: e.kind, label: e.label });
   }

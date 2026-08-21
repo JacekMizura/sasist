@@ -111,6 +111,8 @@ function payloadForKind(kind: AutomationEffectKind): Record<string, string | num
       return { template_id: "", recipient_type: "CUSTOMER" };
     case "warehouse_commit":
       return {};
+    case "generate_sale_correction":
+      return {};
     case "print":
       return { printer: "", print_document: "", template: "", copies: "1" };
     case "assign_courier":
@@ -233,7 +235,10 @@ export default function OrderAutomationEditorPage() {
   const statusNameById = useMemo(() => buildOrderUiStatusNameById(statusSummary), [statusSummary]);
 
   const conditionCategorySteps = useMemo(() => buildConditionCategorySteps(), []);
-  const effectCategorySteps = useMemo(() => buildEffectCategorySteps(), []);
+  const effectCategorySteps = useMemo(
+    () => buildEffectCategorySteps(draft?.entityType || "ORDER"),
+    [draft?.entityType],
+  );
 
   const warehouseOptions = useMemo(
     () => warehouses.map((w) => ({ value: String(w.id), label: w.name })),

@@ -15,6 +15,7 @@ import { IconButton, Tooltip } from "../../../design-system";
 import {
   STATUS_ACTION_COLUMN_HEADERS,
   STATUS_ACTION_COLUMN_TOOLTIPS,
+  STATUS_ACTION_SIMPLE_TOGGLE_KEYS,
   managedKeysForEntity,
 } from "../../../utils/statusActionManagedCatalog";
 import {
@@ -127,18 +128,18 @@ export function StatusActionsMatrix({
               >
                 <span className="inline-flex items-center justify-center gap-0.5">
                   {STATUS_ACTION_COLUMN_HEADERS[key]}
-                  {key === "warehouse_commit" ? (
+                  {STATUS_ACTION_SIMPLE_TOGGLE_KEYS.has(key) ? (
                     <Tooltip
                       content={
                         <span className="block max-w-xs whitespace-normal text-left leading-snug">
-                          {STATUS_ACTION_COLUMN_TOOLTIPS.warehouse_commit}
+                          {STATUS_ACTION_COLUMN_TOOLTIPS[key]}
                         </span>
                       }
                     >
                       <button
                         type="button"
                         className="inline-flex rounded p-0.5 text-slate-400 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
-                        aria-label={STATUS_ACTION_COLUMN_TOOLTIPS.warehouse_commit}
+                        aria-label={STATUS_ACTION_COLUMN_TOOLTIPS[key]}
                       >
                         <Info className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
                       </button>
@@ -201,7 +202,7 @@ export function StatusActionsMatrix({
                     tenantId={tenantId}
                     warehouseId={warehouseId}
                     entityType={entityType}
-                    onToggleWarehouse={(enabled) => {
+                    onToggleSimple={(enabled) => {
                       void persistRow(status, patchRowEffect(row, key, { enabled }));
                     }}
                     onSaveEmail={(next) => {

@@ -60,6 +60,8 @@ export function validateEffect(e: AutomationEffect): string | null {
     }
     case "warehouse_commit":
       return null;
+    case "generate_sale_correction":
+      return null;
     case "assign_courier": {
       const courier = String(e.payload.courier ?? "").trim();
       const preset = String(e.payload.courier_preset ?? "").trim();

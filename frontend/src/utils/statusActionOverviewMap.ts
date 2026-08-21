@@ -6,6 +6,7 @@ import type { StatusActionsRowState } from "./statusActionMatrixPayload";
 function managedKeyFromEffect(e: AutomationEffectDto): StatusActionManagedKey | null {
   const t = String(e.effect_type || "");
   if (t === "warehouse_commit") return "warehouse_commit";
+  if (t === "generate_sale_correction" || t === "generate_correction") return "generate_sale_correction";
   if (t === "send_email" || t === "send_message") {
     const r = String(e.config?.recipient_type || "CUSTOMER").toUpperCase();
     return r === "INTERNAL" ? "send_email_internal" : "send_email_customer";

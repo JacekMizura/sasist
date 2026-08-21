@@ -15,7 +15,8 @@ import {
 } from "../../api/automationsApi";
 import {
   STATUS_ACTION_CHECKBOX_LABELS,
-  WAREHOUSE_COMMIT_TOOLTIP,
+  STATUS_ACTION_COLUMN_TOOLTIPS,
+  STATUS_ACTION_SIMPLE_TOGGLE_KEYS,
   managedKeysForEntity,
   type StatusActionManagedKey,
 } from "../../utils/statusActionManagedCatalog";
@@ -51,6 +52,7 @@ function emptyDraft(key: StatusActionManagedKey): ActionDraft {
 function effectManagedKey(e: AutomationEffectDto): StatusActionManagedKey | null {
   const t = String(e.effect_type || "");
   if (t === "warehouse_commit") return "warehouse_commit";
+  if (t === "generate_sale_correction" || t === "generate_correction") return "generate_sale_correction";
   if (t === "send_email" || t === "send_message") {
     const r = String(e.config?.recipient_type || "CUSTOMER").toUpperCase();
     return r === "INTERNAL" ? "send_email_internal" : "send_email_customer";
@@ -120,6 +122,13 @@ function draftsToEffects(drafts: ActionDraft[]): Omit<AutomationEffectDto, "id">
       out.push({
         position: out.length,
         effect_type: "warehouse_commit",
+        enabled: d.enabled,
+        config: {},
+      });
+    } else if (d.key === "generate_sale_correction") {
+      out.push({
+        position: out.length,
+        effect_type: "generate_sale_correction",
         enabled: d.enabled,
         config: {},
       });
@@ -277,11 +286,11 @@ export function StatusActionsPanel({
                 />
                 <span className="text-sm text-slate-800">{STATUS_ACTION_CHECKBOX_LABELS[d.key]}</span>
               </label>
-              {d.key === "warehouse_commit" ? (
+              {STATUS_ACTION_SIMPLE_TOGGLE_KEYS.has(d.key) ? (
                 <span
                   className="inline-flex shrink-0 text-slate-400"
-                  title={WAREHOUSE_COMMIT_TOOLTIP}
-                  aria-label={WAREHOUSE_COMMIT_TOOLTIP}
+                  title={STATUS_ACTION_COLUMN_TOOLTIPS[d.key]}
+                  aria-label={STATUS_ACTION_COLUMN_TOOLTIPS[d.key]}
                 >
                   <Info className="h-3.5 w-3.5" strokeWidth={2} />
                 </span>

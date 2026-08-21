@@ -36,6 +36,13 @@ export function buildManagedEffectsPayload(
         enabled: Boolean(st.enabled),
         config: {},
       });
+    } else if (key === "generate_sale_correction") {
+      out.push({
+        position: out.length,
+        effect_type: "generate_sale_correction",
+        enabled: Boolean(st.enabled),
+        config: {},
+      });
     } else if (key === "send_email_customer") {
       const tid = Number(st.template_id);
       out.push({

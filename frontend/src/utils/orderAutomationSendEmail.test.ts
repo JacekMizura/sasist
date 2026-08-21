@@ -55,10 +55,22 @@ describe("send_email automation FE", () => {
 
   it("exposes send_email in active effect picker", () => {
     expect(ORDER_AUTOMATION_EFFECT_KINDS.some((k) => k.kind === "send_email" && k.backendSupported)).toBe(true);
-    const steps = buildEffectCategorySteps();
+    const steps = buildEffectCategorySteps("ORDER");
     const ids = steps.flatMap((s) => s.items.map((i) => i.id));
     expect(ids).toContain("send_email");
     expect(ids).not.toContain("send_message");
+    expect(ids).not.toContain("generate_sale_correction");
+    expect(ids).not.toContain("warehouse_commit");
+  });
+
+  it("RETURN picker includes sale correction; ORDER/COMPLAINT do not", () => {
+    const retIds = buildEffectCategorySteps("RETURN").flatMap((s) => s.items.map((i) => i.id));
+    expect(retIds).toContain("generate_sale_correction");
+    expect(retIds).toContain("warehouse_commit");
+    for (const et of ["ORDER", "COMPLAINT"] as const) {
+      const ids = buildEffectCategorySteps(et).flatMap((s) => s.items.map((i) => i.id));
+      expect(ids).not.toContain("generate_sale_correction");
+    }
   });
 
   it("normalizes backend send_email into FE rule", () => {

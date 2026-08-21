@@ -19,7 +19,13 @@ export function backendRuleToFe(dto: AutomationRuleDto): OrderAutomationRule {
   });
   const effects: AutomationEffect[] = (dto.effects ?? []).map((e, i) => {
     const kindRaw = String(e.effect_type || "");
-    const kind = (kindRaw === "send_message" ? "send_email" : kindRaw) as AutomationEffect["kind"];
+    const kind = (
+      kindRaw === "send_message"
+        ? "send_email"
+        : kindRaw === "generate_correction"
+          ? "generate_sale_correction"
+          : kindRaw
+    ) as AutomationEffect["kind"];
     return {
       uid: e.id != null ? `eff-${e.id}` : `eff-pos-${i}`,
       kind,
@@ -108,6 +114,9 @@ export function feRuleToCreateBody(
     if (e.kind === "warehouse_commit") {
       effectType = "warehouse_commit";
     }
+    if (e.kind === "generate_sale_correction") {
+      effectType = "generate_sale_correction";
+    }
     return {
       position: i,
       effect_type: effectType,
@@ -119,7 +128,7 @@ export function feRuleToCreateBody(
   return {
     tenant_id: opts.tenantId,
     warehouse_id: opts.warehouseId,
-    entity_type: "ORDER",
+    entity_type: String(rule.entityType || "ORDER").toUpperCase(),
     name: rule.name,
     group: rule.group || "Ogólne",
     enabled: rule.enabled,

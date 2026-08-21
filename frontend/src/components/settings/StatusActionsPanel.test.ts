@@ -55,7 +55,9 @@ describe("Status actions matrix UX", () => {
     expect(MATRIX).toContain("IconButton");
     expect(MATRIX).toContain("Tooltip");
     expect(CATALOG).toContain('warehouse_commit: "Magazyn"');
+    expect(CATALOG).toContain('generate_sale_correction: "Korekta"');
     expect(CATALOG).toContain("dokument Z-PZ");
+    expect(CATALOG).toContain("korektę faktury");
   });
 
   it("counter stays in Status cell (no anonymous count column)", () => {
@@ -63,9 +65,10 @@ describe("Status actions matrix UX", () => {
     expect(MATRIX).not.toContain(">Licznik<");
   });
 
-  it("F/G — email uses popover; warehouse is direct toggle; OFF keeps config", () => {
+  it("F/G — email uses popover; Magazyn/Korekta are direct toggles; OFF keeps config", () => {
     expect(CELL).toContain("StatusEmailActionPopover");
-    expect(CELL).toContain("onToggleWarehouse");
+    expect(CELL).toContain("onToggleSimple");
+    expect(CELL).toContain("STATUS_ACTION_SIMPLE_TOGGLE_KEYS");
     expect(CELL).toContain("onSaveEmail");
     expect(CELL).toContain("hasEmailConfig");
     expect(CELL).toContain("onDisableEmail");
@@ -84,13 +87,16 @@ describe("Status actions matrix UX", () => {
     expect(SRC).not.toContain("ChevronUp");
   });
 
-  it("H — ORDER/COMPLAINT keys emails only", () => {
-    expect(CATALOG).toContain('return ["warehouse_commit", "send_email_customer", "send_email_internal"]');
+  it("H — ORDER/COMPLAINT keys emails only; RETURN includes correction", () => {
+    expect(CATALOG).toContain('"generate_sale_correction"');
+    expect(CATALOG).toContain("Wystaw korektę faktury");
     expect(CATALOG).toContain('return ["send_email_customer", "send_email_internal"]');
   });
 
-  it("main Automation Editor still supports change_status", () => {
+  it("main Automation Editor supports change_status + sale correction", () => {
     expect(EFFECT_CATALOG).toContain('kind: "change_status"');
+    expect(EFFECT_CATALOG).toContain('kind: "generate_sale_correction"');
+    expect(EFFECT_CATALOG).toContain("Wystaw korektę faktury");
   });
 });
 
@@ -100,8 +106,9 @@ describe("STATUS_ACTION list↔modal sync helpers", () => {
       enabled: true,
       effects: [
         { position: 0, effect_type: "warehouse_commit", enabled: true, config: {} },
+        { position: 1, effect_type: "generate_sale_correction", enabled: true, config: {} },
         {
-          position: 1,
+          position: 2,
           effect_type: "send_email",
           enabled: false,
           config: { recipient_type: "CUSTOMER", template_id: 9 },
@@ -109,10 +116,12 @@ describe("STATUS_ACTION list↔modal sync helpers", () => {
       ],
     });
     expect(row.warehouse_commit?.enabled).toBe(true);
+    expect(row.generate_sale_correction?.enabled).toBe(true);
     expect(row.send_email_customer?.enabled).toBe(false);
     expect(row.send_email_customer?.template_id).toBe(9);
     const state = rowStateFromOverviewMap(row);
     expect(state.warehouse_commit?.enabled).toBe(true);
+    expect(state.generate_sale_correction?.enabled).toBe(true);
   });
 
   it("email OFF preserves template_id in payload", () => {

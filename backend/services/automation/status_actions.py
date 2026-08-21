@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 from ...models.automation import AutomationExecution, AutomationRule
 from .constants import (
     EFFECT_CHANGE_STATUS,
+    EFFECT_GENERATE_SALE_CORRECTION,
     EFFECT_SEND_EMAIL,
     EFFECT_SEND_MESSAGE,
     EFFECT_WAREHOUSE_COMMIT,
@@ -25,6 +26,7 @@ MANAGED_STATUS_ACTION_KEYS = frozenset(
         "send_email_customer",
         "send_email_internal",
         "warehouse_commit",
+        "generate_sale_correction",
     }
 )
 
@@ -82,6 +84,7 @@ def latest_execution_for_rule(db: Session, rule_id: int) -> Optional[AutomationE
 #: Business labels for status-list overview (not technical effect_type).
 MANAGED_STATUS_ACTION_LABELS: dict[str, str] = {
     "warehouse_commit": "Przyjęcie magazynowe",
+    "generate_sale_correction": "Korekta faktury",
     "send_email_customer": "E-mail klientowi",
     "send_email_internal": "E-mail wewnętrzny",
 }
@@ -231,6 +234,8 @@ def logical_status_action_key(effect_type: str, config: Optional[dict[str, Any]]
         return "change_status"
     if et == EFFECT_WAREHOUSE_COMMIT:
         return "warehouse_commit"
+    if et == EFFECT_GENERATE_SALE_CORRECTION or et == "generate_correction":
+        return "generate_sale_correction"
     if et in (EFFECT_SEND_EMAIL, EFFECT_SEND_MESSAGE):
         rtype = str(cfg.get("recipient_type") or cfg.get("recipient") or "CUSTOMER").strip().upper()
         return "send_email_internal" if rtype == "INTERNAL" else "send_email_customer"
@@ -239,6 +244,26 @@ def logical_status_action_key(effect_type: str, config: Optional[dict[str, Any]]
 
 def is_managed_status_action_key(key: str) -> bool:
     return str(key or "") in MANAGED_STATUS_ACTION_KEYS
+
+
+def _assert_return_managed_effect_order(effects: list[dict[str, Any]]) -> None:
+    """Block illegal STATUS_ACTION order: correction before warehouse when both enabled."""
+    wh_pos: Optional[int] = None
+    corr_pos: Optional[int] = None
+    for e in effects:
+        if not bool(e.get("enabled", True)):
+            continue
+        et = str(e.get("effect_type") or "").strip()
+        pos = int(e.get("position", 0))
+        if et == EFFECT_WAREHOUSE_COMMIT:
+            wh_pos = pos
+        elif et == EFFECT_GENERATE_SALE_CORRECTION:
+            corr_pos = pos
+    if wh_pos is not None and corr_pos is not None and wh_pos >= corr_pos:
+        raise ValueError(
+            "invalid_effect_order: warehouse_commit must precede generate_sale_correction "
+            "when both are enabled"
+        )
 
 
 def _normalize_managed_effects(effects: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -264,6 +289,10 @@ def _normalize_managed_effects(effects: list[dict[str, Any]]) -> list[dict[str, 
             etype = EFFECT_SEND_EMAIL
         elif key == "warehouse_commit":
             etype = EFFECT_WAREHOUSE_COMMIT
+            cfg = {}
+        elif key == "generate_sale_correction":
+            etype = EFFECT_GENERATE_SALE_CORRECTION
+            cfg = {}
         normalized.append(
             {
                 "position": len(normalized),
@@ -335,6 +364,9 @@ def upsert_status_action_bundle(
         merged.append({**e, "position": len(merged)})
     for e in preserved:
         merged.append({**e, "position": len(merged)})
+
+    if et == "RETURN":
+        _assert_return_managed_effect_order(merged)
 
     any_on = any(bool(e.get("enabled")) for e in merged)
     trigger_config = {"status_id": sid}

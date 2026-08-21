@@ -7,20 +7,22 @@ import { STATUS_ACTION_COLUMN_HEADERS, managedKeysForEntity } from "./statusActi
 import { buildManagedEffectsPayload, patchRowEffect } from "./statusActionMatrixPayload";
 
 describe("statusActionManagedCatalog", () => {
-  it("RETURN columns include warehouse; ORDER/COMPLAINT emails only", () => {
+  it("RETURN columns include warehouse + correction; ORDER/COMPLAINT emails only", () => {
     expect(managedKeysForEntity("RETURN")).toEqual([
       "warehouse_commit",
+      "generate_sale_correction",
       "send_email_customer",
       "send_email_internal",
     ]);
     expect(managedKeysForEntity("ORDER")).toEqual(["send_email_customer", "send_email_internal"]);
     expect(STATUS_ACTION_COLUMN_HEADERS.warehouse_commit).toBe("Magazyn");
+    expect(STATUS_ACTION_COLUMN_HEADERS.generate_sale_correction).toBe("Korekta");
     expect(STATUS_ACTION_COLUMN_HEADERS.send_email_customer).toBe("E-mail klient");
   });
 
   it("no technical names in column headers", () => {
     for (const label of Object.values(STATUS_ACTION_COLUMN_HEADERS)) {
-      expect(label).not.toMatch(/warehouse_commit|send_email|STATUS_ACTION/);
+      expect(label).not.toMatch(/warehouse_commit|generate_sale_correction|send_email|STATUS_ACTION/);
     }
   });
 });
@@ -29,10 +31,20 @@ describe("statusActionMatrixPayload", () => {
   it("A/B warehouse toggle payload", () => {
     const effects = buildManagedEffectsPayload("RETURN", {
       warehouse_commit: { enabled: true },
+      generate_sale_correction: { enabled: false },
       send_email_customer: { enabled: false },
       send_email_internal: { enabled: false },
     });
     expect(effects.find((e) => e.effect_type === "warehouse_commit")?.enabled).toBe(true);
+  });
+
+  it("Q/R correction toggle payload", () => {
+    const on = buildManagedEffectsPayload("RETURN", {
+      generate_sale_correction: { enabled: true },
+    });
+    expect(on.find((e) => e.effect_type === "generate_sale_correction")?.enabled).toBe(true);
+    const ordered = on.map((e) => e.effect_type);
+    expect(ordered.indexOf("warehouse_commit")).toBeLessThan(ordered.indexOf("generate_sale_correction"));
   });
 
   it("C/D email config in payload", () => {
