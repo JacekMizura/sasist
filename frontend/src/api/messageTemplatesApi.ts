@@ -11,6 +11,8 @@ export type MessageTemplateDto = {
   subject_template: string;
   body_template: string;
   is_active: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 export async function listMessageTemplates(opts: {
@@ -27,4 +29,57 @@ export async function listMessageTemplates(opts: {
   if (opts.activeOnly != null) params.active_only = opts.activeOnly;
   const { data } = await api.get<MessageTemplateDto[]>("/api/message-templates/", { params });
   return Array.isArray(data) ? data : [];
+}
+
+export async function getMessageTemplate(
+  templateId: number,
+  tenantId: number,
+): Promise<MessageTemplateDto> {
+  const { data } = await api.get<MessageTemplateDto>(`/api/message-templates/${templateId}`, {
+    params: { tenant_id: tenantId },
+  });
+  return data;
+}
+
+export async function createMessageTemplate(body: {
+  tenant_id: number;
+  name: string;
+  subject_template?: string;
+  body_template?: string;
+  entity_scope?: string;
+  code?: string;
+  warehouse_id?: number | null;
+  is_active?: boolean;
+}): Promise<MessageTemplateDto> {
+  const { data } = await api.post<MessageTemplateDto>("/api/message-templates/", body);
+  return data;
+}
+
+export async function updateMessageTemplate(
+  templateId: number,
+  tenantId: number,
+  body: {
+    name?: string;
+    subject_template?: string;
+    body_template?: string;
+    entity_scope?: string;
+    is_active?: boolean;
+  },
+): Promise<MessageTemplateDto> {
+  const { data } = await api.patch<MessageTemplateDto>(`/api/message-templates/${templateId}`, body, {
+    params: { tenant_id: tenantId },
+  });
+  return data;
+}
+
+export async function archiveMessageTemplate(
+  templateId: number,
+  tenantId: number,
+): Promise<MessageTemplateDto> {
+  const { data } = await api.post<MessageTemplateDto>(
+    `/api/message-templates/${templateId}/archive`,
+    {},
+    { params: { tenant_id: tenantId } },
+  );
+  return data;
 }

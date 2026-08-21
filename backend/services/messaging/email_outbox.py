@@ -1,4 +1,4 @@
-"""Idempotent outbound email outbox (v1 provider = local outbox record)."""
+"""Idempotent outbound email enqueue — PENDING only (no fake SENT)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,11 @@ from typing import Any, Optional
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ...models.messaging import MessageTemplate, OutboundEmailMessage
+from ...models.messaging import (
+    EMAIL_PENDING,
+    MessageTemplate,
+    OutboundEmailMessage,
+)
 
 
 _VAR_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_]+)\s*\}\}")
@@ -27,6 +31,13 @@ def render_template_string(template: str, context: dict[str, Any]) -> str:
 
 def automation_email_idempotency_key(execution_id: int, effect_id: int) -> str:
     return f"ae:{int(execution_id)}:{int(effect_id)}"
+
+
+def normalize_outbound_status(raw: object) -> str:
+    s = str(raw or "").strip().upper()
+    if s in ("QUEUED", ""):
+        return EMAIL_PENDING
+    return s
 
 
 def enqueue_or_get_outbound_email(
@@ -46,9 +57,7 @@ def enqueue_or_get_outbound_email(
 ) -> tuple[OutboundEmailMessage, bool]:
     """
     Create or return existing outbound message for idempotency_key.
-    Returns (message, created_new).
-
-    Crash-safe: if row already QUEUED/SENT, returns it without creating a second message.
+    Always leaves new rows as PENDING — delivery worker + provider mark SENT.
     """
     existing = (
         db.query(OutboundEmailMessage)
@@ -56,8 +65,10 @@ def enqueue_or_get_outbound_email(
         .first()
     )
     if existing is not None:
-        if existing.status == "QUEUED":
-            _mark_sent(db, existing)
+        if str(existing.status or "").upper() == "QUEUED":
+            existing.status = EMAIL_PENDING
+            db.add(existing)
+            db.flush()
         return existing, False
 
     subject = render_template_string(template.subject_template, context)
@@ -73,8 +84,10 @@ def enqueue_or_get_outbound_email(
         subject=subject,
         body=body,
         context_json=json.dumps(context, ensure_ascii=False),
-        status="QUEUED",
-        provider="outbox",
+        status=EMAIL_PENDING,
+        provider=None,
+        provider_message_id=None,
+        attempt_count=0,
         idempotency_key=str(idempotency_key),
         automation_execution_id=int(automation_execution_id) if automation_execution_id else None,
         automation_effect_id=int(automation_effect_id) if automation_effect_id else None,
@@ -92,22 +105,6 @@ def enqueue_or_get_outbound_email(
         )
         if existing is None:
             raise
-        if existing.status == "QUEUED":
-            _mark_sent(db, existing)
         return existing, False
 
-    _mark_sent(db, row)
     return row, True
-
-
-def _mark_sent(db: Session, row: OutboundEmailMessage) -> None:
-    """v1: mark outbox SENT with stable provider id (no external SMTP yet)."""
-    if row.status == "SENT" and row.provider_message_id:
-        return
-    row.status = "SENT"
-    row.sent_at = datetime.utcnow()
-    row.provider = "outbox"
-    row.provider_message_id = row.provider_message_id or f"outbox:{int(row.id)}"
-    row.error = None
-    db.add(row)
-    db.flush()

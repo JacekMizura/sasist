@@ -34,6 +34,7 @@ def tick_operational_workers_once() -> dict[str, Any]:
     from ..platform_state import is_production_schema_valid
     from .cart_lifecycle_worker import run_cart_lifecycle_worker
     from .document_generation_worker import process_pending_document_jobs
+    from .email_delivery_worker import run_email_delivery_worker
     from .production_stock_replenishment_worker import run_production_stock_replenishment_worker
     from .replenishment_scan_worker import run_replenishment_scan_worker
     from .reservation_expiration_worker import run_reservation_lifecycle_worker
@@ -49,6 +50,7 @@ def tick_operational_workers_once() -> dict[str, Any]:
         out["reservations"] = run_reservation_lifecycle_worker(db)
         out["cart"] = run_cart_lifecycle_worker(db)
         out["documents"] = process_pending_document_jobs(db, limit=20)
+        out["email_delivery"] = run_email_delivery_worker(db, limit=20)
         out["shelf_replenishment"] = run_replenishment_scan_worker(db)
         out["production_stock_replenishment"] = run_production_stock_replenishment_worker(db)
         db.commit()

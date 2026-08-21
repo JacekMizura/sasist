@@ -1,3 +1,17 @@
+## 2026-08-21 — Complete real email delivery pipeline for automations
+
+- Outbox lifecycle PENDING→SENDING→SENT|FAILED; enqueue never fake SENT
+- Pluggable EmailProvider (SMTP ENV / memory tests); unconfigured → FAILED
+- email_delivery_worker on operational_loop; automation effect = enqueue PENDING
+- Template CRUD API + MessageTemplatesModule; shared MessageTemplatePicker
+
+## 2026-08-21 — Add email effect to backend automations
+
+- MessageTemplate + OutboundEmailMessage outbox (idempotency ae:execution:effect)
+- send_email effect adapter for ORDER/RETURN/COMPLAINT; CUSTOMER recipient
+- StatusActionsPanel + main editor; legacy send_message → send_email
+- Preflight treats send_email as supported; (superseded: no fake outbox SENT)
+
 ## 2026-08-21 — Block unsupported automation runtime conditions
 
 - Preflight `validate_automation_runtime`: unsupported/invalid condition or effect → EXEC_BLOCKED, 0 effects

@@ -85,4 +85,23 @@ describe("send_email automation FE", () => {
     expect(fe.effects[0].kind).toBe("send_email");
     expect(fe.effects[0].payload.template_id).toBe(3);
   });
+
+  it("main editor uses MessageTemplatePicker (no numeric template_id input)", async () => {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const root = path.join(process.cwd(), "src/components/orders/automation/effects/orderAutomationEffectEditorRenderers.tsx");
+    const src = await fs.readFile(root, "utf8");
+    expect(src).toContain("MessageTemplatePicker");
+    expect(src).not.toContain("Szablon (ID)");
+  });
+
+  it("StatusActionsPanel uses shared MessageTemplatePicker + empty copy", async () => {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const panel = await fs.readFile(path.join(process.cwd(), "src/components/settings/StatusActionsPanel.tsx"), "utf8");
+    const picker = await fs.readFile(path.join(process.cwd(), "src/components/messaging/MessageTemplatePicker.tsx"), "utf8");
+    expect(panel).toContain("MessageTemplatePicker");
+    expect(picker).toContain("Brak szablonów wiadomości e-mail");
+    expect(picker).toContain("Zarządzaj szablonami");
+  });
 });

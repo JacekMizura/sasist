@@ -1,4 +1,4 @@
-"""send_email effect — ORDER/RETURN/COMPLAINT + idempotency + preflight."""
+﻿"""send_email effect â€” ORDER/RETURN/COMPLAINT + idempotency + preflight."""
 
 from __future__ import annotations
 
@@ -205,8 +205,8 @@ def test_a_order_status_customer_email(db):
     assert len(msgs) == 1
     assert msgs[0].recipient_email == "buyer@example.com"
     assert msgs[0].template_id == 1
-    assert msgs[0].status == "SENT"
-    assert msgs[0].provider_message_id
+    assert msgs[0].status == "PENDING"
+    assert msgs[0].provider_message_id is None
 
 
 def test_b_return_status_customer_email(db):

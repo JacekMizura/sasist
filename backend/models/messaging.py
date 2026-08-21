@@ -18,6 +18,12 @@ from sqlalchemy import (
 
 from ..database import Base
 
+# Outbound delivery lifecycle (SSOT).
+EMAIL_PENDING = "PENDING"
+EMAIL_SENDING = "SENDING"
+EMAIL_SENT = "SENT"
+EMAIL_FAILED = "FAILED"
+
 
 class MessageTemplate(Base):
     """Tenant-owned message template (email channel for Automation Engine)."""
@@ -33,7 +39,7 @@ class MessageTemplate(Base):
     warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=True, index=True)
     code = Column(String(64), nullable=False)
     name = Column(String(255), nullable=False)
-    channel = Column(String(16), nullable=False, default="email")  # email only for now
+    channel = Column(String(16), nullable=False, default="email")
     #: ORDER | RETURN | COMPLAINT | ALL
     entity_scope = Column(String(32), nullable=False, default="ALL")
     subject_template = Column(String(512), nullable=False, default="")
@@ -45,16 +51,17 @@ class MessageTemplate(Base):
 
 class OutboundEmailMessage(Base):
     """
-    Idempotent outbound email record.
+    Idempotent outbound email outbox.
 
-    Unique idempotency_key prevents duplicate sends on crash/retry.
-    Provider transport is pluggable; v1 records outbox SENT without external SMTP.
+    Automation enqueues PENDING. Delivery worker + EmailProvider move to SENT/FAILED.
+    SENT means the provider accepted the message — never set on enqueue alone.
     """
 
     __tablename__ = "outbound_email_messages"
     __table_args__ = (
         UniqueConstraint("idempotency_key", name="uq_outbound_email_idempotency"),
         Index("ix_outbound_email_tenant_entity", "tenant_id", "entity_type", "entity_id"),
+        Index("ix_outbound_email_status", "status"),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -65,16 +72,21 @@ class OutboundEmailMessage(Base):
     template_id = Column(Integer, ForeignKey("message_templates.id", ondelete="SET NULL"), nullable=True)
     recipient_email = Column(String(320), nullable=False)
     recipient_type = Column(String(32), nullable=False, default="CUSTOMER")
+    #: Snapshot at enqueue — immutable thereafter.
     subject = Column(String(512), nullable=False, default="")
     body = Column(Text, nullable=False, default="")
     context_json = Column(Text, nullable=False, default="{}")
-    status = Column(String(24), nullable=False, default="QUEUED")  # QUEUED|SENT|FAILED
-    provider = Column(String(64), nullable=False, default="outbox")
+    status = Column(String(24), nullable=False, default=EMAIL_PENDING)
+    provider = Column(String(64), nullable=True)
     provider_message_id = Column(String(191), nullable=True)
+    attempt_count = Column(Integer, nullable=False, default=0)
+    last_attempt_at = Column(DateTime, nullable=True)
+    last_error = Column(Text, nullable=True)
+    #: Legacy alias column kept in sync with last_error for older readers.
     error = Column(Text, nullable=True)
-    #: Deterministic: ae:{automation_execution_id}:{automation_effect_id}
     idempotency_key = Column(String(191), nullable=False)
     automation_execution_id = Column(Integer, nullable=True, index=True)
     automation_effect_id = Column(Integer, nullable=True, index=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     sent_at = Column(DateTime, nullable=True)
+    failed_at = Column(DateTime, nullable=True)

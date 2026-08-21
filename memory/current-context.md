@@ -1,4 +1,15 @@
-**Automation runtime safety (unsupported conditions) — PASS (commit pending).**
+**Email delivery pipeline — PASS (pending commit).**
+- Outbox: PENDING → SENDING → SENT|FAILED; enqueue never marks SENT
+- Provider: SMTP via EMAIL_SMTP_* / EMAIL_FROM ENV; memory for tests; unconfigured → FAILED configuration_error
+- Worker: email_delivery_worker on operational_loop tick
+- Automation send_email SUCCESS = enqueue PENDING (delivery_status)
+- Template CRUD API + `/templates/messages` UI; shared MessageTemplatePicker (StatusActions + main editor)
+
+**send_email Automation effect — PASS `1e47df40` (superseded by delivery pipeline).**
+- Messaging SSOT: MessageTemplate + OutboundEmailMessage (idempotent ae:{execution}:{effect})
+- Effect adapter send_email; CUSTOMER only; preflight supports send_email (+ legacy send_message alias)
+
+**Automation runtime safety (unsupported conditions) — PASS `fc489fb9`.**
 - No skip of unevaluable conditions; SUPPORTED | UNSUPPORTED | INVALID
 - Shared preflight before RUNNING; unsupported effect → 0 effects (no partial)
 - Read model: runtime_ready + validation_issues; FE badges Gotowa / Wymaga poprawy

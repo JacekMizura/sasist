@@ -118,11 +118,10 @@ def execute_send_email(
         message="email_enqueued" if created else "email_idempotent_reuse",
         data={
             "message_id": int(msg.id),
-            "provider_message_id": msg.provider_message_id,
             "recipient": msg.recipient_email,
             "template_id": int(template.id),
             "idempotency_key": key,
             "created": created,
-            "status": msg.status,
+            "delivery_status": str(msg.status),
         },
     )

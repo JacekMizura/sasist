@@ -12,6 +12,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { MessageTemplatePicker } from "../../../messaging/MessageTemplatePicker";
+import { DAMAGE_TENANT_ID } from "../../../../pages/damage/damageShared";
+import { useWarehouse } from "../../../../context/WarehouseContext";
 import { PanelStatusHierarchyPicker } from "../../../panel/PanelStatusHierarchyPicker";
 import { oaInp, oaWorkflowFieldLabelClass, oaWorkflowFieldRowClass } from "../orderAutomationUiTokens";
 
@@ -150,8 +153,11 @@ export function renderGenerateDocumentEffectEditor({ effect, patchPayload }: Eff
   );
 }
 
-export function renderSendEmailEffectEditor({ effect, patchPayload }: EffectEditorBaseProps) {
-  const templateId = String(effect.payload.template_id ?? effect.payload.template ?? "");
+export function SendEmailEffectEditor({ effect, patchPayload }: EffectEditorBaseProps) {
+  const { warehouse } = useWarehouse();
+  const raw = effect.payload.template_id ?? effect.payload.template;
+  const selected =
+    raw === "" || raw == null ? ("" as const) : Number.isFinite(Number(raw)) && Number(raw) > 0 ? Number(raw) : ("" as const);
   return (
     <div className="grid min-w-0 gap-y-0">
       <div className={erpRow}>
@@ -159,26 +165,29 @@ export function renderSendEmailEffectEditor({ effect, patchPayload }: EffectEdit
         <span className={`${erpInp} flex items-center bg-slate-50 text-slate-700`}>Klient</span>
       </div>
       <div className={erpRow}>
-        <span className={erpLbl}>Szablon (ID)</span>
-        <input
-          className={erpInp}
-          type="number"
-          min={1}
-          placeholder="np. 1"
-          value={templateId}
-          onChange={(e) =>
-            patchPayload({
-              template_id: e.target.value === "" ? "" : Number(e.target.value),
-              recipient_type: "CUSTOMER",
-            })
-          }
-        />
+        <span className={erpLbl}>Szablon</span>
+        <div className="min-w-0 flex-1">
+          <MessageTemplatePicker
+            tenantId={DAMAGE_TENANT_ID}
+            warehouseId={warehouse?.id ?? null}
+            entityType="ORDER"
+            value={selected}
+            inputClassName={erpInp}
+            onChange={(id) =>
+              patchPayload({
+                template_id: id === "" ? "" : id,
+                recipient_type: "CUSTOMER",
+              })
+            }
+          />
+        </div>
       </div>
-      <p className="px-1 pt-1 text-[11px] text-slate-500">
-        Wybierz aktywny szablon e-mail z modułu szablonów wiadomości (tenant).
-      </p>
     </div>
   );
+}
+
+export function renderSendEmailEffectEditor(props: EffectEditorBaseProps) {
+  return <SendEmailEffectEditor {...props} />;
 }
 
 const PRINTERS: { value: string; label: string }[] = [

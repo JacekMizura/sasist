@@ -15,7 +15,7 @@ import {
   type AutomationEntityType,
   type StatusActionRuleDto,
 } from "../../api/automationsApi";
-import { listMessageTemplates, type MessageTemplateDto } from "../../api/messageTemplatesApi";
+import { MessageTemplatePicker } from "../messaging/MessageTemplatePicker";
 
 export type StatusOption = { id: number; name: string; disabled?: boolean };
 
@@ -67,7 +67,6 @@ export function StatusActionsPanel({
   const [addKind, setAddKind] = useState<AddKind>(null);
   const [targetId, setTargetId] = useState<number | "">("");
   const [templateId, setTemplateId] = useState<number | "">("");
-  const [templates, setTemplates] = useState<MessageTemplateDto[]>([]);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -92,27 +91,9 @@ export function StatusActionsPanel({
     }
   }, [tenantId, warehouseId, entityType, statusId]);
 
-  const loadTemplates = useCallback(async () => {
-    try {
-      const rows = await listMessageTemplates({
-        tenantId,
-        entityType,
-        warehouseId,
-        activeOnly: true,
-      });
-      setTemplates(rows);
-    } catch {
-      setTemplates([]);
-    }
-  }, [tenantId, warehouseId, entityType]);
-
   useEffect(() => {
     void load();
   }, [load]);
-
-  useEffect(() => {
-    void loadTemplates();
-  }, [loadTemplates]);
 
   if (statusId == null) {
     return (
@@ -165,12 +146,11 @@ export function StatusActionsPanel({
           toast.error("Wybierz szablon e-mail");
           return;
         }
-        const tmpl = templates.find((t) => t.id === tid);
         await createAutomation({
           tenant_id: tenantId,
           warehouse_id: warehouseId ?? null,
           entity_type: entityType,
-          name: `E-mail: ${tmpl?.name ?? tid}`,
+          name: `E-mail #${tid}`,
           enabled: true,
           trigger_type: "entity_status_entered",
           trigger_config: { status_id: statusId },
@@ -313,19 +293,17 @@ export function StatusActionsPanel({
                 {isEmail ? "Wyślij e-mail" : "Zmień status →"}
               </span>
               {isEmail ? (
-                <select
-                  className="min-w-[10rem] rounded border border-slate-200 bg-white px-2 py-1 text-xs"
-                  disabled={!canWrite || busy}
+                <MessageTemplatePicker
+                  tenantId={tenantId}
+                  warehouseId={warehouseId}
+                  entityType={entityType}
                   value={tmplId ?? ""}
-                  onChange={(e) => void onChangeTemplate(rule, Number(e.target.value))}
-                >
-                  <option value="">— szablon —</option>
-                  {templates.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
+                  disabled={!canWrite || busy}
+                  inputClassName="min-w-[10rem] rounded border border-slate-200 bg-white px-2 py-1 text-xs"
+                  onChange={(id) => {
+                    if (id !== "") void onChangeTemplate(rule, id);
+                  }}
+                />
               ) : (
                 <select
                   className="min-w-[10rem] rounded border border-slate-200 bg-white px-2 py-1 text-xs"
@@ -426,22 +404,18 @@ export function StatusActionsPanel({
               </div>
               <label className="text-xs text-slate-600">
                 Szablon
-                <select
-                  className="mt-1 block min-w-[12rem] rounded border border-slate-200 px-2 py-1.5 text-sm"
+                <MessageTemplatePicker
+                  tenantId={tenantId}
+                  warehouseId={warehouseId}
+                  entityType={entityType}
                   value={templateId}
-                  onChange={(e) => setTemplateId(e.target.value === "" ? "" : Number(e.target.value))}
-                >
-                  <option value="">— wybierz —</option>
-                  {templates.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
+                  disabled={busy}
+                  onChange={setTemplateId}
+                />
               </label>
               <button
                 type="button"
-                disabled={busy || templateId === "" || templates.length === 0}
+                disabled={busy || templateId === ""}
                 className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
                 onClick={() => void onAdd()}
               >
@@ -450,9 +424,6 @@ export function StatusActionsPanel({
               <button type="button" className="text-xs text-slate-500 hover:underline" onClick={resetAdd}>
                 Anuluj
               </button>
-              {templates.length === 0 ? (
-                <p className="w-full text-xs text-amber-700">Brak aktywnych szablonów e-mail dla tenanta.</p>
-              ) : null}
             </div>
           )}
         </div>
