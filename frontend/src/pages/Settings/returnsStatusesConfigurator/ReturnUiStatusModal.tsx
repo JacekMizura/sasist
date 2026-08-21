@@ -17,6 +17,7 @@ import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
 import { RETURN_MAIN_GROUP_LABELS, RETURN_MAIN_GROUP_ORDER } from "./constants";
 import { ReturnsConfiguratorModalShell } from "./ReturnsConfiguratorModalShell";
 import { IntegrationsApiPanel } from "./AdvancedSettingsPanel";
+import { StatusActionsPanel } from "../../../components/settings/StatusActionsPanel";
 
 const inp = "mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300";
 const lab = "block text-xs font-medium text-slate-600";
@@ -122,6 +123,20 @@ export function ReturnUiStatusModal({
   const subVal = mode === "create" ? (createDraft.subgroup_name ?? "") : (editDraft.subgroup_name ?? status?.subgroup_name ?? "").trim();
   const imageUrl = previewBlob ?? status?.image_url ?? null;
   const effectiveCounterColor = mode === "create" ? pendingCounterColor : counterColor;
+
+  const statusOptions = useMemo(() => {
+    const opts: { id: number; name: string; disabled?: boolean }[] = [];
+    for (const g of summary?.groups ?? []) {
+      for (const s of g.sub_statuses ?? []) {
+        opts.push({
+          id: s.id,
+          name: s.name,
+          disabled: s.is_active === false,
+        });
+      }
+    }
+    return opts;
+  }, [summary]);
 
   const handleSave = async () => {
     if (mode === "create") {
@@ -330,6 +345,15 @@ export function ReturnUiStatusModal({
               ) : null}
             </div>
           </div>
+        ) : null}
+        {mode === "edit" && status ? (
+          <StatusActionsPanel
+            tenantId={DAMAGE_TENANT_ID}
+            warehouseId={warehouseId}
+            entityType="RETURN"
+            statusId={status.id}
+            statusOptions={statusOptions}
+          />
         ) : null}
       </div>
     </ReturnsConfiguratorModalShell>

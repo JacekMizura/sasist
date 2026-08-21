@@ -32,6 +32,7 @@ import {
   oaWorkflowGroupHeaderClass,
   oaWorkflowGroupSectionClass,
 } from "../../components/orders/automation/orderAutomationUiTokens";
+import { BackendStatusActionsListSection } from "../../components/orders/automation/BackendStatusActionsListSection";
 
 export default function OrderAutomationListPage() {
   const navigate = useNavigate();
@@ -221,6 +222,8 @@ export default function OrderAutomationListPage() {
           })}
         </div>
       )}
+
+      <BackendStatusActionsListSection tenantId={DAMAGE_TENANT_ID} warehouseId={wid} />
     </div>
   );
 }

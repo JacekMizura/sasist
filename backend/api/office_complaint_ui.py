@@ -5,7 +5,7 @@ Tenant-scoped sub-statuses. Does not add operational workflow fields on Complain
 """
 
 import logging
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
@@ -13,6 +13,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
+from ..auth.deps import get_optional_current_user
+from ..models.app_user import AppUser
 from ..models.complaint import Complaint
 from ..models.complaint_line import ComplaintLine
 from ..models.complaint_ui_status import ComplaintUiStatus
@@ -274,6 +276,16 @@ def delete_status(
     )
     if not row:
         raise HTTPException(status_code=404, detail="Status not found")
+    from ..services.automation.status_actions import disable_status_action_rules_for_status
+    from ..services.automation.constants import ENTITY_COMPLAINT
+
+    disable_status_action_rules_for_status(
+        db,
+        tenant_id=tenant_id,
+        entity_type=ENTITY_COMPLAINT,
+        status_id=int(status_id),
+        warehouse_id=None,
+    )
     db.delete(row)
     db.commit()
     return None
@@ -306,21 +318,25 @@ def patch_complaint_ui_status(
     tenant_id: int = Query(...),
     warehouse_id: int = Query(...),
     db: Session = Depends(get_db),
+    current_user: Optional[AppUser] = Depends(get_optional_current_user),
 ):
     """Set or clear panel sub-status on a complaint."""
     row = _load_complaint_for_panel(db, complaint_id, tenant_id, warehouse_id)
     if not row:
         raise HTTPException(status_code=404, detail="Complaint not found")
-    sid = body.sub_status_id
-    if sid is not None:
-        us = (
-            db.query(ComplaintUiStatus)
-            .filter(ComplaintUiStatus.id == sid, ComplaintUiStatus.tenant_id == tenant_id)
-            .first()
+    from ..services.automation.complaint_ui_status import apply_complaint_panel_ui_status
+
+    uid = int(current_user.id) if current_user is not None and current_user.id is not None else None
+    try:
+        apply_complaint_panel_ui_status(
+            db,
+            row=row,
+            sub_status_id=body.sub_status_id,
+            tenant_id=tenant_id,
+            actor_user_id=uid,
         )
-        if not us:
-            raise HTTPException(status_code=400, detail="Unknown panel sub-status for this tenant")
-    row.complaint_ui_status_id = sid
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     db.commit()
     row = _load_complaint_for_panel(db, complaint_id, tenant_id, warehouse_id)
     assert row is not None

@@ -13,6 +13,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..auth.deps import get_optional_current_user
+from ..models.app_user import AppUser
 from ..models.return_ui_panel_subgroup import ReturnUiPanelSubgroup
 from ..models.return_ui_status import ReturnUiStatus
 from ..schemas.wms_return import (
@@ -257,6 +259,16 @@ def delete_status(
     )
     if not row:
         raise HTTPException(status_code=404, detail="Status not found")
+    from ..services.automation.status_actions import disable_status_action_rules_for_status
+    from ..services.automation.constants import ENTITY_RETURN
+
+    disable_status_action_rules_for_status(
+        db,
+        tenant_id=tenant_id,
+        entity_type=ENTITY_RETURN,
+        status_id=int(status_id),
+        warehouse_id=warehouse_id,
+    )
     db.delete(row)
     db.commit()
     return None
@@ -269,27 +281,26 @@ def patch_return_ui_status(
     tenant_id: int = Query(..., ge=1),
     warehouse_id: int = Depends(office_return_ui_warehouse_id),
     db: Session = Depends(get_db),
+    current_user: Optional[AppUser] = Depends(get_optional_current_user),
 ):
     """Set or clear panel sub-status on an RMZ (does not touch ReturnStatus)."""
     row = _load_rmz(db, rmz_id, tenant_id, warehouse_id)
     if not row:
         raise HTTPException(status_code=404, detail="Return not found")
-    sid = body.sub_status_id
-    if sid is not None:
-        us = (
-            db.query(ReturnUiStatus)
-            .filter(
-                ReturnUiStatus.id == sid,
-                ReturnUiStatus.tenant_id == tenant_id,
-                ReturnUiStatus.warehouse_id == warehouse_id,
-            )
-            .first()
+    from ..services.automation.return_ui_status import apply_return_panel_ui_status
+
+    uid = int(current_user.id) if current_user is not None and current_user.id is not None else None
+    try:
+        apply_return_panel_ui_status(
+            db,
+            row=row,
+            sub_status_id=body.sub_status_id,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            actor_user_id=uid,
         )
-        if not us:
-            raise HTTPException(status_code=400, detail="Unknown panel sub-status for this warehouse")
-        if not bool(getattr(us, "is_active", True)):
-            raise HTTPException(status_code=400, detail="Ten status panelu jest nieaktywny")
-    row.ui_status_id = sid
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     db.commit()
     row = _load_rmz(db, rmz_id, tenant_id, warehouse_id)
     assert row is not None

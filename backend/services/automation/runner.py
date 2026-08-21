@@ -310,10 +310,13 @@ def _execute_one_effect(
     return False
 
 
-def emit_order_status_entered_and_run(
+def emit_entity_status_entered_and_run(
     db: Session,
     *,
-    order,
+    entity_type: str,
+    entity_id: int,
+    tenant_id: int,
+    warehouse_id: Optional[int],
     previous_status_id: Optional[int],
     new_status_id: Optional[int],
     actor_user_id: Optional[int] = None,
@@ -324,23 +327,18 @@ def emit_order_status_entered_and_run(
     """
     if previous_status_id == new_status_id:
         return None
-    if new_status_id is None:
-        # Clearing status — still a transition; key = "null"
-        new_key = "null"
-    else:
-        new_key = str(int(new_status_id))
+    new_key = "null" if new_status_id is None else str(int(new_status_id))
     old_key = str(int(previous_status_id)) if previous_status_id is not None else None
 
     try:
         from .events import create_status_transition_event
-        from .constants import ENTITY_ORDER
 
         event = create_status_transition_event(
             db,
-            tenant_id=int(order.tenant_id),
-            warehouse_id=int(order.warehouse_id) if getattr(order, "warehouse_id", None) else None,
-            entity_type=ENTITY_ORDER,
-            entity_id=int(order.id),
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id) if warehouse_id is not None else None,
+            entity_type=str(entity_type).strip().upper(),
+            entity_id=int(entity_id),
             old_status_key=old_key,
             new_status_key=new_key,
             actor_user_id=actor_user_id,
@@ -349,9 +347,32 @@ def emit_order_status_entered_and_run(
         return event
     except Exception:
         logger.exception(
-            "automation emit failed order_id=%s prev=%s new=%s",
-            getattr(order, "id", None),
+            "automation emit failed entity=%s/%s prev=%s new=%s",
+            entity_type,
+            entity_id,
             previous_status_id,
             new_status_id,
         )
         return None
+
+
+def emit_order_status_entered_and_run(
+    db: Session,
+    *,
+    order,
+    previous_status_id: Optional[int],
+    new_status_id: Optional[int],
+    actor_user_id: Optional[int] = None,
+) -> Optional[StatusTransitionEvent]:
+    from .constants import ENTITY_ORDER
+
+    return emit_entity_status_entered_and_run(
+        db,
+        entity_type=ENTITY_ORDER,
+        entity_id=int(order.id),
+        tenant_id=int(order.tenant_id),
+        warehouse_id=int(order.warehouse_id) if getattr(order, "warehouse_id", None) else None,
+        previous_status_id=previous_status_id,
+        new_status_id=new_status_id,
+        actor_user_id=actor_user_id,
+    )

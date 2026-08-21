@@ -1,8 +1,14 @@
-**3D Matching decision history — PASS (commit pending).**
-- SSOT `WmsThreeDMatchingEvent` — one event per real 3D solver run (not Smart learning)
-- Lazy SMART_THEN_3D (no run/event on Smart hit); write from engine; MANUAL/STATUS triggers
-- API `GET /wms/3d-matching/history`; FE Historia doboru table + detail popover
-- Snapshots: carton name, strategy, filler, result; fill_percent only when solver returns it
+**Automation Engine Phase 2 — PASS (commit pending).**
+- RETURN/COMPLAINT UI status enter → `entity_status_entered` → Automation Engine
+- `change_status` adapters for ORDER/RETURN/COMPLAINT (panel UI only; no RMZ/refund/stock)
+- `source=STATUS_ACTION` + `GET /automations/status-actions` projection
+- Shared FE `StatusActionsPanel` on Return + Complaint status editors; list badge section
+- Delete status → disable STATUS_ACTION rules (keep history)
+
+**Packaging workflow trigger split — PASS (commit pending).**
+- Independent smart_/three_d_ proposal-init + auto-label; packaging_strategy shared
+- Orchestrator `on_order_status_changed_packaging`; assign policy + `selected_carton_source`
+- Legacy proposal_init/auto_label backfill + read fallback
 
 **3D Matching rebuild — PASS `605f847e`.**
 - Rename Dopasowanie przestrzenne → 3D Matching; single Ustawienia section

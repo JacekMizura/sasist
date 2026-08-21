@@ -15,6 +15,7 @@ from ..schemas.automation import (
     AutomationRuleCreate,
     AutomationRuleOut,
     AutomationRuleUpdate,
+    StatusActionRuleOut,
 )
 from ..services.automation.store import (
     create_rule,
@@ -34,6 +35,27 @@ logger = logging.getLogger(__name__)
 
 def _out(rule) -> AutomationRuleOut:
     return AutomationRuleOut.model_validate(rule_to_dict(rule))
+
+
+@router.get("/status-actions", response_model=list[StatusActionRuleOut])
+def get_status_actions(
+    tenant_id: int = Query(..., ge=1),
+    entity_type: str = Query(..., min_length=1),
+    status_id: int = Query(..., ge=1),
+    warehouse_id: Optional[int] = Query(None, ge=1),
+    db: Session = Depends(get_db),
+):
+    """Projection of STATUS_ACTION rules for a panel status editor."""
+    from ..services.automation.status_actions import status_action_projection
+
+    rows = status_action_projection(
+        db,
+        tenant_id=tenant_id,
+        entity_type=entity_type,
+        status_id=status_id,
+        warehouse_id=warehouse_id,
+    )
+    return [StatusActionRuleOut.model_validate(r) for r in rows]
 
 
 @router.get("", response_model=list[AutomationRuleOut])

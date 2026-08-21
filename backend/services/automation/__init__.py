@@ -9,6 +9,7 @@ from .constants import (
     TRIGGER_ENTITY_STATUS_ENTERED,
 )
 from .runner import (
+    emit_entity_status_entered_and_run,
     emit_order_status_entered_and_run,
     idempotency_key,
     run_automations_for_status_entered,
@@ -21,6 +22,7 @@ __all__ = [
     "ENTITY_RETURN",
     "MAX_AUTOMATION_DEPTH",
     "TRIGGER_ENTITY_STATUS_ENTERED",
+    "emit_entity_status_entered_and_run",
     "emit_order_status_entered_and_run",
     "idempotency_key",
     "run_automations_for_status_entered",

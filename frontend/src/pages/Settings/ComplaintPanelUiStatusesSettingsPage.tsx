@@ -21,6 +21,7 @@ import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import PageLayout from "../../components/layout/PageLayout";
 import { DocumentTemplateScopeSection } from "../Settings/document-templates/components/DocumentTemplateScopeSection";
 import { COMPLAINTS_SCOPE_KINDS } from "../Settings/document-templates/documentTemplateScopeKinds";
+import { StatusActionsPanel } from "../../components/settings/StatusActionsPanel";
 
 const GROUP_ORDER: ComplaintUiMainGroup[] = ["NEW", "IN_PROGRESS", "DONE"];
 
@@ -349,6 +350,17 @@ export default function ComplaintPanelUiStatusesSettingsPage() {
                                       highlightStatusId={r.id}
                                       counterColorHex={editCounterColor}
                                       onCounterColorChange={setEditCounterColor}
+                                    />
+                                  </div>
+                                  <div className="mt-4 max-w-xl">
+                                    <StatusActionsPanel
+                                      tenantId={DAMAGE_TENANT_ID}
+                                      warehouseId={warehouseId}
+                                      entityType="COMPLAINT"
+                                      statusId={r.id}
+                                      statusOptions={(summary?.groups ?? []).flatMap((gg) =>
+                                        (gg.sub_statuses ?? []).map((s) => ({ id: s.id, name: s.name })),
+                                      )}
                                     />
                                   </div>
                                 </>

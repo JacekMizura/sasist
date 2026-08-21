@@ -62,6 +62,11 @@ class AutomationRuleOut(BaseModel):
     effects: list[AutomationEffectOut] = Field(default_factory=list)
 
 
+class StatusActionRuleOut(AutomationRuleOut):
+    last_execution_status: Optional[str] = None
+    last_run_at: Optional[str] = None
+
+
 class AutomationEffectExecutionOut(BaseModel):
     id: int
     effect_id: Optional[int] = None

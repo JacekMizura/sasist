@@ -133,3 +133,25 @@ export async function listAutomationExecutions(
   });
   return res.data;
 }
+
+export type StatusActionRuleDto = AutomationRuleDto & {
+  last_execution_status?: string | null;
+  last_run_at?: string | null;
+};
+
+export async function listStatusActions(params: {
+  tenantId: number;
+  entityType: AutomationEntityType;
+  statusId: number;
+  warehouseId?: number | null;
+}): Promise<StatusActionRuleDto[]> {
+  const res = await api.get<StatusActionRuleDto[]>("automations/status-actions", {
+    params: {
+      tenant_id: params.tenantId,
+      entity_type: params.entityType,
+      status_id: params.statusId,
+      warehouse_id: params.warehouseId ?? undefined,
+    },
+  });
+  return res.data;
+}
