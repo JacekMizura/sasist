@@ -292,6 +292,21 @@ export default function ReturnsListPanel() {
     try {
       const effectiveWh = appliedFilters.listWarehouseId ?? warehouseId;
       const sidebarArg = panelFilterToSidebarArg(panelFilter);
+      const listPromise = listAllWmsReturns({
+        tenantId: DAMAGE_TENANT_ID,
+        warehouseId: effectiveWh,
+        sidebarPanel: sidebarArg,
+        filters: appliedFilters,
+        operationalQueue,
+      });
+      const summaryPromise = getReturnUiStatusSummary(DAMAGE_TENANT_ID, effectiveWh);
+
+      // Critical path: table + sidebar tree — do not wait for auxiliary config/counts.
+      const [data, summary] = await Promise.all([listPromise, summaryPromise]);
+      setRows(data);
+      setPanelSummary(summary);
+      setLoading(false);
+
       const countPromise =
         effectiveWh != null && effectiveWh > 0
           ? getWmsReturnQueueCounts({
@@ -302,15 +317,7 @@ export default function ReturnsListPanel() {
             })
           : Promise.resolve({ counts: {} as Partial<Record<ReturnOperationalQueueKey, number>> });
 
-      const [data, summary, sgroups, rsList, smList, qc] = await Promise.all([
-        listAllWmsReturns({
-          tenantId: DAMAGE_TENANT_ID,
-          warehouseId: effectiveWh,
-          sidebarPanel: sidebarArg,
-          filters: appliedFilters,
-          operationalQueue,
-        }),
-        getReturnUiStatusSummary(DAMAGE_TENANT_ID, effectiveWh),
+      void Promise.all([
         getReturnPanelSubgroups(DAMAGE_TENANT_ID, effectiveWh),
         effectiveWh != null && effectiveWh > 0
           ? listWmsReturnWorkflowStatuses(DAMAGE_TENANT_ID, effectiveWh)
@@ -319,19 +326,21 @@ export default function ReturnsListPanel() {
           ? getShippingMethods({ tenant_id: DAMAGE_TENANT_ID, warehouse_id: effectiveWh, active_only: false })
           : Promise.resolve([]),
         countPromise,
-      ]);
-      setRows(data);
-      setPanelSummary(summary);
-      setPanelSubgroups(sgroups);
-      setWorkflowStatuses(rsList);
-      setShippingMethods(smList);
-      setQueueCounts(qc.counts ?? {});
+      ])
+        .then(([sgroups, rsList, smList, qc]) => {
+          setPanelSubgroups(sgroups);
+          setWorkflowStatuses(rsList);
+          setShippingMethods(smList);
+          setQueueCounts(qc.counts ?? {});
+        })
+        .catch(() => {
+          /* auxiliary failure must not clear the list */
+        });
     } catch {
       setErr("Nie udało się wczytać listy zwrotów.");
       setRows([]);
       setPanelSubgroups(null);
       setQueueCounts({});
-    } finally {
       setLoading(false);
     }
   }, [panelFilter, warehouseId, appliedFilters, operationalQueue]);
@@ -350,11 +359,11 @@ export default function ReturnsListPanel() {
   }, [load]);
 
   useEffect(() => {
-    if (panelFilter !== "unassigned") return;
-    if (panelSummary != null && panelSummary.unassigned_count === 0) {
+    // „Bez etykiety” removed from returns sidebar — never keep that filter active.
+    if (panelFilter === "unassigned") {
       setPanelFilter("all");
     }
-  }, [panelFilter, panelSummary, setPanelFilter]);
+  }, [panelFilter, setPanelFilter]);
 
   const toggleFiltersExpanded = toggleFiltersPanel;
   const toggleStatusPanelCollapsed = useCallback(() => {
@@ -532,6 +541,7 @@ export default function ReturnsListPanel() {
                 returnsOperationalQueuesSlot={operationalQueuesSlot}
                 returnsOperationalQueuesCollapsedSlot={operationalQueuesCollapsedSlot}
                 counterColorModule="returns"
+                showUnassignedNav={false}
               />
             }
             mobileDrawerSidebar={
@@ -549,6 +559,7 @@ export default function ReturnsListPanel() {
                 returnsOperationalQueuesSlot={renderOperationalQueueSidebarRows(() => setStatusDrawerOpen(false))}
                 counterColorModule="returns"
                 returnsOperationalQueuesCollapsedSlot={operationalQueuesCollapsedSlot}
+                showUnassignedNav={false}
               />
             }
           />

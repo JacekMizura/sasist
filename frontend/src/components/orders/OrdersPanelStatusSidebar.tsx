@@ -94,8 +94,8 @@ type OrdersPanelStatusSidebarProps = {
   onToggleCollapsed?: () => void;
   /** Moduł localStorage dla kolorów licznika (zamówienia vs zwroty). */
   counterColorModule?: PanelStatusCounterColorModule;
-  /** Opcjonalny override lookupu koloru licznika per status. */
-  statusCounterColorForId?: (statusId: number) => string | null;
+  /** When false, hide „Bez etykiety” nav (null ui_status still counted in Wszystkie). */
+  showUnassignedNav?: boolean;
 };
 
 export function OrdersPanelStatusSidebar({
@@ -114,6 +114,7 @@ export function OrdersPanelStatusSidebar({
   onToggleCollapsed,
   counterColorModule = "orders",
   statusCounterColorForId: statusCounterColorForIdProp,
+  showUnassignedNav = true,
 }: OrdersPanelStatusSidebarProps) {
   const statusCounterColorForIdFromStore = useMemo(() => {
     if (warehouseId == null || warehouseId <= 0) return undefined;
@@ -223,7 +224,7 @@ export function OrdersPanelStatusSidebar({
           <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
           <PanelTreeCount value={totalPanelOrders ?? "—"} />
         </button>
-        {(panelSummary?.unassigned_count ?? 0) > 0 ? (
+        {showUnassignedNav && (panelSummary?.unassigned_count ?? 0) > 0 ? (
           <button
             type="button"
             className="flex w-full flex-col items-center gap-1 rounded-md px-0.5 py-1 hover:bg-slate-100"
@@ -323,7 +324,7 @@ export function OrdersPanelStatusSidebar({
           <PanelTreeCount value={totalPanelOrders ?? "—"} active={panelFilter === "all"} />
         </button>
 
-        {(panelSummary?.unassigned_count ?? 0) > 0 ? (
+        {showUnassignedNav && (panelSummary?.unassigned_count ?? 0) > 0 ? (
           <button
             type="button"
             className={panelTreeMetaRowClass(panelFilter === "unassigned")}

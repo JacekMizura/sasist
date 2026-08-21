@@ -7,7 +7,8 @@ import json
 import logging
 import re
 from datetime import date, datetime, timedelta, timezone
-from typing import List, Optional, Sequence, Tuple
+from collections import defaultdict
+from typing import List, Optional, Sequence, Tuple, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
@@ -28,6 +29,7 @@ from ..models.return_status import ReturnStatus
 from ..models.wms_order_return import WmsOrderReturn
 from ..models.wms_rmz_line import RMZLine
 from ..models.stock_document import StockDocument, StockDocumentItem
+from ..models.stock_document_return_link import StockDocumentReturnLink
 from ..models.wms_refund import WmsRefund
 from ..models.wms_settings import WmsSettings
 from ..schemas.entity_delete import EntityBulkDeleteResult, entity_bulk_delete_result_from_service_dict
@@ -1407,6 +1409,262 @@ def _list_item_from_row(db: Session, r: WmsOrderReturn, order: Order) -> WmsRetu
     )
 
 
+def _batch_stock_document_ids_for_rmzs(db: Session, rows: Sequence[WmsOrderReturn]) -> Dict[int, List[int]]:
+    """Batch equivalent of stock_document_ids_for_rmz for a page of returns."""
+    out: Dict[int, set[int]] = {int(r.id): set() for r in rows}
+    if not rows:
+        return {}
+    for r in rows:
+        wid = getattr(r, "warehouse_document_id", None)
+        if wid:
+            out[int(r.id)].add(int(wid))
+    rmz_ids = list(out.keys())
+    for link_rmz, doc_id in (
+        db.query(StockDocumentReturnLink.rmz_id, StockDocumentReturnLink.stock_document_id)
+        .filter(StockDocumentReturnLink.rmz_id.in_(rmz_ids))
+        .all()
+    ):
+        out[int(link_rmz)].add(int(doc_id))
+    for doc_id, legacy_rmz in (
+        db.query(StockDocument.id, StockDocument.rmz_id)
+        .filter(StockDocument.rmz_id.in_(rmz_ids))
+        .all()
+    ):
+        out[int(legacy_rmz)].add(int(doc_id))
+    for doc_id, src_rmz in (
+        db.query(StockDocumentItem.document_id, StockDocumentItem.source_rmz_id)
+        .filter(StockDocumentItem.source_rmz_id.in_(rmz_ids))
+        .distinct()
+        .all()
+    ):
+        if src_rmz is not None:
+            out[int(src_rmz)].add(int(doc_id))
+    return {rid: sorted(ids) for rid, ids in out.items()}
+
+
+def _lines_preview_from_products(
+    line_reads: List[WmsReturnLineRead],
+    products_by_id: Dict[int, Product],
+    *,
+    limit: int = 3,
+) -> List[WmsReturnLineListPreview]:
+    slice_ = line_reads[:limit]
+    out: List[WmsReturnLineListPreview] = []
+    for ln in slice_:
+        p = products_by_id.get(int(ln.product_id))
+        out.append(
+            WmsReturnLineListPreview(
+                quantity=int(ln.quantity),
+                name=p.name if p else None,
+                ean=p.ean if p else None,
+                sku=(p.symbol or p.sku) if p else None,
+                image_url=getattr(p, "image_url", None) if p else None,
+            )
+        )
+    return out
+
+
+def _sum_return_lines_value_pln_cached(
+    line_reads: List[WmsReturnLineRead],
+    order_items_by_id: Dict[int, OrderItem],
+) -> float:
+    total = 0.0
+    for ln in line_reads:
+        oi = order_items_by_id.get(int(ln.order_item_id))
+        if oi is None:
+            continue
+        try:
+            unit = float(oi.unit_price) if oi.unit_price is not None else float(oi.list_price or 0)
+        except (TypeError, ValueError):
+            unit = 0.0
+        try:
+            qty = float(ln.quantity)
+        except (TypeError, ValueError):
+            qty = 0.0
+        total += qty * max(0.0, unit)
+    return max(0.0, total)
+
+
+def _compute_list_total_refund_amount_cached(
+    order: Order,
+    refund_row: Optional[WmsRefund],
+    line_reads: List[WmsReturnLineRead],
+    shipping_cost: Optional[float],
+    order_items_by_id: Dict[int, OrderItem],
+) -> float:
+    line_sum = _sum_return_lines_value_pln_cached(line_reads, order_items_by_id)
+    ship = 0.0
+    try:
+        ship = max(0.0, float(shipping_cost or 0))
+    except (TypeError, ValueError):
+        ship = 0.0
+    if not refund_row:
+        return line_sum
+    rtype = str(refund_row.refund_type or "NONE").strip().upper()
+    ra = refund_row.refund_amount
+    if ra is not None:
+        try:
+            total = max(0.0, float(ra))
+        except (TypeError, ValueError):
+            total = 0.0
+    elif rtype == "NONE":
+        total = 0.0
+    else:
+        total = line_sum
+    if refund_row.refund_shipping:
+        sa = getattr(refund_row, "refund_shipping_amount", None)
+        if sa is not None:
+            try:
+                total += max(0.0, float(sa))
+            except (TypeError, ValueError):
+                total += ship
+        else:
+            total += ship
+    return max(0.0, total)
+
+def _rmz_line_to_list_read(ln: RMZLine) -> WmsReturnLineRead:
+    aq, dq, dbq, dcq, rq = _wms_return_line_qty_fields_from_rmz_row(ln)
+    return WmsReturnLineRead(
+        id=int(ln.id),
+        order_item_id=int(ln.order_item_id),
+        product_id=int(ln.product_id),
+        quantity=int(ln.quantity),
+        accepted_qty=aq,
+        damaged_qty=dq,
+        damaged_b_qty=dbq,
+        damaged_c_qty=dcq,
+        rejected_qty=rq,
+        decision=ln.decision,  # type: ignore[arg-type]
+        condition=ln.condition,  # type: ignore[arg-type]
+        final_disposition=ln.final_disposition,  # type: ignore[arg-type]
+        processed_at=ln.processed_at,
+        damage_type=(str(ln.damage_type).strip() if getattr(ln, "damage_type", None) else None) or None,
+        photo_urls=_photo_urls_list_from_cell(getattr(ln, "photo_urls", None)) or None,
+        damage_entries=_damage_entry_reads_from_rmz_line(ln),
+    )
+
+
+def _list_items_from_rows_batched(
+    db: Session, pairs: Sequence[Tuple[WmsOrderReturn, Order]]
+) -> List[WmsReturnListItem]:
+    """Build list DTOs with O(1) query batches instead of per-row N+1."""
+    if not pairs:
+        return []
+    _normalize_unset_decision_line_quantities(db)
+    rmz_ids = [int(r.id) for r, _ in pairs]
+
+    lines_by_rmz: Dict[int, List[RMZLine]] = defaultdict(list)
+    for ln in (
+        db.query(RMZLine)
+        .filter(RMZLine.rmz_id.in_(rmz_ids))
+        .order_by(RMZLine.rmz_id.asc(), RMZLine.id.asc())
+        .all()
+    ):
+        lines_by_rmz[int(ln.rmz_id)].append(ln)
+
+    refund_by = {
+        int(rf.rmz_id): rf
+        for rf in db.query(WmsRefund).filter(WmsRefund.rmz_id.in_(rmz_ids)).all()
+    }
+
+    preview_pids: set[int] = set()
+    oi_ids: set[int] = set()
+    line_reads_by_rmz: Dict[int, List[WmsReturnLineRead]] = {}
+    for rid in rmz_ids:
+        raw = lines_by_rmz.get(rid) or []
+        if raw:
+            reads = [_rmz_line_to_list_read(ln) for ln in raw]
+        else:
+            # Legacy JSON fallback — rare; keep per-row parse without extra SQL
+            ret = next(r for r, _ in pairs if int(r.id) == rid)
+            reads = _lines_to_read(_parse_lines(ret.lines_json))
+        line_reads_by_rmz[rid] = reads
+        for ln in reads[:3]:
+            preview_pids.add(int(ln.product_id))
+        for ln in reads:
+            oi_ids.add(int(ln.order_item_id))
+
+    products_by_id: Dict[int, Product] = {}
+    if preview_pids:
+        products_by_id = {
+            int(p.id): p for p in db.query(Product).filter(Product.id.in_(list(preview_pids))).all()
+        }
+
+    order_items_by_id: Dict[int, OrderItem] = {}
+    if oi_ids:
+        order_items_by_id = {
+            int(oi.id): oi for oi in db.query(OrderItem).filter(OrderItem.id.in_(list(oi_ids))).all()
+        }
+
+    stock_ids_by = _batch_stock_document_ids_for_rmzs(db, [r for r, _ in pairs])
+    wh_doc_ids = [
+        int(r.warehouse_document_id)
+        for r, _ in pairs
+        if getattr(r, "warehouse_document_id", None)
+    ]
+    wh_docs: Dict[int, StockDocument] = {}
+    if wh_doc_ids:
+        wh_docs = {
+            int(d.id): d for d in db.query(StockDocument).filter(StockDocument.id.in_(wh_doc_ids)).all()
+        }
+
+    out: List[WmsReturnListItem] = []
+    for r, order in pairs:
+        fn, ln_name = _customer_names_from_order(order)
+        src = getattr(order, "source", None)
+        source_raw = str(src).strip() if src is not None and str(src).strip() else None
+        source_out = _normalize_order_source(source_raw)
+        shipping_cost = _shipping_cost_from_order(order)
+        rs = r.return_status
+        ui_row = getattr(r, "ui_status", None)
+        line_reads = line_reads_by_rmz.get(int(r.id), [])
+        refund_row = refund_by.get(int(r.id))
+        total_refund = _compute_list_total_refund_amount_cached(
+            order, refund_row, line_reads, shipping_cost, order_items_by_id
+        )
+        wh_doc_id = getattr(r, "warehouse_document_id", None)
+        wh_num = None
+        if wh_doc_id and int(wh_doc_id) in wh_docs:
+            doc = wh_docs[int(wh_doc_id)]
+            num = str(getattr(doc, "document_number", None) or "").strip()
+            if num:
+                wh_num = num
+            else:
+                dt = str(getattr(doc, "document_type", None) or "Z_PZ").strip().upper()
+                label = "Z-PZ" if dt == "Z_PZ" else dt
+                wh_num = f"{label} #{int(doc.id)}"
+        out.append(
+            WmsReturnListItem(
+                id=r.id,
+                rmz_number=r.rmz_number,
+                status=_brief_from_rs(rs),
+                order_id=r.order_id,
+                order_number=order.number,
+                sales_document_number=getattr(order, "sales_document_number", None),
+                return_type=(
+                    str(getattr(r, "return_type", "RMA") or "RMA").upper()
+                    if str(getattr(r, "return_type", "RMA") or "").upper() in _RETURN_TYPE_VALUES
+                    else "RMA"
+                ),  # type: ignore[arg-type]
+                first_name=fn,
+                last_name=ln_name,
+                source=source_out,
+                shipping_cost=shipping_cost,
+                created_at=r.created_at,
+                lines=line_reads,
+                lines_preview=_lines_preview_from_products(line_reads, products_by_id),
+                refund=_build_refund_dict(refund_row),  # type: ignore[arg-type]
+                ui_status=_brief_ui_status(ui_row),
+                total_refund_amount=total_refund,
+                stock_document_ids=stock_ids_by.get(int(r.id), []),
+                warehouse_document_id=wh_doc_id,
+                warehouse_document_type=(str(getattr(r, "warehouse_document_type", None) or "").strip() or None),
+                warehouse_document_number=wh_num,
+            )
+        )
+    return out
+
+
 def _returns_query(db: Session, tenant_id: int, warehouse_id: int, *, archive_scope: str = "active"):
     """Base list query: tenant + warehouse + optional archive scope (active | archived | all)."""
     scope = (archive_scope or "active").strip().lower()
@@ -2383,7 +2641,8 @@ def list_wms_returns(
         )
 
         q = q.order_by(nullslast(desc(WmsOrderReturn.created_at)), desc(WmsOrderReturn.id)).limit(500)
-        return [_list_item_from_row(db, r, o) for r, o in q.all()]
+        pairs = q.all()
+        return _list_items_from_rows_batched(db, pairs)
     except HTTPException:
         raise
     except SQLAlchemyError:
@@ -2480,6 +2739,9 @@ def create_wms_return(
     )
     wh_settings = resolve_returns_settings(db, tenant_id=body.tenant_id, warehouse_id=wh_id)
     stamp_rmz_snapshot_on_create(row, wh_settings)
+    from ..services.return_default_new_panel_status import assign_default_new_panel_status_to_return
+
+    assign_default_new_panel_status_to_return(db, row)
     db.add(row)
     db.commit()
     db.refresh(row)
