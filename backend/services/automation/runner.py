@@ -18,6 +18,7 @@ from ...models.automation import (
     StatusTransitionEvent,
 )
 from .constants import (
+    EXEC_BLOCKED,
     EXEC_FAILED,
     EXEC_PENDING,
     EXEC_RUNNING,
@@ -94,21 +95,7 @@ def find_matching_rules(db: Session, event: StatusTransitionEvent) -> list[Autom
 
         if not rule_allows_status_enter_auto(r):
             continue
-        from .conditions import evaluate_conditions
-        from .store import _loads_list
-
-        conds = _loads_list(getattr(r, "conditions_json", None) or "[]")
-        if conds:
-            result = evaluate_conditions(
-                db,
-                conditions=conds,
-                entity_type=str(event.entity_type),
-                entity_id=int(event.entity_id),
-                tenant_id=int(event.tenant_id),
-                ignore_unevaluable=True,
-            )
-            if not result.matched:
-                continue
+        # Conditions + preflight happen in _run_or_resume_rule (audit BLOCKED/SKIPPED).
         matched.append(r)
     return matched
 
@@ -219,13 +206,76 @@ def _run_or_resume_rule(
             "resumed": False,
             "duplicate": True,
         }
-    if execution.status == EXEC_SKIPPED:
+    if execution.status in (EXEC_SKIPPED, EXEC_BLOCKED):
         return {
             "rule_id": int(rule.id),
             "execution_id": int(execution.id),
-            "status": EXEC_SKIPPED,
+            "status": execution.status,
             "duplicate": True,
         }
+
+    from .preflight import validate_automation_runtime
+    from .conditions import evaluate_conditions
+    from .store import _loads_list
+
+    pf = validate_automation_runtime(rule, entity_type=str(event.entity_type))
+    if not pf.ok:
+        execution.status = EXEC_BLOCKED
+        execution.error = pf.blocked_code or "blocked"
+        if execution.started_at is None:
+            execution.started_at = datetime.utcnow()
+        execution.completed_at = datetime.utcnow()
+        db.add(execution)
+        db.flush()
+        return {
+            "rule_id": int(rule.id),
+            "execution_id": int(execution.id),
+            "status": EXEC_BLOCKED,
+            "blocked_code": pf.blocked_code,
+            "validation_issues": [i.to_dict() for i in pf.issues],
+            "effects_executed": 0,
+        }
+
+    conds = _loads_list(getattr(rule, "conditions_json", None) or "[]")
+    if conds:
+        cond_result = evaluate_conditions(
+            db,
+            conditions=conds,
+            entity_type=str(event.entity_type),
+            entity_id=int(event.entity_id),
+            tenant_id=int(event.tenant_id),
+        )
+        if cond_result.blocked:
+            execution.status = EXEC_BLOCKED
+            execution.error = cond_result.blocked_code or "unsupported_condition"
+            if execution.started_at is None:
+                execution.started_at = datetime.utcnow()
+            execution.completed_at = datetime.utcnow()
+            db.add(execution)
+            db.flush()
+            return {
+                "rule_id": int(rule.id),
+                "execution_id": int(execution.id),
+                "status": EXEC_BLOCKED,
+                "blocked_code": cond_result.blocked_code,
+                "unsupported_condition_keys": cond_result.unsupported_keys,
+                "effects_executed": 0,
+            }
+        if not cond_result.matched:
+            execution.status = EXEC_SKIPPED
+            execution.error = "conditions_not_matched"
+            if execution.started_at is None:
+                execution.started_at = datetime.utcnow()
+            execution.completed_at = datetime.utcnow()
+            db.add(execution)
+            db.flush()
+            return {
+                "rule_id": int(rule.id),
+                "execution_id": int(execution.id),
+                "status": EXEC_SKIPPED,
+                "reason": "conditions_not_matched",
+                "effects_executed": 0,
+            }
 
     # Resume FAILED / PENDING / RUNNING — skip completed effects
     execution.status = EXEC_RUNNING

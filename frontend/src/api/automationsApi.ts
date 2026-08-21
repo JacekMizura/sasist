@@ -27,6 +27,13 @@ export type AutomationRuleDto = {
   conditions?: unknown[];
   metadata?: Record<string, unknown>;
   source: string;
+  runtime_ready?: boolean;
+  validation_issues?: Array<{
+    code: string;
+    message: string;
+    condition_type?: string;
+    effect_type?: string;
+  }>;
   created_at?: string | null;
   updated_at?: string | null;
   effects: AutomationEffectDto[];

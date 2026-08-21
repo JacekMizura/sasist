@@ -45,7 +45,7 @@ export default function OrderAutomationListPage() {
   const canWrite = hasPermission("settings.automation");
 
   const store = useOrderAutomationStore(DAMAGE_TENANT_ID, wid, scope);
-  const { rules, reload, hydrated, setEnabled, deleteRule, legacyPending, runLegacyImport, dismissLegacy, sourceByRuleId } =
+  const { rules, reload, hydrated, setEnabled, deleteRule, legacyPending, runLegacyImport, dismissLegacy, sourceByRuleId, runtimeReadyByRuleId } =
     store;
 
   const [q, setQ] = useState("");
@@ -244,6 +244,7 @@ export default function OrderAutomationListPage() {
                       idSort={idSort}
                       onIdSortChange={setIdSort}
                       sourceByRuleId={sourceByRuleId}
+                      runtimeReadyByRuleId={runtimeReadyByRuleId}
                       onToggle={(id, enabled) => void setEnabled(id, enabled)}
                       onDelete={confirmDelete}
                       onLogs={openRuleLogs}

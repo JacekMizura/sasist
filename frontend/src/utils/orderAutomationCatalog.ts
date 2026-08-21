@@ -5,30 +5,151 @@ export type ConditionFieldDef = {
   label: string;
   category: string;
   valueKind: "status" | "text" | "number" | "multi";
+  /** Backend evaluator supports this field at runtime. */
+  backendSupported?: boolean;
+  /** Shown in picker but disabled — not yet evaluable. */
+  disabled?: boolean;
+  disabledReason?: string;
 };
 
 /** Metadane pól warunków — bez listy statusów (statusy z API panelu). */
 export const ORDER_AUTOMATION_CONDITION_FIELDS: ConditionFieldDef[] = [
-  { key: "order_status", label: "Status zamówienia", category: "Zamówienie", valueKind: "multi" },
-  { key: "order_source", label: "Źródło zamówienia", category: "Zamówienie", valueKind: "multi" },
-  { key: "order_tags", label: "Tagi", category: "Zamówienie", valueKind: "multi" },
-  { key: "order_categories", label: "Kategorie", category: "Zamówienie", valueKind: "multi" },
-  { key: "order_number", label: "Numer zamówienia", category: "Zamówienie", valueKind: "text" },
-  { key: "customer_email", label: "E-mail klienta", category: "Klient", valueKind: "text" },
-  { key: "customer_group", label: "Grupa klienta", category: "Klient", valueKind: "text" },
-  { key: "shipment_courier", label: "Przewoźnik", category: "Wysyłka", valueKind: "multi" },
-  { key: "shipment_status", label: "Status przesyłki", category: "Wysyłka", valueKind: "multi" },
-  { key: "payment_method", label: "Forma płatności", category: "Płatności", valueKind: "multi" },
-  { key: "payment_status", label: "Status płatności", category: "Płatności", valueKind: "text" },
-  { key: "order_total", label: "Wartość zamówienia", category: "Płatności", valueKind: "number" },
-  { key: "warehouse_id", label: "Magazyn", category: "Magazyn", valueKind: "multi" },
-  { key: "product_sku", label: "SKU w zamówieniu", category: "Produkty", valueKind: "text" },
-  { key: "document_type", label: "Typ dokumentu", category: "Dokumenty", valueKind: "text" },
-  { key: "wms_stock_state", label: "Stan magazynowy WMS", category: "WMS", valueKind: "text" },
-  { key: "allegro_account", label: "Konto Allegro", category: "Allegro", valueKind: "text" },
-  { key: "integration_channel", label: "Kanał integracji", category: "Integracje", valueKind: "text" },
-  { key: "custom_field", label: "Pole dodatkowe", category: "Pola własne", valueKind: "text" },
+  { key: "order_status", label: "Status zamówienia", category: "Zamówienie", valueKind: "multi", backendSupported: true },
+  { key: "order_number", label: "Numer zamówienia", category: "Zamówienie", valueKind: "text", backendSupported: true },
+  { key: "warehouse_id", label: "Magazyn", category: "Magazyn", valueKind: "multi", backendSupported: true },
+  {
+    key: "order_source",
+    label: "Źródło zamówienia",
+    category: "Zamówienie",
+    valueKind: "multi",
+    disabled: true,
+    disabledReason: "Jeszcze nieobsługiwane przez backend",
+  },
+  {
+    key: "order_tags",
+    label: "Tagi",
+    category: "Zamówienie",
+    valueKind: "multi",
+    disabled: true,
+    disabledReason: "Jeszcze nieobsługiwane przez backend",
+  },
+  {
+    key: "order_categories",
+    label: "Kategorie",
+    category: "Zamówienie",
+    valueKind: "multi",
+    disabled: true,
+    disabledReason: "Jeszcze nieobsługiwane przez backend",
+  },
+  {
+    key: "customer_email",
+    label: "E-mail klienta",
+    category: "Klient",
+    valueKind: "text",
+    disabled: true,
+    disabledReason: "Jeszcze nieobsługiwane przez backend",
+  },
+  {
+    key: "customer_group",
+    label: "Grupa klienta",
+    category: "Klient",
+    valueKind: "text",
+    disabled: true,
+    disabledReason: "Jeszcze nieobsługiwane przez backend",
+  },
+  {
+    key: "shipment_courier",
+    label: "Przewoźnik",
+    category: "Wysyłka",
+    valueKind: "multi",
+    disabled: true,
+    disabledReason: "Jeszcze nieobsługiwane przez backend",
+  },
+  {
+    key: "shipment_status",
+    label: "Status przesyłki",
+    category: "Wysyłka",
+    valueKind: "multi",
+    disabled: true,
+    disabledReason: "Jeszcze nieobsługiwane przez backend",
+  },
+  {
+    key: "payment_method",
+    label: "Forma płatności",
+    category: "Płatności",
+    valueKind: "multi",
+    disabled: true,
+    disabledReason: "Jeszcze nieobsługiwane przez backend",
+  },
+  {
+    key: "payment_status",
+    label: "Status płatności",
+    category: "Płatności",
+    valueKind: "text",
+    disabled: true,
+    disabledReason: "Jeszcze nieobsługiwane przez backend",
+  },
+  {
+    key: "order_total",
+    label: "Wartość zamówienia",
+    category: "Płatności",
+    valueKind: "number",
+    disabled: true,
+    disabledReason: "Jeszcze nieobsługiwane przez backend",
+  },
+  {
+    key: "product_sku",
+    label: "SKU w zamówieniu",
+    category: "Produkty",
+    valueKind: "text",
+    disabled: true,
+    disabledReason: "Jeszcze nieobsługiwane przez backend",
+  },
+  {
+    key: "document_type",
+    label: "Typ dokumentu",
+    category: "Dokumenty",
+    valueKind: "text",
+    disabled: true,
+    disabledReason: "Jeszcze nieobsługiwane przez backend",
+  },
+  {
+    key: "wms_stock_state",
+    label: "Stan magazynowy WMS",
+    category: "WMS",
+    valueKind: "text",
+    disabled: true,
+    disabledReason: "Jeszcze nieobsługiwane przez backend",
+  },
+  {
+    key: "allegro_account",
+    label: "Konto Allegro",
+    category: "Allegro",
+    valueKind: "text",
+    disabled: true,
+    disabledReason: "Jeszcze nieobsługiwane przez backend",
+  },
+  {
+    key: "integration_channel",
+    label: "Kanał integracji",
+    category: "Integracje",
+    valueKind: "text",
+    disabled: true,
+    disabledReason: "Jeszcze nieobsługiwane przez backend",
+  },
+  {
+    key: "custom_field",
+    label: "Pole dodatkowe",
+    category: "Pola własne",
+    valueKind: "text",
+    disabled: true,
+    disabledReason: "Jeszcze nieobsługiwane przez backend",
+  },
 ];
+
+export const BACKEND_SUPPORTED_CONDITION_KEYS = new Set(
+  ORDER_AUTOMATION_CONDITION_FIELDS.filter((f) => f.backendSupported).map((f) => f.key),
+);
 
 export const ORDER_AUTOMATION_OPERATOR_LABELS: Record<string, string> = {
   in: "jest jednym z",
@@ -47,16 +168,59 @@ export const ORDER_AUTOMATION_OPERATOR_UI: Record<string, string> = {
   contains: "zawiera",
 };
 
-export type EffectKindMeta = { kind: AutomationEffectKind; label: string; category: string };
+export type EffectKindMeta = {
+  kind: AutomationEffectKind;
+  label: string;
+  category: string;
+  backendSupported?: boolean;
+  disabled?: boolean;
+  disabledReason?: string;
+};
 
 export const ORDER_AUTOMATION_EFFECT_KINDS: EffectKindMeta[] = [
-  { kind: "change_status", label: "Zmień status", category: "Zamówienie" },
-  { kind: "send_message", label: "Wyślij wiadomość", category: "Komunikacja" },
-  { kind: "generate_document", label: "Generuj dokument", category: "Dokumenty" },
-  { kind: "assign_courier", label: "Przypisz kuriera", category: "Wysyłka" },
-  { kind: "add_tag", label: "Dodaj tag", category: "Zamówienie" },
-  { kind: "print", label: "Drukuj", category: "WMS" },
-  { kind: "wms_action", label: "Akcja WMS", category: "WMS" },
+  { kind: "change_status", label: "Zmień status", category: "Zamówienie", backendSupported: true },
+  {
+    kind: "send_message",
+    label: "Wyślij wiadomość",
+    category: "Komunikacja",
+    disabled: true,
+    disabledReason: "Jeszcze nieobsługiwane przez backend",
+  },
+  {
+    kind: "generate_document",
+    label: "Generuj dokument",
+    category: "Dokumenty",
+    disabled: true,
+    disabledReason: "Jeszcze nieobsługiwane przez backend",
+  },
+  {
+    kind: "assign_courier",
+    label: "Przypisz kuriera",
+    category: "Wysyłka",
+    disabled: true,
+    disabledReason: "Jeszcze nieobsługiwane przez backend",
+  },
+  {
+    kind: "add_tag",
+    label: "Dodaj tag",
+    category: "Zamówienie",
+    disabled: true,
+    disabledReason: "Jeszcze nieobsługiwane przez backend",
+  },
+  {
+    kind: "print",
+    label: "Drukuj",
+    category: "WMS",
+    disabled: true,
+    disabledReason: "Jeszcze nieobsługiwane przez backend",
+  },
+  {
+    kind: "wms_action",
+    label: "Akcja WMS",
+    category: "WMS",
+    disabled: true,
+    disabledReason: "Jeszcze nieobsługiwane przez backend",
+  },
 ];
 
 export function conditionFieldLabel(key: string): string {
@@ -96,6 +260,7 @@ export type AutomationPickerCategory = {
 export function buildConditionCategorySteps(): AutomationPickerCategory[] {
   const byCat = new Map<string, AutomationPickerCategory["items"]>();
   for (const f of ORDER_AUTOMATION_CONDITION_FIELDS) {
+    if (f.disabled) continue; // hide unsupported from active editor picker
     if (!byCat.has(f.category)) byCat.set(f.category, []);
     byCat.get(f.category)!.push({ id: f.key, label: f.label });
   }
@@ -120,6 +285,7 @@ export const EFFECT_CATEGORY_ORDER = ["Zamówienie", "Komunikacja", "Dokumenty",
 export function buildEffectCategorySteps(): AutomationPickerCategory[] {
   const byCat = new Map<string, AutomationPickerCategory["items"]>();
   for (const e of ORDER_AUTOMATION_EFFECT_KINDS) {
+    if (e.disabled) continue;
     if (!byCat.has(e.category)) byCat.set(e.category, []);
     byCat.get(e.category)!.push({ id: e.kind, label: e.label });
   }

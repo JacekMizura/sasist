@@ -1,3 +1,25 @@
+## 2026-08-21 — Block unsupported automation runtime conditions
+
+- Preflight `validate_automation_runtime`: unsupported/invalid condition or effect → EXEC_BLOCKED, 0 effects
+- Removed skip semantics for unevaluable conditions; API `runtime_ready` + `validation_issues`
+- FE: Gotowa / Wymaga poprawy badges; editor issues; unsupported catalog fields/effects hidden from picker
+- Legacy import preserves conditions; runtime_ready=false until migrated
+
+## 2026-08-21 — Order Automations → backend SSOT cutover
+
+- Extended AutomationRule: group, conditions, metadata; run_kind on executions
+- Backend condition evaluator (order_status/warehouse_id/order_number + domain status fields)
+- FE editor/list/packing use API; legacy import idempotent; executeOrderAutomationEffects retired
+- Order StatusActionsPanel; STATUS_ACTION badge on main list
+
+## 2026-08-21 — Automation Engine Phase 2 (Return/Complaint STATUS_ACTION)
+
+- Triggers on ReturnUiStatus / ComplaintUiStatus enter only (not RMZ workflow)
+- `change_status` for ORDER|RETURN|COMPLAINT via domain services
+- STATUS_ACTION source + status-actions projection API; delete status disables rules
+- FE shared StatusActionsPanel; automation list shows backend STATUS_ACTION badge
+- No refund/stock/email/SMS; tests A–Q style + vitest + build PASS
+
 ## 2026-08-21 — 3D Matching decision history
 
 - `WmsThreeDMatchingEvent` + schema upgrade; write only on real 3D engine run

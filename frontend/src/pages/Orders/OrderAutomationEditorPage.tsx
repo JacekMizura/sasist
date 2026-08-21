@@ -137,8 +137,19 @@ export default function OrderAutomationEditorPage() {
   const canWrite = hasPermission("settings.automation");
 
   const store = useOrderAutomationStore(DAMAGE_TENANT_ID, wid, scope);
-  const { hydrated, reload, upsertRule, deleteRule, recordTestRun, byId, changeLogs, executionLogs, appendChangeLogs } =
-    store;
+  const {
+    hydrated,
+    reload,
+    upsertRule,
+    deleteRule,
+    recordTestRun,
+    byId,
+    changeLogs,
+    executionLogs,
+    appendChangeLogs,
+    validationIssuesByRuleId,
+    runtimeReadyByRuleId,
+  } = store;
 
   const [draft, setDraft] = useState<OrderAutomationRule>(() => defaultRule());
   const [statusSummary, setStatusSummary] = useState<OrderUiStatusPanelSummary | null>(null);
@@ -450,6 +461,23 @@ export default function OrderAutomationEditorPage() {
         </div>
         {nameInvalid ? <p className="mt-2 text-xs text-red-600">Nazwa jest wymagana</p> : null}
       </div>
+
+      {!isNew && runtimeReadyByRuleId.get(draft.id) === false ? (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-sm">
+          <p className="text-sm font-semibold text-amber-950">
+            Automatyzacja nie zostanie uruchomiona — zawiera nieobsługiwany lub nieprawidłowy warunek/efekt.
+          </p>
+          <ul className="mt-2 list-inside list-disc space-y-0.5 text-sm text-amber-900">
+            {(validationIssuesByRuleId.get(draft.id) ?? []).map((issue, idx) => (
+              <li key={`${issue?.code}-${idx}`}>
+                {issue?.message || issue?.code}
+                {issue?.condition_type ? ` (${issue.condition_type})` : ""}
+                {issue?.effect_type ? ` [${issue.effect_type}]` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {saveAttempted && !validation.valid ? (
         <div className="mb-6 rounded-xl border border-red-200 bg-white px-4 py-3 shadow-sm">

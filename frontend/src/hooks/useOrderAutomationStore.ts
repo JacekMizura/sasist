@@ -262,12 +262,26 @@ export function useOrderAutomationStore(
     return m;
   }, [backendDtos]);
 
+  const runtimeReadyByRuleId = useMemo(() => {
+    const m = new Map<string, boolean>();
+    for (const d of backendDtos) m.set(String(d.id), d.runtime_ready !== false);
+    return m;
+  }, [backendDtos]);
+
+  const validationIssuesByRuleId = useMemo(() => {
+    const m = new Map<string, AutomationRuleDto["validation_issues"]>();
+    for (const d of backendDtos) m.set(String(d.id), d.validation_issues ?? []);
+    return m;
+  }, [backendDtos]);
+
   return {
     canUse,
     hydrated,
     rules,
     backendDtos,
     sourceByRuleId,
+    runtimeReadyByRuleId,
+    validationIssuesByRuleId,
     legacyPending,
     runLegacyImport,
     dismissLegacy,

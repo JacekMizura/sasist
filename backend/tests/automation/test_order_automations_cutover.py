@@ -99,7 +99,7 @@ def test_conditions_warehouse_isolation(db):
     assert result.matched is False
 
 
-def test_unevaluable_ignored_by_default(db):
+def test_unevaluable_blocks_by_default(db):
     result = evaluate_conditions(
         db,
         conditions=[
@@ -111,8 +111,9 @@ def test_unevaluable_ignored_by_default(db):
         tenant_id=1,
         ignore_unevaluable=True,
     )
-    assert result.matched is True
-    assert "allegro_account" in result.skipped_unevaluable
+    assert result.matched is False
+    assert result.blocked is True
+    assert "allegro_account" in result.unsupported_keys
 
 
 def test_create_with_group_conditions_metadata(db):

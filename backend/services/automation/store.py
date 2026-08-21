@@ -272,6 +272,9 @@ def list_executions(
 
 def rule_to_dict(rule: AutomationRule) -> dict[str, Any]:
     effects = sorted(rule.effects or [], key=lambda e: (int(e.position), int(e.id or 0)))
+    from .preflight import rule_runtime_projection
+
+    runtime = rule_runtime_projection(rule)
     return {
         "id": int(rule.id),
         "tenant_id": int(rule.tenant_id),
@@ -285,6 +288,8 @@ def rule_to_dict(rule: AutomationRule) -> dict[str, Any]:
         "conditions": _loads_list(getattr(rule, "conditions_json", None) or "[]"),
         "metadata": _loads(getattr(rule, "metadata_json", None) or "{}"),
         "source": rule.source,
+        "runtime_ready": runtime["runtime_ready"],
+        "validation_issues": runtime["validation_issues"],
         "created_at": rule.created_at.isoformat() if rule.created_at else None,
         "updated_at": rule.updated_at.isoformat() if rule.updated_at else None,
         "effects": [

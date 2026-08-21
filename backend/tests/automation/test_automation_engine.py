@@ -20,6 +20,7 @@ from backend.services.automation.constants import (
     EFFECT_CHANGE_STATUS,
     EFFECT_SEND_EMAIL,
     ENTITY_ORDER,
+    EXEC_BLOCKED,
     EXEC_FAILED,
     EXEC_SUCCEEDED,
     MAX_AUTOMATION_DEPTH,
@@ -221,6 +222,7 @@ def test_H_disabled_rule(db):
 
 
 def test_I_J_ordered_effects_and_stop_on_failure(db):
+    """Preflight: unsupported effect in the chain → 0 effects executed (not partial)."""
     create_rule(
         db,
         tenant_id=1,
@@ -254,18 +256,12 @@ def test_I_J_ordered_effects_and_stop_on_failure(db):
     apply_order_panel_ui_status(db, order=order, sub_status_id=20)
     db.commit()
     ex = db.query(AutomationExecution).first()
-    assert ex.status == EXEC_FAILED
-    ees = (
-        db.query(AutomationEffectExecution)
-        .filter(AutomationEffectExecution.execution_id == ex.id)
-        .order_by(AutomationEffectExecution.position)
-        .all()
-    )
-    assert len(ees) == 2  # third never started
-    assert ees[0].status == EXEC_SUCCEEDED
-    assert ees[1].status == EXEC_FAILED
+    assert ex.status == EXEC_BLOCKED
+    assert db.query(AutomationEffectExecution).filter(
+        AutomationEffectExecution.execution_id == ex.id
+    ).count() == 0
     db.refresh(order)
-    assert int(order.order_ui_status_id) == 30  # first effect kept; third not run
+    assert int(order.order_ui_status_id) == 20  # only panel apply; no automation effects
 
 
 def test_K_change_status_via_domain(db):
@@ -342,6 +338,7 @@ def test_N_audit_persisted(db):
 
 
 def test_O_resume_skips_completed_effect(db):
+    """Unsupported effect → BLOCKED with 0 effect rows; retry stays BLOCKED (no partial)."""
     rule = create_rule(
         db,
         tenant_id=1,
@@ -378,19 +375,16 @@ def test_O_resume_skips_completed_effect(db):
     run_automations_for_status_entered(db, event=event)
     db.commit()
     ex = db.query(AutomationExecution).first()
-    assert ex.status == EXEC_FAILED
-    # Simulate retry same event — must not duplicate SUCCEEDED effect row for pos 0
+    assert ex.status == EXEC_BLOCKED
     run_automations_for_status_entered(db, event=event)
     db.commit()
-    succeeded = (
+    assert db.query(AutomationExecution).count() == 1
+    assert (
         db.query(AutomationEffectExecution)
-        .filter(
-            AutomationEffectExecution.execution_id == ex.id,
-            AutomationEffectExecution.status == EXEC_SUCCEEDED,
-        )
+        .filter(AutomationEffectExecution.execution_id == ex.id)
         .count()
+        == 0
     )
-    assert succeeded == 1
 
 
 def test_P_unsupported_effect_rejected(db):
@@ -408,10 +402,9 @@ def test_P_unsupported_effect_rejected(db):
     apply_order_panel_ui_status(db, order=order, sub_status_id=20)
     db.commit()
     ex = db.query(AutomationExecution).first()
-    assert ex.status == EXEC_FAILED
-    assert "not supported" in (ex.error or "").lower() or "not supported" in (
-        db.query(AutomationEffectExecution).first().error or ""
-    ).lower()
+    assert ex.status == EXEC_BLOCKED
+    assert "unsupported" in (ex.error or "").lower()
+    assert db.query(AutomationEffectExecution).count() == 0
 
 
 def test_schema_ensure(db):

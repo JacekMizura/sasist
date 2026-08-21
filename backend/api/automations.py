@@ -277,7 +277,22 @@ def test_automation(
         raise HTTPException(status_code=404, detail="Automation rule not found")
     entity_id = body.entity_id
     if entity_id is None:
-        # Pure config dry-run without entity — skip condition eval
+        # Pure config dry-run without entity — still preflight
+        from ..services.automation.preflight import validate_automation_runtime
+        from ..services.automation.constants import EXEC_BLOCKED, RUN_KIND_TEST
+
+        pf = validate_automation_runtime(row)
+        if not pf.ok:
+            return {
+                "rule_id": int(row.id),
+                "status": EXEC_BLOCKED,
+                "run_kind": RUN_KIND_TEST,
+                "dry_run": True,
+                "blocked_code": pf.blocked_code,
+                "validation_issues": [i.to_dict() for i in pf.issues],
+                "effects_executed": 0,
+                "note": "No entity_id — conditions not evaluated against entity",
+            }
         return {
             "rule_id": int(row.id),
             "status": "DRY_RUN",
@@ -293,6 +308,7 @@ def test_automation(
                 for e in sorted(row.effects or [], key=lambda x: int(x.position))
                 if e.enabled
             ],
+            "runtime_ready": pf.runtime_ready,
             "note": "No entity_id — conditions not evaluated",
         }
     try:

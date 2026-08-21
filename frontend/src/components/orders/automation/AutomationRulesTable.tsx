@@ -144,6 +144,7 @@ type RuleRowProps = {
   basePath: string;
   expanded: boolean;
   sourceBadge?: string | null;
+  runtimeReady?: boolean;
   onToggleExpand: () => void;
   onToggle: () => void;
   onDelete: () => void;
@@ -158,6 +159,7 @@ function AutomationRuleTableRow({
   basePath,
   expanded,
   sourceBadge,
+  runtimeReady = true,
   onToggleExpand,
   onToggle,
   onDelete,
@@ -200,6 +202,13 @@ function AutomationRuleTableRow({
             {sourceBadge}
           </span>
         ) : null}
+        <span
+          className={`mt-1 inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+            runtimeReady ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-950"
+          }`}
+        >
+          {runtimeReady ? "Gotowa" : "Wymaga poprawy"}
+        </span>
         <p className="mt-1.5 text-xs leading-snug text-slate-500">
           Wykonano: <span className="font-semibold tabular-nums text-slate-700">{rule.stats.runCount}</span>
         </p>
@@ -282,6 +291,7 @@ export type AutomationRulesTableProps = {
   idSort: "asc" | "desc";
   onIdSortChange: (dir: "asc" | "desc") => void;
   sourceByRuleId?: Map<string, string>;
+  runtimeReadyByRuleId?: Map<string, boolean>;
   onToggle: (id: string, enabled: boolean) => void;
   onDelete: (rule: OrderAutomationRule) => void;
   onLogs: (rule: OrderAutomationRule) => void;
@@ -296,6 +306,7 @@ export function AutomationRulesTable({
   idSort,
   onIdSortChange,
   sourceByRuleId,
+  runtimeReadyByRuleId,
   onToggle,
   onDelete,
   onLogs,
@@ -350,6 +361,7 @@ export function AutomationRulesTable({
                 : src && src.toUpperCase() === "SYSTEM"
                   ? "System"
                   : null;
+            const ready = runtimeReadyByRuleId?.get(r.id) !== false;
             return (
               <AutomationRuleTableRow
                 key={r.id}
@@ -360,6 +372,7 @@ export function AutomationRulesTable({
                 basePath={basePath}
                 expanded={expandedRuleId === r.id}
                 sourceBadge={badge}
+                runtimeReady={ready}
                 onToggleExpand={() =>
                   setExpandedRuleId((prev) => (prev === r.id ? null : r.id))
                 }

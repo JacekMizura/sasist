@@ -1,4 +1,17 @@
-**Automation Engine Phase 2 — PASS (commit pending).**
+**Automation runtime safety (unsupported conditions) — PASS (commit pending).**
+- No skip of unevaluable conditions; SUPPORTED | UNSUPPORTED | INVALID
+- Shared preflight before RUNNING; unsupported effect → 0 effects (no partial)
+- Read model: runtime_ready + validation_issues; FE badges Gotowa / Wymaga poprawy
+- Legacy import keeps full conditions_json; blocked until supported
+
+**Order Automations cutover to backend SSOT — PASS.**
+- Editor/list/packing activators → `/api/automations` (no new rule writes to localStorage)
+- Model: group, conditions_json, metadata_json; condition evaluator; test/run/import-legacy
+- Runtime effect ACTIVE: change_status only; other FE kinds persist as UNSUPPORTED
+- STATUS_ACTION on same list with badge; Order StatusActionsPanel shared
+- Legacy one-shot import (idempotent marker)
+
+**Automation Engine Phase 2 — PASS `367c0626`.**
 - RETURN/COMPLAINT UI status enter → `entity_status_entered` → Automation Engine
 - `change_status` adapters for ORDER/RETURN/COMPLAINT (panel UI only; no RMZ/refund/stock)
 - `source=STATUS_ACTION` + `GET /automations/status-actions` projection

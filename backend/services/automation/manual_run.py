@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from ...models.automation import AutomationEffectExecution, AutomationExecution, AutomationRule
 from .conditions import evaluate_conditions
 from .constants import (
+    EXEC_BLOCKED,
     EXEC_FAILED,
     EXEC_RUNNING,
     EXEC_SKIPPED,
@@ -21,6 +22,7 @@ from .constants import (
 )
 from .effects import get_adapter, parse_config
 from .events import create_status_transition_event
+from .preflight import validate_automation_runtime
 from .store import _loads, _loads_list, rule_to_dict, update_rule
 
 logger = logging.getLogger(__name__)
@@ -61,15 +63,30 @@ def run_rule_on_entity(
     run_kind: str = RUN_KIND_MANUAL,
     dry_run: bool = False,
     check_conditions: bool = True,
-    ignore_unevaluable_conditions: bool = True,
+    ignore_unevaluable_conditions: bool = False,
 ) -> dict[str, Any]:
     """
     Execute (or dry-run) a rule against an entity using the same effect adapters.
 
-    TEST dry_run: evaluate conditions + list effects; no status mutations.
+    Preflight runs first: unsupported condition/effect → BLOCKED, 0 effects.
     """
+    del ignore_unevaluable_conditions  # never skip unsupported
     et = str(entity_type).upper()
     eid = int(entity_id)
+
+    pf = validate_automation_runtime(rule, entity_type=et)
+    if not pf.ok:
+        return {
+            "rule_id": int(rule.id),
+            "status": EXEC_BLOCKED,
+            "run_kind": run_kind,
+            "dry_run": dry_run,
+            "blocked_code": pf.blocked_code or "unsupported_condition",
+            "validation_issues": [i.to_dict() for i in pf.issues],
+            "effects_executed": 0,
+            "rule": rule_to_dict(rule),
+        }
+
     conditions = _loads_list(getattr(rule, "conditions_json", None) or "[]")
     cond_result = None
     if check_conditions and conditions:
@@ -79,8 +96,18 @@ def run_rule_on_entity(
             entity_type=et,
             entity_id=eid,
             tenant_id=int(rule.tenant_id),
-            ignore_unevaluable=ignore_unevaluable_conditions,
         )
+        if cond_result.blocked:
+            return {
+                "rule_id": int(rule.id),
+                "status": EXEC_BLOCKED,
+                "run_kind": run_kind,
+                "dry_run": dry_run,
+                "blocked_code": cond_result.blocked_code or "unsupported_condition",
+                "unsupported_condition_keys": cond_result.unsupported_keys,
+                "conditions": cond_result.details,
+                "effects_executed": 0,
+            }
         if not cond_result.matched:
             return {
                 "rule_id": int(rule.id),
@@ -89,6 +116,7 @@ def run_rule_on_entity(
                 "dry_run": dry_run,
                 "reason": "conditions_not_matched",
                 "conditions": cond_result.details,
+                "effects_executed": 0,
             }
 
     effects = sorted(

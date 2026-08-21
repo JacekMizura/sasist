@@ -72,6 +72,8 @@ class AutomationRuleOut(BaseModel):
     conditions: list[Any] = Field(default_factory=list)
     rule_metadata: dict[str, Any] = Field(default_factory=dict, alias="metadata")
     source: str
+    runtime_ready: bool = True
+    validation_issues: list[dict[str, Any]] = Field(default_factory=list)
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
     effects: list[AutomationEffectOut] = Field(default_factory=list)
