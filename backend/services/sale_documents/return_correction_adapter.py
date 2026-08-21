@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
+from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
 from ...models.sale_document import SaleDocument
-from ...models.sale_document_item import LINE_KIND_PRODUCT, SaleDocumentItem
+from ...models.sale_document_item import LINE_KIND_PRODUCT, LINE_KIND_SHIPPING, SaleDocumentItem
 from ...models.wms_order_return import WmsOrderReturn
 from ...models.wms_rmz_line import RMZLine
 from .correction_financials import signed_delta_amounts
@@ -31,18 +31,121 @@ def commercial_correction_qty_from_rmz_line(line: RMZLine) -> int:
     return accepted + dmg_b + dmg_c
 
 
-def build_correction_scope_hash(lines: list[dict[str, Any]]) -> str:
-    payload = [
-        {
-            "order_item_id": int(ln["order_item_id"]),
-            "quantity": float(ln["quantity"]),
-            "line_gross": float(ln["line_gross"]),
-            "vat_percent": float(ln["vat_percent"]),
+def _product_scope_entries(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for ln in lines:
+        kind = str(ln.get("line_kind") or LINE_KIND_PRODUCT).strip().upper()
+        if kind != LINE_KIND_PRODUCT:
+            continue
+        oid = ln.get("order_item_id")
+        if oid is None:
+            continue
+        entries.append(
+            {
+                "order_item_id": int(oid),
+                "quantity": float(ln.get("quantity") or 0.0),
+                "line_gross": float(ln.get("line_gross") or 0.0),
+                "vat_percent": float(ln.get("vat_percent") or 0.0),
+            }
+        )
+    return sorted(entries, key=lambda x: int(x["order_item_id"]))
+
+
+def _shipping_scope_entry(lines: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
+    for ln in lines:
+        kind = str(ln.get("line_kind") or "").strip().upper()
+        if kind != LINE_KIND_SHIPPING:
+            continue
+        return {
+            "line_kind": LINE_KIND_SHIPPING,
+            "include_shipping_cost": True,
+            "quantity": float(ln.get("quantity") or 0.0),
+            "line_gross": float(ln.get("line_gross") or 0.0),
+            "line_net": float(ln.get("line_net") or 0.0),
+            "line_vat": float(ln.get("line_vat") or 0.0),
+            "vat_percent": float(ln.get("vat_percent") or 0.0),
+            "name": str(ln.get("name") or ""),
         }
-        for ln in sorted(lines, key=lambda x: int(x["order_item_id"]))
-    ]
-    raw = json.dumps(payload, separators=(",", ":"), ensure_ascii=True)
+    return None
+
+
+def build_correction_scope_hash(lines: list[dict[str, Any]]) -> str:
+    """
+    Distinguish products-only vs products+shipping.
+
+    Products are keyed by order_item_id; shipping by immutable source snapshot values.
+    """
+    payload = {
+        "products": _product_scope_entries(lines),
+        "shipping": _shipping_scope_entry(lines),
+        "include_shipping_cost": _shipping_scope_entry(lines) is not None,
+    }
+    raw = json.dumps(payload, separators=(",", ":"), ensure_ascii=True, sort_keys=True)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _source_shipping_item(source_items: list[SaleDocumentItem]) -> Optional[SaleDocumentItem]:
+    ships = [
+        it
+        for it in source_items
+        if str(getattr(it, "line_kind", None) or "").strip().upper() == LINE_KIND_SHIPPING
+    ]
+    if not ships:
+        return None
+    if len(ships) > 1:
+        raise SaleCorrectionError(
+            "SOURCE_SHIPPING_AMBIGUOUS",
+            "Dokument źródłowy ma więcej niż jedną pozycję SHIPPING.",
+        )
+    return ships[0]
+
+
+def source_shipping_already_corrected(db: Session, *, source_sale_document_id: str) -> bool:
+    """True if any CORRECTION of this source already contains a SHIPPING delta line."""
+    corr_ids = [
+        str(r.id)
+        for r in db.query(SaleDocument)
+        .filter(
+            SaleDocument.source_sale_document_id == str(source_sale_document_id),
+            SaleDocument.document_kind == "CORRECTION",
+        )
+        .all()
+    ]
+    if not corr_ids:
+        return False
+    row = (
+        db.query(SaleDocumentItem.id)
+        .filter(
+            SaleDocumentItem.sale_document_id.in_(corr_ids),
+            SaleDocumentItem.line_kind == LINE_KIND_SHIPPING,
+        )
+        .first()
+    )
+    return row is not None
+
+
+def _shipping_correction_line_from_source(ship: SaleDocumentItem, *, position: int) -> dict[str, Any]:
+    """Signed negative delta copying historical source SHIPPING amounts (no VAT recompute)."""
+    line_net = -abs(float(ship.line_net or 0.0))
+    line_vat = -abs(float(ship.line_vat or 0.0))
+    line_gross = -abs(float(ship.line_gross or 0.0))
+    unit_net = abs(float(ship.unit_net)) if ship.unit_net is not None else abs(line_net)
+    unit_gross = abs(float(ship.unit_gross)) if ship.unit_gross is not None else abs(line_gross)
+    return {
+        "line_kind": LINE_KIND_SHIPPING,
+        "order_item_id": None,
+        "product_id": None,
+        "name": str(ship.name or "Koszt wysyłki")[:512],
+        "sku": None,
+        "position": position,
+        "quantity": -1.0,
+        "unit_net": round(unit_net, 4),
+        "unit_gross": round(unit_gross, 4),
+        "vat_percent": float(ship.vat_percent if ship.vat_percent is not None else 0.0),
+        "line_net": round(line_net, 2),
+        "line_vat": round(line_vat, 2),
+        "line_gross": round(line_gross, 2),
+    }
 
 
 def build_return_correction_lines(
@@ -50,11 +153,13 @@ def build_return_correction_lines(
     *,
     source: SaleDocument,
     return_row: WmsOrderReturn,
+    include_shipping_cost: bool = False,
 ) -> tuple[list[dict[str, Any]], str]:
     """
     Deterministic RMZ → correction deltas using source document item snapshots.
 
-    Mapping SSOT: order_item_id on RMZLine ↔ order_item_id on SaleDocumentItem.
+    Mapping SSOT: order_item_id on RMZLine ↔ PRODUCT SaleDocumentItem.
+    Shipping SSOT: source SaleDocumentItem line_kind=SHIPPING (never live Order).
     """
     assert_return_ready_for_sale_correction(db, return_row=return_row)
 
@@ -75,7 +180,7 @@ def build_return_correction_lines(
     for it in source_items:
         kind = str(getattr(it, "line_kind", None) or LINE_KIND_PRODUCT).strip().upper()
         if kind != LINE_KIND_PRODUCT:
-            continue  # SHIPPING (and future kinds) are not product-correction-mapped
+            continue
         if it.order_item_id is None:
             continue
         oid = int(it.order_item_id)
@@ -134,5 +239,15 @@ def build_return_correction_lines(
             "NO_CORRECTABLE_QTY",
             "Brak zaakceptowanych/uszkodzonych ilości do korekty (odrzucone nie wchodzą).",
         )
+
+    if include_shipping_cost:
+        ship = _source_shipping_item(source_items)
+        if ship is None:
+            raise SaleCorrectionError(
+                "SOURCE_SHIPPING_NOT_AVAILABLE",
+                "Dokument źródłowy nie ma zsnapshotowanego kosztu dostawy (SHIPPING) — "
+                "nie można uwzględnić dostawy w korekcie.",
+            )
+        out.append(_shipping_correction_line_from_source(ship, position=len(out)))
 
     return out, build_correction_scope_hash(out)

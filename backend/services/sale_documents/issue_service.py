@@ -18,7 +18,10 @@ from ..sale_document_buyer_snapshot import parse_buyer_snapshot, serialize_buyer
 from .correction_financials import compute_totals_from_sale_document_items
 from .errors import SaleCorrectionError
 from .items_snapshot import replace_sale_document_items
-from .return_correction_adapter import build_return_correction_lines
+from .return_correction_adapter import (
+    build_return_correction_lines,
+    source_shipping_already_corrected,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -264,6 +267,7 @@ def issue_sale_correction_for_return(
     source_sale_document_id: str | None = None,
     reason: str | None = None,
     warehouse_id: int | None = None,
+    include_shipping_cost: bool = False,
 ) -> tuple[SaleDocument, bool]:
     """Domain adapter: RETURN → correction request → issue_sale_correction."""
     ret = (
@@ -330,7 +334,31 @@ def issue_sale_correction_for_return(
             "Więcej niż jedna faktura PRIMARY dla zamówienia — podaj source_sale_document_id.",
         )
 
-    lines, scope_hash = build_return_correction_lines(db, source=source, return_row=ret)
+    lines, scope_hash = build_return_correction_lines(
+        db,
+        source=source,
+        return_row=ret,
+        include_shipping_cost=bool(include_shipping_cost),
+    )
+    # Idempotency first — retry of same scope must reuse even if shipping already on that doc.
+    existing = _find_existing_idempotent(
+        db,
+        source_id=str(source.id),
+        business_source_type=BUSINESS_SOURCE_RETURN,
+        business_source_id=str(int(ret.id)),
+        scope_hash=scope_hash,
+    )
+    if existing is not None:
+        return existing, True
+
+    if bool(include_shipping_cost) and source_shipping_already_corrected(
+        db, source_sale_document_id=str(source.id)
+    ):
+        raise SaleCorrectionError(
+            "SHIPPING_ALREADY_CORRECTED",
+            "Koszt dostawy z dokumentu źródłowego został już skorygowany wcześniej.",
+        )
+
     return issue_sale_correction(
         db,
         tenant_id=int(tenant_id),

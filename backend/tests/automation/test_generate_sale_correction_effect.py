@@ -169,6 +169,41 @@ def test_d_e_f_g_success_result_shape(db):
         kwargs = issue.call_args.kwargs
         assert kwargs["return_id"] == 50
         assert kwargs["tenant_id"] == 1
+        assert kwargs.get("include_shipping_cost") is False
+
+
+def test_include_shipping_cost_passed_to_domain(db):
+    ev = _event()
+    db.add(ev)
+    db.flush()
+    with patch(
+        "backend.services.automation.effects.generate_sale_correction.issue_sale_correction_for_return",
+        return_value=_fake_doc(reused=False),
+    ) as issue:
+        r = execute_generate_sale_correction(
+            db, config={"include_shipping_cost": True}, event=ev, actor_user_id=1
+        )
+        assert r.ok is True
+        assert r.data["include_shipping_cost"] is True
+        assert issue.call_args.kwargs["include_shipping_cost"] is True
+
+
+def test_source_shipping_not_available_mapped(db):
+    ev = _event()
+    db.add(ev)
+    db.flush()
+    with patch(
+        "backend.services.automation.effects.generate_sale_correction.issue_sale_correction_for_return",
+        side_effect=SaleCorrectionError(
+            "SOURCE_SHIPPING_NOT_AVAILABLE",
+            "Brak SHIPPING na source",
+        ),
+    ):
+        r = execute_generate_sale_correction(
+            db, config={"include_shipping_cost": True}, event=ev, actor_user_id=1
+        )
+        assert r.ok is False
+        assert r.data["error_code"] == "source_shipping_not_available"
 
 
 def test_h_j_retry_reuses_existing(db):

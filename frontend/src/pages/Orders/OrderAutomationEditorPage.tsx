@@ -112,7 +112,7 @@ function payloadForKind(kind: AutomationEffectKind): Record<string, string | num
     case "warehouse_commit":
       return {};
     case "generate_sale_correction":
-      return {};
+      return { include_shipping_cost: false };
     case "print":
       return { printer: "", print_document: "", template: "", copies: "1" };
     case "assign_courier":

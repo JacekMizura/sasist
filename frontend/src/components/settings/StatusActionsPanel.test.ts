@@ -98,6 +98,21 @@ describe("Status actions matrix UX", () => {
     expect(EFFECT_CATALOG).toContain('kind: "generate_sale_correction"');
     expect(EFFECT_CATALOG).toContain("Wystaw korektę faktury");
   });
+
+  it("modal exposes nested include_shipping_cost under correction", () => {
+    expect(SRC).toContain("Uwzględnij koszt dostawy");
+    expect(SRC).toContain("includeShippingCost");
+    expect(SRC).toContain("include_shipping_cost");
+  });
+
+  it("main editor exposes include_shipping_cost checkbox", () => {
+    const editor = readFileSync(
+      path.join(HERE, "../../components/orders/automation/effects/orderAutomationEffectEditorRenderers.tsx"),
+      "utf8",
+    );
+    expect(editor).toContain("Uwzględnij koszt dostawy");
+    expect(editor).toContain("include_shipping_cost");
+  });
 });
 
 describe("STATUS_ACTION list↔modal sync helpers", () => {
@@ -122,6 +137,28 @@ describe("STATUS_ACTION list↔modal sync helpers", () => {
     const state = rowStateFromOverviewMap(row);
     expect(state.warehouse_commit?.enabled).toBe(true);
     expect(state.generate_sale_correction?.enabled).toBe(true);
+  });
+
+  it("correction include_shipping_cost round-trips overview → payload", () => {
+    const row = overviewRowFromRule({
+      enabled: true,
+      effects: [
+        {
+          position: 0,
+          effect_type: "generate_sale_correction",
+          enabled: false,
+          config: { include_shipping_cost: true },
+        },
+      ],
+    });
+    expect(row.generate_sale_correction?.enabled).toBe(false);
+    expect(row.generate_sale_correction?.include_shipping_cost).toBe(true);
+    const state = rowStateFromOverviewMap(row);
+    expect(state.generate_sale_correction?.include_shipping_cost).toBe(true);
+    const effects = buildManagedEffectsPayload("RETURN", state);
+    const corr = effects.find((e) => e.effect_type === "generate_sale_correction");
+    expect(corr?.enabled).toBe(false);
+    expect(corr?.config.include_shipping_cost).toBe(true);
   });
 
   it("email OFF preserves template_id in payload", () => {

@@ -6,6 +6,8 @@ export type StatusActionEffectState = {
   enabled: boolean;
   template_id?: number | null;
   user_id?: number | null;
+  /** Nested under generate_sale_correction — preserved when effect disabled. */
+  include_shipping_cost?: boolean;
 };
 
 export type StatusActionsRowState = Partial<Record<StatusActionManagedKey, StatusActionEffectState>>;
@@ -41,7 +43,9 @@ export function buildManagedEffectsPayload(
         position: out.length,
         effect_type: "generate_sale_correction",
         enabled: Boolean(st.enabled),
-        config: {},
+        config: {
+          include_shipping_cost: Boolean(st.include_shipping_cost),
+        },
       });
     } else if (key === "send_email_customer") {
       const tid = Number(st.template_id);

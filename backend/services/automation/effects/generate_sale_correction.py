@@ -20,12 +20,21 @@ _DOMAIN_CODE_MAP = {
     "SOURCE_NOT_FOUND": "source_document_missing",
     "CORRECTION_NOT_SUPPORTED_FOR_DOCUMENT_TYPE": "correction_not_supported_for_document_type",
     "LINE_MAPPING_FAILED": "correction_line_mapping_failed",
+    "SOURCE_SHIPPING_NOT_AVAILABLE": "source_shipping_not_available",
+    "SHIPPING_ALREADY_CORRECTED": "shipping_already_corrected",
 }
 
 
 def _map_domain_code(code: str) -> str:
     c = str(code or "").strip().upper()
     return _DOMAIN_CODE_MAP.get(c, c.lower() if c else "sale_correction_failed")
+
+
+def _include_shipping_from_config(config: dict[str, Any]) -> bool:
+    raw = config.get("include_shipping_cost", False)
+    if isinstance(raw, str):
+        return raw.strip().lower() in ("1", "true", "yes", "on")
+    return bool(raw)
 
 
 def execute_generate_sale_correction(
@@ -39,8 +48,12 @@ def execute_generate_sale_correction(
     Business meaning: „Wystaw korektę faktury”.
 
     Thin adapter only — domain service is SSOT for readiness, VAT, numbering, lines, idempotency.
+    Config: ``include_shipping_cost`` (default false) — shipping from source SaleDocument SHIPPING item.
     """
-    del config, actor_user_id  # no config; actor unused by domain entrypoint
+    del actor_user_id
+    cfg = config if isinstance(config, dict) else {}
+    include_shipping = _include_shipping_from_config(cfg)
+
     entity_type = str(event.entity_type or "").upper()
     if entity_type != ENTITY_RETURN:
         return EffectResult(
@@ -71,6 +84,7 @@ def execute_generate_sale_correction(
             tenant_id=int(event.tenant_id),
             return_id=int(row.id),
             warehouse_id=wh_id,
+            include_shipping_cost=include_shipping,
         )
     except SaleCorrectionError as exc:
         code = _map_domain_code(exc.code)
@@ -92,7 +106,6 @@ def execute_generate_sale_correction(
     if source is not None:
         source_number = getattr(source, "document_number", None)
     elif source_id:
-        # Lazy: domain may not have relationship loaded — avoid heavy join; id is enough
         from ....models.sale_document import SaleDocument
 
         src_row = db.query(SaleDocument).filter(SaleDocument.id == str(source_id)).first()
@@ -108,5 +121,6 @@ def execute_generate_sale_correction(
             "source_document_id": str(source_id) if source_id else None,
             "source_document_number": str(source_number) if source_number else None,
             "reused_existing": bool(reused),
+            "include_shipping_cost": include_shipping,
         },
     )

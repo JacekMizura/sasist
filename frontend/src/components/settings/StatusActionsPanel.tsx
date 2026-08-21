@@ -43,10 +43,11 @@ type ActionDraft = {
   enabled: boolean;
   templateId: number | "";
   userId: number | "";
+  includeShippingCost: boolean;
 };
 
 function emptyDraft(key: StatusActionManagedKey): ActionDraft {
-  return { key, enabled: false, templateId: "", userId: "" };
+  return { key, enabled: false, templateId: "", userId: "", includeShippingCost: false };
 }
 
 function effectManagedKey(e: AutomationEffectDto): StatusActionManagedKey | null {
@@ -84,6 +85,9 @@ function hydrateFromRules(rules: StatusActionRuleDto[], keys: StatusActionManage
       if (key === "send_email_internal") {
         const u = Number(eff.config?.user_id);
         draft.userId = Number.isFinite(u) && u > 0 ? u : "";
+      }
+      if (key === "generate_sale_correction") {
+        draft.includeShippingCost = Boolean(eff.config?.include_shipping_cost);
       }
       byKey.set(key, draft);
     }
@@ -130,7 +134,9 @@ function draftsToEffects(drafts: ActionDraft[]): Omit<AutomationEffectDto, "id">
         position: out.length,
         effect_type: "generate_sale_correction",
         enabled: d.enabled,
-        config: {},
+        config: {
+          include_shipping_cost: Boolean(d.includeShippingCost),
+        },
       });
     }
   }
@@ -296,6 +302,25 @@ export function StatusActionsPanel({
                 </span>
               ) : null}
             </div>
+
+            {d.key === "generate_sale_correction" && d.enabled ? (
+              <label className="ml-6 mt-1 flex cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 shrink-0 rounded border-slate-300 accent-emerald-600"
+                  checked={d.includeShippingCost}
+                  disabled={readOnly || busy}
+                  onChange={(e) => {
+                    void persist(
+                      drafts.map((x) =>
+                        x.key === d.key ? { ...x, includeShippingCost: e.target.checked, enabled: true } : x,
+                      ),
+                    );
+                  }}
+                />
+                <span className="text-xs text-slate-700">Uwzględnij koszt dostawy</span>
+              </label>
+            ) : null}
 
             {d.enabled && d.key === "send_email_customer" ? (
               <div className="ml-6 mt-1">

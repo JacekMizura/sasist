@@ -116,6 +116,7 @@ export function feRuleToCreateBody(
     }
     if (e.kind === "generate_sale_correction") {
       effectType = "generate_sale_correction";
+      config.include_shipping_cost = Boolean(config.include_shipping_cost);
     }
     return {
       position: i,

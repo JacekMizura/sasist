@@ -204,6 +204,7 @@ export type StatusActionOverviewEffectDto = {
   enabled: boolean;
   template_id?: number | null;
   user_id?: number | null;
+  include_shipping_cost?: boolean;
 };
 
 export type StatusActionsOverviewDto = {

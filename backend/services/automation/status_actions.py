@@ -194,6 +194,8 @@ def status_actions_overview(
                     uid_n = None
                 if uid_n and uid_n > 0:
                     entry["user_id"] = uid_n
+                if logical == "generate_sale_correction":
+                    entry["include_shipping_cost"] = bool(cfg.get("include_shipping_cost", False))
                 actions[logical] = entry
             by_status[key] = actions
     return by_status
@@ -292,7 +294,7 @@ def _normalize_managed_effects(effects: list[dict[str, Any]]) -> list[dict[str, 
             cfg = {}
         elif key == "generate_sale_correction":
             etype = EFFECT_GENERATE_SALE_CORRECTION
-            cfg = {}
+            cfg = {"include_shipping_cost": bool(cfg.get("include_shipping_cost", False))}
         normalized.append(
             {
                 "position": len(normalized),

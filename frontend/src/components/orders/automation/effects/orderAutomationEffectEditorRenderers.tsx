@@ -236,12 +236,24 @@ export function renderWarehouseCommitEffectEditor(props: EffectEditorBaseProps) 
   return <WarehouseCommitEffectEditor {...props} />;
 }
 
-export function GenerateSaleCorrectionEffectEditor(_props: EffectEditorBaseProps) {
+export function GenerateSaleCorrectionEffectEditor({ effect, patchPayload }: EffectEditorBaseProps) {
+  const includeShipping = Boolean(effect.payload.include_shipping_cost);
   return (
-    <p className="px-1 py-2 text-xs text-slate-600">
-      Wystawia korektę faktury na podstawie finalnie przyjętych pozycji zwrotu. Wymaga wcześniejszego przyjęcia w
-      magazynie. Bez dodatkowej konfiguracji.
-    </p>
+    <div className="space-y-2 px-1 py-2">
+      <p className="text-xs text-slate-600">
+        Wystawia korektę faktury na podstawie finalnie przyjętych pozycji zwrotu. Wymaga wcześniejszego przyjęcia w
+        magazynie.
+      </p>
+      <label className="flex cursor-pointer items-center gap-2">
+        <input
+          type="checkbox"
+          className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
+          checked={includeShipping}
+          onChange={(e) => patchPayload({ include_shipping_cost: e.target.checked })}
+        />
+        <span className="text-sm text-slate-800">Uwzględnij koszt dostawy</span>
+      </label>
+    </div>
   );
 }
 

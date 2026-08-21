@@ -30,6 +30,9 @@ export function overviewRowFromRuleEffects(
     if (Number.isFinite(tid) && tid > 0) entry.template_id = tid;
     const uid = Number(e.config?.user_id);
     if (Number.isFinite(uid) && uid > 0) entry.user_id = uid;
+    if (key === "generate_sale_correction") {
+      entry.include_shipping_cost = Boolean(e.config?.include_shipping_cost);
+    }
     out[key] = entry;
   }
   return out;
@@ -49,6 +52,7 @@ export function rowStateFromOverviewMap(
       enabled: Boolean(v?.enabled),
       template_id: v?.template_id ?? null,
       user_id: v?.user_id ?? null,
+      include_shipping_cost: Boolean(v?.include_shipping_cost),
     };
   }
   return out;

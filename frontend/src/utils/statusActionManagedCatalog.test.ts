@@ -42,9 +42,35 @@ describe("statusActionMatrixPayload", () => {
     const on = buildManagedEffectsPayload("RETURN", {
       generate_sale_correction: { enabled: true },
     });
-    expect(on.find((e) => e.effect_type === "generate_sale_correction")?.enabled).toBe(true);
+    const corr = on.find((e) => e.effect_type === "generate_sale_correction");
+    expect(corr?.enabled).toBe(true);
+    expect(corr?.config.include_shipping_cost).toBe(false);
     const ordered = on.map((e) => e.effect_type);
     expect(ordered.indexOf("warehouse_commit")).toBeLessThan(ordered.indexOf("generate_sale_correction"));
+  });
+
+  it("include_shipping_cost in payload; OFF preserves shipping flag", () => {
+    const on = buildManagedEffectsPayload("RETURN", {
+      generate_sale_correction: { enabled: true, include_shipping_cost: true },
+    });
+    expect(on.find((e) => e.effect_type === "generate_sale_correction")?.config.include_shipping_cost).toBe(true);
+
+    const off = patchRowEffect(
+      { generate_sale_correction: { enabled: true, include_shipping_cost: true } },
+      "generate_sale_correction",
+      { enabled: false },
+    );
+    expect(off.generate_sale_correction?.enabled).toBe(false);
+    expect(off.generate_sale_correction?.include_shipping_cost).toBe(true);
+    const payload = buildManagedEffectsPayload("RETURN", off);
+    const corr = payload.find((e) => e.effect_type === "generate_sale_correction");
+    expect(corr?.enabled).toBe(false);
+    expect(corr?.config.include_shipping_cost).toBe(true);
+  });
+
+  it("no separate Koszt dostawy matrix column", () => {
+    expect(Object.values(STATUS_ACTION_COLUMN_HEADERS)).not.toContain("Koszt dostawy");
+    expect(STATUS_ACTION_COLUMN_HEADERS.generate_sale_correction).toBe("Korekta");
   });
 
   it("C/D email config in payload", () => {
