@@ -2,10 +2,15 @@ import api from "./axios";
 
 export type WmsSmartMatchingSettingsApi = {
   enabled: boolean;
+  smart_enabled: boolean;
+  three_d_enabled: boolean;
+  three_d_filler_percent: number;
   identical_orders_threshold: 2 | 3 | 5;
   proposal_init_status_id: number | null;
   auto_label_enabled: boolean;
   auto_label_status_ids: number[];
+  packaging_strategy: string;
+  legacy_v1_fallback_enabled?: boolean;
 };
 
 export type WmsSmartMatchingCompositionItemApi = {

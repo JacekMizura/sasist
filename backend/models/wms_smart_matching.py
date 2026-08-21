@@ -29,11 +29,15 @@ class WmsSmartMatchingSettings(Base):
     tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False, index=True)
 
-    #: Włącz propozycje opakowań do zamówień (Smart + wspólny przełącznik silników).
+    #: Legacy mirror of ``smart_enabled`` (pre–independent-flags). Prefer smart_enabled / three_d_enabled.
     enabled = Column(Boolean, nullable=False, default=True)
+    #: Independent Smart Matching engine enable (learning + Smart suggest).
+    smart_enabled = Column(Boolean, nullable=False, default=True)
+    #: Independent 3D Matching engine enable (geometry fit).
+    three_d_enabled = Column(Boolean, nullable=False, default=True)
     #: Tryb / próg uczenia: 2 | 3 | 5 identycznych spakowanych zamówień.
     identical_orders_threshold = Column(Integer, nullable=False, default=3)
-    #: Status inicjujący propozycję opakowania (jeden).
+    #: Status inicjujący propozycję opakowania (jeden) — wspólny packaging pipeline.
     proposal_init_status_id = Column(
         Integer, ForeignKey("order_ui_statuses.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -46,6 +50,8 @@ class WmsSmartMatchingSettings(Base):
     packaging_strategy = Column(String(32), nullable=False, default="SMART_THEN_3D")
     #: When True, Smart suggest may fall back to legacy exact composition rules (v1 readonly).
     legacy_v1_fallback_enabled = Column(Boolean, nullable=False, default=True)
+    #: Volume reserved for filler materials (0–99). Shrinks usable carton dims by cbrt(1 - pct/100).
+    three_d_filler_percent = Column(Float, nullable=False, default=0.0)
 
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=True, default=datetime.utcnow, onupdate=datetime.utcnow)

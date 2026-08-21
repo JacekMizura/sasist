@@ -2396,6 +2396,41 @@ def ensure_wms_smart_matching_tables(engine: Engine) -> None:
                         f"ADD COLUMN legacy_v1_fallback_enabled {_bool_col_default(engine, default_true=True)}"
                     )
                 )
+            # Independent Smart / 3D enable + filler (non-destructive backfill from legacy ``enabled``).
+            scols = _table_column_names(conn, "wms_smart_matching_settings")
+            added_smart = False
+            added_3d = False
+            if "smart_enabled" not in scols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_smart_matching_settings "
+                        f"ADD COLUMN smart_enabled {_bool_col_default(engine, default_true=True)}"
+                    )
+                )
+                added_smart = True
+            if "three_d_enabled" not in scols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_smart_matching_settings "
+                        f"ADD COLUMN three_d_enabled {_bool_col_default(engine, default_true=True)}"
+                    )
+                )
+                added_3d = True
+            if "three_d_filler_percent" not in scols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE wms_smart_matching_settings "
+                        "ADD COLUMN three_d_filler_percent FLOAT NOT NULL DEFAULT 0"
+                    )
+                )
+            if added_smart or added_3d:
+                # Preserve prior behaviour: legacy ``enabled`` gated both engines.
+                conn.execute(
+                    text(
+                        "UPDATE wms_smart_matching_settings SET "
+                        "smart_enabled = enabled, three_d_enabled = enabled"
+                    )
+                )
         # Smart Matching engine v2 tables.
         if not _table_exists(conn, "wms_smart_matching_observations_v2"):
             conn.execute(

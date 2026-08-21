@@ -173,7 +173,7 @@ class TestFitInvariants(unittest.TestCase):
             purchase_price=None,
             last_purchase_price_net=None,
         )
-        td = suggest_three_d_matching(order, [bad, good])
+        td = suggest_three_d_matching(order, [bad, good])[0]
         smart = [
             PackagingSuggestionDraft(7, "SMART_MATCHING", "BAD", "BAD", "", None, 0.9, None, "carrier", sort_key=1.2)
         ]

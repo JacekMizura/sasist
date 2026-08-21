@@ -38,6 +38,7 @@ class ThreeDResult:
     alternatives: list[PackagingSuggestionDraft] = field(default_factory=list)
     packages: list[dict] = field(default_factory=list)  # future: [{carton_id, items}]
     fits: bool = False
+    outcome: str = "NO_FIT"  # MATCHED | NO_FIT | MISSING_PRODUCT_DATA | SKIPPED
 
 
 @dataclass
@@ -73,19 +74,40 @@ def three_d_result_from_drafts(
     *,
     fits: bool = False,
     packages: Optional[list[dict]] = None,
+    outcome: Optional[str] = None,
 ) -> ThreeDResult:
-    usable = [d for d in drafts if not _is_reject(d)]
+    usable = [d for d in drafts if not _is_reject(d) and str(d.suggested_package_id or "").strip()]
     rejects = [d for d in drafts if _is_reject(d)]
     usable.sort(
         key=lambda d: (-float(d.sort_key), -float(d.confidence_score), str(d.suggested_package_id))
     )
     primary = usable[0] if usable else None
     alts = usable[1:5] + rejects[:3]
+    resolved = str(outcome or "").strip().upper()
+    if not resolved:
+        resolved = "MATCHED" if (fits and primary is not None) else "NO_FIT"
+    if resolved == "MISSING_PRODUCT_DATA":
+        return ThreeDResult(
+            primary=None,
+            alternatives=alts,
+            packages=list(packages or []),
+            fits=False,
+            outcome="MISSING_PRODUCT_DATA",
+        )
+    if resolved == "MATCHED" and primary is not None:
+        return ThreeDResult(
+            primary=primary,
+            alternatives=alts,
+            packages=list(packages or []),
+            fits=True,
+            outcome="MATCHED",
+        )
     return ThreeDResult(
-        primary=primary,
-        alternatives=alts,
+        primary=None,
+        alternatives=alts if alts else list(usable[:4]),
         packages=list(packages or []),
-        fits=bool(fits) or primary is not None,
+        fits=False,
+        outcome=resolved if resolved in ("NO_FIT", "SKIPPED") else "NO_FIT",
     )
 
 

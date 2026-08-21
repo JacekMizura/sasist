@@ -9,7 +9,7 @@ const T = {
   receiving: "Przyjęcia",
   production: "Produkcja",
   smart_matching: "Smart Matching",
-  three_d_matching: "Dopasowanie przestrzenne",
+  three_d_matching: "3D Matching",
 } as const;
 
 function e(
@@ -457,7 +457,7 @@ export const WMS_SETTINGS_SEARCH_CATALOG: WmsSettingsSearchEntry[] = [
   // Smart / 3D
   e({
     id: "smart.packaging_suggestions_enabled",
-    label: "Włącz propozycje opakowań do zamówień",
+    label: "Włącz Smart Matching",
     tabId: "smart_matching",
     sectionId: "wms-smart-config",
     sectionLabel: "Ogólne",
@@ -473,12 +473,20 @@ export const WMS_SETTINGS_SEARCH_CATALOG: WmsSettingsSearchEntry[] = [
     keywords: ["tryb", "smart", "próg", "historia", "reguły"],
   }),
   e({
-    id: "smart.proposal_init_status",
-    label: "Status inicjujący propozycję opakowania",
+    id: "packaging.strategy",
+    label: "Strategia doboru opakowania",
     tabId: "smart_matching",
     sectionId: "wms-smart-config",
     sectionLabel: "Ogólne",
-    keywords: ["status", "smart"],
+    keywords: ["strategia", "3d", "smart", "dobór"],
+  }),
+  e({
+    id: "smart.proposal_init_status",
+    label: "Status inicjujący dobór opakowania",
+    tabId: "smart_matching",
+    sectionId: "wms-smart-config",
+    sectionLabel: "Ogólne",
+    keywords: ["status", "smart", "3d", "dobór"],
   }),
   e({
     id: "smart.auto_label_enabled",
@@ -489,24 +497,19 @@ export const WMS_SETTINGS_SEARCH_CATALOG: WmsSettingsSearchEntry[] = [
     keywords: ["etykiety", "list", "smart"],
   }),
   e({
-    id: "three_d.matching_strategy",
-    label: "Strategia dopasowania",
+    id: "three_d.enabled",
+    label: "Włącz 3D Matching",
     tabId: "three_d_matching",
-    sectionId: "wms-3d-engine",
-    sectionLabel: "Ogólne",
+    sectionId: "wms-3d-settings",
+    sectionLabel: "Ustawienia",
+    keywords: ["3d", "matching", "geometria"],
   }),
   e({
-    id: "three_d.dimension_tolerance_mm",
-    label: "Tolerancja wymiarów (mm)",
+    id: "three_d.filler_percent",
+    label: "Wypełnienie opakowania",
     tabId: "three_d_matching",
-    sectionId: "wms-3d-engine",
-    sectionLabel: "Ogólne",
-  }),
-  e({
-    id: "three_d.allow_product_rotation",
-    label: "Obracanie produktów w symulacji",
-    tabId: "three_d_matching",
-    sectionId: "wms-3d-engine",
-    sectionLabel: "Ogólne",
+    sectionId: "wms-3d-settings",
+    sectionLabel: "Ustawienia",
+    keywords: ["filler", "wypełnienie", "3d"],
   }),
 ];

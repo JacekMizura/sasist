@@ -32,9 +32,12 @@ def on_order_status_changed_smart_matching(
     try:
         tid = int(order.tenant_id)
         wid = int(order.warehouse_id)
-        settings = settings_to_out(get_or_create_settings(db, tenant_id=tid, warehouse_id=wid))
-        if not settings.enabled:
+        settings_row = get_or_create_settings(db, tenant_id=tid, warehouse_id=wid)
+        from .smart_matching_store import effective_smart_enabled, effective_three_d_enabled
+
+        if not effective_smart_enabled(settings_row) and not effective_three_d_enabled(settings_row):
             return result
+        settings = settings_to_out(settings_row)
 
         sid = int(new_status_id)
         if settings.proposal_init_status_id is not None and sid == int(settings.proposal_init_status_id):

@@ -27,6 +27,17 @@ from ...schemas.wms_smart_matching import WmsSmartMatchingSettingsOut
 logger = logging.getLogger(__name__)
 
 VALID_THRESHOLDS = frozenset({2, 3, 5})
+MAX_THREE_D_FILLER_PERCENT = 99.0
+
+
+def _clamp_filler_percent(raw: object) -> float:
+    try:
+        v = float(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0.0
+    if v != v:  # NaN
+        return 0.0
+    return max(0.0, min(MAX_THREE_D_FILLER_PERCENT, v))
 
 
 def _loads_ids(raw: object) -> list[int]:
@@ -43,6 +54,24 @@ def _loads_ids(raw: object) -> list[int]:
     return [int(x) for x in data if str(x).strip().lstrip("-").isdigit() and int(x) > 0]
 
 
+def effective_smart_enabled(row: WmsSmartMatchingSettings) -> bool:
+    """Runtime SSOT for Smart engine — prefers smart_enabled, falls back to legacy enabled."""
+    if hasattr(row, "smart_enabled") and row.smart_enabled is not None:
+        return bool(row.smart_enabled)
+    return bool(row.enabled)
+
+
+def effective_three_d_enabled(row: WmsSmartMatchingSettings) -> bool:
+    """Runtime SSOT for 3D engine — prefers three_d_enabled, falls back to legacy enabled."""
+    if hasattr(row, "three_d_enabled") and row.three_d_enabled is not None:
+        return bool(row.three_d_enabled)
+    return bool(row.enabled)
+
+
+def effective_filler_percent(row: WmsSmartMatchingSettings) -> float:
+    return _clamp_filler_percent(getattr(row, "three_d_filler_percent", 0) or 0)
+
+
 def get_or_create_settings(db: Session, *, tenant_id: int, warehouse_id: int) -> WmsSmartMatchingSettings:
     row = (
         db.query(WmsSmartMatchingSettings)
@@ -53,17 +82,34 @@ def get_or_create_settings(db: Session, *, tenant_id: int, warehouse_id: int) ->
         .first()
     )
     if row is not None:
+        # Self-heal rows created before independent flags (NULL / missing attrs).
+        changed = False
+        if getattr(row, "smart_enabled", None) is None:
+            row.smart_enabled = bool(row.enabled)
+            changed = True
+        if getattr(row, "three_d_enabled", None) is None:
+            row.three_d_enabled = bool(row.enabled)
+            changed = True
+        if getattr(row, "three_d_filler_percent", None) is None:
+            row.three_d_filler_percent = 0.0
+            changed = True
+        if changed:
+            db.add(row)
+            db.flush()
         return row
     row = WmsSmartMatchingSettings(
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
         enabled=True,
+        smart_enabled=True,
+        three_d_enabled=True,
         identical_orders_threshold=3,
         proposal_init_status_id=None,
         auto_label_enabled=False,
         auto_label_status_ids_json="[]",
         packaging_strategy="SMART_THEN_3D",
         legacy_v1_fallback_enabled=True,
+        three_d_filler_percent=0.0,
     )
     db.add(row)
     db.flush()
@@ -74,8 +120,12 @@ def settings_to_out(row: WmsSmartMatchingSettings) -> WmsSmartMatchingSettingsOu
     th = int(row.identical_orders_threshold or 3)
     if th not in VALID_THRESHOLDS:
         th = 3
+    smart_on = effective_smart_enabled(row)
+    three_d_on = effective_three_d_enabled(row)
     return WmsSmartMatchingSettingsOut(
-        enabled=bool(row.enabled),
+        enabled=smart_on,
+        smart_enabled=smart_on,
+        three_d_enabled=three_d_on,
         identical_orders_threshold=th,  # type: ignore[arg-type]
         proposal_init_status_id=int(row.proposal_init_status_id)
         if row.proposal_init_status_id is not None
@@ -84,6 +134,7 @@ def settings_to_out(row: WmsSmartMatchingSettings) -> WmsSmartMatchingSettingsOu
         auto_label_status_ids=_loads_ids(row.auto_label_status_ids_json),
         packaging_strategy=str(getattr(row, "packaging_strategy", None) or "SMART_THEN_3D"),
         legacy_v1_fallback_enabled=bool(getattr(row, "legacy_v1_fallback_enabled", True)),
+        three_d_filler_percent=effective_filler_percent(row),
     )
 
 
@@ -92,16 +143,29 @@ def save_settings(
     *,
     tenant_id: int,
     warehouse_id: int,
-    enabled: bool,
     identical_orders_threshold: int,
     proposal_init_status_id: Optional[int],
     auto_label_enabled: bool,
     auto_label_status_ids: list[int],
+    enabled: Optional[bool] = None,
+    smart_enabled: Optional[bool] = None,
+    three_d_enabled: Optional[bool] = None,
     packaging_strategy: Optional[str] = None,
     legacy_v1_fallback_enabled: Optional[bool] = None,
+    three_d_filler_percent: Optional[float] = None,
 ) -> WmsSmartMatchingSettings:
     row = get_or_create_settings(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
-    row.enabled = bool(enabled)
+
+    if smart_enabled is not None:
+        row.smart_enabled = bool(smart_enabled)
+    elif enabled is not None:
+        row.smart_enabled = bool(enabled)
+    # Keep legacy column in sync with Smart so old readers stay coherent.
+    row.enabled = bool(row.smart_enabled)
+
+    if three_d_enabled is not None:
+        row.three_d_enabled = bool(three_d_enabled)
+
     th = int(identical_orders_threshold)
     row.identical_orders_threshold = th if th in VALID_THRESHOLDS else 3
     row.proposal_init_status_id = int(proposal_init_status_id) if proposal_init_status_id else None
@@ -115,6 +179,8 @@ def save_settings(
         row.packaging_strategy = ps if ps in PACKAGING_STRATEGIES else DEFAULT_PACKAGING_STRATEGY
     if legacy_v1_fallback_enabled is not None:
         row.legacy_v1_fallback_enabled = bool(legacy_v1_fallback_enabled)
+    if three_d_filler_percent is not None:
+        row.three_d_filler_percent = _clamp_filler_percent(three_d_filler_percent)
     row.updated_at = datetime.utcnow()
     db.add(row)
     db.flush()

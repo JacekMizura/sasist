@@ -22,7 +22,7 @@ export const WMS_SETTINGS_TABS = [
   { id: "putaway", label: "Rozlokowania" },
   { id: "transfers", label: "Przesunięcia" },
   { id: "smart_matching", label: "Smart Matching" },
-  { id: "three_d_matching", label: "Dopasowanie przestrzenne" },
+  { id: "three_d_matching", label: "3D Matching" },
   { id: "workstations", label: "Stanowiska" },
 ] as const;
 

@@ -107,7 +107,7 @@ class TestAuditRegressions(unittest.TestCase):
             material_type="",
             image_url=None,
         )
-        td = suggest_three_d_matching(order, [bad, good])
+        td = suggest_three_d_matching(order, [bad, good])[0]
         smart = [
             PackagingSuggestionDraft(
                 7,

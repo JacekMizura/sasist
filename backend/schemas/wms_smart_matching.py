@@ -11,25 +11,34 @@ SmartMatchingThreshold = Literal[2, 3, 5]
 
 
 class WmsSmartMatchingSettingsOut(BaseModel):
+    #: Legacy alias of ``smart_enabled`` (Smart Matching toggle in older clients).
     enabled: bool = True
+    smart_enabled: bool = True
+    three_d_enabled: bool = True
     identical_orders_threshold: SmartMatchingThreshold = 3
     proposal_init_status_id: Optional[int] = None
     auto_label_enabled: bool = False
     auto_label_status_ids: list[int] = Field(default_factory=list)
     packaging_strategy: str = "SMART_THEN_3D"
     legacy_v1_fallback_enabled: bool = True
+    #: 0–99; percent of carton volume reserved for filler (geometry shrink).
+    three_d_filler_percent: float = 0.0
 
 
 class WmsSmartMatchingSettingsSave(BaseModel):
     tenant_id: int = Field(..., ge=1)
     warehouse_id: int = Field(..., ge=1)
-    enabled: bool = True
+    #: Legacy write path → maps to smart_enabled when smart_enabled omitted.
+    enabled: Optional[bool] = None
+    smart_enabled: Optional[bool] = None
+    three_d_enabled: Optional[bool] = None
     identical_orders_threshold: SmartMatchingThreshold = 3
     proposal_init_status_id: Optional[int] = None
     auto_label_enabled: bool = False
     auto_label_status_ids: list[int] = Field(default_factory=list)
     packaging_strategy: Optional[str] = None
     legacy_v1_fallback_enabled: Optional[bool] = None
+    three_d_filler_percent: Optional[float] = Field(default=None, ge=0, le=99)
 
 
 class WmsSmartMatchingBreakOut(BaseModel):

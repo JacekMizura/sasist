@@ -281,12 +281,21 @@ def solve_cartonization(
     allow_multi_carton: bool = True,
     max_payload_kg_by_carton_id: Optional[dict[str, float]] = None,
     shipping_constraints: Optional[ShippingPackageConstraints] = None,
+    filler_percent: float = 0.0,
+    require_real_product_dimensions: bool = False,
 ) -> PackagingFitResult:
     """
     Pick smallest carton that geometrically fits; else multi-carton plan if allowed.
     Deterministic: sort by volume asc, then id.
     Shipping method constraints (when set) tighten effective carton payload / dims.
+
+    filler_percent: reserve volume for packing filler (isotropic usable-dim shrink).
+    require_real_product_dimensions: when True, missing/defaulted XYZ (or weight when
+    needed for payload) → MISSING_PRODUCT_DATA (no 1×1×1 volume estimate MATCHED).
     """
+    from .three_d_filler import apply_filler_to_container, clamp_filler_percent
+
+    filler_pct = clamp_filler_percent(filler_percent)
     warnings: list[str] = []
     rejected: list[RejectedCarton] = []
     capability = {"multi_carton": True, "geometric_placement": True}
@@ -294,6 +303,11 @@ def solve_cartonization(
     defaults_used = any(bool(getattr(it, "used_defaults", False)) for it, q in items_with_qty if q > 0)
     geometry_fallback = any(
         bool(set(getattr(it, "defaulted_fields", ()) or ()) & {"length", "width", "height"})
+        for it, q in items_with_qty
+        if q > 0
+    )
+    weight_defaulted = any(
+        "weight" in set(getattr(it, "defaulted_fields", ()) or ())
         for it, q in items_with_qty
         if q > 0
     )
@@ -314,6 +328,8 @@ def solve_cartonization(
         )
     ):
         warnings.append("SHIPPING_METHOD_DIMENSION_LIMIT_APPLIED")
+    if filler_pct > 0:
+        warnings.append("FILLER_RESERVE_APPLIED")
 
     # Missing dims → UNKNOWN / VOLUME_ESTIMATE, do not fake EXACT
     # (After logistics normalizer, dims are usually technical 1×1×1; used_defaults marks that.)
@@ -328,6 +344,35 @@ def solve_cartonization(
         for it, q in items_with_qty
         if q > 0
     )
+
+    # Strict 3D Matching: no fake 1×1×1 MATCHED
+    if require_real_product_dimensions and (geometry_fallback or no_xyz or missing):
+        return PackagingFitResult(
+            fits=False,
+            recommended_carton_id=None,
+            cartons=[],
+            multi_carton_required=False,
+            method=FitMethod.UNKNOWN.value,
+            confidence=FitConfidence.UNKNOWN.value,
+            explanation="MISSING_PRODUCT_DATA: brak kompletnych wymiarów produktów.",
+            warnings=warnings + ["MISSING_PRODUCT_DATA"],
+            rejected_cartons=[],
+            capability_flags=capability,
+        )
+    if require_real_product_dimensions and weight_defaulted:
+        # Weight gates payload checks — cannot safely MATCHED without master weight.
+        return PackagingFitResult(
+            fits=False,
+            recommended_carton_id=None,
+            cartons=[],
+            multi_carton_required=False,
+            method=FitMethod.UNKNOWN.value,
+            confidence=FitConfidence.UNKNOWN.value,
+            explanation="MISSING_PRODUCT_DATA: brak wagi produktów.",
+            warnings=warnings + ["MISSING_PRODUCT_DATA", "MISSING_PRODUCT_WEIGHT"],
+            rejected_cartons=[],
+            capability_flags=capability,
+        )
 
     sorted_cartons = sorted(
         [c for c in cartons if _carton_volume_cm3(c) > 0],
@@ -352,9 +397,10 @@ def solve_cartonization(
         if max_payload_kg_by_carton_id and str(c.id) in max_payload_kg_by_carton_id:
             override = max_payload_kg_by_carton_id[str(c.id)]
         payload = effective_carton_payload_kg(c, shipping_constraints, override=override)
-        return fit_container_from_carton(c, max_payload_kg=payload)
+        base = fit_container_from_carton(c, max_payload_kg=payload)
+        return apply_filler_to_container(base, filler_pct)
 
-    if no_xyz:
+    if no_xyz and not require_real_product_dimensions:
         # Soft carton suggestion by volume ratio only — never EXACT
         demand = sum(max(0.0, it.unit_volume_dm3) * q * 1000 for it, q in items_with_qty)
         conf = FitConfidence.UNKNOWN if missing else FitConfidence.ESTIMATED

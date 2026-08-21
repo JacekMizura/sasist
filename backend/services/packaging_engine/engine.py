@@ -89,15 +89,23 @@ def _merge_by_carton(
     return merged
 
 
-def _load_active_cartons(db: Session, *, tenant_id: int, warehouse_id: int, limit: int = 24) -> list[Carton]:
+def _load_active_cartons(db: Session, *, tenant_id: int, warehouse_id: int) -> list[Carton]:
+    """All active cartons for warehouse — no arbitrary sample limit (correctness > cap)."""
+    from sqlalchemy.orm import noload
+
     rows = (
         db.query(Carton)
+        .options(
+            noload(Carton.price_tiers),
+            noload(Carton.shipping_methods),
+            noload(Carton.supplier),
+            noload(Carton.producer),
+        )
         .filter(
             Carton.tenant_id == int(tenant_id),
             Carton.warehouse_id == int(warehouse_id),
             Carton.is_active.is_(True),
         )
-        .limit(max(4, min(int(limit), 48)))
         .all()
     )
     rows.sort(key=_carton_volume_sort_key)
@@ -216,10 +224,17 @@ def build_packaging_suggestions_for_order(
       candidates → PHYSICAL FIT (plan) → SmartResult | ThreeDResult → StrategyResolver → PRIMARY.
     Soft Smart+3D score merge is no longer the SSOT.
     """
-    from .smart_matching_store import get_or_create_settings
+    from .smart_matching_store import (
+        effective_filler_percent,
+        effective_smart_enabled,
+        effective_three_d_enabled,
+        get_or_create_settings,
+    )
 
     settings = get_or_create_settings(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
-    suggestions_enabled = bool(settings.enabled)
+    smart_on = effective_smart_enabled(settings)
+    three_d_on = effective_three_d_enabled(settings)
+    filler_pct = effective_filler_percent(settings)
     strategy = normalize_strategy(getattr(settings, "packaging_strategy", None))
 
     cartons = _load_active_cartons(db, tenant_id=tenant_id, warehouse_id=warehouse_id)
@@ -227,17 +242,21 @@ def build_packaging_suggestions_for_order(
     items = items_from_order(order)
     shipping_constraints = None
     sm_id = getattr(order, "shipping_method_id", None)
-    if sm_id:
+    sm_id_s = str(sm_id).strip() if sm_id else None
+    if sm_id_s:
         from ...models.shipping_method import ShippingMethod
         from .cartonization_solver import ShippingPackageConstraints
 
-        sm = db.query(ShippingMethod).filter(ShippingMethod.id == str(sm_id)).first()
+        sm = db.query(ShippingMethod).filter(ShippingMethod.id == sm_id_s).first()
         shipping_constraints = ShippingPackageConstraints.from_shipping_method(sm)
+    # Fit plan for UI: same filler + real-dims rules when 3D is in play
     fit = solve_cartonization(
         items_with_qty=items,
         cartons=cartons,
         allow_multi_carton=True,
         shipping_constraints=shipping_constraints,
+        filler_percent=filler_pct if three_d_on else 0.0,
+        require_real_product_dimensions=bool(three_d_on),
     )
     fit_plan = _fit_plan_out(fit)
 
@@ -250,8 +269,8 @@ def build_packaging_suggestions_for_order(
         if fit.recommended_carton_id:
             eligible.add(str(fit.recommended_carton_id))
 
-    run_smart = suggestions_enabled and strategy != "THREE_D_ONLY"
-    run_3d = suggestions_enabled and strategy != "SMART_ONLY"
+    run_smart = smart_on and strategy != "THREE_D_ONLY"
+    run_3d = three_d_on and strategy != "SMART_ONLY"
 
     smart = (
         evaluate_smart_matching_v2(
@@ -261,13 +280,19 @@ def build_packaging_suggestions_for_order(
         else SmartResult(draft=None, ambiguous=False, reason="SKIPPED")
     )
 
-    td_drafts = (
-        suggest_three_d_matching(order, cartons=cartons, shipping_constraints=shipping_constraints)
-        if run_3d
-        else []
-    )
+    td_outcome = "SKIPPED"
+    td_drafts: list[PackagingSuggestionDraft] = []
+    if run_3d:
+        td_drafts, td_outcome = suggest_three_d_matching(
+            order,
+            cartons=cartons,
+            shipping_constraints=shipping_constraints,
+            filler_percent=filler_pct,
+            db=db,
+            shipping_method_id=sm_id_s,
+        )
     for d in td_drafts:
-        if "Odrzucony:" not in (d.reason or ""):
+        if "Odrzucony:" not in (d.reason or "") and str(d.suggested_package_id or "").strip():
             eligible.add(str(d.suggested_package_id))
     eligible -= rejected_ids
 
@@ -287,8 +312,9 @@ def build_packaging_suggestions_for_order(
 
     three_d = three_d_result_from_drafts(
         td_drafts,
-        fits=bool(fit.fits),
-        packages=packages_preview,
+        fits=td_outcome == "MATCHED",
+        packages=packages_preview if td_outcome == "MATCHED" else [],
+        outcome=td_outcome,
     )
 
     outcome = resolve_packaging_strategy(strategy, smart=smart, three_d=three_d)

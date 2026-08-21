@@ -107,12 +107,15 @@ def put_smart_matching_settings(
             tenant_id=int(body.tenant_id),
             warehouse_id=int(warehouse_id),
             enabled=body.enabled,
+            smart_enabled=body.smart_enabled,
+            three_d_enabled=body.three_d_enabled,
             identical_orders_threshold=int(body.identical_orders_threshold),
             proposal_init_status_id=body.proposal_init_status_id,
             auto_label_enabled=body.auto_label_enabled,
             auto_label_status_ids=list(body.auto_label_status_ids or []),
             packaging_strategy=body.packaging_strategy,
             legacy_v1_fallback_enabled=body.legacy_v1_fallback_enabled,
+            three_d_filler_percent=body.three_d_filler_percent,
         )
         db.commit()
         db.refresh(row)
