@@ -13,6 +13,7 @@ import {
 } from "../../api/orderUiStatusApi";
 import { CompactLabelColorPicker } from "../../components/label/CompactLabelColorPicker";
 import { PanelStatusConfiguratorAside } from "../../components/settings/PanelStatusConfiguratorAside";
+import { StatusActionsPanel } from "../../components/settings/StatusActionsPanel";
 import { OrderUiStatusConfigRowPresent } from "../../components/orders/orderList/OrderUiStatusConfigRowPresent";
 import { usePanelStatusCounterColor } from "../../hooks/usePanelStatusCounterColor";
 import {
@@ -514,6 +515,21 @@ export default function OrderPanelUiStatusesSettingsPage() {
               counterColorHex={editCounterColor}
               onCounterColorChange={setEditCounterColor}
             />
+            <div className="mt-4">
+              <StatusActionsPanel
+                tenantId={DAMAGE_TENANT_ID}
+                warehouseId={warehouseId}
+                entityType="ORDER"
+                statusId={r.id}
+                statusOptions={(summary?.groups ?? []).flatMap((gg) =>
+                  (gg.sub_statuses ?? []).map((s) => ({
+                    id: s.id,
+                    name: s.name,
+                    disabled: s.is_active === false,
+                  })),
+                )}
+              />
+            </div>
           </div>
         </div>
         

@@ -321,7 +321,7 @@ export default function OrderAutomationEditorPage() {
   const validation = useMemo(() => validateAutomationRule(draft), [draft]);
   const canSave = validation.valid && draft.name.trim().length > 0;
 
-  const save = () => {
+  const save = async () => {
     setNameTouched(true);
     setSaveAttempted(true);
     if (!draft.name.trim()) {
@@ -341,11 +341,19 @@ export default function OrderAutomationEditorPage() {
     const prevNormalized = prevRule ? normalizeRule({ ...prevRule }) : null;
     const userId = user?.id ?? 0;
     const entries = computeRuleChangeLogEntries(prevNormalized, toSave, userId, userDisplayName, changeLogCtx);
-    upsertRule(toSave);
-    if (entries.length > 0) appendChangeLogs(entries);
-    setSaveAttempted(false);
-    toast.success("Zapisano.");
-    if (isNew) navigate(`${baseList}/${draft.id}/edit`, { replace: true });
+    try {
+      const saved = await upsertRule(toSave);
+      if (entries.length > 0) {
+        const remapped = entries.map((e) => ({ ...e, ruleId: saved.id }));
+        appendChangeLogs(remapped);
+      }
+      setDraft(normalizeRule(saved));
+      setSaveAttempted(false);
+      toast.success("Zapisano.");
+      if (isNew) navigate(`${baseList}/${saved.id}/edit`, { replace: true });
+    } catch {
+      toast.error("Nie udało się zapisać na serwerze.");
+    }
   };
 
   const nameInvalid = nameTouched && !draft.name.trim();
@@ -435,7 +443,7 @@ export default function OrderAutomationEditorPage() {
             <button type="button" className={`${oaBtn} gap-2`} onClick={() => setTestOpen(true)}>
               <FlaskConical className="h-4 w-4" /> Test
             </button>
-            <button type="button" className={`${oaBtnPri} min-h-10 px-5`} onClick={save} disabled={!canSave}>
+            <button type="button" className={`${oaBtnPri} min-h-10 px-5`} onClick={() => void save()} disabled={!canSave}>
               Zapisz
             </button>
           </div>
@@ -535,9 +543,15 @@ export default function OrderAutomationEditorPage() {
               className={oaBtnDanger}
               onClick={() => {
                 if (!window.confirm("Usunąć tę automatyzację?")) return;
-                deleteRule(draft.id);
-                toast.success("Usunięto.");
-                navigate(baseList);
+                void (async () => {
+                  try {
+                    await deleteRule(draft.id);
+                    toast.success("Usunięto.");
+                    navigate(baseList);
+                  } catch {
+                    toast.error("Nie udało się usunąć.");
+                  }
+                })();
               }}
             >
               Usuń automatyzację
@@ -602,19 +616,32 @@ export default function OrderAutomationEditorPage() {
         <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm" role="dialog" aria-modal>
           <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
             <h2 className="text-lg font-semibold text-slate-900">Test akcji</h2>
-            <p className="mt-2 text-sm text-slate-600">Symulacja uruchomienia akcji automatycznej.</p>
+            <p className="mt-2 text-sm text-slate-600">
+              Dry-run na backendzie (warunki + plan efektów). Bez side-effectów przy domyślnym teście.
+            </p>
             <div className="mt-6 flex justify-end gap-2">
               <button type="button" className={oaBtn} onClick={() => setTestOpen(false)}>Zamknij</button>
               <button
                 type="button"
                 className={oaBtnPri}
                 onClick={() => {
-                  recordTestRun(draft, true, "Test (edytor — placeholder)", JSON.stringify({ name: draft.name }));
-                  toast.success("Zapisano w dzienniku.");
-                  setTestOpen(false);
+                  void (async () => {
+                    try {
+                      await recordTestRun(
+                        draft,
+                        true,
+                        "Test (dry-run backend)",
+                        JSON.stringify({ name: draft.name }),
+                      );
+                      toast.success("Test zapisany (backend dry-run).");
+                      setTestOpen(false);
+                    } catch {
+                      toast.error("Test nie powiódł się.");
+                    }
+                  })();
                 }}
               >
-                Zapisz test w dzienniku
+                Uruchom test (dry-run)
               </button>
             </div>
           </div>

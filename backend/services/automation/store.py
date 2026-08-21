@@ -21,6 +21,10 @@ def _dumps(obj: object) -> str:
     return json.dumps(obj if obj is not None else {}, ensure_ascii=False)
 
 
+def _dumps_list(obj: object) -> str:
+    return json.dumps(obj if obj is not None else [], ensure_ascii=False)
+
+
 def _loads(raw: object) -> dict[str, Any]:
     if isinstance(raw, dict):
         return raw
@@ -31,6 +35,16 @@ def _loads(raw: object) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+def _loads_list(raw: object) -> list[Any]:
+    if isinstance(raw, list):
+        return raw
+    try:
+        data = json.loads(str(raw or "[]"))
+    except Exception:
+        return []
+    return data if isinstance(data, list) else []
+
+
 def list_rules(
     db: Session,
     *,
@@ -38,6 +52,7 @@ def list_rules(
     warehouse_id: Optional[int] = None,
     entity_type: Optional[str] = None,
     enabled: Optional[bool] = None,
+    source: Optional[str] = None,
 ) -> list[AutomationRule]:
     q = db.query(AutomationRule).options(joinedload(AutomationRule.effects)).filter(
         AutomationRule.tenant_id == int(tenant_id)
@@ -50,6 +65,8 @@ def list_rules(
         q = q.filter(AutomationRule.entity_type == str(entity_type).upper())
     if enabled is not None:
         q = q.filter(AutomationRule.enabled.is_(bool(enabled)))
+    if source is not None:
+        q = q.filter(AutomationRule.source == str(source))
     return q.order_by(AutomationRule.id.asc()).all()
 
 
@@ -60,6 +77,24 @@ def get_rule(db: Session, *, tenant_id: int, rule_id: int) -> Optional[Automatio
         .filter(AutomationRule.id == int(rule_id), AutomationRule.tenant_id == int(tenant_id))
         .first()
     )
+
+
+def find_rule_by_legacy_fe_id(
+    db: Session, *, tenant_id: int, warehouse_id: Optional[int], legacy_fe_id: str
+) -> Optional[AutomationRule]:
+    needle = str(legacy_fe_id or "").strip()
+    if not needle:
+        return None
+    q = db.query(AutomationRule).options(joinedload(AutomationRule.effects)).filter(
+        AutomationRule.tenant_id == int(tenant_id)
+    )
+    if warehouse_id is not None:
+        q = q.filter(AutomationRule.warehouse_id == int(warehouse_id))
+    for rule in q.all():
+        meta = _loads(getattr(rule, "metadata_json", None) or "{}")
+        if str(meta.get("legacy_fe_id") or "") == needle:
+            return rule
+    return None
 
 
 def create_rule(
@@ -74,6 +109,9 @@ def create_rule(
     trigger_config: Optional[dict[str, Any]] = None,
     source: str = SOURCE_USER,
     effects: Optional[list[dict[str, Any]]] = None,
+    group: Optional[str] = None,
+    conditions: Optional[list[Any]] = None,
+    metadata: Optional[dict[str, Any]] = None,
 ) -> AutomationRule:
     et = str(entity_type).strip().upper()
     if et not in ENTITY_TYPES:
@@ -84,9 +122,12 @@ def create_rule(
         warehouse_id=int(warehouse_id) if warehouse_id is not None else None,
         entity_type=et,
         name=(name or "").strip() or "Bez nazwy",
+        group=(group or "Ogólne").strip() or "Ogólne",
         enabled=bool(enabled),
         trigger_type=str(trigger_type or TRIGGER_ENTITY_STATUS_ENTERED),
         trigger_config_json=_dumps(trigger_config or {}),
+        conditions_json=_dumps_list(conditions or []),
+        metadata_json=_dumps(metadata or {}),
         source=str(source or SOURCE_USER),
         created_at=now,
         updated_at=now,
@@ -110,11 +151,17 @@ def update_rule(
     trigger_type: Optional[str] = None,
     trigger_config: Optional[dict[str, Any]] = None,
     effects: Optional[list[dict[str, Any]]] = None,
+    group: Optional[str] = None,
+    conditions: Optional[list[Any]] = None,
+    metadata: Optional[dict[str, Any]] = None,
+    merge_metadata: bool = True,
 ) -> AutomationRule:
     if name is not None:
         rule.name = name.strip() or rule.name
     if enabled is not None:
         rule.enabled = bool(enabled)
+    if group is not None:
+        rule.group = group.strip() or "Ogólne"
     if clear_warehouse:
         rule.warehouse_id = None
     elif warehouse_id is not None:
@@ -123,12 +170,51 @@ def update_rule(
         rule.trigger_type = str(trigger_type)
     if trigger_config is not None:
         rule.trigger_config_json = _dumps(trigger_config)
+    if conditions is not None:
+        rule.conditions_json = _dumps_list(conditions)
+    if metadata is not None:
+        if merge_metadata:
+            prev = _loads(getattr(rule, "metadata_json", None) or "{}")
+            prev.update(metadata)
+            rule.metadata_json = _dumps(prev)
+        else:
+            rule.metadata_json = _dumps(metadata)
     if effects is not None:
         _replace_effects(db, rule, effects)
     rule.updated_at = datetime.utcnow()
     db.add(rule)
     db.flush()
     return rule
+
+
+def duplicate_rule(db: Session, rule: AutomationRule) -> AutomationRule:
+    meta = _loads(getattr(rule, "metadata_json", None) or "{}")
+    meta.pop("legacy_fe_id", None)
+    meta["stats"] = {"lastRunAt": None, "runCount": 0}
+    effects = [
+        {
+            "position": int(e.position),
+            "effect_type": e.effect_type,
+            "config": _loads(e.config_json),
+            "enabled": bool(e.enabled),
+        }
+        for e in sorted(rule.effects or [], key=lambda x: (int(x.position), int(x.id or 0)))
+    ]
+    return create_rule(
+        db,
+        tenant_id=int(rule.tenant_id),
+        warehouse_id=int(rule.warehouse_id) if rule.warehouse_id is not None else None,
+        entity_type=str(rule.entity_type),
+        name=f"{rule.name} (kopia)",
+        enabled=False,
+        trigger_type=str(rule.trigger_type),
+        trigger_config=_loads(rule.trigger_config_json),
+        source=str(rule.source or SOURCE_USER),
+        effects=effects,
+        group=getattr(rule, "group", None) or "Ogólne",
+        conditions=_loads_list(getattr(rule, "conditions_json", None) or "[]"),
+        metadata=meta,
+    )
 
 
 def delete_rule(db: Session, rule: AutomationRule) -> None:
@@ -192,9 +278,12 @@ def rule_to_dict(rule: AutomationRule) -> dict[str, Any]:
         "warehouse_id": int(rule.warehouse_id) if rule.warehouse_id is not None else None,
         "entity_type": rule.entity_type,
         "name": rule.name,
+        "group": getattr(rule, "group", None) or "Ogólne",
         "enabled": bool(rule.enabled),
         "trigger_type": rule.trigger_type,
         "trigger_config": _loads(rule.trigger_config_json),
+        "conditions": _loads_list(getattr(rule, "conditions_json", None) or "[]"),
+        "metadata": _loads(getattr(rule, "metadata_json", None) or "{}"),
         "source": rule.source,
         "created_at": rule.created_at.isoformat() if rule.created_at else None,
         "updated_at": rule.updated_at.isoformat() if rule.updated_at else None,
@@ -219,6 +308,7 @@ def execution_to_dict(ex: AutomationExecution) -> dict[str, Any]:
         "entity_type": ex.entity_type,
         "entity_id": int(ex.entity_id),
         "trigger_event_id": ex.trigger_event_id,
+        "run_kind": getattr(ex, "run_kind", None) or "AUTO",
         "idempotency_key": ex.idempotency_key,
         "status": ex.status,
         "started_at": ex.started_at.isoformat() if ex.started_at else None,

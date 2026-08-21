@@ -1,7 +1,7 @@
 /**
- * LEGACY: Persystencja reguł i dziennika testów — wyłącznie frontend (localStorage).
- * Backend Automation Engine (`/api/automations`) is the SSOT going forward.
- * Po migracji zamień warstwę zapisu na API, zachowując kształt {@link OrderAutomationRule}.
+ * LEGACY MIGRATION ONLY: Persystencja reguł w localStorage — wyłącznie odczyt do jednorazowego importu.
+ * Zapis nowych reguł: backend `/api/automations` (SSOT).
+ * Execution/change logs + groups + module settings remain local until dedicated APIs exist.
  */
 import type {
   OrderAutomationChangeLogEntry,
@@ -25,8 +25,13 @@ const CHANGE_LOGS_PREFIX = "orderAutomation.changeLogs.v1";
 const GROUPS_PREFIX = "orderAutomation.actionGroups.v1";
 const MODULE_SETTINGS_PREFIX = "orderAutomation.moduleSettings.v1";
 const PUBLIC_ID_COUNTER_PREFIX = "orderAutomation.publicIdCounter.v1";
+const MIGRATION_MARKER_PREFIX = "orderAutomation.backendMigrated.v1";
 
 export type OrderAutomationScope = "orders" | "inventory";
+
+export function migrationMarkerKey(tenantId: number, warehouseId: number) {
+  return `${MIGRATION_MARKER_PREFIX}:${tenantId}:${warehouseId}`;
+}
 
 export type OrderAutomationActionGroup = {
   id: string;

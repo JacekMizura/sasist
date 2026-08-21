@@ -1,6 +1,6 @@
 /**
  * Backend Automation Engine API client (SSOT).
- * FE localStorage orderAutomation* remains LEGACY until a dedicated migration task.
+ * Legacy localStorage is migration-only — no new rule writes.
  */
 import api from "./axios";
 
@@ -20,9 +20,12 @@ export type AutomationRuleDto = {
   warehouse_id: number | null;
   entity_type: AutomationEntityType | string;
   name: string;
+  group?: string;
   enabled: boolean;
   trigger_type: string;
   trigger_config: Record<string, unknown>;
+  conditions?: unknown[];
+  metadata?: Record<string, unknown>;
   source: string;
   created_at?: string | null;
   updated_at?: string | null;
@@ -34,9 +37,12 @@ export type AutomationRuleCreateBody = {
   warehouse_id?: number | null;
   entity_type: AutomationEntityType;
   name: string;
+  group?: string;
   enabled?: boolean;
   trigger_type?: string;
   trigger_config?: Record<string, unknown>;
+  conditions?: unknown[];
+  metadata?: Record<string, unknown>;
   source?: string;
   effects?: Omit<AutomationEffectDto, "id">[];
 };
@@ -46,7 +52,8 @@ export type AutomationExecutionDto = {
   rule_id: number;
   entity_type: string;
   entity_id: number;
-  trigger_event_id: string;
+  trigger_event_id?: string | null;
+  run_kind?: string;
   idempotency_key: string;
   status: string;
   started_at?: string | null;
@@ -70,6 +77,7 @@ export async function listAutomations(params: {
   warehouseId?: number | null;
   entityType?: string;
   enabled?: boolean;
+  source?: string;
 }): Promise<AutomationRuleDto[]> {
   const res = await api.get<AutomationRuleDto[]>("automations", {
     params: {
@@ -77,6 +85,7 @@ export async function listAutomations(params: {
       warehouse_id: params.warehouseId ?? undefined,
       entity_type: params.entityType,
       enabled: params.enabled,
+      source: params.source,
     },
   });
   return res.data;
@@ -120,6 +129,51 @@ export async function disableAutomation(ruleId: number, tenantId: number): Promi
   const res = await api.post<AutomationRuleDto>(`automations/${ruleId}/disable`, null, {
     params: { tenant_id: tenantId },
   });
+  return res.data;
+}
+
+export async function duplicateAutomation(ruleId: number, tenantId: number): Promise<AutomationRuleDto> {
+  const res = await api.post<AutomationRuleDto>(`automations/${ruleId}/duplicate`, null, {
+    params: { tenant_id: tenantId },
+  });
+  return res.data;
+}
+
+export async function testAutomation(
+  ruleId: number,
+  body: {
+    tenant_id: number;
+    entity_type?: AutomationEntityType;
+    entity_id?: number | null;
+    dry_run?: boolean;
+    check_conditions?: boolean;
+  },
+): Promise<Record<string, unknown>> {
+  const res = await api.post<Record<string, unknown>>(`automations/${ruleId}/test`, body);
+  return res.data;
+}
+
+export async function runAutomation(
+  ruleId: number,
+  body: {
+    tenant_id: number;
+    entity_type: AutomationEntityType;
+    entity_id: number;
+    check_conditions?: boolean;
+    dry_run?: boolean;
+  },
+): Promise<Record<string, unknown>> {
+  const res = await api.post<Record<string, unknown>>(`automations/${ruleId}/run`, body);
+  return res.data;
+}
+
+export async function importLegacyAutomations(body: {
+  tenant_id: number;
+  warehouse_id: number;
+  entity_type?: AutomationEntityType;
+  rules: unknown[];
+}): Promise<{ created: number; skipped: number; errors: string[]; rule_ids: number[] }> {
+  const res = await api.post("automations/import-legacy", body);
   return res.data;
 }
 

@@ -143,6 +143,7 @@ type RuleRowProps = {
   warehouseOptions?: ConditionOption[];
   basePath: string;
   expanded: boolean;
+  sourceBadge?: string | null;
   onToggleExpand: () => void;
   onToggle: () => void;
   onDelete: () => void;
@@ -156,6 +157,7 @@ function AutomationRuleTableRow({
   warehouseOptions,
   basePath,
   expanded,
+  sourceBadge,
   onToggleExpand,
   onToggle,
   onDelete,
@@ -193,6 +195,11 @@ function AutomationRuleTableRow({
         >
           {ruleName}
         </button>
+        {sourceBadge ? (
+          <span className="mt-1 inline-flex rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-900">
+            {sourceBadge}
+          </span>
+        ) : null}
         <p className="mt-1.5 text-xs leading-snug text-slate-500">
           Wykonano: <span className="font-semibold tabular-nums text-slate-700">{rule.stats.runCount}</span>
         </p>
@@ -274,6 +281,7 @@ export type AutomationRulesTableProps = {
   basePath: string;
   idSort: "asc" | "desc";
   onIdSortChange: (dir: "asc" | "desc") => void;
+  sourceByRuleId?: Map<string, string>;
   onToggle: (id: string, enabled: boolean) => void;
   onDelete: (rule: OrderAutomationRule) => void;
   onLogs: (rule: OrderAutomationRule) => void;
@@ -287,6 +295,7 @@ export function AutomationRulesTable({
   basePath,
   idSort,
   onIdSortChange,
+  sourceByRuleId,
   onToggle,
   onDelete,
   onLogs,
@@ -333,23 +342,33 @@ export function AutomationRulesTable({
           </tr>
         </thead>
         <tbody>
-          {sorted.map((r) => (
-            <AutomationRuleTableRow
-              key={r.id}
-              rule={r}
-              statusNameById={statusNameById}
-              statusBriefById={statusBriefById}
-              warehouseOptions={warehouseOptions}
-              basePath={basePath}
-              expanded={expandedRuleId === r.id}
-              onToggleExpand={() =>
-                setExpandedRuleId((prev) => (prev === r.id ? null : r.id))
-              }
-              onToggle={() => onToggle(r.id, !r.enabled)}
-              onDelete={() => onDelete(r)}
-              onLogs={() => onLogs(r)}
-            />
-          ))}
+          {sorted.map((r) => {
+            const src = sourceByRuleId?.get(r.id);
+            const badge =
+              src && src.toUpperCase() === "STATUS_ACTION"
+                ? "Akcja statusu"
+                : src && src.toUpperCase() === "SYSTEM"
+                  ? "System"
+                  : null;
+            return (
+              <AutomationRuleTableRow
+                key={r.id}
+                rule={r}
+                statusNameById={statusNameById}
+                statusBriefById={statusBriefById}
+                warehouseOptions={warehouseOptions}
+                basePath={basePath}
+                expanded={expandedRuleId === r.id}
+                sourceBadge={badge}
+                onToggleExpand={() =>
+                  setExpandedRuleId((prev) => (prev === r.id ? null : r.id))
+                }
+                onToggle={() => onToggle(r.id, !r.enabled)}
+                onDelete={() => onDelete(r)}
+                onLogs={() => onLogs(r)}
+              />
+            );
+          })}
         </tbody>
       </table>
     </div>

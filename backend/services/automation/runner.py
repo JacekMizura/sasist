@@ -86,7 +86,31 @@ def find_matching_rules(db: Session, event: StatusTransitionEvent) -> list[Autom
         )
     )
     rules = q.order_by(AutomationRule.id.asc()).all()
-    return [r for r in rules if _trigger_matches(r, event)]
+    matched: list[AutomationRule] = []
+    for r in rules:
+        if not _trigger_matches(r, event):
+            continue
+        from .manual_run import rule_allows_status_enter_auto
+
+        if not rule_allows_status_enter_auto(r):
+            continue
+        from .conditions import evaluate_conditions
+        from .store import _loads_list
+
+        conds = _loads_list(getattr(r, "conditions_json", None) or "[]")
+        if conds:
+            result = evaluate_conditions(
+                db,
+                conditions=conds,
+                entity_type=str(event.entity_type),
+                entity_id=int(event.entity_id),
+                tenant_id=int(event.tenant_id),
+                ignore_unevaluable=True,
+            )
+            if not result.matched:
+                continue
+        matched.append(r)
+    return matched
 
 
 def run_automations_for_status_entered(
@@ -155,6 +179,7 @@ def _get_or_create_execution(
         entity_type=str(event.entity_type).upper(),
         entity_id=int(event.entity_id),
         trigger_event_id=str(event.id),
+        run_kind="AUTO",
         idempotency_key=key,
         status=EXEC_PENDING,
         created_at=datetime.utcnow(),

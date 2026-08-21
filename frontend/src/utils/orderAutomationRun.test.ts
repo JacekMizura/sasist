@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrderAutomationRule } from "../types/orderAutomation";
 import { defaultManualTrigger } from "./orderAutomationManualTrigger";
-import { saveAutomationRules } from "./orderAutomationLocalStore";
 import {
   activatorButtonLabel,
   createExclusiveActivatorRunGate,
@@ -10,34 +9,15 @@ import {
   runOrderAutomationActivator,
 } from "./orderAutomationRun";
 
-vi.mock("../api/orderUiStatusApi", () => ({
-  patchOrderUiStatus: vi.fn(),
+vi.mock("../api/automationsApi", () => ({
+  listAutomations: vi.fn(async () => []),
+  runAutomation: vi.fn(async () => ({ status: "SUCCEEDED", planned_effects: [{ effect_type: "change_status" }] })),
 }));
 
-import { patchOrderUiStatus } from "../api/orderUiStatusApi";
+import { listAutomations, runAutomation } from "../api/automationsApi";
 
-const patchMock = vi.mocked(patchOrderUiStatus);
-
-function installMemoryLocalStorage() {
-  const store = new Map<string, string>();
-  const api = {
-    getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
-    setItem: (k: string, v: string) => {
-      store.set(k, String(v));
-    },
-    removeItem: (k: string) => {
-      store.delete(k);
-    },
-    clear: () => {
-      store.clear();
-    },
-    key: (i: number) => Array.from(store.keys())[i] ?? null,
-    get length() {
-      return store.size;
-    },
-  };
-  Object.defineProperty(globalThis, "localStorage", { value: api, configurable: true });
-}
+const listMock = vi.mocked(listAutomations);
+const runMock = vi.mocked(runAutomation);
 
 function baseRule(partial: Partial<OrderAutomationRule> & Pick<OrderAutomationRule, "id" | "name">): OrderAutomationRule {
   return {
@@ -64,131 +44,110 @@ function baseRule(partial: Partial<OrderAutomationRule> & Pick<OrderAutomationRu
   };
 }
 
+function installMemoryLocalStorage() {
+  const store = new Map<string, string>();
+  Object.defineProperty(globalThis, "localStorage", {
+    value: {
+      getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
+      setItem: (k: string, v: string) => {
+        store.set(k, String(v));
+      },
+      removeItem: (k: string) => {
+        store.delete(k);
+      },
+      clear: () => store.clear(),
+    },
+    configurable: true,
+  });
+}
+
 installMemoryLocalStorage();
 
-describe("packingAutomationActivatorRules", () => {
-  const tenantId = 1;
-  const warehouseId = 9;
-
+describe("orderAutomationRun backend SSOT", () => {
   beforeEach(() => {
     localStorage.clear();
-    patchMock.mockReset();
-    patchMock.mockResolvedValue({} as never);
+    listMock.mockReset();
+    runMock.mockReset();
+    runMock.mockResolvedValue({
+      status: "SUCCEEDED",
+      planned_effects: [{ effect_type: "change_status" }],
+    });
   });
 
-  it("shows a button rule when activator is configured for packing", () => {
-    saveAutomationRules(tenantId, warehouseId, [baseRule({ id: "r1", name: "Status X" })]);
-    const rules = packingAutomationActivatorRules(tenantId, warehouseId);
+  it("packingAutomationActivatorRules loads from backend API", async () => {
+    listMock.mockResolvedValue([
+      {
+        id: 7,
+        tenant_id: 1,
+        warehouse_id: 9,
+        entity_type: "ORDER",
+        name: "Status X",
+        enabled: true,
+        trigger_type: "entity_status_entered",
+        trigger_config: {},
+        source: "USER_AUTOMATION",
+        effects: [{ position: 0, effect_type: "change_status", config: { status_id: 42 }, enabled: true }],
+        metadata: {
+          manualTrigger: {
+            ...defaultManualTrigger(),
+            enabled: true,
+            buttonEnabled: true,
+            visibleOnWmsPacking: true,
+            label: "Akcja",
+          },
+          execution: { automatic: false },
+          stats: { lastRunAt: null, runCount: 0 },
+        },
+        conditions: [],
+        group: "Ogólne",
+      },
+    ]);
+    const rules = await packingAutomationActivatorRules(1, 9);
+    expect(listMock).toHaveBeenCalled();
     expect(rules).toHaveLength(1);
-    expect(rules[0]!.id).toBe("r1");
+    expect(rules[0].id).toBe("7");
   });
 
-  it("shows two independent activator rules", () => {
-    saveAutomationRules(tenantId, warehouseId, [
-      baseRule({ id: "a", name: "A", manualTrigger: { ...defaultManualTrigger(), enabled: true, label: "Nadaj" } }),
-      baseRule({ id: "b", name: "B", manualTrigger: { ...defaultManualTrigger(), enabled: true, label: "Drukuj" } }),
-    ]);
-    const rules = packingAutomationActivatorRules(tenantId, warehouseId);
-    expect(rules.map((r) => r.id).sort()).toEqual(["a", "b"]);
-    expect(activatorButtonLabel(rules.find((r) => r.id === "a")!)).toBe("Nadaj");
-    expect(activatorButtonLabel(rules.find((r) => r.id === "b")!)).toBe("Drukuj");
-  });
-
-  it("hides disabled activator / rule / packing visibility / button off", () => {
-    saveAutomationRules(tenantId, warehouseId, [
-      baseRule({ id: "off-rule", name: "Off", enabled: false }),
-      baseRule({
-        id: "off-manual",
-        name: "Off manual",
-        manualTrigger: { ...defaultManualTrigger(), enabled: false },
+  it("runOrderAutomationActivator calls backend /run", async () => {
+    const rule = baseRule({ id: "12", name: "X" });
+    const result = await runOrderAutomationActivator({
+      tenantId: 1,
+      warehouseId: 9,
+      orderId: 55,
+      rule,
+    });
+    expect(runMock).toHaveBeenCalledWith(
+      12,
+      expect.objectContaining({
+        tenant_id: 1,
+        entity_type: "ORDER",
+        entity_id: 55,
+        dry_run: false,
       }),
-      baseRule({
-        id: "off-btn",
-        name: "Off btn",
-        manualTrigger: { ...defaultManualTrigger(), enabled: true, buttonEnabled: false },
-      }),
-      baseRule({
-        id: "off-packing",
-        name: "Off packing",
-        manualTrigger: { ...defaultManualTrigger(), enabled: true, visibleOnWmsPacking: false },
-      }),
-    ]);
-    expect(packingAutomationActivatorRules(tenantId, warehouseId)).toEqual([]);
-  });
-});
-
-describe("executeOrderAutomationEffects / runOrderAutomationActivator", () => {
-  const tenantId = 1;
-  const warehouseId = 9;
-  const orderId = 100;
-
-  beforeEach(() => {
-    localStorage.clear();
-    patchMock.mockReset();
-    patchMock.mockResolvedValue({} as never);
+    );
+    expect(result.successMessage).toContain("Akcja");
   });
 
-  it("click path executes change_status via existing API", async () => {
-    const rule = baseRule({ id: "r1", name: "Zmień", manualTrigger: { ...defaultManualTrigger(), enabled: true, label: "Wyślij" } });
-    const result = await runOrderAutomationActivator({ tenantId, warehouseId, orderId, rule });
-    expect(patchMock).toHaveBeenCalledWith(orderId, tenantId, warehouseId, 42);
-    expect(result.effectsExecuted).toEqual(["change_status→42"]);
-    expect(result.successMessage).toBe("Wykonano: Wyślij");
-  });
-
-  it("falls back to rule name then Akcja for label", () => {
-    expect(
-      activatorButtonLabel(
-        baseRule({
-          id: "x",
-          name: "Reguła",
-          manualTrigger: { ...defaultManualTrigger(), label: "  " },
-        }),
-      ),
-    ).toBe("Reguła");
-    expect(
-      activatorButtonLabel(
-        baseRule({
-          id: "y",
-          name: "  ",
-          manualTrigger: { ...defaultManualTrigger(), label: "" },
-        }),
-      ),
-    ).toBe("Akcja");
-  });
-
-  it("rejects empty effects and unsupported kinds with Polish errors", async () => {
-    await expect(
-      executeOrderAutomationEffects({ tenantId, warehouseId, orderId, effects: [] }),
-    ).rejects.toThrow("Reguła nie ma skonfigurowanych akcji do wykonania.");
-
+  it("executeOrderAutomationEffects is retired and throws", async () => {
     await expect(
       executeOrderAutomationEffects({
-        tenantId,
-        warehouseId,
-        orderId,
-        effects: [{ uid: "e", kind: "send_message", payload: { template: "x" } }],
+        tenantId: 1,
+        warehouseId: 1,
+        orderId: 1,
+        effects: [],
       }),
-    ).rejects.toThrow(/wiadomości/i);
+    ).rejects.toThrow(/retired/);
   });
 
-  it("surfaces API failure as Polish error message", async () => {
-    patchMock.mockRejectedValue({
-      response: { data: { detail: "Status nie istnieje w tym magazynie." } },
-    });
-    const rule = baseRule({ id: "r1", name: "Zmień" });
-    await expect(runOrderAutomationActivator({ tenantId, warehouseId, orderId, rule })).rejects.toThrow(
-      "Status nie istnieje w tym magazynie.",
-    );
+  it("activatorButtonLabel uses manual label", () => {
+    expect(activatorButtonLabel(baseRule({ id: "1", name: "N" }))).toBe("Akcja");
   });
 
-  it("blocks concurrent runs of the same activator", async () => {
+  it("exclusive gate blocks concurrent runs", () => {
     const gate = createExclusiveActivatorRunGate();
-    expect(gate.tryBegin("same")).toBe(true);
-    expect(gate.tryBegin("same")).toBe(false);
-    expect(gate.tryBegin("other")).toBe(false);
-    gate.end("same");
-    expect(gate.tryBegin("same")).toBe(true);
-    gate.end("same");
+    expect(gate.tryBegin("a")).toBe(true);
+    expect(gate.tryBegin("b")).toBe(false);
+    gate.end("a");
+    expect(gate.tryBegin("b")).toBe(true);
   });
 });

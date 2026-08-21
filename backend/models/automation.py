@@ -50,10 +50,16 @@ class AutomationRule(Base):
     warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=True, index=True)
     entity_type = Column(String(32), nullable=False, index=True)
     name = Column(String(255), nullable=False)
+    #: UI grouping label (e.g. "Ogólne") — FE list accordion.
+    group = Column(String(128), nullable=False, default="Ogólne")
     enabled = Column(Boolean, nullable=False, default=True)
     trigger_type = Column(String(64), nullable=False, default="entity_status_entered")
     trigger_config_json = Column(Text, nullable=False, default="{}")
-    #: USER | SYSTEM | STATUS_ACTION — source of rule authorship
+    #: Editor conditions[] JSON (fieldKey/operator/value/joinToNext).
+    conditions_json = Column(Text, nullable=False, default="[]")
+    #: FE metadata: manualTrigger, execution, delayMinutes, stats, publicId, legacy_fe_id.
+    metadata_json = Column(Text, nullable=False, default="{}")
+    #: USER | USER_AUTOMATION | SYSTEM | STATUS_ACTION — source of rule authorship
     source = Column(String(32), nullable=False, default="USER")
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
@@ -93,7 +99,11 @@ class AutomationExecution(Base):
     rule_id = Column(Integer, ForeignKey("automation_rules.id", ondelete="CASCADE"), nullable=False, index=True)
     entity_type = Column(String(32), nullable=False)
     entity_id = Column(Integer, nullable=False)
-    trigger_event_id = Column(String(36), ForeignKey("status_transition_events.id", ondelete="CASCADE"), nullable=False)
+    trigger_event_id = Column(
+        String(36), ForeignKey("status_transition_events.id", ondelete="CASCADE"), nullable=True
+    )
+    #: AUTO | MANUAL | TEST
+    run_kind = Column(String(16), nullable=False, default="AUTO")
     idempotency_key = Column(String(191), nullable=False)
     status = Column(String(24), nullable=False, default="PENDING")  # PENDING|RUNNING|SUCCEEDED|FAILED|SKIPPED
     started_at = Column(DateTime, nullable=True)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.exc import SQLAlchemyError
@@ -15,14 +15,18 @@ from ..schemas.automation import (
     AutomationRuleCreate,
     AutomationRuleOut,
     AutomationRuleUpdate,
+    AutomationRunRequest,
+    AutomationTestRequest,
+    LegacyImportRequest,
+    LegacyImportResult,
     StatusActionRuleOut,
 )
 from ..services.automation.store import (
     create_rule,
     delete_rule,
+    duplicate_rule,
     execution_to_dict,
     get_rule,
-    list_executions,
     list_rules,
     rule_to_dict,
     set_rule_enabled,
@@ -58,12 +62,36 @@ def get_status_actions(
     return [StatusActionRuleOut.model_validate(r) for r in rows]
 
 
+@router.post("/import-legacy", response_model=LegacyImportResult)
+def import_legacy_automations(body: LegacyImportRequest, db: Session = Depends(get_db)):
+    from ..services.automation.manual_run import import_legacy_fe_rules
+
+    try:
+        result = import_legacy_fe_rules(
+            db,
+            tenant_id=int(body.tenant_id),
+            warehouse_id=int(body.warehouse_id),
+            rules=body.rules,
+            entity_type=body.entity_type,
+        )
+        db.commit()
+        return LegacyImportResult.model_validate(result)
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("import_legacy_automations")
+        raise HTTPException(status_code=500, detail="Database error") from e
+
+
 @router.get("", response_model=list[AutomationRuleOut])
 def get_automations(
     tenant_id: int = Query(..., ge=1),
     warehouse_id: Optional[int] = Query(None, ge=1),
     entity_type: Optional[str] = Query(None),
     enabled: Optional[bool] = Query(None),
+    source: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     rows = list_rules(
@@ -72,6 +100,7 @@ def get_automations(
         warehouse_id=warehouse_id,
         entity_type=entity_type,
         enabled=enabled,
+        source=source,
     )
     return [_out(r) for r in rows]
 
@@ -102,6 +131,9 @@ def post_automation(body: AutomationRuleCreate, db: Session = Depends(get_db)):
             trigger_config=body.trigger_config,
             source=body.source,
             effects=[e.model_dump() for e in body.effects],
+            group=body.group,
+            conditions=body.conditions,
+            metadata=body.rule_metadata,
         )
         db.commit()
         db.refresh(row)
@@ -136,6 +168,9 @@ def patch_automation(
             trigger_type=body.trigger_type,
             trigger_config=body.trigger_config,
             effects=[e.model_dump() for e in body.effects] if body.effects is not None else None,
+            group=body.group,
+            conditions=body.conditions,
+            metadata=body.rule_metadata,
         )
         db.commit()
         return _out(get_rule(db, tenant_id=tenant_id, rule_id=rule_id) or row)
@@ -203,6 +238,118 @@ def disable_automation(
     set_rule_enabled(db, row, False)
     db.commit()
     return _out(get_rule(db, tenant_id=tenant_id, rule_id=rule_id) or row)
+
+
+@router.post("/{rule_id}/duplicate", response_model=AutomationRuleOut)
+def duplicate_automation(
+    rule_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    row = get_rule(db, tenant_id=tenant_id, rule_id=rule_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Automation rule not found")
+    try:
+        copy = duplicate_rule(db, row)
+        db.commit()
+        return _out(get_rule(db, tenant_id=tenant_id, rule_id=int(copy.id)) or copy)
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("duplicate_automation")
+        raise HTTPException(status_code=500, detail="Database error") from e
+
+
+@router.post("/{rule_id}/test")
+def test_automation(
+    rule_id: int,
+    body: AutomationTestRequest,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Test / dry-run using the same condition evaluator and effect adapters."""
+    from ..services.automation.constants import RUN_KIND_TEST
+    from ..services.automation.manual_run import run_rule_on_entity
+
+    row = get_rule(db, tenant_id=body.tenant_id, rule_id=rule_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Automation rule not found")
+    entity_id = body.entity_id
+    if entity_id is None:
+        # Pure config dry-run without entity — skip condition eval
+        return {
+            "rule_id": int(row.id),
+            "status": "DRY_RUN",
+            "run_kind": RUN_KIND_TEST,
+            "dry_run": True,
+            "conditions": [],
+            "planned_effects": [
+                {
+                    "position": int(e.position),
+                    "effect_type": e.effect_type,
+                    "config": __import__("json").loads(e.config_json or "{}"),
+                }
+                for e in sorted(row.effects or [], key=lambda x: int(x.position))
+                if e.enabled
+            ],
+            "note": "No entity_id — conditions not evaluated",
+        }
+    try:
+        result = run_rule_on_entity(
+            db,
+            rule=row,
+            entity_type=body.entity_type,
+            entity_id=int(entity_id),
+            run_kind=RUN_KIND_TEST,
+            dry_run=bool(body.dry_run),
+            check_conditions=bool(body.check_conditions),
+        )
+        db.commit()
+        return result
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("test_automation")
+        raise HTTPException(status_code=500, detail="Database error") from e
+
+
+@router.post("/{rule_id}/run")
+def run_automation(
+    rule_id: int,
+    body: AutomationRunRequest,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Manual run (e.g. packing activator) — same adapters as AUTO."""
+    from ..services.automation.constants import RUN_KIND_MANUAL
+    from ..services.automation.manual_run import run_rule_on_entity
+
+    row = get_rule(db, tenant_id=body.tenant_id, rule_id=rule_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Automation rule not found")
+    if not row.enabled:
+        raise HTTPException(status_code=400, detail="Rule is disabled")
+    try:
+        result = run_rule_on_entity(
+            db,
+            rule=row,
+            entity_type=body.entity_type,
+            entity_id=int(body.entity_id),
+            run_kind=RUN_KIND_MANUAL,
+            dry_run=bool(body.dry_run),
+            check_conditions=bool(body.check_conditions),
+        )
+        db.commit()
+        return result
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("run_automation")
+        raise HTTPException(status_code=500, detail="Database error") from e
 
 
 @router.get("/{rule_id}/executions", response_model=list[AutomationExecutionOut])

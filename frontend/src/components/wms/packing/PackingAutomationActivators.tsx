@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { getManualIconComponent } from "@/modules/orders/automation/utils/orderAutomationManualIcons";
 import type { OrderAutomationRule } from "../../../types/orderAutomation";
@@ -27,7 +27,7 @@ type Props = {
 /**
  * Aktywatory ręcznych akcji automatycznych na ekranie pakowania.
  * Widoczność: showAutomationButtons + reguły z „Pakowanie WMS”.
- * Wykonanie: wspólny runner ({@link runOrderAutomationActivator}).
+ * Wykonanie: backend POST /automations/{id}/run.
  */
 export function PackingAutomationActivators({
   tenantId,
@@ -40,11 +40,26 @@ export function PackingAutomationActivators({
   onStatusChanged,
 }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [rules, setRules] = useState<OrderAutomationRule[]>([]);
   const runGateRef = useRef(createExclusiveActivatorRunGate());
 
-  const rules = useMemo(() => {
-    if (!showAutomationButtons) return [];
-    return packingAutomationActivatorRules(tenantId, warehouseId);
+  useEffect(() => {
+    if (!showAutomationButtons) {
+      setRules([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const rows = await packingAutomationActivatorRules(tenantId, warehouseId);
+        if (!cancelled) setRules(rows);
+      } catch {
+        if (!cancelled) setRules([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [showAutomationButtons, tenantId, warehouseId]);
 
   const onRun = useCallback(
@@ -98,22 +113,12 @@ export function PackingAutomationActivators({
           <button
             key={rule.id}
             type="button"
-            data-testid={`packing-automation-activator-${rule.id}`}
-            data-busy={busy ? "true" : "false"}
             disabled={anyBusy}
-            aria-busy={busy}
-            onClick={() => void onRun(rule)}
-            className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white shadow-sm disabled:opacity-60"
             style={{ backgroundColor: bg }}
-            title={mt.shortcut?.trim() ? `${label} (${mt.shortcut.trim()})` : label}
+            onClick={() => void onRun(rule)}
           >
-            {busy ? (
-              <Loader2 className="h-4 w-4 shrink-0 animate-spin" strokeWidth={2.25} aria-hidden />
-            ) : mt.iconSource === "custom" && mt.customImageDataUrl ? (
-              <img src={mt.customImageDataUrl} alt="" className="h-4 w-4 shrink-0 rounded object-cover" />
-            ) : (
-              <Icon className="h-4 w-4 shrink-0" strokeWidth={2.25} />
-            )}
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Icon className="h-3.5 w-3.5" />}
             {label}
           </button>
         );

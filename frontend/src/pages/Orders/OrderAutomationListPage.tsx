@@ -15,7 +15,7 @@ import { useAuth } from "../../context/AuthContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { useOrderAutomationStore } from "../../hooks/useOrderAutomationStore";
 import type { OrderAutomationRule } from "../../types/orderAutomation";
-import type { OrderAutomationScope } from "../../utils/orderAutomationLocalStore";
+import type { OrderAutomationScope } from "../../hooks/useOrderAutomationStore";
 import { getOrderUiStatusSummary } from "../../api/orderUiStatusApi";
 import type { OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
 import {
@@ -32,7 +32,6 @@ import {
   oaWorkflowGroupHeaderClass,
   oaWorkflowGroupSectionClass,
 } from "../../components/orders/automation/orderAutomationUiTokens";
-import { BackendStatusActionsListSection } from "../../components/orders/automation/BackendStatusActionsListSection";
 
 export default function OrderAutomationListPage() {
   const navigate = useNavigate();
@@ -46,7 +45,8 @@ export default function OrderAutomationListPage() {
   const canWrite = hasPermission("settings.automation");
 
   const store = useOrderAutomationStore(DAMAGE_TENANT_ID, wid, scope);
-  const { rules, reload, hydrated, setEnabled, deleteRule } = store;
+  const { rules, reload, hydrated, setEnabled, deleteRule, legacyPending, runLegacyImport, dismissLegacy, sourceByRuleId } =
+    store;
 
   const [q, setQ] = useState("");
   const [group, setGroup] = useState<string>("all");
@@ -115,8 +115,14 @@ export default function OrderAutomationListPage() {
     const title = formatRuleWorkflowTitle(rule, statusNameById);
     const label = title !== "—" ? title : rule.name;
     if (!window.confirm(`Usunąć „${label}” (ID ${formatRuleDisplayId(rule)})?`)) return;
-    deleteRule(rule.id);
-    toast.success("Usunięto.");
+    void (async () => {
+      try {
+        await deleteRule(rule.id);
+        toast.success("Usunięto.");
+      } catch {
+        toast.error("Nie udało się usunąć.");
+      }
+    })();
   };
 
   if (wid == null) {
@@ -137,6 +143,36 @@ export default function OrderAutomationListPage() {
 
   return (
     <div className={`${moduleAutomationShellClass} w-full max-w-none`}>
+      {legacyPending ? (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <p className="font-medium">Wykryto reguły w localStorage (legacy).</p>
+          <p className="mt-1 text-xs">
+            Zaimportuj je jednorazowo do backend Automation Engine. Import jest idempotentny.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={oaBtnPri}
+              onClick={() => {
+                void (async () => {
+                  try {
+                    const r = await runLegacyImport();
+                    toast.success(`Import: utworzono ${r.created}, pominięto ${r.skipped}`);
+                  } catch {
+                    toast.error("Import nie powiódł się");
+                  }
+                })();
+              }}
+            >
+              Importuj do backendu
+            </button>
+            <button type="button" className="text-xs text-amber-800 underline" onClick={dismissLegacy}>
+              Pomiń (oznacz jako zmigrowane)
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="mb-4 flex flex-col gap-3 border-b border-slate-200 pb-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative min-w-[12rem] flex-1 sm:max-w-lg">
@@ -207,7 +243,8 @@ export default function OrderAutomationListPage() {
                       basePath={basePath}
                       idSort={idSort}
                       onIdSortChange={setIdSort}
-                      onToggle={(id, enabled) => setEnabled(id, enabled)}
+                      sourceByRuleId={sourceByRuleId}
+                      onToggle={(id, enabled) => void setEnabled(id, enabled)}
                       onDelete={confirmDelete}
                       onLogs={openRuleLogs}
                     />
@@ -222,8 +259,6 @@ export default function OrderAutomationListPage() {
           })}
         </div>
       )}
-
-      <BackendStatusActionsListSection tenantId={DAMAGE_TENANT_ID} warehouseId={wid} />
     </div>
   );
 }

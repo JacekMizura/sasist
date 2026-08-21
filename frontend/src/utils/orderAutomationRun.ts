@@ -1,30 +1,16 @@
 /**
- * Wykonanie reguł „Akcje automatyczne” — wspólny mechanizm dla aktywatorów (m.in. pakowanie WMS).
- * Reguły żyją w localStorage; efekty z realnym API idą przez istniejące endpointy (SSOT backendu dla statusu).
+ * Wykonanie reguł „Akcje automatyczne” — backend Automation Engine SSOT.
+ * FE localStorage executor is DEAD for runtime; packing activators call POST /automations/{id}/run.
  */
 import { extractApiErrorMessage } from "../api/apiErrorMessage";
-import { patchOrderUiStatus } from "../api/orderUiStatusApi";
-import type {
-  AutomationEffect,
-  AutomationEffectKind,
-  OrderAutomationRule,
-} from "../types/orderAutomation";
-import { effectKindLabel } from "./orderAutomationCatalog";
+import { listAutomations, runAutomation } from "../api/automationsApi";
+import type { OrderAutomationRule } from "../types/orderAutomation";
 import {
   appendAutomationExecutionLog,
-  loadAutomationRules,
   newUid,
 } from "./orderAutomationLocalStore";
+import { backendRuleToFe } from "./orderAutomationBackendMap";
 import { migrateManualTrigger } from "./orderAutomationManualTrigger";
-
-const UNSUPPORTED_EFFECT_MESSAGES: Record<Exclude<AutomationEffectKind, "change_status">, string> = {
-  send_message: "Wysyłka wiadomości nie jest jeszcze dostępna w aktywatorach.",
-  generate_document: "Generowanie dokumentu nie jest jeszcze dostępne w aktywatorach.",
-  assign_courier: "Przypisanie kuriera nie jest jeszcze dostępne w aktywatorach.",
-  add_tag: "Dodawanie tagu nie jest jeszcze dostępne w aktywatorach.",
-  print: "Drukowanie nie jest jeszcze dostępne w aktywatorach.",
-  wms_action: "Akcja WMS nie jest jeszcze dostępna w aktywatorach.",
-};
 
 export type OrderAutomationRunResult = {
   effectsExecuted: string[];
@@ -49,17 +35,20 @@ export function createExclusiveActivatorRunGate() {
   };
 }
 
-export function packingAutomationActivatorRules(
+export async function packingAutomationActivatorRules(
   tenantId: number,
   warehouseId: number,
-): OrderAutomationRule[] {
-  return loadAutomationRules(tenantId, warehouseId, "orders").filter((rule) => {
-    if (!rule.enabled) return false;
-    const mt = migrateManualTrigger(rule.manualTrigger);
-    if (!mt.enabled) return false;
-    if (mt.buttonEnabled === false) return false;
-    return mt.visibleOnWmsPacking !== false;
-  });
+): Promise<OrderAutomationRule[]> {
+  const dtos = await listAutomations({ tenantId, warehouseId, entityType: "ORDER" });
+  return dtos
+    .map(backendRuleToFe)
+    .filter((rule) => {
+      if (!rule.enabled) return false;
+      const mt = migrateManualTrigger(rule.manualTrigger);
+      if (!mt.enabled) return false;
+      if (mt.buttonEnabled === false) return false;
+      return mt.visibleOnWmsPacking !== false;
+    });
 }
 
 export function activatorButtonLabel(rule: OrderAutomationRule): string {
@@ -67,69 +56,22 @@ export function activatorButtonLabel(rule: OrderAutomationRule): string {
   return mt.label.trim() || rule.name.trim() || "Akcja";
 }
 
-function polishApiError(err: unknown, fallback: string): Error {
-  const fromApi = extractApiErrorMessage(err, "");
-  if (fromApi.trim()) return new Error(fromApi.trim());
-  if (err instanceof Error && err.message.trim()) return new Error(err.message.trim());
-  return new Error(fallback);
-}
-
-async function executeEffect(opts: {
+/**
+ * @deprecated FE effect executor — do not use. Runtime SSOT is backend /automations/{id}/run.
+ * Kept as throw guard so accidental imports fail loudly.
+ */
+export async function executeOrderAutomationEffects(_opts: {
   tenantId: number;
   warehouseId: number;
   orderId: number;
-  effect: AutomationEffect;
-}): Promise<string> {
-  const { effect } = opts;
-  switch (effect.kind) {
-    case "change_status": {
-      const raw = effect.payload.order_ui_status_id;
-      const statusId = Number(raw);
-      if (!Number.isFinite(statusId) || statusId <= 0) {
-        throw new Error("Brak statusu w akcji automatycznej.");
-      }
-      try {
-        await patchOrderUiStatus(opts.orderId, opts.tenantId, opts.warehouseId, statusId);
-      } catch (e) {
-        throw polishApiError(e, "Nie udało się zmienić statusu zamówienia.");
-      }
-      return `change_status→${statusId}`;
-    }
-    default: {
-      const msg =
-        UNSUPPORTED_EFFECT_MESSAGES[effect.kind as Exclude<AutomationEffectKind, "change_status">] ??
-        `Akcja „${effectKindLabel(effect.kind)}” nie jest jeszcze dostępna.`;
-      throw new Error(msg);
-    }
-  }
-}
-
-/** Wykonuje efekty reguły na zamówieniu (bez logów / potwierdzeń UI). */
-export async function executeOrderAutomationEffects(opts: {
-  tenantId: number;
-  warehouseId: number;
-  orderId: number;
-  effects: AutomationEffect[];
+  effects: unknown[];
 }): Promise<string[]> {
-  const effects = opts.effects ?? [];
-  if (effects.length === 0) {
-    throw new Error("Reguła nie ma skonfigurowanych akcji do wykonania.");
-  }
-  const executed: string[] = [];
-  for (const effect of effects) {
-    executed.push(
-      await executeEffect({
-        tenantId: opts.tenantId,
-        warehouseId: opts.warehouseId,
-        orderId: opts.orderId,
-        effect,
-      }),
-    );
-  }
-  return executed;
+  throw new Error(
+    "executeOrderAutomationEffects is retired — use backend POST /automations/{id}/run",
+  );
 }
 
-/** Uruchamia regułę z aktywatora i zapisuje wpis w lokalnym dzienniku wykonań. */
+/** Uruchamia regułę z aktywatora przez backend Engine. */
 export async function runOrderAutomationActivator(opts: {
   tenantId: number;
   warehouseId: number;
@@ -139,13 +81,32 @@ export async function runOrderAutomationActivator(opts: {
 }): Promise<OrderAutomationRunResult> {
   const label = activatorButtonLabel(opts.rule);
   const source = opts.sourceLabel ?? "pakowania WMS";
+  const ruleId = Number(opts.rule.id);
+  if (!Number.isFinite(ruleId) || ruleId <= 0) {
+    throw new Error("Reguła nie ma identyfikatora backendowego.");
+  }
   try {
-    const effectsExecuted = await executeOrderAutomationEffects({
-      tenantId: opts.tenantId,
-      warehouseId: opts.warehouseId,
-      orderId: opts.orderId,
-      effects: opts.rule.effects ?? [],
+    const result = await runAutomation(ruleId, {
+      tenant_id: opts.tenantId,
+      entity_type: "ORDER",
+      entity_id: opts.orderId,
+      check_conditions: Boolean(opts.rule.manualTrigger?.checkConditionsOnManualRun),
+      dry_run: false,
     });
+    const status = String(result.status || "");
+    if (status === "SKIPPED") {
+      throw new Error("Warunki reguły nie są spełnione.");
+    }
+    if (status === "FAILED") {
+      throw new Error(String(result.error || "Nie udało się wykonać akcji."));
+    }
+    const effectsExecuted = (
+      Array.isArray(result.planned_effects)
+        ? (result.planned_effects as Array<{ effect_type?: string }>).map(
+            (e) => String(e.effect_type || "effect"),
+          )
+        : ["ok"]
+    );
     appendAutomationExecutionLog(opts.tenantId, opts.warehouseId, {
       id: newUid("log"),
       ts: new Date().toISOString(),
@@ -162,10 +123,10 @@ export async function runOrderAutomationActivator(opts: {
       successMessage: `Wykonano: ${label}`,
     };
   } catch (e) {
+    const fromApi = extractApiErrorMessage(e, "");
     const msg =
-      e instanceof Error && e.message.trim()
-        ? e.message.trim()
-        : "Nie udało się wykonać akcji.";
+      fromApi.trim() ||
+      (e instanceof Error && e.message.trim() ? e.message.trim() : "Nie udało się wykonać akcji.");
     appendAutomationExecutionLog(opts.tenantId, opts.warehouseId, {
       id: newUid("log"),
       ts: new Date().toISOString(),

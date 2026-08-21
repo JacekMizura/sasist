@@ -19,20 +19,29 @@ EFFECT_GENERATE_CORRECTION = "generate_correction"
 EFFECT_ADD_TAG = "add_tag"
 EFFECT_PRINT = "print"
 
-#: Runtime-executable in v1.
+#: Runtime-executable.
 SUPPORTED_EFFECT_TYPES = frozenset({EFFECT_CHANGE_STATUS})
 
-#: Known future adapters — may be stored, rejected at runtime until implemented.
+#: Persistable effect types (editor catalog + future adapters). Unsupported at runtime → FAILED.
+EFFECT_SEND_MESSAGE = "send_message"
+EFFECT_GENERATE_DOCUMENT = "generate_document"
+EFFECT_ASSIGN_COURIER = "assign_courier"
+EFFECT_WMS_ACTION = "wms_action"
+
 KNOWN_EFFECT_TYPES = frozenset(
     {
         EFFECT_CHANGE_STATUS,
         EFFECT_SEND_EMAIL,
         EFFECT_SEND_SMS,
+        EFFECT_SEND_MESSAGE,
         EFFECT_OFFICE_REFUND,
         EFFECT_WAREHOUSE_COMMIT,
         EFFECT_GENERATE_CORRECTION,
+        EFFECT_GENERATE_DOCUMENT,
+        EFFECT_ASSIGN_COURIER,
         EFFECT_ADD_TAG,
         EFFECT_PRINT,
+        EFFECT_WMS_ACTION,
     }
 )
 
@@ -41,6 +50,10 @@ EXEC_RUNNING = "RUNNING"
 EXEC_SUCCEEDED = "SUCCEEDED"
 EXEC_FAILED = "FAILED"
 EXEC_SKIPPED = "SKIPPED"
+
+RUN_KIND_AUTO = "AUTO"
+RUN_KIND_MANUAL = "MANUAL"
+RUN_KIND_TEST = "TEST"
 
 SOURCE_USER = "USER"
 SOURCE_USER_AUTOMATION = "USER_AUTOMATION"
