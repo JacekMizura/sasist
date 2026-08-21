@@ -64,7 +64,7 @@ def get_print_template_presets():
 def post_sale_correction_from_return(body: IssueSaleCorrectionFromReturnBody, db: Session = Depends(get_db)):
     """Issue invoice correction (KOR) from a finalized RMZ return — domain pipeline, not automation."""
     try:
-        doc, reused = issue_sale_correction_for_return(
+        result = issue_sale_correction_for_return(
             db,
             tenant_id=int(body.tenant_id),
             return_id=int(body.return_id),
@@ -80,6 +80,17 @@ def post_sale_correction_from_return(body: IssueSaleCorrectionFromReturnBody, db
         db.rollback()
         _logger.exception("post_sale_correction_from_return failed")
         raise HTTPException(status_code=500, detail="Nie udało się wystawić korekty.") from None
+
+    doc = result.document
+    if doc is None:
+        return {
+            "correction_document_id": None,
+            "correction_number": None,
+            "source_document_id": None,
+            "source_document_number": None,
+            "reused_existing": True,
+            "no_new_delta": True,
+        }
 
     source = None
     if doc.source_sale_document_id:
@@ -98,7 +109,8 @@ def post_sale_correction_from_return(body: IssueSaleCorrectionFromReturnBody, db
         "correction_number": str(doc.document_number or ""),
         "source_document_id": str(doc.source_sale_document_id or ""),
         "source_document_number": str(source.document_number or "") if source else None,
-        "reused_existing": bool(reused),
+        "reused_existing": bool(result.reused_existing),
+        "no_new_delta": bool(result.no_new_delta),
         "total_net": doc.total_net,
         "total_vat": doc.total_vat,
         "total_gross": doc.total_gross,

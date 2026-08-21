@@ -215,9 +215,12 @@ def test_issue_correction_partial_and_idempotent():
     db, sale_series, _ = _session()
     primary = _create_invoice(db, sale_series)
     ret = _make_return(db, accepted_a=1, rejected_a=1)
-    corr, reused = issue_sale_correction_for_return(db, tenant_id=1, return_id=int(ret.id))
+    result = issue_sale_correction_for_return(db, tenant_id=1, return_id=int(ret.id))
     db.commit()
+    corr = result.document
+    reused = result.reused_existing
     assert reused is False
+    assert result.no_new_delta is False
     assert corr.document_kind == "CORRECTION"
     assert corr.source_sale_document_id == primary.id
     assert corr.series_type == "CORRECTION"
@@ -227,13 +230,15 @@ def test_issue_correction_partial_and_idempotent():
     assert len(lines) == 1
     assert float(lines[0].quantity) == -1.0
     assert float(lines[0].line_gross) < 0
+    assert lines[0].source_sale_document_item_id is not None
     totals = compute_totals_from_sale_document_items(lines)
     assert totals["total_gross"] < 0
 
-    corr2, reused2 = issue_sale_correction_for_return(db, tenant_id=1, return_id=int(ret.id))
+    result2 = issue_sale_correction_for_return(db, tenant_id=1, return_id=int(ret.id))
     db.commit()
-    assert reused2 is True
-    assert corr2.id == corr.id
+    assert result2.reused_existing is True
+    assert result2.no_new_delta is True
+    assert result2.document.id == corr.id
     assert len(list_corrections_for_source(db, tenant_id=1, source_sale_document_id=str(primary.id))) == 1
 
 
@@ -245,8 +250,9 @@ def test_buyer_snapshot_stable_after_customer_change():
     cust.company_name = "CHANGED LIVE"
     cust.nip = "1111111111"
     db.commit()
-    corr, _ = issue_sale_correction_for_return(db, tenant_id=1, return_id=int(ret.id))
+    result = issue_sale_correction_for_return(db, tenant_id=1, return_id=int(ret.id))
     db.commit()
+    corr = result.document
     assert "CHANGED" not in str(corr.buyer_json or "")
     assert "5250000000" in str(corr.buyer_json or "")
 
@@ -292,8 +298,9 @@ def test_mapper_uses_persisted_correction_lines():
     db, sale_series, _ = _session()
     _create_invoice(db, sale_series)
     ret = _make_return(db, accepted_a=1)
-    corr, _ = issue_sale_correction_for_return(db, tenant_id=1, return_id=int(ret.id))
+    result = issue_sale_correction_for_return(db, tenant_id=1, return_id=int(ret.id))
     db.commit()
+    corr = result.document
     oi = db.query(OrderItem).filter(OrderItem.id == 1001).one()
     oi.quantity = 99
     db.commit()
@@ -319,8 +326,10 @@ def test_multiple_lines_correction():
     db, sale_series, _ = _session()
     _create_invoice(db, sale_series)
     ret = _make_return(db, accepted_a=2, accepted_b=1)
-    corr, _ = issue_sale_correction_for_return(db, tenant_id=1, return_id=int(ret.id))
+    result = issue_sale_correction_for_return(db, tenant_id=1, return_id=int(ret.id))
     db.commit()
+    corr = result.document
     lines = db.query(SaleDocumentItem).filter(SaleDocumentItem.sale_document_id == corr.id).all()
     assert len(lines) == 2
     assert sorted(float(x.quantity) for x in lines) == [-2.0, -1.0]
+    assert all(x.source_sale_document_item_id is not None for x in lines)

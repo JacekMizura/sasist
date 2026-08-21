@@ -42,6 +42,11 @@ def replace_sale_document_items(
             sale_document_id=str(sale_document_id),
             line_kind=kind,
             order_item_id=int(ln["order_item_id"]) if ln.get("order_item_id") is not None else None,
+            source_sale_document_item_id=(
+                int(ln["source_sale_document_item_id"])
+                if ln.get("source_sale_document_item_id") is not None
+                else None
+            ),
             product_id=int(ln["product_id"]) if ln.get("product_id") is not None else None,
             position=int(ln.get("position") if ln.get("position") is not None else i),
             name=str(ln.get("name") or "")[:512],

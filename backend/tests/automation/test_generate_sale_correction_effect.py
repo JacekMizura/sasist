@@ -1,4 +1,4 @@
-"""generate_sale_correction automation effect — RETURN-only thin adapter."""
+﻿"""generate_sale_correction automation effect â€” RETURN-only thin adapter."""
 
 from __future__ import annotations
 
@@ -95,13 +95,19 @@ def _event(*, entity_type=ENTITY_RETURN, entity_id=50, tenant_id=1, warehouse_id
     )
 
 
-def _fake_doc(*, reused=False):
+def _fake_result(*, reused=False, no_new_delta=False):
+    from backend.services.sale_documents.issue_service import SaleCorrectionIssueResult
+
     doc = MagicMock()
     doc.id = "corr-1"
     doc.document_number = "KOR/1/2026"
     doc.source_sale_document_id = "src-1"
     doc.source_document = MagicMock(document_number="FV/1/2026")
-    return doc, reused
+    return SaleCorrectionIssueResult(
+        document=doc,
+        reused_existing=reused,
+        no_new_delta=no_new_delta,
+    )
 
 
 def test_a_preflight_ready_return(db):
@@ -156,7 +162,7 @@ def test_d_e_f_g_success_result_shape(db):
     db.flush()
     with patch(
         "backend.services.automation.effects.generate_sale_correction.issue_sale_correction_for_return",
-        return_value=_fake_doc(reused=False),
+        return_value= _fake_result(reused=False),
     ) as issue:
         r = execute_generate_sale_correction(db, config={}, event=ev, actor_user_id=1)
         assert r.ok is True
@@ -165,6 +171,7 @@ def test_d_e_f_g_success_result_shape(db):
         assert r.data["source_document_id"] == "src-1"
         assert r.data["source_document_number"] == "FV/1/2026"
         assert r.data["reused_existing"] is False
+        assert r.data["no_new_delta"] is False
         issue.assert_called_once()
         kwargs = issue.call_args.kwargs
         assert kwargs["return_id"] == 50
@@ -178,7 +185,7 @@ def test_include_shipping_cost_passed_to_domain(db):
     db.flush()
     with patch(
         "backend.services.automation.effects.generate_sale_correction.issue_sale_correction_for_return",
-        return_value=_fake_doc(reused=False),
+        return_value= _fake_result(reused=False),
     ) as issue:
         r = execute_generate_sale_correction(
             db, config={"include_shipping_cost": True}, event=ev, actor_user_id=1
@@ -212,7 +219,7 @@ def test_h_j_retry_reuses_existing(db):
     db.flush()
     with patch(
         "backend.services.automation.effects.generate_sale_correction.issue_sale_correction_for_return",
-        return_value=_fake_doc(reused=True),
+        return_value= _fake_result(reused=True),
     ):
         r = execute_generate_sale_correction(db, config={}, event=ev, actor_user_id=1)
         assert r.ok is True
@@ -228,7 +235,7 @@ def test_k_return_not_ready(db):
         "backend.services.automation.effects.generate_sale_correction.issue_sale_correction_for_return",
         side_effect=SaleCorrectionError(
             "RETURN_NOT_READY",
-            "Korekta wymaga zakończonego przyjęcia magazynowego",
+            "Korekta wymaga zakoĹ„czonego przyjÄ™cia magazynowego",
         ),
     ):
         r = execute_generate_sale_correction(db, config={}, event=ev, actor_user_id=1)
@@ -244,7 +251,7 @@ def test_l_receipt_source(db):
         "backend.services.automation.effects.generate_sale_correction.issue_sale_correction_for_return",
         side_effect=SaleCorrectionError(
             "CORRECTION_NOT_SUPPORTED_FOR_DOCUMENT_TYPE",
-            "V1 obsługuje wyłącznie korektę faktury",
+            "V1 obsĹ‚uguje wyĹ‚Ä…cznie korektÄ™ faktury",
         ),
     ):
         r = execute_generate_sale_correction(db, config={}, event=ev, actor_user_id=1)
@@ -358,7 +365,7 @@ def test_x_tenant_isolation(db):
     # Return exists only for tenant 1; query filters by event.tenant_id
     with patch(
         "backend.services.automation.effects.generate_sale_correction.issue_sale_correction_for_return",
-        return_value=_fake_doc(),
+        return_value= _fake_result(),
     ) as issue:
         r = execute_generate_sale_correction(db, config={}, event=ev, actor_user_id=1)
         assert r.ok is True
@@ -387,3 +394,4 @@ def test_status_action_illegal_order_raises(db):
                 {"position": 1, "effect_type": "warehouse_commit", "config": {}, "enabled": True},
             ],
         )
+

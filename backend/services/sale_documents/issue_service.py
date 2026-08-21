@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Optional
 
@@ -19,14 +20,23 @@ from .correction_financials import compute_totals_from_sale_document_items
 from .errors import SaleCorrectionError
 from .items_snapshot import replace_sale_document_items
 from .return_correction_adapter import (
+    BUSINESS_SOURCE_RETURN,
+    _list_corrections_for_return,
     build_return_correction_lines,
-    source_shipping_already_corrected,
 )
 
 logger = logging.getLogger(__name__)
 
-BUSINESS_SOURCE_RETURN = "RETURN"
 BUSINESS_SOURCE_MANUAL = "MANUAL"
+
+
+@dataclass(frozen=True)
+class SaleCorrectionIssueResult:
+    """Result of issuing a return (or generic) sale correction."""
+
+    document: SaleDocument | None
+    reused_existing: bool
+    no_new_delta: bool = False
 
 
 def find_primary_sale_document_for_order(
@@ -141,6 +151,15 @@ def _find_existing_idempotent(
     )
 
 
+def _assert_correction_lines_have_source_fk(lines: list[dict[str, Any]]) -> None:
+    for ln in lines:
+        if ln.get("source_sale_document_item_id") is None:
+            raise SaleCorrectionError(
+                "SOURCE_ITEM_LINK_REQUIRED",
+                "Pozycja korekty musi wskazywać source_sale_document_item_id.",
+            )
+
+
 def issue_sale_correction(
     db: Session,
     *,
@@ -157,7 +176,7 @@ def issue_sale_correction(
     Create or reuse a CORRECTION SaleDocument.
 
     Returns (document, reused_existing).
-    Lines must already be signed deltas with order_item_id.
+    Lines must already be signed deltas with source_sale_document_item_id.
     """
     source = (
         db.query(SaleDocument)
@@ -176,6 +195,7 @@ def issue_sale_correction(
 
     if not correction_lines:
         raise SaleCorrectionError("EMPTY_CORRECTION", "Korekta nie zawiera pozycji.")
+    _assert_correction_lines_have_source_fk(correction_lines)
     scope = str(correction_scope_hash or "").strip()
     if not scope:
         raise SaleCorrectionError("SCOPE_HASH_REQUIRED", "Brak correction_scope_hash.")
@@ -268,8 +288,13 @@ def issue_sale_correction_for_return(
     reason: str | None = None,
     warehouse_id: int | None = None,
     include_shipping_cost: bool = False,
-) -> tuple[SaleDocument, bool]:
-    """Domain adapter: RETURN → correction request → issue_sale_correction."""
+) -> SaleCorrectionIssueResult:
+    """
+    Domain adapter: RETURN → economic new-delta → issue_sale_correction.
+
+    Economic SSOT: target − already corrected (per source_sale_document_item_id).
+    Exact-request SSOT: correction_scope_hash of the *new* delta lines.
+    """
     ret = (
         db.query(WmsOrderReturn)
         .filter(
@@ -281,7 +306,6 @@ def issue_sale_correction_for_return(
     if ret is None:
         raise SaleCorrectionError("RETURN_MISSING", "Zwrot nie istnieje.")
     if warehouse_id is not None and int(getattr(ret, "warehouse_id", 0) or 0) not in (0, int(warehouse_id)):
-        # warehouse_id on return may be nullable in some schemas — soft check when set
         ret_wh = getattr(ret, "warehouse_id", None)
         if ret_wh is not None and int(ret_wh) != int(warehouse_id):
             raise SaleCorrectionError("WAREHOUSE_MISMATCH", "Zwrot należy do innego magazynu.")
@@ -311,7 +335,6 @@ def issue_sale_correction_for_return(
                 "Brak pierwotnej faktury (PRIMARY INVOICE) dla zamówienia zwrotu.",
             )
 
-    # Ambiguous: more than one PRIMARY invoice for order
     primaries = (
         db.query(SaleDocument)
         .filter(
@@ -340,7 +363,18 @@ def issue_sale_correction_for_return(
         return_row=ret,
         include_shipping_cost=bool(include_shipping_cost),
     )
-    # Idempotency first — retry of same scope must reuse even if shipping already on that doc.
+
+    if not lines:
+        prior = _list_corrections_for_return(
+            db, source_sale_document_id=str(source.id), return_id=int(ret.id)
+        )
+        latest = prior[-1] if prior else None
+        return SaleCorrectionIssueResult(
+            document=latest,
+            reused_existing=True,
+            no_new_delta=True,
+        )
+
     existing = _find_existing_idempotent(
         db,
         source_id=str(source.id),
@@ -349,17 +383,9 @@ def issue_sale_correction_for_return(
         scope_hash=scope_hash,
     )
     if existing is not None:
-        return existing, True
+        return SaleCorrectionIssueResult(document=existing, reused_existing=True, no_new_delta=False)
 
-    if bool(include_shipping_cost) and source_shipping_already_corrected(
-        db, source_sale_document_id=str(source.id)
-    ):
-        raise SaleCorrectionError(
-            "SHIPPING_ALREADY_CORRECTED",
-            "Koszt dostawy z dokumentu źródłowego został już skorygowany wcześniej.",
-        )
-
-    return issue_sale_correction(
+    doc, reused = issue_sale_correction(
         db,
         tenant_id=int(tenant_id),
         source_sale_document_id=str(source.id),
@@ -369,4 +395,9 @@ def issue_sale_correction_for_return(
         business_source_id=str(int(ret.id)),
         reason=reason or f"Korekta do zwrotu RMZ #{int(ret.id)}",
         warehouse_id=warehouse_id,
+    )
+    return SaleCorrectionIssueResult(
+        document=doc,
+        reused_existing=bool(reused),
+        no_new_delta=False,
     )

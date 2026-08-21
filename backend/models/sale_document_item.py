@@ -24,6 +24,10 @@ class SaleDocumentItem(Base):
     ``line_kind``:
     - PRODUCT — commercial product line (may have order_item_id)
     - SHIPPING — immutable shipping cost snapshot (no order_item_id)
+
+    ``source_sale_document_item_id``:
+    - PRIMARY: always null
+    - CORRECTION: FK to the PRIMARY SaleDocumentItem being corrected (economic ledger)
     """
 
     __tablename__ = "sale_document_items"
@@ -54,6 +58,13 @@ class SaleDocumentItem(Base):
     #: Stable link to original order line (required for product correction mapping).
     #: NULL for SHIPPING lines.
     order_item_id = Column(Integer, ForeignKey("order_items.id", ondelete="SET NULL"), nullable=True, index=True)
+    #: CORRECTION → PRIMARY item being credited. PRIMARY always null.
+    source_sale_document_item_id = Column(
+        Integer,
+        ForeignKey("sale_document_items.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     product_id = Column(Integer, ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True)
     position = Column(Integer, nullable=False, default=0)
     name = Column(String(512), nullable=False, default="")
@@ -69,3 +80,8 @@ class SaleDocumentItem(Base):
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
 
     sale_document = relationship("SaleDocument", back_populates="items")
+    source_item = relationship(
+        "SaleDocumentItem",
+        remote_side=[id],
+        foreign_keys=[source_sale_document_item_id],
+    )

@@ -21,7 +21,9 @@ _DOMAIN_CODE_MAP = {
     "CORRECTION_NOT_SUPPORTED_FOR_DOCUMENT_TYPE": "correction_not_supported_for_document_type",
     "LINE_MAPPING_FAILED": "correction_line_mapping_failed",
     "SOURCE_SHIPPING_NOT_AVAILABLE": "source_shipping_not_available",
-    "SHIPPING_ALREADY_CORRECTED": "shipping_already_corrected",
+    "CORRECTION_SCOPE_REDUCED_AFTER_ISSUE": "correction_scope_reduced_after_issue",
+    "LEGACY_CORRECTION_SCOPE_AMBIGUOUS": "legacy_correction_scope_ambiguous",
+    "CORRECTION_OVER_SOURCE": "correction_over_source",
 }
 
 
@@ -79,7 +81,7 @@ def execute_generate_sale_correction(
 
     wh_id = int(row.warehouse_id) if getattr(row, "warehouse_id", None) else None
     try:
-        doc, reused = issue_sale_correction_for_return(
+        result = issue_sale_correction_for_return(
             db,
             tenant_id=int(event.tenant_id),
             return_id=int(row.id),
@@ -100,27 +102,30 @@ def execute_generate_sale_correction(
             data={"error_code": "sale_correction_failed"},
         )
 
-    source = getattr(doc, "source_document", None)
-    source_id = getattr(doc, "source_sale_document_id", None)
+    doc = result.document
+    source_id = getattr(doc, "source_sale_document_id", None) if doc is not None else None
     source_number = None
-    if source is not None:
-        source_number = getattr(source, "document_number", None)
-    elif source_id:
-        from ....models.sale_document import SaleDocument
+    if doc is not None:
+        source = getattr(doc, "source_document", None)
+        if source is not None:
+            source_number = getattr(source, "document_number", None)
+        elif source_id:
+            from ....models.sale_document import SaleDocument
 
-        src_row = db.query(SaleDocument).filter(SaleDocument.id == str(source_id)).first()
-        if src_row is not None:
-            source_number = getattr(src_row, "document_number", None)
+            src_row = db.query(SaleDocument).filter(SaleDocument.id == str(source_id)).first()
+            if src_row is not None:
+                source_number = getattr(src_row, "document_number", None)
 
     return EffectResult(
         ok=True,
         message="generate_sale_correction_ok",
         data={
-            "correction_document_id": str(doc.id),
-            "correction_number": str(getattr(doc, "document_number", None) or ""),
+            "correction_document_id": str(doc.id) if doc is not None else None,
+            "correction_number": str(getattr(doc, "document_number", None) or "") if doc is not None else None,
             "source_document_id": str(source_id) if source_id else None,
             "source_document_number": str(source_number) if source_number else None,
-            "reused_existing": bool(reused),
+            "reused_existing": bool(result.reused_existing),
+            "no_new_delta": bool(result.no_new_delta),
             "include_shipping_cost": include_shipping,
         },
     )
