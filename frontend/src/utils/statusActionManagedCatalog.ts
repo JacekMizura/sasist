@@ -26,14 +26,13 @@ export const STATUS_ACTION_COLUMN_HEADERS: Record<StatusActionManagedKey, string
   send_email_internal: "E-mail wewn.",
 };
 
-/** Full titles for column header tooltips. */
+/** Full titles for column header help (SettingInfoButton — WMS settings pattern). */
 export const STATUS_ACTION_COLUMN_TOOLTIPS: Record<StatusActionManagedKey, string> = {
-  warehouse_commit:
-    "Finalizuje przyjęcie zwrotu przez workflow RMZ i tworzy dokument Z-PZ, jeśli zwrot jest gotowy do przyjęcia.",
-  generate_sale_correction:
-    "Wystawia korektę faktury na podstawie finalnie przyjętych pozycji zwrotu. Zwrot musi być wcześniej przyjęty w magazynie.",
-  send_email_customer: "Wyślij e-mail klientowi po wejściu w ten status",
-  send_email_internal: "Wyślij e-mail wewnętrzny po wejściu w ten status",
+  warehouse_commit: "Zatwierdza przyjęcie zwrotu w magazynie i tworzy dokument magazynowy.",
+  generate_sale_correction: "Wystawia korektę faktury dla przyjętych pozycji zwrotu.",
+  send_email_customer: "Wysyła wybrany e-mail do klienta po wejściu zwrotu w ten status.",
+  send_email_internal:
+    "Wysyła wybrany e-mail do wskazanego użytkownika po wejściu zwrotu w ten status.",
 };
 
 export const WAREHOUSE_COMMIT_TOOLTIP = STATUS_ACTION_COLUMN_TOOLTIPS.warehouse_commit;

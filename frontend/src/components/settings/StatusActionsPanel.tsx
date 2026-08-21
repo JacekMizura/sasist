@@ -3,7 +3,6 @@
  * Edited status = trigger; checkboxes = side-effects. No change_status here.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Info } from "lucide-react";
 import toast from "react-hot-toast";
 
 import {
@@ -13,10 +12,10 @@ import {
   type AutomationEntityType,
   type StatusActionRuleDto,
 } from "../../api/automationsApi";
+import { SettingInfoButton } from "../../pages/Settings/SettingInfoButton";
 import {
   STATUS_ACTION_CHECKBOX_LABELS,
   STATUS_ACTION_COLUMN_TOOLTIPS,
-  STATUS_ACTION_SIMPLE_TOGGLE_KEYS,
   managedKeysForEntity,
   type StatusActionManagedKey,
 } from "../../utils/statusActionManagedCatalog";
@@ -292,15 +291,10 @@ export function StatusActionsPanel({
                 />
                 <span className="text-sm text-slate-800">{STATUS_ACTION_CHECKBOX_LABELS[d.key]}</span>
               </label>
-              {STATUS_ACTION_SIMPLE_TOGGLE_KEYS.has(d.key) ? (
-                <span
-                  className="inline-flex shrink-0 text-slate-400"
-                  title={STATUS_ACTION_COLUMN_TOOLTIPS[d.key]}
-                  aria-label={STATUS_ACTION_COLUMN_TOOLTIPS[d.key]}
-                >
-                  <Info className="h-3.5 w-3.5" strokeWidth={2} />
-                </span>
-              ) : null}
+              <SettingInfoButton
+                title={STATUS_ACTION_CHECKBOX_LABELS[d.key]}
+                description={STATUS_ACTION_COLUMN_TOOLTIPS[d.key]}
+              />
             </div>
 
             {d.key === "generate_sale_correction" && d.enabled ? (

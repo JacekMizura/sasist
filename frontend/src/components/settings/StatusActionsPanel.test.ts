@@ -53,11 +53,20 @@ describe("Status actions matrix UX", () => {
     expect(MATRIX).toContain("Edytuj status");
     expect(MATRIX).not.toMatch(/>\s*Edytuj\s*</);
     expect(MATRIX).toContain("IconButton");
-    expect(MATRIX).toContain("Tooltip");
+    expect(MATRIX).toContain("SettingInfoButton");
     expect(CATALOG).toContain('warehouse_commit: "Magazyn"');
     expect(CATALOG).toContain('generate_sale_correction: "Korekta"');
-    expect(CATALOG).toContain("dokument Z-PZ");
+    expect(CATALOG).toContain("dokument magazynowy");
     expect(CATALOG).toContain("korektę faktury");
+  });
+
+  it("matrix column help reuses WMS SettingInfoButton (portal modal)", () => {
+    expect(MATRIX).toContain('from "../../../pages/Settings/SettingInfoButton"');
+    expect(MATRIX).toContain("<SettingInfoButton");
+    expect(MATRIX).not.toMatch(/\bTooltip\b/);
+    expect(MATRIX).not.toMatch(/\bInfo className/);
+    expect(SRC).toContain("SettingInfoButton");
+    expect(SRC).not.toMatch(/\bInfo className/);
   });
 
   it("counter stays in Status cell (no anonymous count column)", () => {

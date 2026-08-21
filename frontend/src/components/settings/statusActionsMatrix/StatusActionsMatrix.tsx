@@ -3,7 +3,7 @@
  * List and modal share AutomationRule SSOT — no local boolean SSOT.
  */
 import { useCallback, useState } from "react";
-import { Info, Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 import {
@@ -11,11 +11,11 @@ import {
   type AutomationEntityType,
   type StatusActionOverviewEffectDto,
 } from "../../../api/automationsApi";
-import { IconButton, Tooltip } from "../../../design-system";
+import { IconButton } from "../../../design-system";
+import { SettingInfoButton } from "../../../pages/Settings/SettingInfoButton";
 import {
   STATUS_ACTION_COLUMN_HEADERS,
   STATUS_ACTION_COLUMN_TOOLTIPS,
-  STATUS_ACTION_SIMPLE_TOGGLE_KEYS,
   managedKeysForEntity,
 } from "../../../utils/statusActionManagedCatalog";
 import {
@@ -126,25 +126,12 @@ export function StatusActionsMatrix({
                 key={key}
                 className="w-24 px-1 py-1.5 text-center font-semibold text-slate-600"
               >
-                <span className="inline-flex items-center justify-center gap-0.5">
+                <span className="inline-flex items-center justify-center gap-1.5">
                   {STATUS_ACTION_COLUMN_HEADERS[key]}
-                  {STATUS_ACTION_SIMPLE_TOGGLE_KEYS.has(key) ? (
-                    <Tooltip
-                      content={
-                        <span className="block max-w-xs whitespace-normal text-left leading-snug">
-                          {STATUS_ACTION_COLUMN_TOOLTIPS[key]}
-                        </span>
-                      }
-                    >
-                      <button
-                        type="button"
-                        className="inline-flex rounded p-0.5 text-slate-400 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
-                        aria-label={STATUS_ACTION_COLUMN_TOOLTIPS[key]}
-                      >
-                        <Info className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                      </button>
-                    </Tooltip>
-                  ) : null}
+                  <SettingInfoButton
+                    title={STATUS_ACTION_COLUMN_HEADERS[key]}
+                    description={STATUS_ACTION_COLUMN_TOOLTIPS[key]}
+                  />
                 </span>
               </th>
             ))}
