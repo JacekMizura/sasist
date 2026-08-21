@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { listStatusActionsOverview, type StatusActionOverviewEffectDto } from "../../../api/automationsApi";
 import {
   createReturnUiStatus,
   deleteReturnUiStatus,
@@ -23,13 +24,34 @@ import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
 export function useReturnPanelStatusesConfig(warehouseId: number | null) {
   const [summary, setSummary] = useState<ReturnUiStatusPanelSummary | null>(null);
   const [panelSubgroups, setPanelSubgroups] = useState<ReturnUiPanelSubgroupRead[]>([]);
+  const [actionsByStatusId, setActionsByStatusId] = useState<
+    Record<string, Record<string, StatusActionOverviewEffectDto>>
+  >({});
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const loadActionsOverview = useCallback(async () => {
+    if (warehouseId == null) {
+      setActionsByStatusId({});
+      return;
+    }
+    try {
+      const overview = await listStatusActionsOverview({
+        tenantId: DAMAGE_TENANT_ID,
+        entityType: "RETURN",
+        warehouseId,
+      });
+      setActionsByStatusId(overview.by_status_id ?? {});
+    } catch {
+      setActionsByStatusId({});
+    }
+  }, [warehouseId]);
 
   const load = useCallback(async () => {
     if (warehouseId == null) {
       setSummary(null);
       setPanelSubgroups([]);
+      setActionsByStatusId({});
       return;
     }
     setLoading(true);
@@ -41,14 +63,16 @@ export function useReturnPanelStatusesConfig(warehouseId: number | null) {
       ]);
       setSummary(data);
       setPanelSubgroups(sg);
+      await loadActionsOverview();
     } catch {
       setErr("Nie udało się wczytać statusów panelu.");
       setSummary(null);
       setPanelSubgroups([]);
+      setActionsByStatusId({});
     } finally {
       setLoading(false);
     }
-  }, [warehouseId]);
+  }, [warehouseId, loadActionsOverview]);
 
   useEffect(() => {
     void load();
@@ -99,7 +123,11 @@ export function useReturnPanelStatusesConfig(warehouseId: number | null) {
 
   const createStatus = async (body: ReturnUiStatusCreatePayload): Promise<number | false> => {
     const badge = (body.badge_color ?? body.color ?? DEFAULT_PANEL_STATUS_HEX).trim();
-    if (!isValidPanelStatusHex(badge) || !isValidPanelStatusHex(body.background_color ?? badge) || !isValidPanelStatusHex(body.text_color ?? "#0f172a")) {
+    if (
+      !isValidPanelStatusHex(badge) ||
+      !isValidPanelStatusHex(body.background_color ?? badge) ||
+      !isValidPanelStatusHex(body.text_color ?? "#0f172a")
+    ) {
       setErr("Kolory: format #RRGGBB.");
       return false;
     }
@@ -157,8 +185,18 @@ export function useReturnPanelStatusesConfig(warehouseId: number | null) {
     const a = subs[idx];
     const b = subs[j];
     try {
-      await updateReturnUiStatus(a.id, DAMAGE_TENANT_ID, { sort_status: b.sort_status ?? b.sort_order, sort_order: b.sort_order }, warehouseId);
-      await updateReturnUiStatus(b.id, DAMAGE_TENANT_ID, { sort_status: a.sort_status ?? a.sort_order, sort_order: a.sort_order }, warehouseId);
+      await updateReturnUiStatus(
+        a.id,
+        DAMAGE_TENANT_ID,
+        { sort_status: b.sort_status ?? b.sort_order, sort_order: b.sort_order },
+        warehouseId,
+      );
+      await updateReturnUiStatus(
+        b.id,
+        DAMAGE_TENANT_ID,
+        { sort_status: a.sort_status ?? a.sort_order, sort_order: a.sort_order },
+        warehouseId,
+      );
       await load();
     } catch {
       setErr("Nie udało się zmienić kolejności.");
@@ -181,10 +219,12 @@ export function useReturnPanelStatusesConfig(warehouseId: number | null) {
   return {
     summary,
     panelSubgroups,
+    actionsByStatusId,
     loading,
     err,
     setErr,
     reload: load,
+    reloadActionsOverview: loadActionsOverview,
     saveStatus,
     createStatus,
     removeStatus,

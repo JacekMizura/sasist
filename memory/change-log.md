@@ -1,3 +1,10 @@
+## 2026-08-21 — Return status actions inline matrix
+
+- Full-width matrix per subgroup: Status | Magazyn | E-mail klient | E-mail wewn. | Akcje
+- Inline checkbox toggles → PUT status-actions (managed/unmanaged merge preserved)
+- Email popover for template (+ internal user); overview batch returns enabled+config map
+- Removed under-name “Brak automatycznych akcji” text projection
+
 ## 2026-08-21 — Return status list STATUS_ACTION overview UX
 
 - Compact StatusActionsPanel (property checkboxes; email config only when ON; warehouse_commit tooltip)

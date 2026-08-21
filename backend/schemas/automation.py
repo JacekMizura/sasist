@@ -93,15 +93,16 @@ class StatusActionUpsertIn(BaseModel):
     effects: list[AutomationEffectIn] = Field(default_factory=list)
 
 
-class StatusActionOverviewItem(BaseModel):
-    key: str
-    label: str
+class StatusActionOverviewEffect(BaseModel):
+    enabled: bool = False
+    template_id: Optional[int] = None
+    user_id: Optional[int] = None
 
 
 class StatusActionsOverviewOut(BaseModel):
-    """Batch map: status_id (string) → enabled managed actions for list UI."""
+    """Batch map: status_id → managed_key → enabled + config for matrix UI."""
 
-    by_status_id: dict[str, list[StatusActionOverviewItem]] = Field(default_factory=dict)
+    by_status_id: dict[str, dict[str, StatusActionOverviewEffect]] = Field(default_factory=dict)
 
 
 class AutomationEffectExecutionOut(BaseModel):

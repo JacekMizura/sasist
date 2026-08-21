@@ -200,10 +200,14 @@ export type StatusActionRuleDto = AutomationRuleDto & {
   last_run_at?: string | null;
 };
 
-export type StatusActionOverviewItemDto = { key: string; label: string };
+export type StatusActionOverviewEffectDto = {
+  enabled: boolean;
+  template_id?: number | null;
+  user_id?: number | null;
+};
 
 export type StatusActionsOverviewDto = {
-  by_status_id: Record<string, StatusActionOverviewItemDto[]>;
+  by_status_id: Record<string, Record<string, StatusActionOverviewEffectDto>>;
 };
 
 export async function listStatusActions(params: {
@@ -223,7 +227,7 @@ export async function listStatusActions(params: {
   return res.data;
 }
 
-/** One request: map of status_id → enabled managed actions for list overview. */
+/** One request: map of status_id → managed_key → { enabled, template_id?, user_id? }. */
 export async function listStatusActionsOverview(params: {
   tenantId: number;
   entityType: AutomationEntityType;

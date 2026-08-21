@@ -136,10 +136,13 @@ def status_actions_overview(
     tenant_id: int,
     entity_type: str,
     warehouse_id: Optional[int] = None,
-) -> dict[str, list[dict[str, str]]]:
+) -> dict[str, dict[str, dict[str, Any]]]:
     """
-    Batch projection: status_id → enabled managed actions (business labels).
-    One query for all STATUS_ACTION rules of the entity — no N+1 per status.
+    Batch projection for editable status matrix.
+
+    status_id → managed_key → { enabled, template_id?, user_id? }
+    Includes disabled effects/rules so the UI can show OFF + preserve config.
+    One query — no N+1 per status.
     """
     et = str(entity_type).strip().upper()
     q = (
@@ -150,38 +153,45 @@ def status_actions_overview(
             AutomationRule.entity_type == et,
             AutomationRule.source == SOURCE_STATUS_ACTION,
             AutomationRule.trigger_type == TRIGGER_ENTITY_STATUS_ENTERED,
-            AutomationRule.enabled.is_(True),
         )
     )
     if warehouse_id is not None:
         q = q.filter(
             (AutomationRule.warehouse_id.is_(None)) | (AutomationRule.warehouse_id == int(warehouse_id))
         )
-    by_status: dict[str, list[dict[str, str]]] = {}
-    # Prefer lowest rule id per status (same as upsert primary).
+    by_status: dict[str, dict[str, dict[str, Any]]] = {}
     seen_status_rule: dict[str, int] = {}
     for rule in q.order_by(AutomationRule.id.asc()).all():
+        rule_on = bool(rule.enabled)
         for sid in _trigger_status_ids(rule):
             key = str(sid)
             if key in seen_status_rule:
                 continue
             seen_status_rule[key] = int(rule.id)
-            actions: list[dict[str, str]] = []
-            seen_keys: set[str] = set()
+            actions: dict[str, dict[str, Any]] = {}
             for e in sorted(rule.effects or [], key=lambda x: (int(x.position), int(x.id or 0))):
-                if not bool(getattr(e, "enabled", True)):
-                    continue
                 cfg = parse_config(getattr(e, "config_json", None))
                 logical = logical_status_action_key(str(e.effect_type or ""), cfg)
-                if not is_managed_status_action_key(logical) or logical in seen_keys:
+                if not is_managed_status_action_key(logical) or logical in actions:
                     continue
-                seen_keys.add(logical)
-                actions.append(
-                    {
-                        "key": logical,
-                        "label": MANAGED_STATUS_ACTION_LABELS.get(logical, logical),
-                    }
-                )
+                entry: dict[str, Any] = {
+                    "enabled": bool(getattr(e, "enabled", True)) and rule_on,
+                }
+                tid = cfg.get("template_id")
+                try:
+                    tid_n = int(tid) if tid is not None else None
+                except (TypeError, ValueError):
+                    tid_n = None
+                if tid_n and tid_n > 0:
+                    entry["template_id"] = tid_n
+                uid = cfg.get("user_id")
+                try:
+                    uid_n = int(uid) if uid is not None else None
+                except (TypeError, ValueError):
+                    uid_n = None
+                if uid_n and uid_n > 0:
+                    entry["user_id"] = uid_n
+                actions[logical] = entry
             by_status[key] = actions
     return by_status
 

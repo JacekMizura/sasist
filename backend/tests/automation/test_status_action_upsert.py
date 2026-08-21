@@ -429,11 +429,11 @@ def test_overview_batch_projection(db):
     db.commit()
     overview = status_actions_overview(db, tenant_id=1, entity_type="RETURN", warehouse_id=1)
     assert "7" in overview
-    labels = [a["label"] for a in overview["7"]]
-    assert "Przyjęcie magazynowe" in labels
-    assert "E-mail klientowi" in labels
-    assert "E-mail wewnętrzny" not in labels
-    # Status 8: rule enabled=False when all managed off → omitted from overview
-    assert overview.get("8", []) == []
-    # Tenant isolation
+    assert overview["7"]["warehouse_commit"]["enabled"] is True
+    assert overview["7"]["send_email_customer"]["enabled"] is True
+    assert overview["7"]["send_email_customer"]["template_id"] == 1
+    assert overview["7"]["send_email_internal"]["enabled"] is False
+    assert overview["7"]["send_email_internal"].get("template_id") == 2
+    # Status 8: rule disabled — still present with enabled=false for matrix OFF state
+    assert overview["8"]["warehouse_commit"]["enabled"] is False
     assert status_actions_overview(db, tenant_id=2, entity_type="RETURN", warehouse_id=1) == {}

@@ -68,9 +68,12 @@ export function ReturnsStatusesConfigurator({ warehouseId, cfg, setDraft }: Prop
           summary={panel.summary}
           panelSubgroups={panel.panelSubgroups}
           actionsByStatusId={panel.actionsByStatusId}
+          warehouseId={warehouseId}
           onAddSubgroup={(mg) => setSubgroupModal(mg)}
           onAddStatus={(mg) => setStatusModal({ mode: "create", mainGroup: mg })}
           onEditStatus={(s) => setStatusModal({ mode: "edit", status: s })}
+          onDeleteStatus={(id) => void panel.removeStatus(id)}
+          onActionsOverviewChanged={() => panel.reloadActionsOverview()}
         />
       )}
 
