@@ -929,6 +929,8 @@ export default function ReturnsReturnDetailPage() {
   }
 
   const refundProcessing = data.refund_processing ?? "disabled";
+  /** Existing refund record on the RMZ (API field) — required by openRefundModal + sectionCtx. */
+  const refund = data.refund ?? null;
   const officeRefundStage =
     data.status?.transition_key === "office_pending" || data.status?.transition_key === "qc_complete";
 
