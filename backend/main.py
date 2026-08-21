@@ -379,6 +379,7 @@ from .api.wms_carriers import router as wms_carriers_router
 from .api.wms_locations import router as wms_locations_router
 from .api.office_return_ui import router as office_return_ui_router
 from .api.office_return_module import router as office_return_module_router
+from .api.returns_report import router as returns_report_router
 from .api.wms_return_module import router as wms_return_module_router
 from .api.office_order_ui import router as office_order_ui_router
 from .api.order_substatuses import router as order_substatuses_router
@@ -2331,6 +2332,7 @@ _API_ROUTERS = (
     wms_locations_router,
     office_return_ui_router,
     office_return_module_router,
+    returns_report_router,
     wms_return_module_router,
     office_order_ui_router,
     order_substatuses_router,

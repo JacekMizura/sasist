@@ -40,6 +40,7 @@ import OrderList from "./pages/Orders/OrderList"
 import ReturnStatusesPage from "./pages/Orders/ReturnStatusesPage"
 import ReturnsHubPage from "./pages/Orders/ReturnsHubPage"
 import ReturnsListPanel from "./pages/Orders/ReturnsListPanel"
+import ReturnsReportPage from "./pages/Orders/ReturnsReportPage"
 import ReturnsReturnDetailPage from "./pages/Orders/ReturnsReturnDetailPage"
 import CreateOrderPage from "./pages/Orders/CreateOrderPage"
 import OrderDetailPage from "./pages/Orders/OrderDetailPage"
@@ -929,6 +930,7 @@ export const router = createBrowserRouter(
                     <Route path="return-types" element={<Navigate to="/orders/returns/dictionaries" replace />} />
                     <Route path="sources" element={<Navigate to="/orders/returns/dictionaries" replace />} />
                     <Route path="configurator" element={<ReturnsModuleSettingsTabPage tab="konfigurator" />} />
+                    <Route path="report" element={<ReturnsReportPage />} />
                     <Route path=":returnId" element={<ReturnsReturnDetailPage />} />
                   </Route>
                   <Route path="automation" element={<OrderAutomationModuleShell />}>

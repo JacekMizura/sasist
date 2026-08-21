@@ -16,6 +16,7 @@ export const RETURNS_MODULE_TABS = [
   },
   { path: `${BASE}/dictionaries`, label: "Słowniki zwrotów", end: true as const, activePaths: [`${BASE}/return-types`, `${BASE}/sources`] },
   { path: `${BASE}/configurator`, label: "Konfigurator", end: true as const },
+  { path: `${BASE}/report`, label: "Raport zwrotów", end: true as const },
 ];
 
 /** Ukrywane na szczegółach RMZ (`/orders/returns/:id`) — shell modułu pomija breadcrumb i zakładki. */
