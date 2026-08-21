@@ -88,12 +88,26 @@ function EffectsCell({
   statusNameById,
   statusBriefById,
   expanded,
+  isStatusAction,
 }: {
   rule: OrderAutomationRule;
   statusNameById: Map<number, string>;
   statusBriefById?: OrderUiStatusBriefById;
   expanded: boolean;
+  isStatusAction?: boolean;
 }) {
+  if (isStatusAction) {
+    const n = rule.effects.filter((e) => e.kind).length;
+    const sid = rule.triggerStatusId;
+    const statusLabel =
+      sid != null && statusNameById.get(sid) ? statusNameById.get(sid)! : sid != null ? `#${sid}` : "—";
+    return (
+      <div className="min-w-0 text-sm text-slate-700">
+        <p className="font-medium">{n} {n === 1 ? "akcja" : n < 5 ? "akcje" : "akcji"}</p>
+        <p className="mt-0.5 text-xs text-slate-500">Po wejściu w status: {statusLabel}</p>
+      </div>
+    );
+  }
   if (rule.effects.length === 0) {
     return <span className="text-slate-400">—</span>;
   }
@@ -167,8 +181,25 @@ function AutomationRuleTableRow({
 }: RuleRowProps) {
   const navigate = useNavigate();
   const displayId = formatRuleDisplayId(rule);
-  const ruleName = formatRuleListName(rule);
-  const canExpand = rule.conditions.length > COLLAPSED_LIMIT || rule.effects.length > COLLAPSED_LIMIT;
+  const isStatusAction = (sourceBadge || rule.source || "").toUpperCase() === "STATUS_ACTION" || sourceBadge === "Akcja statusu";
+  const ruleName = isStatusAction
+    ? rule.name.startsWith("Po wejściu")
+      ? rule.name
+      : `Po wejściu w status: ${
+          rule.triggerStatusId != null && statusNameById.get(rule.triggerStatusId)
+            ? statusNameById.get(rule.triggerStatusId)
+            : rule.name
+        }`
+    : formatRuleListName(rule);
+  const canExpand = !isStatusAction && (rule.conditions.length > COLLAPSED_LIMIT || rule.effects.length > COLLAPSED_LIMIT);
+
+  const openEditor = () => {
+    if (isStatusAction && rule.triggerStatusId != null) {
+      navigate(`/orders/statuses?editStatusId=${rule.triggerStatusId}`);
+      return;
+    }
+    navigate(`${basePath}/${rule.id}/edit`);
+  };
 
   return (
     <tr className={`${oaListRowClass} ${rule.enabled ? "" : "opacity-55 hover:opacity-100"}`}>
@@ -193,7 +224,7 @@ function AutomationRuleTableRow({
             rule.enabled ? "text-slate-900" : "text-slate-500 line-through"
           }`}
           title={ruleName}
-          onClick={() => navigate(`${basePath}/${rule.id}/edit`)}
+          onClick={openEditor}
         >
           {ruleName}
         </button>
@@ -202,26 +233,32 @@ function AutomationRuleTableRow({
             {sourceBadge}
           </span>
         ) : null}
-        <span
-          className={`mt-1 inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-            runtimeReady ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-950"
-          }`}
-        >
-          {runtimeReady ? "Gotowa" : "Wymaga poprawy"}
-        </span>
+        {!isStatusAction ? (
+          <span
+            className={`mt-1 inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+              runtimeReady ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-950"
+            }`}
+          >
+            {runtimeReady ? "Gotowa" : "Wymaga poprawy"}
+          </span>
+        ) : null}
         <p className="mt-1.5 text-xs leading-snug text-slate-500">
           Wykonano: <span className="font-semibold tabular-nums text-slate-700">{rule.stats.runCount}</span>
         </p>
         <p className="text-xs leading-snug text-slate-500">Ostatnie: {fmtTime(rule.stats.lastRunAt)}</p>
       </td>
       <td className={oaListTdClass} style={{ width: "28%" }}>
-        <ConditionsCell
-          rule={rule}
-          statusNameById={statusNameById}
-          statusBriefById={statusBriefById}
-          warehouseOptions={warehouseOptions}
-          expanded={expanded}
-        />
+        {isStatusAction ? (
+          <span className="text-xs text-slate-500">Wejście w status panelowy</span>
+        ) : (
+          <ConditionsCell
+            rule={rule}
+            statusNameById={statusNameById}
+            statusBriefById={statusBriefById}
+            warehouseOptions={warehouseOptions}
+            expanded={expanded}
+          />
+        )}
       </td>
       <td className={oaListTdClass} style={{ width: "28%" }}>
         <EffectsCell
@@ -229,13 +266,14 @@ function AutomationRuleTableRow({
           statusNameById={statusNameById}
           statusBriefById={statusBriefById}
           expanded={expanded}
+          isStatusAction={isStatusAction}
         />
       </td>
       <td className={`${oaListTdClass} tabular-nums text-slate-600`} style={{ width: 120 }}>
-        {formatDelayMinutes(rule.delayMinutes)}
+        {isStatusAction ? "—" : formatDelayMinutes(rule.delayMinutes)}
       </td>
       <td className={oaListTdClass} style={{ width: 180 }}>
-        <ExecutionCell rule={rule} />
+        {isStatusAction ? <span className="text-xs text-slate-500">Automatycznie</span> : <ExecutionCell rule={rule} />}
       </td>
       <td className={oaListTdClass} style={{ width: 180 }}>
         <div className="flex items-start gap-1">
@@ -244,7 +282,7 @@ function AutomationRuleTableRow({
             className={oaRowActionBtn}
             title="Edytuj"
             aria-label="Edytuj"
-            onClick={() => navigate(`${basePath}/${rule.id}/edit`)}
+            onClick={openEditor}
           >
             <Pencil className="h-4 w-4" strokeWidth={2} />
           </button>

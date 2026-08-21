@@ -147,6 +147,10 @@ export type OrderAutomationRule = {
   /** Opóźnienie wykonania po spełnieniu warunków (minuty). Domyślnie 0. */
   delayMinutes?: number;
   stats: OrderAutomationStats;
+  /** Backend source (STATUS_ACTION | USER | …) — optional projection. */
+  source?: string;
+  /** Trigger status_id for STATUS_ACTION rules. */
+  triggerStatusId?: number | null;
 };
 
 export type OrderAutomationLogLevel = "success" | "error" | "info";

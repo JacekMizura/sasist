@@ -233,6 +233,11 @@ def set_rule_enabled(db: Session, rule: AutomationRule, enabled: bool) -> Automa
 def _replace_effects(db: Session, rule: AutomationRule, effects: list[dict[str, Any]]) -> None:
     for old in list(rule.effects or []):
         db.delete(old)
+    # Clear identity-map collection so subsequent updates don't resurrect deleted rows.
+    try:
+        rule.effects = []
+    except Exception:
+        pass
     db.flush()
     for i, eff in enumerate(effects):
         et = str(eff.get("effect_type") or "").strip()

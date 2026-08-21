@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, ChevronUp, Edit2, Trash2, Plus } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import {
   createOrderUiStatus,
@@ -67,6 +67,7 @@ function defaultExpanded(): Record<string, boolean> {
 export default function OrderPanelUiStatusesSettingsPage() {
   const { warehouse } = useWarehouse();
   const warehouseId = warehouse?.id ?? null;
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [summary, setSummary] = useState<Awaited<ReturnType<typeof getOrderUiStatusSummary>> | null>(null);
   const [panelSubgroups, setPanelSubgroups] = useState<Awaited<ReturnType<typeof getOrderPanelSubgroups>>>([]);
@@ -155,6 +156,20 @@ export default function OrderPanelUiStatusesSettingsPage() {
       is_active: r.is_active !== false,
     });
   };
+
+  useEffect(() => {
+    const raw = searchParams.get("editStatusId");
+    if (!raw || !summary) return;
+    const sid = Number(raw);
+    if (!Number.isFinite(sid) || sid <= 0) return;
+    const hit = (summary.groups ?? [])
+      .flatMap((g) => g.sub_statuses ?? [])
+      .find((s) => s.id === sid);
+    if (hit) {
+      startEdit(hit);
+      setSearchParams({}, { replace: true });
+    }
+  }, [summary, searchParams, setSearchParams]);
 
   const cancelEdit = () => {
     setEditImageBlobUrl(null);
@@ -521,6 +536,8 @@ export default function OrderPanelUiStatusesSettingsPage() {
                 warehouseId={warehouseId}
                 entityType="ORDER"
                 statusId={r.id}
+                statusName={r.name}
+                statusActive={r.is_active !== false}
                 statusOptions={(summary?.groups ?? []).flatMap((gg) =>
                   (gg.sub_statuses ?? []).map((s) => ({
                     id: s.id,

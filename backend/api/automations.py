@@ -20,6 +20,7 @@ from ..schemas.automation import (
     LegacyImportRequest,
     LegacyImportResult,
     StatusActionRuleOut,
+    StatusActionUpsertIn,
 )
 from ..services.automation.store import (
     create_rule,
@@ -60,6 +61,36 @@ def get_status_actions(
         warehouse_id=warehouse_id,
     )
     return [StatusActionRuleOut.model_validate(r) for r in rows]
+
+
+@router.put("/status-actions", response_model=StatusActionRuleOut)
+def put_status_actions(body: StatusActionUpsertIn, db: Session = Depends(get_db)):
+    """Upsert one STATUS_ACTION rule per status with ordered effects (no duplicates)."""
+    from ..services.automation.status_actions import upsert_status_action_bundle
+
+    try:
+        rule = upsert_status_action_bundle(
+            db,
+            tenant_id=int(body.tenant_id),
+            entity_type=body.entity_type,
+            status_id=int(body.status_id),
+            warehouse_id=body.warehouse_id,
+            status_name=body.status_name,
+            effects=[e.model_dump() for e in body.effects],
+        )
+        db.commit()
+        db.refresh(rule)
+        d = rule_to_dict(rule)
+        d["last_execution_status"] = None
+        d["last_run_at"] = None
+        return StatusActionRuleOut.model_validate(d)
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("put_status_actions failed")
+        raise HTTPException(status_code=500, detail="status action upsert failed") from e
 
 
 @router.post("/import-legacy", response_model=LegacyImportResult)

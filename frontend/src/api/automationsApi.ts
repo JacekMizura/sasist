@@ -216,3 +216,15 @@ export async function listStatusActions(params: {
   });
   return res.data;
 }
+
+export async function upsertStatusActions(body: {
+  tenant_id: number;
+  entity_type: AutomationEntityType;
+  status_id: number;
+  warehouse_id?: number | null;
+  status_name?: string | null;
+  effects: Omit<AutomationEffectDto, "id">[];
+}): Promise<StatusActionRuleDto> {
+  const res = await api.put<StatusActionRuleDto>("automations/status-actions", body);
+  return res.data;
+}

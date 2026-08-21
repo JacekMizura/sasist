@@ -84,6 +84,15 @@ class StatusActionRuleOut(AutomationRuleOut):
     last_run_at: Optional[str] = None
 
 
+class StatusActionUpsertIn(BaseModel):
+    tenant_id: int = Field(..., ge=1)
+    entity_type: EntityType
+    status_id: int = Field(..., ge=1)
+    warehouse_id: Optional[int] = Field(default=None, ge=1)
+    status_name: Optional[str] = None
+    effects: list[AutomationEffectIn] = Field(default_factory=list)
+
+
 class AutomationEffectExecutionOut(BaseModel):
     id: int
     effect_id: Optional[int] = None

@@ -36,6 +36,11 @@ export function backendRuleToFe(dto: AutomationRuleDto): OrderAutomationRule {
     ),
   );
   const statsRaw = (meta.stats as OrderAutomationRule["stats"]) ?? { lastRunAt: null, runCount: 0 };
+  const tc = (dto.trigger_config ?? {}) as Record<string, unknown>;
+  let triggerStatusId: number | null = null;
+  const rawSid = tc.status_id ?? (Array.isArray(tc.status_ids) ? tc.status_ids[0] : null);
+  const nSid = Number(rawSid);
+  if (Number.isFinite(nSid) && nSid > 0) triggerStatusId = nSid;
   return {
     id: String(dto.id),
     publicId: typeof meta.publicId === "number" ? meta.publicId : dto.id,
@@ -51,6 +56,8 @@ export function backendRuleToFe(dto: AutomationRuleDto): OrderAutomationRule {
       lastRunAt: statsRaw.lastRunAt ?? null,
       runCount: Number(statsRaw.runCount) || 0,
     },
+    source: dto.source,
+    triggerStatusId,
   };
 }
 

@@ -352,6 +352,8 @@ export function ReturnUiStatusModal({
             warehouseId={warehouseId}
             entityType="RETURN"
             statusId={status.id}
+            statusName={status.name}
+            statusActive={status.is_active !== false}
             statusOptions={statusOptions}
           />
         ) : null}

@@ -358,6 +358,8 @@ export default function ComplaintPanelUiStatusesSettingsPage() {
                                       warehouseId={warehouseId}
                                       entityType="COMPLAINT"
                                       statusId={r.id}
+                                      statusName={r.name}
+                                      statusActive={true}
                                       statusOptions={(summary?.groups ?? []).flatMap((gg) =>
                                         (gg.sub_statuses ?? []).map((s) => ({ id: s.id, name: s.name })),
                                       )}
