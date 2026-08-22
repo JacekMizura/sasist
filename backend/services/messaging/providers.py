@@ -48,19 +48,18 @@ class EmailProvider(Protocol):
 
 
 class UnconfiguredEmailProvider:
-    """Used when SMTP env is missing — delivery must FAIL, never fake SENT."""
+    """Used when provider env is missing — delivery must FAIL, never fake SENT."""
 
     name = "unconfigured"
+
+    def __init__(self, *, hint: str | None = None) -> None:
+        self._hint = hint or "Configure EMAIL_PROVIDER and required credentials (see ENV docs)"
 
     def is_configured(self) -> bool:
         return False
 
     def send(self, request: EmailSendRequest) -> EmailSendResult:
-        raise EmailProviderError(
-            "Email SMTP is not configured (set EMAIL_SMTP_HOST and EMAIL_FROM)",
-            code="configuration_error",
-            transient=False,
-        )
+        raise EmailProviderError(self._hint, code="configuration_error", transient=False)
 
 
 class MemoryEmailProvider:
@@ -178,8 +177,9 @@ def get_email_provider() -> EmailProvider:
     """
     Resolve provider from ENV.
 
-    EMAIL_PROVIDER=memory|smtp|auto (default auto)
+    EMAIL_PROVIDER=memory|smtp|resend|auto (default auto)
     - memory: in-process recorder (tests)
+    - resend: Resend HTTP API when RESEND_API_KEY + EMAIL_FROM set, else Unconfigured
     - smtp / auto: SMTP when EMAIL_SMTP_HOST + EMAIL_FROM set, else Unconfigured
     """
     global _memory_singleton
@@ -189,8 +189,19 @@ def get_email_provider() -> EmailProvider:
             _memory_singleton = MemoryEmailProvider()
         return _memory_singleton
 
-    host = (os.environ.get("EMAIL_SMTP_HOST") or "").strip()
     from_addr = (os.environ.get("EMAIL_FROM") or "").strip()
+
+    if mode == "resend":
+        from .resend_provider import ResendEmailProvider
+
+        api_key = (os.environ.get("RESEND_API_KEY") or "").strip()
+        if api_key and from_addr:
+            return ResendEmailProvider(api_key=api_key, from_address=from_addr)
+        return UnconfiguredEmailProvider(
+            hint="Resend is not configured (set RESEND_API_KEY and EMAIL_FROM)",
+        )
+
+    host = (os.environ.get("EMAIL_SMTP_HOST") or "").strip()
     if mode in ("smtp", "auto") and host and from_addr:
         port_raw = os.environ.get("EMAIL_SMTP_PORT") or "587"
         try:
@@ -217,7 +228,9 @@ def get_email_provider() -> EmailProvider:
             use_ssl=use_ssl,
         )
 
-    return UnconfiguredEmailProvider()
+    return UnconfiguredEmailProvider(
+        hint="Email SMTP is not configured (set EMAIL_SMTP_HOST and EMAIL_FROM)",
+    )
 
 
 def reset_memory_provider_for_tests() -> MemoryEmailProvider:
