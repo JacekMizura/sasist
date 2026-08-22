@@ -197,6 +197,12 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
             metadata={"login": user.login},
         )
         ensure_active_warehouse_on_login(db, user)
+        try:
+            from ..services.mail.permission_backfill import backfill_mail_permissions_for_full_access_users
+
+            backfill_mail_permissions_for_full_access_users(db)
+        except Exception:
+            logger.exception("mail permission backfill on login failed")
         db.commit()
 
         return TokenResponse(access_token=create_access_token(user.id), refresh_token=raw_refresh)

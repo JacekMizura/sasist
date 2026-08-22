@@ -31,7 +31,8 @@ from backend.services.mail.account_service import (
     get_smtp_password,
     update_account,
 )
-from backend.services.mail.connection_test import ConnectionTestResult, probe_account_connection
+from backend.services.mail.connection_test import ConnectionTestResult, ProtocolProbeResult, probe_account_connection
+from backend.services.mail.connection_errors import ProbeStatus
 from backend.services.mail.inbound.imap_connector import InMemoryImapConnector
 from backend.services.mail.inbound.message_parser import parse_inbound_email
 from backend.services.mail.inbound.sync_service import ingest_inbound_message, sync_account_inbound
@@ -404,12 +405,13 @@ def test_connection_send_only(monkeypatch, db):
 
     monkeypatch.setattr(
         "backend.services.mail.connection_test.test_smtp_connection",
-        lambda **_: (True, "OK"),
+        lambda **_: ProtocolProbeResult(status=ProbeStatus.OK, message="ok"),
     )
     result = probe_account_connection(row)
     assert result.ok is True
-    assert result.imap_ok is None
-    assert result.smtp_ok is True
+    assert result.imap is None
+    assert result.smtp is not None
+    assert result.smtp.status.value == "OK"
 
 
 def test_mail_permissions_exist():

@@ -22,6 +22,21 @@ export type MailAccountDto = {
   last_sync_error: string | null;
 };
 
+export type MailProtocolProbeResult = {
+  status: "OK" | "AUTH_ERROR" | "NETWORK_ERROR" | "TIMEOUT" | "CONFIG_ERROR" | "SKIPPED";
+  message: string;
+  diagnostics?: Record<string, unknown>;
+};
+
+export type MailConnectionTestResult = {
+  ok: boolean;
+  message: string;
+  imap?: MailProtocolProbeResult | null;
+  smtp?: MailProtocolProbeResult | null;
+  imap_ok?: boolean | null;
+  smtp_ok?: boolean | null;
+};
+
 export type MailSetupStatus = {
   has_accounts: boolean;
   has_active_accounts: boolean;
@@ -84,17 +99,15 @@ export async function testMailAccountConnection(
   accountId: number,
   tenantId: number,
   overrides?: Partial<MailAccountPayload>,
-): Promise<{ ok: boolean; message: string; imap_ok?: boolean | null; smtp_ok?: boolean | null }> {
-  const res = await api.post(`/mail/accounts/${accountId}/test`, overrides ?? {}, {
+): Promise<MailConnectionTestResult> {
+  const res = await api.post<MailConnectionTestResult>(`/mail/accounts/${accountId}/test`, overrides ?? {}, {
     params: { tenant_id: tenantId },
   });
   return res.data;
 }
 
-export async function testMailAccountConfig(
-  payload: MailAccountPayload,
-): Promise<{ ok: boolean; message: string; imap_ok?: boolean | null; smtp_ok?: boolean | null }> {
-  const res = await api.post("/mail/accounts/test-config", payload);
+export async function testMailAccountConfig(payload: MailAccountPayload): Promise<MailConnectionTestResult> {
+  const res = await api.post<MailConnectionTestResult>("/mail/accounts/test-config", payload);
   return res.data;
 }
 

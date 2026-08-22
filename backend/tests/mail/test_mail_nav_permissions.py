@@ -72,3 +72,10 @@ def test_mail_permission_backfill_skips_plain_user(perm_db):
     backfill_mail_permissions_for_full_access_users(perm_db)
     count = perm_db.query(UserPermission).filter(UserPermission.user_id == 2).count()
     assert count == 0
+
+
+def test_owner_effective_permissions_include_mail_manage_accounts(perm_db):
+    from backend.auth.deps import user_has_permission
+
+    owner = perm_db.query(AppUser).filter(AppUser.id == 1).one()
+    assert user_has_permission(perm_db, owner, "mail.manage_accounts") is True

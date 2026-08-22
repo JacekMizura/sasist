@@ -18,7 +18,9 @@ import {
   listMailAccounts,
   testMailAccountConnection,
   type MailAccountDto,
+  type MailConnectionTestResult,
 } from "../../modules/poczta/services/mailApi";
+import { formatMailConnectionTestSummary } from "./MailConnectionTestResults";
 import { MailAccountFormModal } from "./MailAccountFormModal";
 
 function fmtSync(row: MailAccountDto): string {
@@ -74,8 +76,9 @@ export default function MailAccountsPage() {
   const handleTest = async (row: MailAccountDto) => {
     setBusyId(row.id);
     try {
-      const res = await testMailAccountConnection(row.id, tenantId);
-      setToast(res.ok ? "Połączenie działa poprawnie." : res.message);
+      const res: MailConnectionTestResult = await testMailAccountConnection(row.id, tenantId);
+      const lines = formatMailConnectionTestSummary(res, row.is_send_only);
+      setToast(res.ok ? lines.join(" ") : lines.join(" · "));
     } catch {
       setToast("Test połączenia nie powiódł się.");
     } finally {

@@ -80,7 +80,13 @@ def effective_permission_keys(db: Session, user: AppUser) -> set[str]:
             break
     rows = db.query(UserPermission.permission_key).filter(UserPermission.user_id == user.id).all()
     explicit = {row[0] for row in rows}
-    return preset | explicit
+    keys = preset | explicit
+    # Owner accounts — full mail module access (matches permission backfill intent).
+    if getattr(user, "is_owner", False):
+        from ..services.mail.permission_backfill import MAIL_MODULE_PERMISSIONS
+
+        keys |= set(MAIL_MODULE_PERMISSIONS)
+    return keys
 
 
 def list_permissions_for_user(db: Session, user: AppUser) -> list[str]:

@@ -57,12 +57,7 @@ def test_mail_account_config(
     probe.imap_password_ciphertext = encrypt_secret(body.imap_password)
     probe.smtp_password_ciphertext = encrypt_secret(body.smtp_password)
     result = probe_account_connection(probe)
-    return {
-        "ok": result.ok,
-        "imap_ok": result.imap_ok,
-        "smtp_ok": result.smtp_ok,
-        "message": result.message,
-    }
+    return result.to_api_dict()
 
 
 @router.get("/setup-status")
@@ -255,9 +250,4 @@ def test_mail_account_connection(
             probe.is_send_only = body.is_send_only
 
     result = probe_account_connection(probe)
-    return {
-        "ok": result.ok,
-        "imap_ok": result.imap_ok,
-        "smtp_ok": result.smtp_ok,
-        "message": result.message,
-    }
+    return result.to_api_dict()

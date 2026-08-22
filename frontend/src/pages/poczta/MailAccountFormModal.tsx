@@ -8,7 +8,9 @@ import {
   updateMailAccount,
   type MailAccountDto,
   type MailAccountPayload,
+  type MailConnectionTestResult,
 } from "../../modules/poczta/services/mailApi";
+import { MailConnectionTestResults } from "./MailConnectionTestResults";
 
 type Props = {
   tenantId: number;
@@ -34,7 +36,7 @@ export function MailAccountFormModal({ tenantId, initial, onClose, onSaved }: Pr
   const [smtpUsername, setSmtpUsername] = useState(initial?.smtp_username ?? "");
   const [smtpPassword, setSmtpPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [testMsg, setTestMsg] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<MailConnectionTestResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -65,13 +67,13 @@ export function MailAccountFormModal({ tenantId, initial, onClose, onSaved }: Pr
 
   const handleTest = async () => {
     setBusy(true);
-    setTestMsg(null);
+    setTestResult(null);
     setErr(null);
     try {
       const res = await testMailAccountConfig(buildPayload());
-      setTestMsg(res.ok ? "Połączenie działa." : res.message);
+      setTestResult(res);
     } catch {
-      setTestMsg("Test połączenia nie powiódł się.");
+      setErr("Test połączenia nie powiódł się. Sprawdź sesję lub uprawnienia do kont pocztowych.");
     } finally {
       setBusy(false);
     }
@@ -164,7 +166,7 @@ export function MailAccountFormModal({ tenantId, initial, onClose, onSaved }: Pr
           </fieldset>
         </div>
 
-        {testMsg ? <p className="mt-3 text-sm text-slate-700">{testMsg}</p> : null}
+        {testResult ? <MailConnectionTestResults result={testResult} isSendOnly={isSendOnly} /> : null}
         {err ? <p className="mt-3 text-sm text-red-700">{err}</p> : null}
 
         <div className="mt-5 flex flex-wrap justify-end gap-2">
