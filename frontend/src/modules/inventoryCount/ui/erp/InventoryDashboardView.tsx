@@ -11,6 +11,14 @@ import {
 
 import type { InventoryDashboardPayload, InventoryDocumentRead } from "@/api/inventoryCountApi";
 import { AppEmptyState } from "@/components/app-shell";
+import {
+  moduleListRowClass,
+  moduleListTableClass,
+  moduleListTableScrollClass,
+  moduleListTdClass,
+  moduleListThClass,
+  moduleListTheadClass,
+} from "@/components/listPage/moduleList";
 import { OperationalActionLink } from "@/components/operational";
 import { brandLinkTextClass, primaryButtonClassName } from "@/design-system";
 import { PurchasingKpiCard, PurchasingKpiGrid, PurchasingTableSection } from "@/modules/purchasing/ui";
@@ -24,8 +32,8 @@ type Props = {
 
 function DashboardDocRow({ doc }: { doc: InventoryDocumentRead }) {
   return (
-    <tr className="group transition-colors hover:bg-slate-50/80">
-      <td className="px-6 py-3">
+    <tr className={moduleListRowClass}>
+      <td className={moduleListTdClass}>
         <Link
           to={erpInventoryCountPaths.document(doc.id)}
           className="font-medium text-slate-900 hover:text-orange-600 hover:underline"
@@ -34,16 +42,16 @@ function DashboardDocRow({ doc }: { doc: InventoryDocumentRead }) {
         </Link>
         <div className="mt-0.5 text-xs text-slate-500">{inventoryTypeLabel(doc.inventory_type)}</div>
       </td>
-      <td className="px-6 py-3">
+      <td className={moduleListTdClass}>
         <InventoryDocumentStatusBadge status={doc.status} />
       </td>
-      <td className="px-6 py-3 text-right tabular-nums text-slate-700">
+      <td className={`${moduleListTdClass} text-right tabular-nums text-slate-700`}>
         {doc.coverage_percent}%
         <div className="text-xs text-slate-400">
           {doc.counted_lines}/{doc.total_lines}
         </div>
       </td>
-      <td className="px-6 py-3 text-right">
+      <td className={`${moduleListTdClass} text-right`}>
         <div className="inline-flex justify-end opacity-0 transition-opacity group-hover:opacity-100">
           <OperationalActionLink
             to={erpInventoryCountPaths.document(doc.id)}
@@ -78,21 +86,23 @@ function DashboardSectionTable({
       {docs.length === 0 ? (
         <p className="px-6 py-8 text-sm text-slate-500">{emptyMessage}</p>
       ) : (
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-6 py-3">Dokument</th>
-              <th className="px-6 py-3">Status</th>
-              <th className="px-6 py-3 text-right">Pokrycie</th>
-              <th className="px-6 py-3 text-right" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {docs.map((d) => (
-              <DashboardDocRow key={d.id} doc={d} />
-            ))}
-          </tbody>
-        </table>
+        <div className={moduleListTableScrollClass}>
+          <table className={moduleListTableClass}>
+            <thead className={moduleListTheadClass}>
+              <tr>
+                <th className={moduleListThClass}>Dokument</th>
+                <th className={moduleListThClass}>Status</th>
+                <th className={`${moduleListThClass} text-right`}>Pokrycie</th>
+                <th className={`${moduleListThClass} text-right`} />
+              </tr>
+            </thead>
+            <tbody>
+              {docs.map((d) => (
+                <DashboardDocRow key={d.id} doc={d} />
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </PurchasingTableSection>
   );

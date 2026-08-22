@@ -1,5 +1,9 @@
 /**
  * Flat ERP tokens for automation module — white-first, minimal gray fills.
+ *
+ * Phase B list migration: list table/row-action tokens (`oaList*`, `oaRowAction*`)
+ * are superseded on the automation rules list by `moduleList*` + `OperationalAction*`.
+ * Keep editor/workflow tokens below — used by OrderAutomationEditorPage and workflow UI.
  */
 
 import { brandPrimaryButtonClass } from "../../../design-system/brandUi";

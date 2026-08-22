@@ -17,17 +17,20 @@ import {
   statusNameMapKey,
 } from "../../../utils/statusActionDeepLink";
 import toast from "react-hot-toast";
+import {
+  moduleListRowClass,
+  moduleListTableClass,
+  moduleListTableScrollClass,
+  moduleListTdClass,
+  moduleListThClass,
+  moduleListThSortClass,
+  moduleListTheadClass,
+} from "../../listPage/moduleList";
+import { OperationalActionButton, OperationalActionColumn } from "../../operational";
+import { StatusBadge } from "@/design-system";
 import { AutomationConditionSummary } from "./AutomationConditionSummary";
 import { AutomationEffectSummary } from "./AutomationEffectSummary";
 import type { OrderUiStatusBriefById } from "./buildOrderUiStatusNameById";
-import {
-  oaListRowClass,
-  oaListTableClass,
-  oaListTdClass,
-  oaListThClass,
-  oaRowActionBtn,
-  oaRowActionBtnDanger,
-} from "./orderAutomationUiTokens";
 
 const COLLAPSED_LIMIT = 3;
 
@@ -246,9 +249,9 @@ function AutomationRuleTableRow({
   };
 
   return (
-    <tr className={`${oaListRowClass} ${rule.enabled ? "" : "opacity-55 hover:opacity-100"}`}>
-      <td className={`${oaListTdClass} w-10 text-center`}>
-        <label className="inline-flex h-9 w-9 cursor-pointer items-center justify-center">
+    <tr className={`${moduleListRowClass} ${rule.enabled ? "" : "opacity-55 hover:opacity-100"}`}>
+      <td className={`${moduleListTdClass} w-10 text-center`}>
+        <label className="inline-flex cursor-pointer items-center justify-center">
           <input
             type="checkbox"
             className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
@@ -258,10 +261,10 @@ function AutomationRuleTableRow({
           />
         </label>
       </td>
-      <td className={`${oaListTdClass} font-mono text-sm font-semibold tabular-nums text-slate-600`} style={{ width: 80 }}>
+      <td className={`${moduleListTdClass} font-mono text-sm font-semibold tabular-nums text-slate-600`} style={{ width: 80 }}>
         {displayId}
       </td>
-      <td className={oaListTdClass} style={{ width: "16%" }}>
+      <td className={moduleListTdClass} style={{ width: "16%" }}>
         <button
           type="button"
           className={`block max-w-full text-left text-base font-bold leading-snug hover:underline ${
@@ -273,35 +276,39 @@ function AutomationRuleTableRow({
           {ruleName}
         </button>
         {sourceBadge ? (
-          <span className="mt-1 inline-flex rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-900">
-            {sourceBadge}
-          </span>
+          <div className="mt-1">
+            <StatusBadge tone="primary" density="compact" className="uppercase tracking-wide">
+              {sourceBadge}
+            </StatusBadge>
+          </div>
         ) : null}
         {isStatusAction ? (
-          <span className="mt-1 inline-flex rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-700">
-            {statusActionDomainLabel(rule.entityType)}
-          </span>
+          <div className="mt-1">
+            <StatusBadge tone="neutral" density="compact" className="uppercase tracking-wide">
+              {statusActionDomainLabel(rule.entityType)}
+            </StatusBadge>
+          </div>
         ) : null}
         {isStatusAction && statusMissing ? (
-          <span className="mt-1 inline-flex rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-950">
-            Wymaga poprawy
-          </span>
+          <div className="mt-1">
+            <StatusBadge tone="warning" density="compact">
+              Wymaga poprawy
+            </StatusBadge>
+          </div>
         ) : null}
         {!isStatusAction ? (
-          <span
-            className={`mt-1 inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-              runtimeReady ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-950"
-            }`}
-          >
-            {runtimeReady ? "Gotowa" : "Wymaga poprawy"}
-          </span>
+          <div className="mt-1">
+            <StatusBadge tone={runtimeReady ? "success" : "warning"} density="compact">
+              {runtimeReady ? "Gotowa" : "Wymaga poprawy"}
+            </StatusBadge>
+          </div>
         ) : null}
         <p className="mt-1.5 text-xs leading-snug text-slate-500">
           Wykonano: <span className="font-semibold tabular-nums text-slate-700">{rule.stats.runCount}</span>
         </p>
         <p className="text-xs leading-snug text-slate-500">Ostatnie: {fmtTime(rule.stats.lastRunAt)}</p>
       </td>
-      <td className={oaListTdClass} style={{ width: "28%" }}>
+      <td className={moduleListTdClass} style={{ width: "28%" }}>
         {isStatusAction ? (
           <span className="text-xs text-slate-500">Wejście w status panelowy</span>
         ) : (
@@ -314,7 +321,7 @@ function AutomationRuleTableRow({
           />
         )}
       </td>
-      <td className={oaListTdClass} style={{ width: "28%" }}>
+      <td className={moduleListTdClass} style={{ width: "28%" }}>
         <EffectsCell
           rule={rule}
           statusNameById={statusNameById}
@@ -324,52 +331,47 @@ function AutomationRuleTableRow({
           isStatusAction={isStatusAction}
         />
       </td>
-      <td className={`${oaListTdClass} tabular-nums text-slate-600`} style={{ width: 120 }}>
+      <td className={`${moduleListTdClass} tabular-nums text-slate-600`} style={{ width: 120 }}>
         {isStatusAction ? "—" : formatDelayMinutes(rule.delayMinutes)}
       </td>
-      <td className={oaListTdClass} style={{ width: 180 }}>
+      <td className={moduleListTdClass} style={{ width: 180 }}>
         {isStatusAction ? <span className="text-xs text-slate-500">Automatycznie</span> : <ExecutionCell rule={rule} />}
       </td>
-      <td className={oaListTdClass} style={{ width: 180 }}>
-        <div className="flex items-start gap-1">
-          <button
-            type="button"
-            className={oaRowActionBtn}
-            title="Edytuj"
-            aria-label="Edytuj"
-            onClick={openEditor}
-          >
-            <Pencil className="h-4 w-4" strokeWidth={2} />
-          </button>
-          <button type="button" className={oaRowActionBtnDanger} title="Usuń" aria-label="Usuń" onClick={onDelete}>
-            <Trash2 className="h-4 w-4" strokeWidth={2} />
-          </button>
-          <button
-            type="button"
-            className={oaRowActionBtn}
-            title="Historia wykonań"
-            aria-label="Historia wykonań"
-            onClick={onLogs}
-          >
-            <ClipboardList className="h-4 w-4" strokeWidth={2} />
-          </button>
-          {canExpand ? (
-            <button
-              type="button"
-              className={oaRowActionBtn}
-              title={expanded ? "Zwiń podgląd" : "Rozwiń podgląd"}
-              aria-label={expanded ? "Zwiń podgląd" : "Rozwiń podgląd"}
-              aria-expanded={expanded}
-              onClick={onToggleExpand}
+      <td className={moduleListTdClass} style={{ width: 180 }}>
+        <OperationalActionColumn
+          aria-label="Akcje reguły"
+          slots={[
+            <OperationalActionButton key="edit" title="Edytuj" aria-label="Edytuj" onClick={openEditor}>
+              <Pencil className="text-slate-600" strokeWidth={2} aria-hidden />
+            </OperationalActionButton>,
+            <OperationalActionButton key="del" variant="danger" title="Usuń" aria-label="Usuń" onClick={onDelete}>
+              <Trash2 strokeWidth={2} aria-hidden />
+            </OperationalActionButton>,
+            <OperationalActionButton
+              key="logs"
+              title="Historia wykonań"
+              aria-label="Historia wykonań"
+              onClick={onLogs}
             >
-              {expanded ? (
-                <ChevronUp className="h-4 w-4" strokeWidth={2} />
-              ) : (
-                <ChevronDown className="h-4 w-4" strokeWidth={2} />
-              )}
-            </button>
-          ) : null}
-        </div>
+              <ClipboardList className="text-slate-600" strokeWidth={2} aria-hidden />
+            </OperationalActionButton>,
+            canExpand ? (
+              <OperationalActionButton
+                key="expand"
+                title={expanded ? "Zwiń podgląd" : "Rozwiń podgląd"}
+                aria-label={expanded ? "Zwiń podgląd" : "Rozwiń podgląd"}
+                aria-expanded={expanded}
+                onClick={onToggleExpand}
+              >
+                {expanded ? (
+                  <ChevronUp className="text-slate-600" strokeWidth={2} aria-hidden />
+                ) : (
+                  <ChevronDown className="text-slate-600" strokeWidth={2} aria-hidden />
+                )}
+              </OperationalActionButton>
+            ) : null,
+          ]}
+        />
       </td>
     </tr>
   );
@@ -411,8 +413,8 @@ export function AutomationRulesTable({
   const [expandedRuleId, setExpandedRuleId] = useState<string | null>(null);
 
   return (
-    <div className="overflow-x-auto">
-      <table className={oaListTableClass}>
+    <div className={moduleListTableScrollClass}>
+      <table className={moduleListTableClass} style={{ minWidth: 1180 }}>
         <colgroup>
           <col className="w-10" />
           <col style={{ width: 80 }} />
@@ -423,10 +425,10 @@ export function AutomationRulesTable({
           <col style={{ width: 180 }} />
           <col style={{ width: 180 }} />
         </colgroup>
-        <thead>
-          <tr className="border-b border-slate-200 bg-white">
-            <th className={oaListThClass} aria-label="Aktywna" />
-            <th className={oaListThClass}>
+        <thead className={moduleListTheadClass}>
+          <tr>
+            <th className={moduleListThClass} aria-label="Aktywna" />
+            <th className={moduleListThSortClass}>
               <button
                 type="button"
                 className="inline-flex items-center gap-1 hover:text-slate-800"
@@ -440,12 +442,12 @@ export function AutomationRulesTable({
                 )}
               </button>
             </th>
-            <th className={oaListThClass}>Nazwa</th>
-            <th className={oaListThClass}>Warunki</th>
-            <th className={oaListThClass}>Efekty</th>
-            <th className={oaListThClass}>Opóźnienie</th>
-            <th className={oaListThClass}>Uruchamianie</th>
-            <th className={oaListThClass}>Akcje</th>
+            <th className={moduleListThClass}>Nazwa</th>
+            <th className={moduleListThClass}>Warunki</th>
+            <th className={moduleListThClass}>Efekty</th>
+            <th className={moduleListThClass}>Opóźnienie</th>
+            <th className={moduleListThClass}>Uruchamianie</th>
+            <th className={moduleListThClass}>Akcje</th>
           </tr>
         </thead>
         <tbody>

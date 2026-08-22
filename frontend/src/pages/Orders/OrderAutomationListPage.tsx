@@ -10,6 +10,8 @@ import {
 } from "../../components/orders/automation/buildOrderUiStatusNameById";
 import { moduleAutomationShellClass } from "../../components/layout/flatSectionTokens";
 import { moduleListEmptyStateClass } from "../../components/listPage/moduleList";
+import { listSellasistInputClass } from "../../components/listPage/listSellasistTokens";
+import { PrimaryButton } from "../../design-system";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useAuth } from "../../context/AuthContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
@@ -29,9 +31,6 @@ import {
   primaryTriggerLabel,
 } from "../../utils/orderAutomationPreview";
 import {
-  oaBtnPri,
-  oaSearchInp,
-  oaSel,
   oaWorkflowGroupHeaderClass,
   oaWorkflowGroupSectionClass,
 } from "../../components/orders/automation/orderAutomationUiTokens";
@@ -176,9 +175,9 @@ export default function OrderAutomationListPage() {
             Zaimportuj je jednorazowo do backend Automation Engine. Import jest idempotentny.
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
-            <button
+            <PrimaryButton
               type="button"
-              className={oaBtnPri}
+              density="compact"
               onClick={() => {
                 void (async () => {
                   try {
@@ -191,7 +190,7 @@ export default function OrderAutomationListPage() {
               }}
             >
               Importuj do backendu
-            </button>
+            </PrimaryButton>
             <button type="button" className="text-xs text-amber-800 underline" onClick={dismissLegacy}>
               Pomiń (oznacz jako zmigrowane)
             </button>
@@ -211,20 +210,27 @@ export default function OrderAutomationListPage() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Szukaj po nazwie lub ID…"
-              className={oaSearchInp}
+              className={`${listSellasistInputClass} !h-9 w-full py-0 pl-10 pr-3`}
               type="search"
             />
           </div>
-          <select value={group} onChange={(e) => setGroup(e.target.value)} className={oaSel} aria-label="Filtruj po grupie">
+          <select
+            value={group}
+            onChange={(e) => setGroup(e.target.value)}
+            className={`${listSellasistInputClass} min-w-[12rem]`}
+            aria-label="Filtruj po grupie"
+          >
             <option value="all">Wszystkie grupy</option>
             {groups.map((g) => (
               <option key={g} value={g}>{g}</option>
             ))}
           </select>
         </div>
-        <Link to={`${basePath}/new`} className={`${oaBtnPri} shrink-0 gap-2`}>
-          <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
-          Nowa automatyzacja
+        <Link to={`${basePath}/new`}>
+          <PrimaryButton type="button" density="compact" className="shrink-0 gap-2">
+            <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
+            Nowa automatyzacja
+          </PrimaryButton>
         </Link>
       </div>
 
@@ -232,8 +238,10 @@ export default function OrderAutomationListPage() {
         <div className="py-12 text-center">
           <p className="text-sm font-medium text-slate-800">Brak automatyzacji</p>
           <p className="mt-1 text-xs text-slate-500">Dodaj regułę lub zmień filtry.</p>
-          <Link to={`${basePath}/new`} className={`${oaBtnPri} mt-4 inline-flex`}>
-            Nowa automatyzacja
+          <Link to={`${basePath}/new`} className="mt-4 inline-flex">
+            <PrimaryButton type="button" density="compact">
+              Nowa automatyzacja
+            </PrimaryButton>
           </Link>
         </div>
       ) : (
