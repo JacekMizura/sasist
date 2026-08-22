@@ -9,7 +9,6 @@ import { usePurchasingModuleContextOptional } from "../../modules/purchasing/con
 import { usePurchasingTenant } from "../../modules/purchasing/hooks/usePurchasingTenant";
 import {
   PurchasingContentArea,
-  PurchasingPageHeader,
   PurchasingPageShell,
   PurchasingStatusBadge,
   PurchasingTableHeader,
@@ -77,12 +76,6 @@ export default function PurchasingPoPage() {
   return (
     <PurchasingContentArea>
       <PurchasingPageShell
-        header={
-          <PurchasingPageHeader
-            title="Zamówienia zakupowe"
-            subtitle="Szkice i zamówienia wysłane do dostawców."
-          />
-        }
         status={
           <>
             {toast ? (
@@ -136,7 +129,7 @@ export default function PurchasingPoPage() {
               {rows.length === 0 ? (
                 <AppEmptyState
                   icon={ShoppingCart}
-                  title="Brak zamówień zakupowych"
+                  title="Brak zamówień do dostawców"
                   description="Użyj generatora uzupełnień, aby utworzyć pierwsze zamówienie."
                   density="inline"
                   action={

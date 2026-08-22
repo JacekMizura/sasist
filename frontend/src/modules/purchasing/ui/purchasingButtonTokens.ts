@@ -21,7 +21,10 @@ export const purchasingBtnGhost = ghostButtonClass;
 export const purchasingLinkClass =
   "text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline";
 
-/** Link w nagłówku sekcji tabeli (bez podkreślenia domyślnie). */
+/** Kompaktowy secondary CTA w nagłówku sekcji (Link lub button). */
+export const purchasingSectionLinkBtnClass = `inline-flex items-center gap-1.5 ${purchasingBtnSecondary}`;
+
+/** Link w nagłówku sekcji tabeli (bez podkreślenia domyślnie). @deprecated Prefer {@link purchasingSectionLinkBtnClass}. */
 export const purchasingLinkSectionClass = "text-sm font-medium text-blue-600 hover:text-blue-700";
 
 /** @deprecated Użyj {@link purchasingBtnSecondary}. */

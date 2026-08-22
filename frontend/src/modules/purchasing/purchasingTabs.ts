@@ -4,6 +4,6 @@ import type { TabItem } from "../../components/TopTabsNavigation";
 export const PURCHASING_TABS: TabItem[] = [
   { path: "/purchasing/dashboard", label: "Pulpit" },
   { path: "/purchasing/plan", label: "Plan zakupów" },
-  { path: "/purchasing/orders", label: "Zamówienia zakupowe" },
+  { path: "/purchasing/orders", label: "Zamówienia do dostawców" },
   { path: "/purchasing/suppliers", label: "Dostawcy" },
 ];

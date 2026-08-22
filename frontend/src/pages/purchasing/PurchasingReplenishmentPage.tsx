@@ -27,6 +27,15 @@ import { usePurchasingTenant } from "../../modules/purchasing/hooks/usePurchasin
 import { PlanAlertStrip, type PlanAlertQuickFilter } from "./plan/PlanAlertStrip";
 import { PlanCategoryStrip, type PlanCategoryQuickFilter } from "./plan/PlanCategoryStrip";
 import { PlanProductDetailPanel } from "./plan/PlanProductDetailPanel";
+import { formatAvgDaily, normalizeNumericZero } from "./plan/planFormatters";
+import {
+  moduleListRowClass,
+  moduleListTableClass,
+  moduleListTdClass,
+  moduleListThClass,
+  moduleListTheadClass,
+} from "../../components/listPage/moduleList";
+import { panelListDenseCheckboxInputClass } from "../../components/operational";
 import {
   PurchasingContentArea,
   PurchasingFilterBar,
@@ -43,7 +52,6 @@ import {
   purchasingBtnSecondary,
   purchasingInputClass,
   purchasingSelectClass,
-  purchasingTableTdClass,
 } from "../../modules/purchasing/ui";
 import { AppOverlayPortal } from "../../components/overlay";
 
@@ -101,20 +109,21 @@ function isWeightLikeUnit(unit: string | null | undefined): boolean {
 /** Wyświetlanie ilości: szt. → ceil, kg/m/l → 2 miejsca, inaczej do 3 miejsc. */
 function formatQtyDisplay(unit: string | null | undefined, v: number | null | undefined): string {
   if (v == null || Number.isNaN(v)) return "—";
+  const x = normalizeNumericZero(v);
   if (isPieceLikeUnit(unit)) {
-    const n = Math.ceil(v - 1e-9);
-    return n.toLocaleString("pl-PL", { maximumFractionDigits: 0 });
+    const n = Math.ceil(x - 1e-9);
+    return normalizeNumericZero(n).toLocaleString("pl-PL", { maximumFractionDigits: 0 });
   }
   if (isWeightLikeUnit(unit)) {
-    return v.toLocaleString("pl-PL", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    return x.toLocaleString("pl-PL", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   }
-  return v.toLocaleString("pl-PL", { maximumFractionDigits: 3 });
+  return x.toLocaleString("pl-PL", { maximumFractionDigits: 3 });
 }
 
 /** Stan / w drodze / sprzedaż: bez ceil (unika fałszywego „1” przy 0,00x), −0 → 0; szt. jak w asortymencie (round). */
 function formatPipelineQty(unit: string | null | undefined, v: number | null | undefined): string {
   if (v == null || Number.isNaN(v)) return "—";
-  const x = Math.abs(v) < 1e-9 ? 0 : v;
+  const x = normalizeNumericZero(v);
   if (isPieceLikeUnit(unit)) {
     const n = Math.round(x);
     return n.toLocaleString("pl-PL", { maximumFractionDigits: 0 });
@@ -479,7 +488,8 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
     return true;
   };
 
-  const td = purchasingTableTdClass;
+  const td = moduleListTdClass;
+  const th = moduleListThClass;
 
   return (
     <PurchasingContentArea className="pb-20">
@@ -799,49 +809,56 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
                   density="inline"
                 />
               ) : (
-              <table className="w-full min-w-[1100px] border-collapse text-sm">
-                <PurchasingTableHeader sticky className="bg-white">
+              <table className={`${moduleListTableClass} min-w-[1100px]`}>
+                <PurchasingTableHeader sticky className={moduleListTheadClass}>
                   <tr>
-                    <th className={`${td} w-10 text-center font-semibold uppercase tracking-wide text-slate-500`}>
+                    <th className={`${th} w-10 text-center`}>
                       <input
                         type="checkbox"
+                        className={panelListDenseCheckboxInputClass}
                         aria-label="Zaznacz stronę"
                         checked={displayRows.length > 0 && displayRows.every((r) => selected.has(r.product_id))}
                         onChange={togglePage}
                       />
                     </th>
-                    <th className={`${td} text-left font-semibold uppercase tracking-wide text-slate-500`}>Produkt</th>
-                    <th className={`${td} text-right font-semibold uppercase tracking-wide text-slate-500`}>Stan</th>
-                    <th className={`${td} text-right font-semibold uppercase tracking-wide text-slate-500`}>W drodze</th>
-                    <th className={`${td} text-right font-semibold uppercase tracking-wide text-slate-500`}>Sprzedaż 30d</th>
-                    <th className={`${td} text-right font-semibold uppercase tracking-wide text-slate-500`}>Śr/dzień</th>
-                    <th className={`${td} text-right font-semibold uppercase tracking-wide text-slate-500`}>Dni zapasu</th>
-                    <th className={`${td} text-right font-semibold uppercase tracking-wide text-slate-500`}>Sugestia</th>
-                    <th className={`${td} w-28 text-center font-semibold uppercase tracking-wide text-slate-500`}>Sygnał</th>
-                    <th className={`${td} text-left font-semibold uppercase tracking-wide text-slate-500`}>Dostawca</th>
-                    <th className={`${td} text-right font-semibold uppercase tracking-wide text-slate-500`}>Zakup</th>
-                    <th className={`${td} text-right font-semibold uppercase tracking-wide text-slate-500`}>Marża</th>
-                    <th className={`${td} text-right font-semibold uppercase tracking-wide text-slate-500`}>Wartość</th>
+                    <th className={`${th} text-left`}>Produkt</th>
+                    <th className={`${th} text-right`}>Stan</th>
+                    <th className={`${th} text-right`}>W drodze</th>
+                    <th className={`${th} text-right`}>Sprzedaż 30d</th>
+                    <th className={`${th} text-right`}>Śr/dzień</th>
+                    <th className={`${th} text-right`}>Dni zapasu</th>
+                    <th className={`${th} text-right`}>Sugestia</th>
+                    <th
+                      className={`${th} w-28 text-center`}
+                      title="OK gdy sugestia spełnia progi zapasu i rotacji (7–90 dni pokrycia)"
+                    >
+                      Ocena sugestii
+                    </th>
+                    <th className={`${th} text-left`}>Dostawca</th>
+                    <th className={`${th} text-right`}>Zakup</th>
+                    <th className={`${th} text-right`}>Marża</th>
+                    <th className={`${th} text-right`}>Wartość</th>
                   </tr>
                 </PurchasingTableHeader>
                 <tbody>
               {displayRows.map((r, idx) => (
                 <tr
                   key={r.product_id}
-                  className={`border-b border-slate-100 ${rowTone(r, idx)} ${
+                  className={`${moduleListRowClass} border-b border-slate-100 ${rowTone(r, idx)} ${
                     isPlan && selectedProductId === r.product_id ? "bg-orange-50/80 ring-1 ring-inset ring-orange-300" : ""
                   } ${isPlan ? "cursor-pointer" : ""}`}
                   onClick={() => handleRowActivate(r.product_id)}
                 >
-                  <td className="px-2 py-2 text-center align-middle">
+                  <td className={`${td} w-10 text-center align-middle`}>
                     <input
                       type="checkbox"
+                      className={panelListDenseCheckboxInputClass}
                       checked={selected.has(r.product_id)}
                       onChange={() => toggleOne(r.product_id)}
                       onClick={(e) => e.stopPropagation()}
                     />
                   </td>
-                  <td className="px-2 py-2 align-middle">
+                  <td className={`${td} align-middle`}>
                     <PurchasingProductCell
                       name={r.product_name}
                       sku={r.sku}
@@ -852,23 +869,23 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
                       unit={r.product_unit}
                     />
                   </td>
-                  <td className="px-2 py-2 text-right tabular-nums text-slate-800">
+                  <td className={`${td} text-right tabular-nums text-slate-800`}>
                     {formatPipelineQty(r.product_unit, r.current_stock)}
                   </td>
-                  <td className="px-2 py-2 text-right tabular-nums text-slate-800">
+                  <td className={`${td} text-right tabular-nums text-slate-800`}>
                     {formatPipelineQty(r.product_unit, r.incoming_qty)}
                   </td>
-                  <td className="px-2 py-2 text-right tabular-nums text-slate-800">
+                  <td className={`${td} text-right tabular-nums text-slate-800`}>
                     {formatPipelineQty(r.product_unit, r.sales_30d)}
                   </td>
-                  <td className="px-2 py-2 text-right tabular-nums text-slate-800">
-                    {formatPipelineQty(r.product_unit, r.avg_daily_sales)}
+                  <td className={`${td} text-right tabular-nums text-slate-800`}>
+                    {formatAvgDaily(r.avg_daily_sales)}
                   </td>
-                  <td className="px-2 py-2 text-right tabular-nums text-slate-800">{r.stock_cover_days ?? "—"}</td>
-                  <td className="px-2 py-2 text-right tabular-nums font-medium text-slate-900">
+                  <td className={`${td} text-right tabular-nums text-slate-800`}>{r.stock_cover_days ?? "—"}</td>
+                  <td className={`${td} text-right tabular-nums font-medium text-slate-900`}>
                     {formatQtyDisplay(r.product_unit, r.suggested_qty)}
                   </td>
-                  <td className="px-2 py-2 text-center align-middle">
+                  <td className={`${td} text-center align-middle`}>
                     {showGoodSuggestionBadge(r) ? (
                       <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-900">
                         OK
@@ -877,11 +894,11 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
                       <span className="text-xs text-slate-400">—</span>
                     )}
                   </td>
-                  <td className="max-w-[140px] truncate px-2 py-2 text-slate-700" title={r.supplier_name ?? undefined}>
+                  <td className={`${td} max-w-[140px] truncate text-slate-700`} title={r.supplier_name ?? undefined}>
                     {r.supplier_name ?? "—"}
                   </td>
-                  <td className="px-2 py-2 text-right tabular-nums text-slate-800">{numFmt(r.buy_price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  <td className="px-2 py-2 text-right tabular-nums text-slate-800">
+                  <td className={`${td} text-right tabular-nums text-slate-800`}>{numFmt(r.buy_price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className={`${td} text-right tabular-nums text-slate-800`}>
                     {r.margin_percent != null ? (
                       <span className="inline-flex flex-col items-end gap-0.5 leading-tight">
                         <span>{numFmt(r.margin_percent, { maximumFractionDigits: 2 })}%</span>
@@ -895,7 +912,7 @@ export default function PurchasingReplenishmentPage({ variant = "standalone" }: 
                       "—"
                     )}
                   </td>
-                  <td className="px-2 py-2 text-right tabular-nums font-medium text-slate-900">
+                  <td className={`${td} text-right tabular-nums font-medium text-slate-900`}>
                     {numFmt(r.estimated_order_value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                 </tr>

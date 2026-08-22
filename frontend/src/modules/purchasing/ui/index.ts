@@ -4,6 +4,7 @@ export {
   purchasingBtnGhost,
   purchasingLinkClass,
   purchasingLinkSectionClass,
+  purchasingSectionLinkBtnClass,
   purchasingFilterButtonClass,
   purchasingFilterPrimaryButtonClass,
 } from "./purchasingButtonTokens";
@@ -42,6 +43,7 @@ export { PurchasingProductInspectorDrawer } from "./PurchasingProductInspectorDr
 export { PurchasingPriceOpportunityDrawer } from "./PurchasingPriceOpportunityDrawer";
 export {
   fetchProductDisplayMeta,
+  formatProductEanSkuMeta,
   type ProductDisplayMeta,
 } from "./purchasingProductDisplayMeta";
 export { getProductImage, toAbsoluteProductImageUrl } from "./getProductImage";

@@ -10,6 +10,7 @@ import {
   purchasingThumbBoxClass,
   purchasingThumbImgClass,
 } from "./purchasingProductThumbnailTokens";
+import { formatProductEanSkuMeta } from "./purchasingProductDisplayMeta";
 import { getProductImage } from "./getProductImage";
 
 const HOVER_DELAY_MS = 150;
@@ -145,7 +146,7 @@ function PurchasingProductThumbnailInner({
               )}
             </div>
             <p className="mt-2 line-clamp-2 text-sm font-semibold text-slate-900">{name}</p>
-            {sku ? <p className="mt-0.5 text-xs text-slate-500">SKU: {sku}</p> : null}
+            {sku ? <p className="mt-0.5 text-xs text-slate-500">{formatProductEanSkuMeta(null, sku)}</p> : null}
             <dl className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
               <dt className="text-slate-500">Stan</dt>
               <dd className="text-right font-medium tabular-nums text-slate-800">{fmtQty(stock, unit)}</dd>
@@ -193,13 +194,13 @@ function PurchasingProductCellInner({
   subtitle,
   ...thumbProps
 }: CellProps) {
-  const meta = subtitle ?? ([sku, ean].filter(Boolean).join(" · ") || "—");
+  const meta = subtitle ?? formatProductEanSkuMeta(ean, sku);
   return (
     <div className="flex min-w-0 items-center gap-2.5">
       <PurchasingProductThumbnail name={name} sku={sku} {...thumbProps} />
       <div className="min-w-0">
-        <div className="truncate font-medium text-slate-900">{name}</div>
-        <div className="truncate text-xs text-slate-500">{meta}</div>
+        <div className="truncate text-sm font-medium text-slate-900">{name}</div>
+        {meta ? <div className="truncate text-xs text-slate-500">{meta}</div> : null}
       </div>
     </div>
   );

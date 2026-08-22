@@ -4,9 +4,9 @@ export const PURCHASING_THUMB_MD_PX = 56;
 export const PURCHASING_THUMB_LG_PX = 80;
 
 export const purchasingThumbBoxClass =
-  "flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white";
+  "flex shrink-0 items-center justify-center overflow-hidden bg-transparent";
 
-export const purchasingThumbImgClass = "h-full w-full object-contain object-center";
+export const purchasingThumbImgClass = "max-h-full max-w-full object-contain object-center";
 
 export const purchasingThumbTableSizeClass = "h-10 w-10";
 export const purchasingThumbMdSizeClass = "h-14 w-14";

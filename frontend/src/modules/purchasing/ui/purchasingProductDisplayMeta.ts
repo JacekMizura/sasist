@@ -38,6 +38,14 @@ function brandFromPayload(p: Record<string, unknown>): string | null {
   return null;
 }
 
+export function formatProductEanSkuMeta(ean?: string | null, sku?: string | null): string | null {
+  const parts = [
+    ean?.trim() ? `EAN ${ean.trim()}` : null,
+    sku?.trim() ? `SKU ${sku.trim()}` : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
 export function productDisplayMetaFromPayload(raw: Record<string, unknown>): ProductDisplayMeta {
   const symbol = raw.symbol ?? raw.sku;
   return {

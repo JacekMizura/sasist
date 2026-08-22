@@ -1,11 +1,11 @@
 import { memo, useEffect, useState } from "react";
+import { ExternalLink, X } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
-import { X } from "lucide-react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { PurchasingAlertEvent } from "../../../api/purchasingAlertsApi";
 import { fetchPurchasingForecast, type PurchasingForecastPayload } from "../../../api/purchasingForecastApi";
 import type { ReplenishmentRow } from "../../../api/purchasingReplenishmentApi";
-import { PurchasingProductThumbnail } from "../../../modules/purchasing/ui";
+import { formatProductEanSkuMeta, PurchasingProductThumbnail } from "../../../modules/purchasing/ui";
 import { getProductDetailsPath, productDetailsNavState } from "../../Products/productPaths";
 import { fmtShortDate, numFmt } from "./planFormatters";
 
@@ -60,6 +60,7 @@ function PlanProductDetailPanelInner({ row, alerts, tenantId, warehouseId, onClo
   const detail = forecast?.product_detail;
   const unit = detail?.unit ?? row.product_unit ?? null;
   const trend = forecast?.charts.sales_trend ?? [];
+  const productMeta = formatProductEanSkuMeta(row.ean, row.sku);
 
   return (
     <aside
@@ -69,7 +70,21 @@ function PlanProductDetailPanelInner({ row, alerts, tenantId, warehouseId, onClo
       <header className="flex items-start justify-between gap-2 border-b border-slate-200 px-4 py-3">
         <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Wybrany produkt</p>
-          <h2 className="truncate text-sm font-semibold text-slate-900">{row.product_name}</h2>
+          <h2 className="mt-0.5 truncate text-sm font-medium text-slate-900">
+            <Link
+              to={getProductDetailsPath(row.product_id)}
+              state={productDetailsNavState({
+                tenantId,
+                warehouseId: warehouseId ?? undefined,
+                returnTo: `${location.pathname}${location.search}`,
+              })}
+              className="inline-flex max-w-full items-center gap-1 hover:text-slate-700"
+              title="Otwórz kartę produktu"
+            >
+              <span className="truncate">{row.product_name}</span>
+              <ExternalLink size={13} className="shrink-0 text-slate-400" aria-hidden />
+            </Link>
+          </h2>
         </div>
         <button
           type="button"
@@ -94,20 +109,8 @@ function PlanProductDetailPanelInner({ row, alerts, tenantId, warehouseId, onClo
             hoverPreview={false}
           />
           <div className="min-w-0 text-xs text-slate-600">
-            <p>SKU: {row.sku ?? "—"}</p>
-            <p>EAN: {row.ean ?? "—"}</p>
+            {productMeta ? <p className="text-slate-500">{productMeta}</p> : null}
             <p className="mt-1 truncate">{row.supplier_name ?? "Brak dostawcy"}</p>
-            <Link
-              to={getProductDetailsPath(row.product_id)}
-              state={productDetailsNavState({
-                tenantId,
-                warehouseId: warehouseId ?? undefined,
-                returnTo: `${location.pathname}${location.search}`,
-              })}
-              className="mt-2 inline-block font-medium text-blue-600 hover:underline"
-            >
-              Karta produktu →
-            </Link>
           </div>
         </div>
 

@@ -1,24 +1,25 @@
 import { memo, useCallback, useEffect, useState } from "react";
-import { AlertOctagon, ArrowRight, Banknote, Clock, FileText, PackageSearch, ShoppingCart, Truck, Users } from "lucide-react";
+import { AlertOctagon, ArrowRight, Banknote, Clock, FileText, History, PackageSearch, ShoppingCart, Sparkles, Truck, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { AppEmptyState } from "../../../components/app-shell";
+import { OperationalActionLink } from "../../../components/operational";
 import {
   fetchPurchasingDashboard,
   type PurchasingDashboardPayload,
 } from "../../../api/purchasingDashboardApi";
 import { useWarehouse } from "../../../context/WarehouseContext";
 import { usePurchasingTenant } from "../hooks/usePurchasingTenant";
+import { formatAvgDaily } from "../../../pages/purchasing/plan/planFormatters";
 import {
   PurchasingContentArea,
   PurchasingKpiCard,
   PurchasingKpiGrid,
-  PurchasingPageHeader,
   PurchasingPageShell,
   PurchasingProductCell,
   PurchasingStatusBadge,
   PurchasingTableHeader,
   PurchasingTableSection,
-  purchasingLinkSectionClass,
+  purchasingSectionLinkBtnClass,
   purchasingTableTdClass,
   purchasingTableThClass,
 } from "../ui";
@@ -76,12 +77,6 @@ function PlanningDashboardInner() {
   return (
     <PurchasingContentArea>
       <PurchasingPageShell
-        header={
-          <PurchasingPageHeader
-            title="Pulpit zakupów"
-            subtitle="Decyzje zakupowe na dziś — stany, alerty, zamówienia i dostawcy."
-          />
-        }
         status={
           err ? (
             <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{err}</p>
@@ -151,7 +146,8 @@ function PlanningDashboardInner() {
                 subtitle="Top 10 produktów krytycznych"
                 indicatorClass="bg-red-500"
                 action={
-                  <Link to={genHref} className={purchasingLinkSectionClass}>
+                  <Link to={genHref} className={purchasingSectionLinkBtnClass}>
+                    <Sparkles className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
                     Przejdź do generatora
                   </Link>
                 }
@@ -188,20 +184,21 @@ function PlanningDashboardInner() {
                           </td>
                           <td className={`${td} text-right font-semibold tabular-nums text-red-600`}>{r.stock}</td>
                           <td className={`${td} text-right tabular-nums text-slate-500`}>
-                            {r.avg_daily_sales.toFixed(4)}
+                            {formatAvgDaily(r.avg_daily_sales)}
                           </td>
                           <td className={`${td} text-center tabular-nums text-slate-400`}>
                             {r.days_cover != null ? r.days_cover : "—"}
                           </td>
                           <td className={`${td} text-slate-600`}>{r.supplier_name ?? "—"}</td>
                           <td className={`${td} text-right`}>
-                            <Link
+                            <OperationalActionLink
                               to={genHref}
-                              className="inline-flex rounded-md p-1.5 text-blue-600 opacity-0 transition-all hover:bg-blue-100 group-hover:opacity-100"
+                              title="Przejdź do generatora"
                               aria-label="Przejdź do generatora"
+                              className="opacity-0 transition-opacity group-hover:opacity-100"
                             >
-                              <ArrowRight className="h-4 w-4" />
-                            </Link>
+                              <ArrowRight strokeWidth={2} aria-hidden />
+                            </OperationalActionLink>
                           </td>
                         </tr>
                       ))}
@@ -215,7 +212,8 @@ function PlanningDashboardInner() {
                 subtitle="Top 10 wg szac. kosztu"
                 indicatorClass="bg-blue-500"
                 action={
-                  <Link to={genHref} className={purchasingLinkSectionClass}>
+                  <Link to={genHref} className={purchasingSectionLinkBtnClass}>
+                    <Sparkles className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
                     Przejdź do generatora
                   </Link>
                 }
@@ -252,13 +250,14 @@ function PlanningDashboardInner() {
                             {fmtMoney(r.estimated_cost)} zł
                           </td>
                           <td className={`${td} text-right`}>
-                            <Link
+                            <OperationalActionLink
                               to={genHref}
-                              className="inline-flex rounded-md p-1.5 text-blue-600 opacity-0 transition-all hover:bg-blue-100 group-hover:opacity-100"
+                              title="Przejdź do generatora"
                               aria-label="Przejdź do generatora"
+                              className="opacity-0 transition-opacity group-hover:opacity-100"
                             >
-                              <ArrowRight className="h-4 w-4" />
-                            </Link>
+                              <ArrowRight strokeWidth={2} aria-hidden />
+                            </OperationalActionLink>
                           </td>
                         </tr>
                       ))}
@@ -274,7 +273,8 @@ function PlanningDashboardInner() {
             <PurchasingTableSection
               title="Ostatnie przyjęcia (PZ)"
               action={
-                <Link to={cooperationHref} className={purchasingLinkSectionClass}>
+                <Link to={cooperationHref} className={purchasingSectionLinkBtnClass}>
+                  <History className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
                   Historia współpracy
                 </Link>
               }
@@ -307,13 +307,14 @@ function PlanningDashboardInner() {
                         </td>
                         <td className={`${td} text-slate-500`}>{formatDate(r.created_at ?? undefined)}</td>
                         <td className={`${td} text-right`}>
-                          <Link
+                          <OperationalActionLink
                             to={cooperationHref}
-                            className="inline-flex rounded-md p-1.5 text-blue-600 opacity-0 transition-all hover:bg-blue-100 group-hover:opacity-100"
+                            title="Przejdź do historii współpracy"
                             aria-label="Przejdź do historii współpracy"
+                            className="opacity-0 transition-opacity group-hover:opacity-100"
                           >
-                            <ArrowRight className="h-4 w-4" />
-                          </Link>
+                            <ArrowRight strokeWidth={2} aria-hidden />
+                          </OperationalActionLink>
                         </td>
                       </tr>
                     ))}
