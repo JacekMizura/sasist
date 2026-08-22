@@ -163,7 +163,7 @@ describe("UI architecture SSOT (Phase B list modules)", () => {
   });
 });
 
-/** Phase C Wave 1 form modules. */
+/** Phase C Wave 1–2 form modules. */
 const PHASE_C_FORM_GLOBS = [
   "design-system/components/Form.tsx",
   "modules/inventoryCount/ui/erp/InventoryWizardView.tsx",
@@ -174,6 +174,12 @@ const PHASE_C_FORM_GLOBS = [
   "pages/Assortment/categories/CategoryFormModal.tsx",
   "pages/Assortment/categories/CategoryEditBasicTab.tsx",
   "pages/Assortment/categories/CategoryEditNumberingTab.tsx",
+  "pages/Assortment/PurchaseOrderEditPage.tsx",
+  "pages/Assortment/SupplierEditPage.tsx",
+  "pages/Assortment/ManufacturerEditPage.tsx",
+  "pages/documents/DocumentSeriesEditPage.tsx",
+  "components/orders/DocumentSeriesQuickCreateModal.tsx",
+  "pages/documents/WarehouseDocumentDetailInfo.tsx",
 ];
 
 function readPhaseCFiles(): { rel: string; src: string }[] {
@@ -243,5 +249,21 @@ describe("UI architecture SSOT (Phase C form modules)", () => {
   it("does not use custom large checkbox geometry in Wave1 forms", () => {
     const hits = files.filter((f) => LOCAL_CHECKBOX_GEOM.test(f.src)).map((f) => f.rel);
     expect(hits).toEqual([]);
+  });
+
+  it("document series forms use FormField + FORM_FIELD_DENSITY without inpSm", () => {
+    const edit = files.find((f) => f.rel.endsWith("DocumentSeriesEditPage.tsx"));
+    const modal = files.find((f) => f.rel.endsWith("DocumentSeriesQuickCreateModal.tsx"));
+    expect(edit).toBeTruthy();
+    expect(modal).toBeTruthy();
+    for (const f of [edit!, modal!]) {
+      expect(f.src, f.rel).toMatch(/\bFormField\b/);
+      expect(f.src, f.rel).toMatch(/\bFORM_FIELD_DENSITY\b/);
+      expect(f.src, f.rel).not.toMatch(/\binpSm\b/);
+      expect(f.src, f.rel).not.toMatch(/mt-1 w-full rounded-md border border-slate-200 bg-white px-2/);
+    }
+    expect(edit!.src).toMatch(/\bFormSection\b/);
+    expect(edit!.src).toMatch(/\bFormActions\b/);
+    expect(edit!.src).toMatch(/\bPrimaryButton\b/);
   });
 });

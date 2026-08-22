@@ -10,22 +10,26 @@ import {
 } from "../../api/manufacturersApi";
 import { AssortmentEntityPageShell } from "../../components/assortment/AssortmentEntityPageShell";
 import { SUPPLIER_COUNTRIES, SUPPLIER_COUNTRY_VALUES } from "../../constants/supplierTaxonomy";
-import { PrimaryButton } from "../../design-system/PrimaryButton";
+import {
+  brandLinkButtonClass,
+  brandLinkTextClass,
+  Checkbox,
+  FormField,
+  FormSection,
+  FORM_FIELD_DENSITY,
+  formStackClass,
+  Input,
+  PrimaryButton,
+  SecondaryButton,
+  Select,
+  Textarea,
+} from "../../design-system";
 import {
   manufacturerDetailTabs,
   parseManufacturerEditTab,
   type ManufacturerEditTab,
 } from "../../modules/manufacturers/manufacturerDetailTabs";
 import { taxIdValidationMessage } from "../../utils/taxIdOptional";
-
-function Card({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`border-t border-slate-100 pt-4 ${className}`}>
-      <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</h4>
-      <div className="mt-3 space-y-3">{children}</div>
-    </div>
-  );
-}
 
 export default function ManufacturerEditPage() {
   const navigate = useNavigate();
@@ -64,10 +68,6 @@ export default function ManufacturerEditPage() {
   const [mfgSuppliers, setMfgSuppliers] = useState<ManufacturerSupplierBrief[]>([]);
   const [mfgSuppliersLoading, setMfgSuppliersLoading] = useState(false);
   const [mfgSuppliersErr, setMfgSuppliersErr] = useState<string | null>(null);
-
-  const fieldLabel = "mb-1 block text-sm font-medium text-slate-700";
-  const inputClass =
-    "w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 focus:border-violet-400 focus:ring-2 focus:ring-violet-500";
 
   const reset = useCallback(() => {
     setLoadErr(null);
@@ -234,13 +234,9 @@ export default function ManufacturerEditPage() {
 
   const saveFooter = (
     <div className="flex flex-wrap justify-end gap-2">
-      <button
-        type="button"
-        onClick={() => void navigate(listHref)}
-        className="rounded-lg border border-slate-200 px-4 py-2 text-slate-700 hover:bg-slate-50"
-      >
+      <SecondaryButton type="button" onClick={() => void navigate(listHref)}>
         Anuluj
-      </button>
+      </SecondaryButton>
       <PrimaryButton type="submit" form="manufacturer-edit-form" disabled={saving || !!loadErr}>
         {saving ? "Zapisywanie…" : isNew ? "Utwórz" : "Zapisz"}
       </PrimaryButton>
@@ -263,135 +259,183 @@ export default function ManufacturerEditPage() {
     >
       {loadErr ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{loadErr}</div> : null}
 
-      <form id="manufacturer-edit-form" className="space-y-4" onSubmit={handleSubmit}>
+      <form id="manufacturer-edit-form" className={formStackClass} onSubmit={handleSubmit}>
         <div className="min-w-0">
             {tab === "basic" && (
               <div className="space-y-6 lg:grid lg:grid-cols-[1fr_220px] lg:items-start lg:gap-6">
                 <div className="space-y-6">
-                  <Card title="Podstawowe">
-                    <div>
-                      <label className={fieldLabel}>Krótka nazwa (lista, wyszukiwarka) *</label>
-                      <input type="text" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} required />
+                  <FormSection title="Podstawowe">
+                    <div className={formStackClass}>
+                      <FormField label="Krótka nazwa (lista, wyszukiwarka) *">
+                        <Input
+                          type="text"
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          required
+                          density={FORM_FIELD_DENSITY}
+                          focusTone="brand"
+                        />
+                      </FormField>
+                      <FormField label="Pełna nazwa firmy">
+                        <Input
+                          type="text"
+                          value={companyName}
+                          onChange={(e) => setCompanyName(e.target.value)}
+                          placeholder="np. nazwa prawna na fakturze"
+                          density={FORM_FIELD_DENSITY}
+                          focusTone="brand"
+                        />
+                      </FormField>
+                      <FormField label="NIP">
+                        <Input
+                          type="text"
+                          value={taxId}
+                          onChange={(e) => setTaxId(e.target.value)}
+                          placeholder="opcjonalnie"
+                          density={FORM_FIELD_DENSITY}
+                          focusTone="brand"
+                        />
+                      </FormField>
+                      <FormField label="URL logo">
+                        <Input
+                          ref={logoUrlInputRef}
+                          type="url"
+                          value={logoUrl}
+                          onChange={(e) => setLogoUrl(e.target.value)}
+                          placeholder="https://…"
+                          density={FORM_FIELD_DENSITY}
+                          focusTone="brand"
+                        />
+                      </FormField>
+                      <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                        <Checkbox checked={active} onChange={(e) => setActive(e.target.checked)} />
+                        Aktywny
+                      </label>
                     </div>
-                    <div>
-                      <label className={fieldLabel}>Pełna nazwa firmy</label>
-                      <input
-                        type="text"
-                        value={companyName}
-                        onChange={(e) => setCompanyName(e.target.value)}
-                        className={inputClass}
-                        placeholder="np. nazwa prawna na fakturze"
-                      />
-                    </div>
-                    <div>
-                      <label className={fieldLabel}>NIP</label>
-                      <input type="text" value={taxId} onChange={(e) => setTaxId(e.target.value)} className={inputClass} placeholder="opcjonalnie" />
-                    </div>
-                    <div>
-                      <label className={fieldLabel}>URL logo</label>
-                      <input
-                        ref={logoUrlInputRef}
-                        type="url"
-                        value={logoUrl}
-                        onChange={(e) => setLogoUrl(e.target.value)}
-                        className={inputClass}
-                        placeholder="https://…"
-                      />
-                    </div>
-                    <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-                      <input
-                        type="checkbox"
-                        className="rounded border-slate-300 text-violet-600"
-                        checked={active}
-                        onChange={(e) => setActive(e.target.checked)}
-                      />
-                      Aktywny
-                    </label>
-                  </Card>
+                  </FormSection>
                 </div>
 
                 <aside className="min-h-0 lg:sticky lg:top-0">
                   {logoUrl.trim() ? (
-                    <Card title="Logo">
+                    <FormSection title="Logo">
                       <button
                         type="button"
                         onClick={focusLogoField}
                         title="Edytuj adres URL logo"
-                        className="mx-auto block w-full rounded-lg p-1 transition hover:bg-violet-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+                        className="mx-auto block w-full rounded-lg p-1 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/50"
                       >
                         <img src={logoUrl.trim()} alt="" className="mx-auto max-h-32 rounded-lg object-contain" />
                       </button>
                       <p className="text-center text-xs text-slate-500">Kliknij, aby przejść do pola URL</p>
-                    </Card>
+                    </FormSection>
                   ) : null}
                 </aside>
               </div>
             )}
 
             {tab === "address" && (
-              <Card title="Adres">
-                <div>
-                  <label className={fieldLabel}>Kraj</label>
-                  <select className={inputClass} value={country} onChange={(e) => setCountry(e.target.value)}>
-                    <option value="">—</option>
-                    {SUPPLIER_COUNTRIES.map((c) => (
-                      <option key={c.value} value={c.value}>
-                        {c.label}
-                      </option>
-                    ))}
-                    {country && !SUPPLIER_COUNTRY_VALUES.has(country) ? (
-                      <option value={country}>{country} (zapis spoza listy — wybierz kraj z listy i zapisz)</option>
-                    ) : null}
-                  </select>
+              <FormSection title="Adres">
+                <div className={formStackClass}>
+                  <FormField label="Kraj">
+                    <Select
+                      value={country}
+                      onChange={(e) => setCountry(e.target.value)}
+                      density={FORM_FIELD_DENSITY}
+                      focusTone="brand"
+                      className="bg-white"
+                    >
+                      <option value="">—</option>
+                      {SUPPLIER_COUNTRIES.map((c) => (
+                        <option key={c.value} value={c.value}>
+                          {c.label}
+                        </option>
+                      ))}
+                      {country && !SUPPLIER_COUNTRY_VALUES.has(country) ? (
+                        <option value={country}>{country} (zapis spoza listy — wybierz kraj z listy i zapisz)</option>
+                      ) : null}
+                    </Select>
+                  </FormField>
+                  <FormField label="Miasto">
+                    <Input
+                      type="text"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      density={FORM_FIELD_DENSITY}
+                      focusTone="brand"
+                    />
+                  </FormField>
+                  <FormField label="Kod pocztowy">
+                    <Input
+                      type="text"
+                      value={postalCode}
+                      onChange={(e) => setPostalCode(e.target.value)}
+                      density={FORM_FIELD_DENSITY}
+                      focusTone="brand"
+                    />
+                  </FormField>
+                  <FormField label="Ulica i numer">
+                    <Textarea
+                      value={street}
+                      onChange={(e) => setStreet(e.target.value)}
+                      rows={3}
+                      density={FORM_FIELD_DENSITY}
+                      focusTone="brand"
+                    />
+                  </FormField>
                 </div>
-                <div>
-                  <label className={fieldLabel}>Miasto</label>
-                  <input type="text" value={city} onChange={(e) => setCity(e.target.value)} className={inputClass} />
-                </div>
-                <div>
-                  <label className={fieldLabel}>Kod pocztowy</label>
-                  <input type="text" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className={inputClass} />
-                </div>
-                <div>
-                  <label className={fieldLabel}>Ulica i numer</label>
-                  <textarea className={`${inputClass} min-h-[72px]`} value={street} onChange={(e) => setStreet(e.target.value)} />
-                </div>
-              </Card>
+              </FormSection>
             )}
 
             {tab === "contact" && (
-              <Card title="Kontakt">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className={fieldLabel}>Strona WWW</label>
-                    <input type="url" value={website} onChange={(e) => setWebsite(e.target.value)} className={inputClass} />
+              <FormSection title="Kontakt">
+                <div className={formStackClass}>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <FormField label="Strona WWW">
+                      <Input
+                        type="url"
+                        value={website}
+                        onChange={(e) => setWebsite(e.target.value)}
+                        density={FORM_FIELD_DENSITY}
+                        focusTone="brand"
+                      />
+                    </FormField>
+                    <FormField label="E-mail">
+                      <Input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        density={FORM_FIELD_DENSITY}
+                        focusTone="brand"
+                      />
+                    </FormField>
                   </div>
-                  <div>
-                    <label className={fieldLabel}>E-mail</label>
-                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />
-                  </div>
+                  <FormField label="Telefon">
+                    <Input
+                      type="text"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      density={FORM_FIELD_DENSITY}
+                      focusTone="brand"
+                    />
+                  </FormField>
                 </div>
-                <div>
-                  <label className={fieldLabel}>Telefon</label>
-                  <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} />
-                </div>
-              </Card>
+              </FormSection>
             )}
 
             {tab === "mproducts" &&
               (isNew ? (
-                <Card title="Produkty">
+                <FormSection title="Produkty">
                   <p className="text-sm text-slate-600">Zapisz producenta, aby zobaczyć produkty przypisane w katalogu.</p>
-                </Card>
+                </FormSection>
               ) : detail != null ? (
-                <Card title={`Produkty producenta (${detail.product_count})`}>
+                <FormSection title={`Produkty producenta (${detail.product_count})`}>
                   <p className="text-xs text-slate-500">
                     Produkty z polem wskazującym na tego producenta. Łańcuch dostaw: Producent →
                     Produkt → Dostawca (zakładka Dostawcy).
                   </p>
                   <Link
                     to={`/products/list?manufacturer_id=${manufacturerId}&tenant_id=${tenantId}`}
-                    className="inline-flex text-sm font-medium text-violet-700 underline decoration-violet-300 underline-offset-2 hover:text-violet-900"
+                    className={`inline-flex text-sm underline underline-offset-2 decoration-orange-200 ${brandLinkTextClass}`}
                   >
                     Otwórz pełną listę w module Produkty →
                   </Link>
@@ -419,18 +463,18 @@ export default function ManufacturerEditPage() {
                       </table>
                     </div>
                   )}
-                </Card>
+                </FormSection>
               ) : (
                 <p className="text-sm text-slate-500">Ładowanie…</p>
               ))}
 
             {tab === "msuppliers" &&
               (isNew ? (
-                <Card title="Dostawcy">
+                <FormSection title="Dostawcy">
                   <p className="text-sm text-slate-600">Zapisz producenta, aby zobaczyć dostawców oferujących jego produkty.</p>
-                </Card>
+                </FormSection>
               ) : (
-                <Card title="Dostawcy powiązani przez produkty">
+                <FormSection title="Dostawcy powiązani przez produkty">
                   <p className="text-xs text-slate-500">
                     Dostawcy mający w ofercie co najmniej jeden produkt tego producenta.
                   </p>
@@ -465,7 +509,7 @@ export default function ManufacturerEditPage() {
                               <td className="px-3 py-2">
                                 <Link
                                   to={`/suppliers/${s.supplier_id}?tenant_id=${tenantId}`}
-                                  className="text-xs font-medium text-violet-700 hover:underline"
+                                  className={brandLinkButtonClass}
                                 >
                                   Edycja dostawcy
                                 </Link>
@@ -476,17 +520,17 @@ export default function ManufacturerEditPage() {
                       </table>
                     </div>
                   )}
-                </Card>
+                </FormSection>
               ))}
 
             {tab === "stats" &&
               (isNew ? (
-                <Card title="Statystyki">
+                <FormSection title="Statystyki">
                   <p className="text-sm text-slate-600">Zapisz producenta, aby zobaczyć statystyki i listę produktów.</p>
-                </Card>
+                </FormSection>
               ) : detail != null ? (
                 <div className="space-y-6">
-                  <Card title="Statystyki">
+                  <FormSection title="Statystyki">
                     <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
                       <div className="rounded-lg bg-slate-50 px-3 py-2">
                         <dt className="text-xs font-medium text-slate-500">Liczba produktów</dt>
@@ -507,7 +551,7 @@ export default function ManufacturerEditPage() {
                         </dd>
                       </div>
                     </dl>
-                  </Card>
+                  </FormSection>
                   <p className="text-xs text-slate-500">
                     Listę produktów i powiązanych dostawców zobaczysz w zakładkach <span className="font-medium">Produkty</span> i{" "}
                     <span className="font-medium">Dostawcy</span>.
@@ -518,19 +562,31 @@ export default function ManufacturerEditPage() {
               ))}
 
             {tab === "gpsr" && (
-              <Card title="GPSR — osoba odpowiedzialna (domyślnie dla produktów)">
-                <p className="text-xs text-slate-500">
-                  Produkty mogą nadpisać te dane w polach „Osoba odpowiedzialna” / e-mail w karcie produktu (metadane).
-                </p>
-                <div>
-                  <label className={fieldLabel}>Imię i nazwisko</label>
-                  <input type="text" value={respName} onChange={(e) => setRespName(e.target.value)} className={inputClass} />
+              <FormSection title="GPSR — osoba odpowiedzialna (domyślnie dla produktów)">
+                <div className={formStackClass}>
+                  <p className="text-xs text-slate-500">
+                    Produkty mogą nadpisać te dane w polach „Osoba odpowiedzialna” / e-mail w karcie produktu (metadane).
+                  </p>
+                  <FormField label="Imię i nazwisko">
+                    <Input
+                      type="text"
+                      value={respName}
+                      onChange={(e) => setRespName(e.target.value)}
+                      density={FORM_FIELD_DENSITY}
+                      focusTone="brand"
+                    />
+                  </FormField>
+                  <FormField label="E-mail">
+                    <Input
+                      type="email"
+                      value={respEmail}
+                      onChange={(e) => setRespEmail(e.target.value)}
+                      density={FORM_FIELD_DENSITY}
+                      focusTone="brand"
+                    />
+                  </FormField>
                 </div>
-                <div>
-                  <label className={fieldLabel}>E-mail</label>
-                  <input type="email" value={respEmail} onChange={(e) => setRespEmail(e.target.value)} className={inputClass} />
-                </div>
-              </Card>
+              </FormSection>
             )}
 
             {saveErr ? <p className="mt-4 text-sm text-red-600">{saveErr}</p> : null}

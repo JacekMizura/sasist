@@ -8,10 +8,18 @@ import {
 } from "../../api/documentSeriesApi";
 import { rememberDocumentsSeriesListContext } from "../../pages/documents/documentSeriesContext";
 import { documentSeriesSubtypeLabelPl, documentSeriesTypeLabelPl } from "../../pages/documents/documentSeriesUiLabels";
-import { PrimaryButton } from "../../design-system/PrimaryButton";
-import { AppOverlayPortal } from "../../components/overlay";
-
-const inp = "mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900";
+import {
+  Dialog,
+  FormError,
+  FormField,
+  FormHelperText,
+  FORM_FIELD_DENSITY,
+  formStackClass,
+  GhostButton,
+  Input,
+  PrimaryButton,
+  Select,
+} from "@/design-system";
 
 type Props = {
   open: boolean;
@@ -86,83 +94,67 @@ export default function DocumentSeriesQuickCreateModal({
     }
   };
 
-  if (!open) return null;
-
   return (
-    <AppOverlayPortal>
-    <div
-      className="fixed inset-0 z-[280] flex items-center justify-center bg-black/40 p-4"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") onClose();
-      }}
-    >
-      <div
-        className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-2">
-          <h2 className="text-lg font-bold text-slate-900">Nowa seria dokumentów</h2>
-          <button type="button" className="text-sm text-slate-500 hover:text-slate-800" onClick={onClose}>
-            Zamknij
-          </button>
-        </div>
-        <p className="mt-1 text-xs text-slate-500">
-          Uzupełnij podstawowe pola — pełną konfigurację uzupełnisz w sekcji{" "}
-          <span className="font-semibold text-slate-700">Dokumenty, Serie dokumentów</span>.
-        </p>
-
-        <div className="mt-4 space-y-3">
-          <label className="block text-xs font-medium text-slate-600">
-            Nazwa
-            <input className={inp} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-          </label>
-          <label className="block text-xs font-medium text-slate-600">
-            Typ
-            <select
-              className={inp}
-              value={type}
-              onChange={(e) => setType(e.target.value as DocumentSeriesType)}
-            >
-              <option value="SALE">{documentSeriesTypeLabelPl("SALE")}</option>
-              <option value="WAREHOUSE">{documentSeriesTypeLabelPl("WAREHOUSE")}</option>
-              <option value="CORRECTION">{documentSeriesTypeLabelPl("CORRECTION")}</option>
-            </select>
-          </label>
-          <label className="block text-xs font-medium text-slate-600">
-            Podtyp
-            <select
-              className={inp}
-              value={subtype}
-              onChange={(e) => setSubtype(e.target.value as DocumentSeriesSubtype)}
-            >
-              {allowed.map((s) => (
-                <option key={s} value={s}>
-                  {documentSeriesSubtypeLabelPl(s)}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        {err ? <p className="mt-3 text-sm text-red-600">{err}</p> : null}
-
-        <div className="mt-5 flex justify-end gap-2 border-t border-slate-100 pt-4">
-          <button
-            type="button"
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-50"
-            onClick={onClose}
-          >
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title="Nowa seria dokumentów"
+      size="md"
+      footer={
+        <>
+          <GhostButton type="button" density="compact" onClick={onClose} disabled={saving}>
             Anuluj
-          </button>
-          <PrimaryButton type="button" disabled={saving} onClick={() => void save()}>
+          </GhostButton>
+          <PrimaryButton type="button" density="compact" disabled={saving} onClick={() => void save()}>
             {saving ? "…" : "Utwórz serię"}
           </PrimaryButton>
-        </div>
+        </>
+      }
+    >
+      <div className={formStackClass}>
+        <FormHelperText className="mt-0 text-sm text-slate-500">
+          Uzupełnij podstawowe pola — pełną konfigurację uzupełnisz w sekcji{" "}
+          <span className="font-semibold text-slate-700">Dokumenty, Serie dokumentów</span>.
+        </FormHelperText>
+        <FormField label="Nazwa">
+          <Input
+            density={FORM_FIELD_DENSITY}
+            focusTone="brand"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoFocus
+          />
+        </FormField>
+        <FormField label="Typ">
+          <Select
+            density={FORM_FIELD_DENSITY}
+            focusTone="brand"
+            className="bg-white"
+            value={type}
+            onChange={(e) => setType(e.target.value as DocumentSeriesType)}
+          >
+            <option value="SALE">{documentSeriesTypeLabelPl("SALE")}</option>
+            <option value="WAREHOUSE">{documentSeriesTypeLabelPl("WAREHOUSE")}</option>
+            <option value="CORRECTION">{documentSeriesTypeLabelPl("CORRECTION")}</option>
+          </Select>
+        </FormField>
+        <FormField label="Podtyp">
+          <Select
+            density={FORM_FIELD_DENSITY}
+            focusTone="brand"
+            className="bg-white"
+            value={subtype}
+            onChange={(e) => setSubtype(e.target.value as DocumentSeriesSubtype)}
+          >
+            {allowed.map((s) => (
+              <option key={s} value={s}>
+                {documentSeriesSubtypeLabelPl(s)}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+        {err ? <FormError className="mt-0 text-sm">{err}</FormError> : null}
       </div>
-    </div>
-    </AppOverlayPortal>
+    </Dialog>
   );
 }

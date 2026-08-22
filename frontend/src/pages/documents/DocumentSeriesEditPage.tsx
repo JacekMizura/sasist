@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { Layers, Loader2 } from "lucide-react";
 import { fetchCompanyProfile, type CompanyProfileDto } from "../../api/companyProfileApi";
 import {
@@ -35,7 +35,22 @@ import {
 import DocumentsEmptyState from "./DocumentsEmptyState";
 import { DocumentsSectionShell } from "./DocumentsSectionShell";
 import { DocumentTemplateSelect } from "@/pages/Settings/document-templates/components/DocumentTemplateSelect";
-import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+import {
+  Checkbox,
+  FormActions,
+  FormError,
+  FormField,
+  FormSection,
+  FORM_FIELD_DENSITY,
+  formStackClass,
+  GhostButton,
+  Input,
+  PrimaryButton,
+  SecondaryButton,
+  Select,
+  Textarea,
+  typography,
+} from "@/design-system";
 
 const SUBTYPE_TO_KIND: Record<string, string> = {
   INVOICE: "invoice",
@@ -151,12 +166,6 @@ function dtoToWrite(d: DocumentSeriesDto): DocumentSeriesWritePayload {
     company_email: d.company_email,
   };
 }
-
-const inpSm = "mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900";
-const lab = "block text-xs font-medium text-slate-600";
-const card = "rounded-xl border border-slate-200/90 bg-white p-4 shadow-sm sm:p-5";
-const hSection = "text-xs font-bold uppercase tracking-wide text-slate-500";
-const colTitle = "text-sm font-bold text-slate-900";
 
 export default function DocumentSeriesEditPage() {
   const { id } = useParams<{ id: string }>();
@@ -322,10 +331,11 @@ export default function DocumentSeriesEditPage() {
   }
 
   const statusSelect = (label: string, field: keyof DocumentSeriesWritePayload, value: number | null) => (
-    <label className={lab}>
-      {label}
-      <select
-        className={inpSm}
+    <FormField label={label}>
+      <Select
+        density={FORM_FIELD_DENSITY}
+        focusTone="brand"
+        className="bg-white"
         value={value ?? ""}
         onChange={(e) => {
           const v = e.target.value;
@@ -338,8 +348,8 @@ export default function DocumentSeriesEditPage() {
             {orderPanelStatusSelectLabel(s)}
           </option>
         ))}
-      </select>
-    </label>
+      </Select>
+    </FormField>
   );
 
   const onNumberingPresetChange = (p: NumberingPresetUi) => {
@@ -349,68 +359,83 @@ export default function DocumentSeriesEditPage() {
   const printModeCustom = draft.print_template_id == null;
 
   return (
-    <div className="min-h-full w-full space-y-4 pb-28 pt-1">
-      {err ? <p className="text-sm text-red-600">{err}</p> : null}
+    <div className={`min-h-full w-full ${formStackClass} pb-28 pt-1`}>
+      {err ? <FormError className="mt-0 text-sm">{err}</FormError> : null}
 
       <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
-        <div className="space-y-5">
-          <p className={colTitle}>Ustawienia serii</p>
+        <div className={formStackClass}>
+          <p className={typography.h2}>Ustawienia serii</p>
 
-          <div className={card}>
-            <h3 className={hSection}>Podstawowe</h3>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <label className={`${lab} sm:col-span-2`}>
-                Nazwa serii *
-                <input className={inpSm} value={draft.name} onChange={(e) => setField("name", e.target.value)} />
-              </label>
-              <label className={lab}>
-                Prefiks
-                <input className={inpSm} value={draft.prefix} onChange={(e) => setField("prefix", e.target.value)} />
-              </label>
-              <label className={lab}>
-                Sufiks
-                <input className={inpSm} value={draft.suffix} onChange={(e) => setField("suffix", e.target.value)} />
-              </label>
-              <label className={`${lab} sm:col-span-2`}>
-                Kolor serii (panel / lista)
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <input
+          <FormSection title="Podstawowe">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <FormField label="Nazwa serii *" className="sm:col-span-2">
+                <Input
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  value={draft.name}
+                  onChange={(e) => setField("name", e.target.value)}
+                />
+              </FormField>
+              <FormField label="Prefiks">
+                <Input
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  value={draft.prefix}
+                  onChange={(e) => setField("prefix", e.target.value)}
+                />
+              </FormField>
+              <FormField label="Sufiks">
+                <Input
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  value={draft.suffix}
+                  onChange={(e) => setField("suffix", e.target.value)}
+                />
+              </FormField>
+              <FormField label="Kolor serii (panel / lista)" className="sm:col-span-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
                     type="color"
                     aria-label="Kolor"
-                    className="h-9 w-14 cursor-pointer rounded border border-slate-200 bg-white p-0.5"
+                    density={FORM_FIELD_DENSITY}
+                    focusTone="brand"
+                    className="!w-14 cursor-pointer p-0.5"
                     value={/^#[0-9A-Fa-f]{6}$/.test(draft.color) ? draft.color : "#64748b"}
                     onChange={(e) => setField("color", e.target.value)}
                   />
-                  <input
-                    className={`${inpSm} max-w-[10rem]`}
+                  <Input
+                    density={FORM_FIELD_DENSITY}
+                    focusTone="brand"
+                    className="max-w-[10rem]"
                     value={draft.color}
                     onChange={(e) => setField("color", e.target.value)}
                     placeholder="#RRGGBB"
                   />
                 </div>
-              </label>
+              </FormField>
             </div>
-          </div>
+          </FormSection>
 
-          <div className={card}>
-            <h3 className={hSection}>Typ dokumentu</h3>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <label className={lab}>
-                Typ *
-                <select
-                  className={inpSm}
+          <FormSection title="Typ dokumentu">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <FormField label="Typ *">
+                <Select
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  className="bg-white"
                   value={draft.type}
                   onChange={(e) => setField("type", e.target.value as DocumentSeriesType)}
                 >
                   <option value="SALE">{documentSeriesTypeLabelPl("SALE")}</option>
                   <option value="WAREHOUSE">{documentSeriesTypeLabelPl("WAREHOUSE")}</option>
                   <option value="CORRECTION">{documentSeriesTypeLabelPl("CORRECTION")}</option>
-                </select>
-              </label>
-              <label className={lab}>
-                Podtyp *
-                <select
-                  className={inpSm}
+                </Select>
+              </FormField>
+              <FormField label="Podtyp *">
+                <Select
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  className="bg-white"
                   value={draft.subtype}
                   onChange={(e) => setField("subtype", e.target.value as DocumentSeriesSubtype)}
                 >
@@ -419,18 +444,18 @@ export default function DocumentSeriesEditPage() {
                       {documentSeriesSubtypeLabelPl(s)}
                     </option>
                   ))}
-                </select>
-              </label>
+                </Select>
+              </FormField>
             </div>
-          </div>
+          </FormSection>
 
-          <div className={card}>
-            <h3 className={hSection}>Zachowanie dokumentu</h3>
-            <div className="mt-3 grid gap-3">
-              <label className={lab}>
-                Seria korekty (powiązanie)
-                <select
-                  className={inpSm}
+          <FormSection title="Zachowanie dokumentu">
+            <div className="grid gap-3">
+              <FormField label="Seria korekty (powiązanie)">
+                <Select
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  className="bg-white"
                   value={draft.correction_series_id ?? ""}
                   onChange={(e) => setField("correction_series_id", e.target.value || null)}
                 >
@@ -440,13 +465,14 @@ export default function DocumentSeriesEditPage() {
                       {s.name}
                     </option>
                   ))}
-                </select>
-              </label>
+                </Select>
+              </FormField>
               {draft.type === "SALE" ? (
-                <label className={lab}>
-                  Seria dokumentu magazynowego (WZ)
-                  <select
-                    className={inpSm}
+                <FormField label="Seria dokumentu magazynowego (WZ)">
+                  <Select
+                    density={FORM_FIELD_DENSITY}
+                    focusTone="brand"
+                    className="bg-white"
                     value={draft.warehouse_document_series_id ?? ""}
                     onChange={(e) => setField("warehouse_document_series_id", e.target.value || null)}
                   >
@@ -456,13 +482,14 @@ export default function DocumentSeriesEditPage() {
                         {s.name}
                       </option>
                     ))}
-                  </select>
-                </label>
+                  </Select>
+                </FormField>
               ) : null}
-              <label className={lab}>
-                Szablon druku
-                <select
-                  className={inpSm}
+              <FormField label="Szablon druku">
+                <Select
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  className="bg-white"
                   value={draft.print_template_id ?? ""}
                   onChange={(e) => {
                     const v = e.target.value;
@@ -479,19 +506,19 @@ export default function DocumentSeriesEditPage() {
                       {p.label}
                     </option>
                   ))}
-                </select>
-              </label>
-              <label className={lab}>
-                Własna ścieżka lub identyfikator szablonu
-                <input
-                  className={inpSm}
+                </Select>
+              </FormField>
+              <FormField label="Własna ścieżka lub identyfikator szablonu">
+                <Input
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
                   disabled={!printModeCustom}
                   value={draft.print_template}
                   onChange={(e) => setField("print_template", e.target.value)}
                   placeholder="np. templates/invoice_v2.html"
                 />
-              </label>
-              <div className="md:col-span-2">
+              </FormField>
+              <div>
                 <DocumentTemplateSelect
                   tenantId={tenantId}
                   kindCode={SUBTYPE_TO_KIND[draft.subtype] ?? null}
@@ -502,60 +529,77 @@ export default function DocumentSeriesEditPage() {
                   }
                 />
               </div>
-              <label className="flex items-center gap-2 text-sm text-slate-800">
-                <input
-                  type="checkbox"
+              <label className={`flex items-center gap-2 ${typography.body}`}>
+                <Checkbox
                   checked={draft.warehouse_effect}
                   onChange={(e) => setField("warehouse_effect", e.target.checked)}
                 />
                 Efekt magazynowy (ruchy stanów / WMS)
               </label>
               {draft.type === "WAREHOUSE" && draft.subtype === "Z_PZ" ? (
-                <label className="flex items-start gap-2 text-sm text-slate-800">
-                  <input
-                    type="checkbox"
+                <label className={`flex items-start gap-2 ${typography.body}`}>
+                  <Checkbox
                     className="mt-0.5"
                     checked={draft.collective_return_receipt ?? false}
                     onChange={(e) => setField("collective_return_receipt", e.target.checked)}
                   />
                   <span>
                     <span className="font-medium">Zbiorczy dokument dla zwrotów</span>
-                    <span className="mt-0.5 block text-xs text-slate-500">
+                    <span className={`mt-0.5 block ${typography.caption}`}>
                       Opcjonalnie: dopisuj zwroty do jednego otwartego Z-PZ. Wyłączone = jeden zwrot → jeden Z-PZ
                       (zalecane do rozlokowania). Gdy zbiorczy: zamykasz dokument ręcznie po zapełnieniu nośnika.
                     </span>
                   </span>
                 </label>
               ) : null}
-              <label className="flex items-center gap-2 text-sm text-slate-800">
-                <input
-                  type="checkbox"
+              <label className={`flex items-center gap-2 ${typography.body}`}>
+                <Checkbox
                   checked={draft.email_notification_enabled}
                   onChange={(e) => setField("email_notification_enabled", e.target.checked)}
                 />
                 Wysyłaj e-mail po wystawieniu dokumentu
               </label>
-              <label className={lab}>
-                Tryb usuwania dokumentu
-                <select
-                  className={inpSm}
+              <FormField label="Tryb usuwania dokumentu">
+                <Select
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  className="bg-white"
                   value={draft.delete_mode}
                   onChange={(e) => setField("delete_mode", e.target.value as DocumentSeriesWritePayload["delete_mode"])}
                 >
                   <option value="ASK">Pytaj przed usunięciem</option>
                   <option value="ALWAYS_DELETE">Zawsze usuwaj</option>
-                </select>
+                </Select>
+              </FormField>
+            </div>
+          </FormSection>
+
+          <FormSection title="Walidacja klienta">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className={`flex items-center gap-2 ${typography.body}`}>
+                <Checkbox
+                  checked={draft.disable_customer_validation}
+                  onChange={(e) => setField("disable_customer_validation", e.target.checked)}
+                />
+                Wyłącz walidację danych klienta
+              </label>
+              <label className={`flex items-center gap-2 ${typography.body}`}>
+                <Checkbox
+                  checked={draft.allow_empty_customer}
+                  onChange={(e) => setField("allow_empty_customer", e.target.checked)}
+                />
+                Dopuszczaj pustego klienta
               </label>
             </div>
-          </div>
+          </FormSection>
 
-          <div className={card}>
-            <h3 className={hSection}>VAT</h3>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <label className={lab}>
-                Źródło VAT *
-                <select
-                  className={inpSm}
+          <FormSection title="VAT">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <FormField label="Źródło VAT *">
+                <Select
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  className="bg-white"
                   value={draft.vat_source ?? "FROM_ORDER"}
                   onChange={(e) => setField("vat_source", e.target.value as VatSource)}
                 >
@@ -563,27 +607,28 @@ export default function DocumentSeriesEditPage() {
                   <option value="FROM_LINES">Z linii</option>
                   <option value="MANUAL">Ręcznie</option>
                   <option value="FIXED">Stała stawka z serii</option>
-                </select>
-              </label>
-              <label className={lab}>
-                Stawka VAT domyślna
-                <div className="mt-1 flex flex-wrap items-center gap-2">
+                </Select>
+              </FormField>
+              <FormField label="Stawka VAT domyślna">
+                <div className="flex flex-wrap items-center gap-2">
                   {[23, 8, 5, 0].map((pct) => (
-                    <button
+                    <GhostButton
                       key={pct}
                       type="button"
-                      className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 hover:bg-slate-50"
+                      density="compact"
                       onClick={() => setField("vat_rate_percent", pct)}
                     >
                       {pct}%
-                    </button>
+                    </GhostButton>
                   ))}
-                  <input
+                  <Input
                     type="number"
                     min={0}
                     max={100}
                     step={1}
-                    className={`${inpSm} max-w-[6rem]`}
+                    density={FORM_FIELD_DENSITY}
+                    focusTone="brand"
+                    className="max-w-[6rem]"
                     value={draft.vat_rate_percent ?? ""}
                     onChange={(e) => {
                       const v = e.target.value;
@@ -592,13 +637,14 @@ export default function DocumentSeriesEditPage() {
                     }}
                     placeholder="np. 23"
                   />
-                  <span className="text-sm text-slate-600">%</span>
+                  <span className={typography.bodyMuted}>%</span>
                 </div>
-              </label>
-              <label className={lab}>
-                VAT — koszt wysyłki
-                <select
-                  className={inpSm}
+              </FormField>
+              <FormField label="VAT — koszt wysyłki">
+                <Select
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  className="bg-white"
                   value={draft.vat_calc_shipping}
                   onChange={(e) =>
                     setField("vat_calc_shipping", e.target.value as DocumentSeriesWritePayload["vat_calc_shipping"])
@@ -609,12 +655,13 @@ export default function DocumentSeriesEditPage() {
                       {o.label}
                     </option>
                   ))}
-                </select>
-              </label>
-              <label className={`${lab} sm:col-span-2`}>
-                VAT — opłaty / płatność (np. pobranie)
-                <select
-                  className={inpSm}
+                </Select>
+              </FormField>
+              <FormField label="VAT — opłaty / płatność (np. pobranie)" className="sm:col-span-2">
+                <Select
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  className="bg-white"
                   value={draft.vat_calc_payment}
                   onChange={(e) =>
                     setField("vat_calc_payment", e.target.value as DocumentSeriesWritePayload["vat_calc_payment"])
@@ -625,12 +672,13 @@ export default function DocumentSeriesEditPage() {
                       {o.label}
                     </option>
                   ))}
-                </select>
-              </label>
-              <label className={`${lab} sm:col-span-2`}>
-                Źródło daty sprzedaży
-                <select
-                  className={inpSm}
+                </Select>
+              </FormField>
+              <FormField label="Źródło daty sprzedaży" className="sm:col-span-2">
+                <Select
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  className="bg-white"
                   value={draft.sale_date_source}
                   onChange={(e) =>
                     setField("sale_date_source", e.target.value as DocumentSeriesWritePayload["sale_date_source"])
@@ -640,137 +688,135 @@ export default function DocumentSeriesEditPage() {
                   <option value="DOCUMENT_DATE">Data dokumentu</option>
                   <option value="DELIVERY_DATE">Data dostawy</option>
                   <option value="MANUAL">Ręcznie</option>
-                </select>
-              </label>
+                </Select>
+              </FormField>
             </div>
-          </div>
+          </FormSection>
 
-          <div className={card}>
-            <h3 className={hSection}>Koszty wysyłki i waluta</h3>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <label className="flex items-center gap-2 text-sm text-slate-800 sm:col-span-2">
-                <input
-                  type="checkbox"
+          <FormSection title="Koszty wysyłki i waluta">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className={`flex items-center gap-2 ${typography.body} sm:col-span-2`}>
+                <Checkbox
                   checked={draft.count_shipping_cost_always}
                   onChange={(e) => setField("count_shipping_cost_always", e.target.checked)}
                 />
                 Zawsze uwzględniaj koszt wysyłki w wartości dokumentu
               </label>
-              <label className={`${lab} sm:col-span-2`}>
-                Nazwa pozycji kosztu wysyłki
-                <input className={inpSm} value={draft.shipping_cost_name} onChange={(e) => setField("shipping_cost_name", e.target.value)} />
-              </label>
-              <label className={lab}>
-                Domyślny termin płatności (tekst)
-                <input className={inpSm} value={draft.payment_term_default} onChange={(e) => setField("payment_term_default", e.target.value)} />
-              </label>
-              <label className={lab}>
-                Źródło waluty
-                <select
-                  className={inpSm}
+              <FormField label="Nazwa pozycji kosztu wysyłki" className="sm:col-span-2">
+                <Input
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  value={draft.shipping_cost_name}
+                  onChange={(e) => setField("shipping_cost_name", e.target.value)}
+                />
+              </FormField>
+              <FormField label="Domyślny termin płatności (tekst)">
+                <Input
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  value={draft.payment_term_default}
+                  onChange={(e) => setField("payment_term_default", e.target.value)}
+                />
+              </FormField>
+              <FormField label="Źródło waluty">
+                <Select
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  className="bg-white"
                   value={draft.currency_source}
                   onChange={(e) => setField("currency_source", e.target.value as DocumentSeriesWritePayload["currency_source"])}
                 >
                   <option value="ORDER">Zamówienie</option>
                   <option value="SERIES">Seria</option>
                   <option value="MANUAL">Ręcznie</option>
-                </select>
-              </label>
-              <label className="flex items-center gap-2 text-sm text-slate-800 sm:col-span-2">
-                <input
-                  type="checkbox"
+                </Select>
+              </FormField>
+              <label className={`flex items-center gap-2 ${typography.body} sm:col-span-2`}>
+                <Checkbox
                   checked={draft.auto_currency_conversion}
                   onChange={(e) => setField("auto_currency_conversion", e.target.checked)}
                 />
                 Automatyczna konwersja walut
               </label>
             </div>
-          </div>
+          </FormSection>
 
-          <div className={card}>
-            <h3 className={hSection}>Numeracja</h3>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <label className={lab}>
-                Sposób numeracji
-                <select
-                  className={inpSm}
+          <FormSection title="Numeracja">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <FormField label="Sposób numeracji">
+                <Select
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  className="bg-white"
                   value={numberingPreset}
                   onChange={(e) => onNumberingPresetChange(e.target.value as NumberingPresetUi)}
                 >
                   <option value="continuous">{numberingPresetLabelPl("continuous")}</option>
                   <option value="monthly">{numberingPresetLabelPl("monthly")}</option>
                   <option value="yearly">{numberingPresetLabelPl("yearly")}</option>
-                </select>
-              </label>
-              <label className={lab}>
-                Start numeracji
-                <input
+                </Select>
+              </FormField>
+              <FormField label="Start numeracji">
+                <Input
                   type="number"
                   min={1}
-                  className={inpSm}
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
                   value={draft.numbering_start}
                   onChange={(e) => setField("numbering_start", Math.max(1, parseInt(e.target.value, 10) || 1))}
                 />
-              </label>
-              <label className={lab}>
-                Długość numeru (padding)
-                <input
+              </FormField>
+              <FormField label="Długość numeru (padding)">
+                <Input
                   type="number"
                   min={1}
                   max={12}
-                  className={inpSm}
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
                   value={draft.padding_length}
                   onChange={(e) =>
                     setField("padding_length", Math.min(12, Math.max(1, parseInt(e.target.value, 10) || 6)))
                   }
                 />
-              </label>
+              </FormField>
               {draft.type === "WAREHOUSE" ? (
-                <label className={lab}>
-                  Kod magazynu (opcjonalnie)
-                  <input
-                    className={inpSm}
+                <FormField label="Kod magazynu (opcjonalnie)">
+                  <Input
+                    density={FORM_FIELD_DENSITY}
+                    focusTone="brand"
                     value={draft.code}
                     onChange={(e) => setField("code", e.target.value)}
                     placeholder="np. MAG1"
                   />
-                </label>
+                </FormField>
               ) : null}
-              <label className="flex items-center gap-2 text-sm text-slate-800">
-                <input
-                  type="checkbox"
+              <label className={`flex items-center gap-2 ${typography.body}`}>
+                <Checkbox
                   checked={draft.is_default}
                   onChange={(e) => setField("is_default", e.target.checked)}
                 />
                 Domyślna seria dla typu dokumentu
               </label>
-              <label className="flex items-center gap-2 text-sm text-slate-800">
-                <input
-                  type="checkbox"
-                  checked={draft.is_active}
-                  onChange={(e) => setField("is_active", e.target.checked)}
-                />
+              <label className={`flex items-center gap-2 ${typography.body}`}>
+                <Checkbox checked={draft.is_active} onChange={(e) => setField("is_active", e.target.checked)} />
                 Aktywna
               </label>
-              <label className="flex items-center gap-2 text-sm text-slate-800">
-                <input
-                  type="checkbox"
+              <label className={`flex items-center gap-2 ${typography.body}`}>
+                <Checkbox
                   checked={draft.yearly_reset}
                   onChange={(e) => setField("yearly_reset", e.target.checked)}
                 />
                 Reset roczny licznika
               </label>
-              <label className="flex items-center gap-2 text-sm text-slate-800">
-                <input
-                  type="checkbox"
+              <label className={`flex items-center gap-2 ${typography.body}`}>
+                <Checkbox
                   checked={draft.monthly_reset}
                   onChange={(e) => setField("monthly_reset", e.target.checked)}
                 />
                 Reset miesięczny licznika
               </label>
-              <p className={`${lab} sm:col-span-2`}>
-                Przykład numeru
-                <span className="mt-1 block rounded-md border border-slate-100 bg-slate-50 px-2 py-1.5 font-mono text-sm text-slate-800">
+              <FormField label="Przykład numeru" className="sm:col-span-2">
+                <span className="block rounded-md border border-slate-100 bg-slate-50 px-2 py-1.5 font-mono text-sm text-slate-800">
                   {documentSeriesNumberingPreview(
                     draft.prefix || "FS",
                     numberingPreset,
@@ -778,186 +824,213 @@ export default function DocumentSeriesEditPage() {
                     draft.padding_length,
                   )}
                 </span>
-              </p>
+              </FormField>
               <details className="sm:col-span-2">
-                <summary className="cursor-pointer text-xs font-medium text-slate-600">Rozszerzenie — własny format numeru</summary>
-                <label className={`${lab} mt-2`}>
-                  Szablon numeru
-                  <input className={inpSm} value={draft.numbering_format} onChange={(e) => setField("numbering_format", e.target.value)} />
-                </label>
-                <p className="mt-1 text-xs text-slate-500">
-                  W typowych przypadkach wystarczy wybrać sposób numeracji powyżej. Edycję szablonu zostaw wyłącznie wtedy, gdy wdrożenie tego wymaga.
-                </p>
+                <summary className={`cursor-pointer ${typography.label}`}>Rozszerzenie — własny format numeru</summary>
+                <FormField
+                  label="Szablon numeru"
+                  className="mt-2"
+                  helperText="W typowych przypadkach wystarczy wybrać sposób numeracji powyżej. Edycję szablonu zostaw wyłącznie wtedy, gdy wdrożenie tego wymaga."
+                >
+                  <Input
+                    density={FORM_FIELD_DENSITY}
+                    focusTone="brand"
+                    value={draft.numbering_format}
+                    onChange={(e) => setField("numbering_format", e.target.value)}
+                  />
+                </FormField>
               </details>
             </div>
-          </div>
+          </FormSection>
 
-          <div className={card}>
-            <h3 className={hSection}>Integracja ze statusem zamówienia</h3>
-            <p className="mb-2 text-xs text-slate-500">
-              Powiązanie z listą statusów z panelu zamówienia — te same statusy co na liście zamówień i w module WMS.
-            </p>
+          <FormSection
+            title="Integracja ze statusem zamówienia"
+            description="Powiązanie z listą statusów z panelu zamówienia — te same statusy co na liście zamówień i w module WMS."
+          >
             <div className="grid gap-3 sm:grid-cols-2">
               {statusSelect("Status przy utworzeniu", "status_on_create_id", draft.status_on_create_id)}
               {statusSelect("Status przy usunięciu", "status_on_delete_id", draft.status_on_delete_id)}
               {statusSelect("Status przy błędzie", "status_on_error_id", draft.status_on_error_id)}
               {statusSelect("Status przy aktualizacji", "status_on_update_id", draft.status_on_update_id)}
             </div>
-          </div>
+          </FormSection>
 
-          <div className={card}>
-            <h3 className={hSection}>Walidacja klienta</h3>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <label className="flex items-center gap-2 text-sm text-slate-800">
-                <input
-                  type="checkbox"
-                  checked={draft.disable_customer_validation}
-                  onChange={(e) => setField("disable_customer_validation", e.target.checked)}
-                />
-                Wyłącz walidację danych klienta
-              </label>
-              <label className="flex items-center gap-2 text-sm text-slate-800">
-                <input
-                  type="checkbox"
-                  checked={draft.allow_empty_customer}
-                  onChange={(e) => setField("allow_empty_customer", e.target.checked)}
-                />
-                Dopuszczaj pustego klienta
-              </label>
-            </div>
-          </div>
+          <FormSection title="Szablon pól dodatkowych (JSON)">
+            <FormField>
+              <Textarea
+                density={FORM_FIELD_DENSITY}
+                focusTone="brand"
+                rows={3}
+                value={draft.additional_fields_template ?? ""}
+                onChange={(e) => setField("additional_fields_template", e.target.value || null)}
+                placeholder="Opcjonalny JSON pól dodatkowych na dokumencie"
+              />
+            </FormField>
+          </FormSection>
 
-          <div className={card}>
-            <h3 className={hSection}>Szablon pól dodatkowych (JSON)</h3>
-            <textarea
-              className={inpSm}
-              rows={3}
-              value={draft.additional_fields_template ?? ""}
-              onChange={(e) => setField("additional_fields_template", e.target.value || null)}
-              placeholder="Opcjonalny JSON pól dodatkowych na dokumencie"
-            />
-          </div>
-
-          <div className={card}>
-            <h3 className={hSection}>Notatki wewnętrzne</h3>
-            <textarea className={inpSm} rows={3} value={draft.notes ?? ""} onChange={(e) => setField("notes", e.target.value || null)} />
-          </div>
+          <FormSection title="Notatki wewnętrzne">
+            <FormField>
+              <Textarea
+                density={FORM_FIELD_DENSITY}
+                focusTone="brand"
+                rows={3}
+                value={draft.notes ?? ""}
+                onChange={(e) => setField("notes", e.target.value || null)}
+              />
+            </FormField>
+          </FormSection>
         </div>
 
-        <div className="space-y-5">
-          <p className={colTitle}>Dane firmy (na dokumencie)</p>
+        <div className={formStackClass}>
+          <p className={typography.h2}>Dane firmy (na dokumencie)</p>
 
-          <div className={card}>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <h3 className={hSection}>Adres i identyfikatory</h3>
-              <button
+          <FormSection title="Adres i identyfikatory">
+            <div className="mb-3 flex justify-end">
+              <SecondaryButton
                 type="button"
+                density="compact"
                 disabled={loadingProfile}
                 onClick={() => void loadFromTenantProfile()}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
               >
                 {loadingProfile ? "Wczytywanie…" : "Wczytaj z profilu firmy"}
-              </button>
+              </SecondaryButton>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className={`${lab} sm:col-span-2`}>
-                Nazwa firmy
-                <input className={inpSm} value={draft.company_name ?? ""} onChange={(e) => setField("company_name", e.target.value || null)} />
-              </label>
-              <label className={`${lab} sm:col-span-2`}>
-                Ulica
-                <input className={inpSm} value={draft.company_street ?? ""} onChange={(e) => setField("company_street", e.target.value || null)} />
-              </label>
-              <label className={lab}>
-                Nr domu
-                <input
-                  className={inpSm}
+              <FormField label="Nazwa firmy" className="sm:col-span-2">
+                <Input
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  value={draft.company_name ?? ""}
+                  onChange={(e) => setField("company_name", e.target.value || null)}
+                />
+              </FormField>
+              <FormField label="Ulica" className="sm:col-span-2">
+                <Input
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  value={draft.company_street ?? ""}
+                  onChange={(e) => setField("company_street", e.target.value || null)}
+                />
+              </FormField>
+              <FormField label="Nr domu">
+                <Input
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
                   value={draft.company_house_number ?? ""}
                   onChange={(e) => setField("company_house_number", e.target.value || null)}
                 />
-              </label>
-              <label className={lab}>
-                Nr lokalu
-                <input
-                  className={inpSm}
+              </FormField>
+              <FormField label="Nr lokalu">
+                <Input
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
                   value={draft.company_apartment_number ?? ""}
                   onChange={(e) => setField("company_apartment_number", e.target.value || null)}
                 />
-              </label>
-              <label className={lab}>
-                Kod pocztowy
-                <input className={inpSm} value={draft.company_zip ?? ""} onChange={(e) => setField("company_zip", e.target.value || null)} />
-              </label>
-              <label className={lab}>
-                Miasto
-                <input className={inpSm} value={draft.company_city ?? ""} onChange={(e) => setField("company_city", e.target.value || null)} />
-              </label>
-              <label className={`${lab} sm:col-span-2`}>
-                Kraj
-                <input className={inpSm} value={draft.company_country ?? ""} onChange={(e) => setField("company_country", e.target.value || null)} />
-              </label>
-              <label className={lab}>
-                NIP
-                <input className={inpSm} value={draft.company_nip ?? ""} onChange={(e) => setField("company_nip", e.target.value || null)} />
-              </label>
-              <label className={lab}>
-                REGON
-                <input className={inpSm} value={draft.company_regon ?? ""} onChange={(e) => setField("company_regon", e.target.value || null)} />
-              </label>
-              <label className={`${lab} sm:col-span-2`}>
-                Dodatkowa linia adresu (opcjonalnie)
-                <input
-                  className={inpSm}
+              </FormField>
+              <FormField label="Kod pocztowy">
+                <Input
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  value={draft.company_zip ?? ""}
+                  onChange={(e) => setField("company_zip", e.target.value || null)}
+                />
+              </FormField>
+              <FormField label="Miasto">
+                <Input
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  value={draft.company_city ?? ""}
+                  onChange={(e) => setField("company_city", e.target.value || null)}
+                />
+              </FormField>
+              <FormField label="Kraj" className="sm:col-span-2">
+                <Input
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  value={draft.company_country ?? ""}
+                  onChange={(e) => setField("company_country", e.target.value || null)}
+                />
+              </FormField>
+              <FormField label="NIP">
+                <Input
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  value={draft.company_nip ?? ""}
+                  onChange={(e) => setField("company_nip", e.target.value || null)}
+                />
+              </FormField>
+              <FormField label="REGON">
+                <Input
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  value={draft.company_regon ?? ""}
+                  onChange={(e) => setField("company_regon", e.target.value || null)}
+                />
+              </FormField>
+              <FormField label="Dodatkowa linia adresu (opcjonalnie)" className="sm:col-span-2">
+                <Input
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
                   value={draft.company_address ?? ""}
                   onChange={(e) => setField("company_address", e.target.value || null)}
                   placeholder="np. budynek B, recepcja"
                 />
-              </label>
+              </FormField>
             </div>
-          </div>
+          </FormSection>
 
-          <div className={card}>
-            <h3 className={hSection}>Bank i kontakt</h3>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <label className={`${lab} sm:col-span-2`}>
-                Nazwa banku
-                <input className={inpSm} value={draft.company_bank ?? ""} onChange={(e) => setField("company_bank", e.target.value || null)} />
-              </label>
-              <label className={lab}>
-                IBAN
-                <input className={inpSm} value={draft.company_iban ?? ""} onChange={(e) => setField("company_iban", e.target.value || null)} />
-              </label>
-              <label className={lab}>
-                BIC / SWIFT
-                <input className={inpSm} value={draft.company_bic ?? ""} onChange={(e) => setField("company_bic", e.target.value || null)} />
-              </label>
-              <label className={`${lab} sm:col-span-2`}>
-                E-mail (na dokumencie)
-                <input className={inpSm} value={draft.company_email ?? ""} onChange={(e) => setField("company_email", e.target.value || null)} />
-              </label>
+          <FormSection title="Bank i kontakt">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <FormField label="Nazwa banku" className="sm:col-span-2">
+                <Input
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  value={draft.company_bank ?? ""}
+                  onChange={(e) => setField("company_bank", e.target.value || null)}
+                />
+              </FormField>
+              <FormField label="IBAN">
+                <Input
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  value={draft.company_iban ?? ""}
+                  onChange={(e) => setField("company_iban", e.target.value || null)}
+                />
+              </FormField>
+              <FormField label="BIC / SWIFT">
+                <Input
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  value={draft.company_bic ?? ""}
+                  onChange={(e) => setField("company_bic", e.target.value || null)}
+                />
+              </FormField>
+              <FormField label="E-mail (na dokumencie)" className="sm:col-span-2">
+                <Input
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  value={draft.company_email ?? ""}
+                  onChange={(e) => setField("company_email", e.target.value || null)}
+                />
+              </FormField>
             </div>
-          </div>
+          </FormSection>
         </div>
       </div>
 
-      <div className="pointer-events-none fixed bottom-0 left-0 right-0 z-40 flex justify-end p-4 sm:p-6">
-        <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-2 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur sm:gap-3 sm:p-3">
-          <Link
-            to="/documents/series"
-            className="hidden rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:inline-block"
-          >
-            Anuluj
-          </Link>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void onSave()}
-            className={brandPrimaryButtonClass}
-          >
-            {saving ? "Zapisywanie…" : "Zapisz"}
-          </button>
-        </div>
-      </div>
+      <FormActions sticky>
+        <SecondaryButton
+          type="button"
+          className="hidden sm:inline-flex"
+          onClick={() => navigate("/documents/series")}
+        >
+          Anuluj
+        </SecondaryButton>
+        <PrimaryButton type="button" disabled={saving} onClick={() => void onSave()}>
+          {saving ? "Zapisywanie…" : "Zapisz"}
+        </PrimaryButton>
+      </FormActions>
     </div>
   );
 }

@@ -14,10 +14,8 @@ import {
 } from "./warehouseDocumentHelpers";
 import type { BusinessDocStatus } from "./warehouseDocumentsUi";
 import { normalizeWarehouseDocType } from "./warehouseDocumentsUi";
-import {
-  warehouseDocFinancialInputClass,
-  WarehouseDocFinancialItem,
-} from "./warehouseDocumentDetailUi";
+import { FORM_FIELD_DENSITY, Input } from "@/design-system";
+import { WarehouseDocFinancialItem } from "./warehouseDocumentDetailUi";
 
 function formatDateShort(iso: string | null | undefined) {
   if (!iso) return "—";
@@ -146,31 +144,34 @@ export function WarehouseDocumentDetailInfo({
               <div className="flex flex-col items-end gap-1">
                 <label className="inline-flex items-center gap-1.5">
                   <span className="text-slate-500">Waluta</span>
-                  <input
+                  <Input
+                    density={FORM_FIELD_DENSITY}
                     value={metaCurrency}
                     onChange={(e) => onMetaCurrencyChange(e.target.value.toUpperCase())}
                     maxLength={8}
-                    className={`${warehouseDocFinancialInputClass} !h-7 !w-16 !py-0 uppercase`}
+                    className="!h-7 !w-16 !py-0 uppercase tabular-nums"
                   />
                 </label>
                 <label className="inline-flex items-center gap-1.5">
                   <span className="text-slate-500">Netto</span>
-                  <input
+                  <Input
+                    density={FORM_FIELD_DENSITY}
                     type="text"
                     inputMode="decimal"
                     value={metaNet}
                     onChange={(e) => onMetaNetChange(e.target.value)}
-                    className={`${warehouseDocFinancialInputClass} !h-7 !w-24 text-right`}
+                    className="!h-7 !w-24 text-right tabular-nums"
                   />
                 </label>
                 <label className="inline-flex items-center gap-1.5">
                   <span className="text-slate-500">Brutto</span>
-                  <input
+                  <Input
+                    density={FORM_FIELD_DENSITY}
                     type="text"
                     inputMode="decimal"
                     value={metaGross}
                     onChange={(e) => onMetaGrossChange(e.target.value)}
-                    className={`${warehouseDocFinancialInputClass} !h-7 !w-24 text-right`}
+                    className="!h-7 !w-24 text-right tabular-nums"
                   />
                 </label>
                 <span className="text-slate-600">

@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import {
-  listSellasistInputClass,
   listSellasistToolbarSquareBtn,
   listSellasistToolbarToggleBtn,
 } from "../../components/listPage/listSellasistTokens";
@@ -19,8 +18,6 @@ export const warehouseDocIconBtnClass = listSellasistToolbarSquareBtn;
 
 export const warehouseDocIconBtnDangerClass =
   "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-red-200/90 bg-white text-red-600 shadow-none transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30 disabled:cursor-not-allowed disabled:opacity-50";
-
-export const warehouseDocFinancialInputClass = `${listSellasistInputClass} !h-9 !py-1.5 tabular-nums`;
 
 export function WarehouseDocCompactRow({
   label,

@@ -25,13 +25,27 @@ import {
 } from "../../api/supplierProductsApi";
 import { fetchPurchasingSupplierAnalytics, type SupplierAnalyticsRow } from "../../api/purchasingSupplierAnalyticsApi";
 import { AssortmentEntityPageShell } from "../../components/assortment/AssortmentEntityPageShell";
-import { PrimaryButton } from "../../design-system/PrimaryButton";
+import {
+  brandLinkButtonClass,
+  Checkbox,
+  FormField,
+  FORM_FIELD_DENSITY,
+  formStackClass,
+  Input,
+  PrimaryButton,
+  SecondaryButton,
+  Select,
+  Textarea,
+} from "../../design-system";
 import {
   parsePurchaseOrderEditTab,
   purchaseOrderDetailTabs,
   type PurchaseOrderEditTab,
 } from "../../modules/purchaseOrders/purchaseOrderDetailTabs";
 import { supplierScoreTier } from "../../utils/supplierScoreBadge";
+
+/** Compact numeric cells in PO line / catalog tables. */
+const tableFieldClass = "min-w-[4rem] text-right tabular-nums";
 
 function catalogRowKey(row: SupplierProductCatalogItem): string {
   return row.row_uid || `legacy-p:${row.product_id ?? 0}`;
@@ -240,12 +254,6 @@ export default function PurchaseOrderEditPage() {
   const [lineDrafts, setLineDrafts] = useState<Record<number, LineDraft>>({});
   const [supplierInsight, setSupplierInsight] = useState<SupplierAnalyticsRow | null>(null);
   const [insightCatalog, setInsightCatalog] = useState<SupplierProductCatalogItem[]>([]);
-
-  const fieldLabel = "mb-1 block text-sm font-medium text-slate-700";
-  const inputClass =
-    "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-violet-400 focus:ring-2 focus:ring-violet-500";
-  const inputTableClass =
-    "w-full min-w-[4rem] rounded border border-slate-200 px-2 py-1 text-right text-sm tabular-nums focus:border-violet-400 focus:ring-1 focus:ring-violet-500";
 
   const reload = useCallback(async () => {
     if (orderId == null) throw new Error("missing order id");
@@ -844,13 +852,9 @@ export default function PurchaseOrderEditPage() {
 
   const pageFooter = (
     <div className="flex flex-wrap justify-end gap-2">
-      <button
-        type="button"
-        onClick={() => void navigate(listHref)}
-        className="rounded-lg border border-slate-200 px-4 py-2 text-slate-700 hover:bg-slate-50"
-      >
+      <SecondaryButton type="button" onClick={() => void navigate(listHref)}>
         Powrót do listy
-      </button>
+      </SecondaryButton>
     </div>
   );
 
@@ -965,25 +969,26 @@ export default function PurchaseOrderEditPage() {
 
       <div className="min-w-0">
           {tab === "basic" && order && (
-            <div className="space-y-4">
-              <div>
-                <label className={fieldLabel}>Nazwa zamówienia</label>
-                <input
+            <div className={formStackClass}>
+              <FormField label="Nazwa zamówienia">
+                <Input
                   type="text"
-                  className={inputClass}
                   value={orderName}
                   onChange={(e) => setOrderName(e.target.value)}
                   placeholder="np. Dostawa Adidas 06.04"
                   maxLength={512}
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
                 />
-              </div>
-              <div>
-                <label className={fieldLabel}>Dostawca</label>
-                <select
-                  className={inputClass}
+              </FormField>
+              <FormField label="Dostawca">
+                <Select
                   value={supplierId || ""}
                   onChange={(e) => setSupplierId(Number(e.target.value))}
                   disabled={linesLocked}
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                  className="bg-white"
                 >
                   {suppliers.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -991,22 +996,27 @@ export default function PurchaseOrderEditPage() {
                       {!s.active ? " (nieaktywny)" : ""}
                     </option>
                   ))}
-                </select>
-              </div>
-              <div>
-                <label className={fieldLabel}>Oczekiwana data</label>
-                <input
+                </Select>
+              </FormField>
+              <FormField label="Oczekiwana data">
+                <Input
                   type="datetime-local"
-                  className={inputClass}
                   value={expectedDate}
                   onChange={(e) => setExpectedDate(e.target.value)}
                   disabled={linesLocked}
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
                 />
-              </div>
-              <div>
-                <label className={fieldLabel}>Notatki</label>
-                <textarea className={`${inputClass} min-h-[80px]`} value={notes} onChange={(e) => setNotes(e.target.value)} />
-              </div>
+              </FormField>
+              <FormField label="Notatki">
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={3}
+                  density={FORM_FIELD_DENSITY}
+                  focusTone="brand"
+                />
+              </FormField>
 
               {belowMinimum ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
@@ -1016,14 +1026,9 @@ export default function PurchaseOrderEditPage() {
               ) : null}
 
               <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={savingHeader}
-                  onClick={() => void saveHeaderData()}
-                  className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50"
-                >
+                <PrimaryButton type="button" disabled={savingHeader} onClick={() => void saveHeaderData()}>
                   {savingHeader ? "Zapisywanie…" : "Zapisz dane"}
-                </button>
+                </PrimaryButton>
 
                 {order.status === "draft" ? (
                   <PrimaryButton
@@ -1093,10 +1098,8 @@ export default function PurchaseOrderEditPage() {
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Dodaj pozycję</p>
                 
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <label className="flex flex-col gap-1">
-                    <span className="text-xs text-slate-600">Producent (opcjonalnie)</span>
-                    <select
-                      className={inputClass}
+                  <FormField label="Producent (opcjonalnie)">
+                    <Select
                       value={manufacturerFilterId || ""}
                       onChange={(e) => {
                         const v = Number(e.target.value);
@@ -1104,6 +1107,9 @@ export default function PurchaseOrderEditPage() {
                         setProductSearch("");
                       }}
                       disabled={linesLocked || supplierId < 1}
+                      density={FORM_FIELD_DENSITY}
+                      focusTone="brand"
+                      className="bg-white"
                     >
                       <option value="">Wszyscy producenci</option>
                       {manufacturersCatalog.map((m) => (
@@ -1112,8 +1118,8 @@ export default function PurchaseOrderEditPage() {
                           {!m.active ? " (nieaktywny)" : ""}
                         </option>
                       ))}
-                    </select>
-                  </label>
+                    </Select>
+                  </FormField>
                   <div className="flex flex-col gap-1 sm:col-span-2">
                     <span className="text-xs text-slate-600">Zakres oferty</span>
                     <div className="flex flex-wrap gap-1.5">
@@ -1132,7 +1138,7 @@ export default function PurchaseOrderEditPage() {
                           onClick={() => setCatalogScope(val)}
                           className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-40 ${
                             catalogScope === val
-                              ? "border-violet-500 bg-violet-50 text-violet-900"
+                              ? "border-orange-500 bg-orange-50 text-orange-900"
                               : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                           }`}
                         >
@@ -1141,10 +1147,8 @@ export default function PurchaseOrderEditPage() {
                       ))}
                     </div>
                   </div>
-                  <label className="flex flex-col gap-1 sm:col-span-2">
-                    <span className="text-xs text-slate-600">Szukaj w ofercie (nazwa, SKU, EAN)</span>
-                    <input
-                      className={inputClass}
+                  <FormField label="Szukaj w ofercie (nazwa, SKU, EAN)" className="sm:col-span-2">
+                    <Input
                       placeholder="Filtruj ofertę: nazwa, SKU lub EAN…"
                       value={productSearch}
                       onChange={(e) => {
@@ -1152,16 +1156,16 @@ export default function PurchaseOrderEditPage() {
                       }}
                       autoComplete="off"
                       disabled={linesLocked || supplierId < 1}
+                      density={FORM_FIELD_DENSITY}
+                      focusTone="brand"
                     />
-                  </label>
+                  </FormField>
                   <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-700 sm:col-span-2">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={hideAlreadyAdded}
                       onChange={(e) => {
                         setHideAlreadyAdded(e.target.checked);
                       }}
-                      className="rounded border-slate-300 text-violet-600 focus:ring-violet-500"
                       disabled={linesLocked || supplierId < 1}
                     />
                     Ukryj już dodane pozycje
@@ -1191,8 +1195,8 @@ export default function PurchaseOrderEditPage() {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {visibleTopProducts.length > 0 ? (
-                          <tr className="bg-violet-50/90">
-                            <td colSpan={9} className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-violet-800">
+                          <tr className="bg-orange-50/90">
+                            <td colSpan={9} className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-orange-900">
                               Najczęściej kupowane
                             </td>
                           </tr>
@@ -1207,7 +1211,6 @@ export default function PurchaseOrderEditPage() {
                             onAdd={() => void addLineForCatalogRow(row)}
                             addFlash={addFlashCatalogKey === catalogRowKey(row)}
                             busyItem={busyItem}
-                            inputTableClass={inputTableClass}
                             fmtMoney={fmtMoney}
                             popularTag
                           />
@@ -1229,7 +1232,6 @@ export default function PurchaseOrderEditPage() {
                             onAdd={() => void addLineForCatalogRow(row)}
                             addFlash={addFlashCatalogKey === catalogRowKey(row)}
                             busyItem={busyItem}
-                            inputTableClass={inputTableClass}
                             fmtMoney={fmtMoney}
                           />
                         ))}
@@ -1350,8 +1352,10 @@ export default function PurchaseOrderEditPage() {
                               {linesLocked ? (
                                 <span className="tabular-nums">{it.quantity_ordered}</span>
                               ) : (
-                                <input
-                                  className={inputTableClass}
+                                <Input
+                                  className={tableFieldClass}
+                                  density="compact"
+                                  focusTone="brand"
                                   value={draft.qty}
                                   onChange={(e) => {
                                     const qty = e.target.value;
@@ -1397,8 +1401,10 @@ export default function PurchaseOrderEditPage() {
                               {linesLocked ? (
                                 <span className="tabular-nums">{it.purchase_price != null ? fmtMoney(it.purchase_price) : "—"}</span>
                               ) : (
-                                <input
-                                  className={inputTableClass}
+                                <Input
+                                  className={tableFieldClass}
+                                  density="compact"
+                                  focusTone="brand"
                                   value={draft.price}
                                   placeholder="—"
                                   onChange={(e) => {
@@ -1429,7 +1435,7 @@ export default function PurchaseOrderEditPage() {
                                   {it.purchase_price_manual ? (
                                     <button
                                       type="button"
-                                      className="mt-1 block text-left text-[10px] font-medium text-violet-700 hover:underline"
+                                      className={`mt-1 block text-left text-[10px] ${brandLinkButtonClass}`}
                                       disabled={busyItem}
                                       onClick={() => void restoreLineCatalogPrice(it.id)}
                                     >
@@ -1447,8 +1453,10 @@ export default function PurchaseOrderEditPage() {
                                     : "—"}
                                 </span>
                               ) : (
-                                <input
-                                  className={inputTableClass}
+                                <Input
+                                  className={tableFieldClass}
+                                  density="compact"
+                                  focusTone="brand"
                                   value={draft.gross}
                                   placeholder="—"
                                   onChange={(e) => {
@@ -1524,7 +1532,6 @@ type CatalogOfferAddRowProps = {
   onAdd: () => void;
   addFlash: boolean;
   busyItem: boolean;
-  inputTableClass: string;
   fmtMoney: (n: number) => string;
   popularTag?: boolean;
 };
@@ -1537,7 +1544,6 @@ function CatalogOfferAddRow({
   onAdd,
   addFlash,
   busyItem,
-  inputTableClass,
   fmtMoney,
   popularTag,
 }: CatalogOfferAddRowProps) {
@@ -1558,11 +1564,11 @@ function CatalogOfferAddRow({
   const resv = row.stock_reserved;
   return (
     <tr
-      className={`align-middle transition-colors ${addFlash ? "bg-emerald-50" : "bg-white"} ${popularTag ? "ring-1 ring-inset ring-violet-100/60" : ""}`}
+      className={`align-middle transition-colors ${addFlash ? "bg-emerald-50" : "bg-white"} ${popularTag ? "ring-1 ring-inset ring-orange-100/70" : ""}`}
     >
       <td className="px-2 py-2">
         {popularTag ? (
-          <span className="mb-1 inline-block rounded bg-violet-600 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
+          <span className="mb-1 inline-block rounded bg-orange-500 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
             Top
           </span>
         ) : null}
@@ -1602,8 +1608,10 @@ function CatalogOfferAddRow({
         {resv != null && resv > 0.0001 ? <div className="text-slate-500">Rez. {fmtCatalogStock(resv)}</div> : null}
       </td>
       <td className="px-1 py-2 text-right">
-        <input
-          className={inputTableClass}
+        <Input
+          className={tableFieldClass}
+          density="compact"
+          focusTone="brand"
           value={draft.qty}
           onChange={(e) => patchInlineCatalogDraft(row, "qty", e.target.value)}
           inputMode="decimal"
@@ -1611,8 +1619,10 @@ function CatalogOfferAddRow({
         />
       </td>
       <td className="px-1 py-2 text-right align-top">
-        <input
-          className={inputTableClass}
+        <Input
+          className={tableFieldClass}
+          density="compact"
+          focusTone="brand"
           value={draft.net}
           placeholder="—"
           onChange={(e) => patchInlineCatalogDraft(row, "net", e.target.value)}
@@ -1626,8 +1636,10 @@ function CatalogOfferAddRow({
         ) : null}
       </td>
       <td className="px-1 py-2 text-right">
-        <input
-          className={inputTableClass}
+        <Input
+          className={tableFieldClass}
+          density="compact"
+          focusTone="brand"
           value={draft.gross}
           placeholder="—"
           onChange={(e) => patchInlineCatalogDraft(row, "gross", e.target.value)}
@@ -1636,8 +1648,10 @@ function CatalogOfferAddRow({
         />
       </td>
       <td className="px-1 py-2 text-right">
-        <input
-          className={`${inputTableClass} w-[3.4rem] min-w-0 pl-0.5 pr-0.5`}
+        <Input
+          className={`${tableFieldClass} w-[3.4rem] min-w-0 pl-0.5 pr-0.5`}
+          density="compact"
+          focusTone="brand"
           value={draft.disc}
           onChange={(e) => patchInlineCatalogDraft(row, "disc", e.target.value)}
           inputMode="decimal"

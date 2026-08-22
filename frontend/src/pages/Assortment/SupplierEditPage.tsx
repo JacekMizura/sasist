@@ -22,7 +22,20 @@ import {
   SUPPLIER_CURRENCIES,
   type SupplierCurrencyCode,
 } from "../../constants/supplierTaxonomy";
-import { PrimaryButton } from "../../design-system/PrimaryButton";
+import {
+  brandLinkTextClass,
+  brandSoftRowHoverClass,
+  Checkbox,
+  FormField,
+  FormSection,
+  FORM_FIELD_DENSITY,
+  formStackClass,
+  Input,
+  PrimaryButton,
+  SecondaryButton,
+  Select,
+  Textarea,
+} from "../../design-system";
 import {
   parseSupplierEditTab,
   supplierDetailTabs,
@@ -30,14 +43,8 @@ import {
 } from "../../modules/suppliers/supplierDetailTabs";
 import { taxIdValidationMessage } from "../../utils/taxIdOptional";
 
-function Card({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`border-t border-slate-100 pt-4 ${className}`}>
-      <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</h4>
-      <div className="mt-3 space-y-3">{children}</div>
-    </div>
-  );
-}
+/** Compact numeric cells in supplier product link table. */
+const tableFieldClass = "min-w-[4rem] tabular-nums";
 
 type ProductSearchHit = {
   id: number;
@@ -111,12 +118,6 @@ export default function SupplierEditPage() {
     () => searchHits.filter((h) => !assignedProductIds.has(h.id)),
     [searchHits, assignedProductIds],
   );
-
-  const fieldLabel = "mb-1 block text-sm font-medium text-slate-700";
-  const inputClass =
-    "w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 focus:border-violet-400 focus:ring-2 focus:ring-violet-500";
-  const inputTableClass =
-    "w-full min-w-[4rem] rounded border border-slate-200 px-2 py-1 text-sm tabular-nums focus:border-violet-400 focus:ring-1 focus:ring-violet-500";
 
   const reset = useCallback(() => {
     setLoadErr(null);
@@ -550,13 +551,9 @@ export default function SupplierEditPage() {
 
   const saveFooter = (
     <div className="flex flex-wrap justify-end gap-2">
-      <button
-        type="button"
-        onClick={() => void navigate(listHref)}
-        className="rounded-lg border border-slate-200 px-4 py-2 text-slate-700 hover:bg-slate-50"
-      >
+      <SecondaryButton type="button" onClick={() => void navigate(listHref)}>
         Anuluj
-      </button>
+      </SecondaryButton>
       {tab !== "products" && tab !== "stats" && tab !== "history" ? (
         <PrimaryButton type="submit" form="supplier-edit-form" disabled={saving || !!loadErr}>
           {saving ? "Zapisywanie…" : isNew ? "Utwórz" : "Zapisz"}
@@ -573,13 +570,14 @@ export default function SupplierEditPage() {
         {linksErr ? <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{linksErr}</div> : null}
         <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Dodaj produkt</p>
-          <input
-            className={inputClass}
+          <Input
             placeholder="Szukaj produktu (nazwa, SKU, EAN)…"
             value={productSearch}
             onChange={(e) => setProductSearch(e.target.value)}
             autoComplete="off"
             disabled={busyLink || linksLoading}
+            density={FORM_FIELD_DENSITY}
+            focusTone="brand"
           />
           {productSearch.trim().length >= 2 && searchHits.length > 0 && visibleSearchHits.length === 0 ? (
             <p className="text-xs text-slate-600">Wszystkie znalezione produkty są już przypisane do tego dostawcy.</p>
@@ -591,7 +589,7 @@ export default function SupplierEditPage() {
                   <button
                     type="button"
                     disabled={busyLink}
-                    className="flex w-full items-center gap-2 px-2 py-1.5 text-left hover:bg-violet-50 disabled:opacity-50"
+                    className={`flex w-full items-center gap-2 px-2 py-1.5 text-left ${brandSoftRowHoverClass} disabled:opacity-50`}
                     onClick={() => void addProductLink(h)}
                   >
                     <SupplierProductThumb
@@ -611,12 +609,12 @@ export default function SupplierEditPage() {
           ) : null}
         </div>
         {!linksLoading && links.length > 0 ? (
-          <div className="flex flex-wrap items-end gap-3 rounded-lg border border-violet-200 bg-violet-50/40 px-3 py-3">
+          <div className="flex flex-wrap items-end gap-3 rounded-lg border border-orange-200 bg-orange-50/40 px-3 py-3">
             <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
               <input
                 ref={bulkSelectAllRef}
                 type="checkbox"
-                className="rounded border-slate-300 text-violet-600"
+                className="h-3.5 w-3.5 shrink-0 rounded border-slate-300 text-slate-800 focus:ring-1 focus:ring-slate-400/50"
                 checked={links.length > 0 && selectedCount === links.length}
                 disabled={busyLink}
                 onChange={() => toggleSelectAllLinks()}
@@ -629,8 +627,10 @@ export default function SupplierEditPage() {
             </span>
             <div className="flex min-w-[6rem] flex-col gap-0.5">
               <label className="text-xs font-medium text-slate-600">Cena netto</label>
-              <input
-                className={inputTableClass}
+              <Input
+                className={tableFieldClass}
+                density="compact"
+                focusTone="brand"
                 value={bulkNetPrice}
                 onChange={(e) => setBulkNetPrice(e.target.value)}
                 placeholder="—"
@@ -640,8 +640,10 @@ export default function SupplierEditPage() {
             </div>
             <div className="flex min-w-[5rem] flex-col gap-0.5">
               <label className="text-xs font-medium text-slate-600">Czas realizacji</label>
-              <input
-                className={inputTableClass}
+              <Input
+                className={tableFieldClass}
+                density="compact"
+                focusTone="brand"
                 type="number"
                 min={0}
                 value={bulkLeadDays}
@@ -652,8 +654,10 @@ export default function SupplierEditPage() {
             </div>
             <div className="flex min-w-[5rem] flex-col gap-0.5">
               <label className="text-xs font-medium text-slate-600">Min. ilość</label>
-              <input
-                className={inputTableClass}
+              <Input
+                className={tableFieldClass}
+                density="compact"
+                focusTone="brand"
                 value={bulkMoq}
                 onChange={(e) => setBulkMoq(e.target.value)}
                 placeholder="—"
@@ -706,7 +710,7 @@ export default function SupplierEditPage() {
                     busy={busyLink}
                     selected={selectedLinkIds.has(row.id)}
                     onToggleSelected={() => toggleLinkSelected(row.id)}
-                    inputTableClass={inputTableClass}
+                    inputTableClass={tableFieldClass}
                     onPatch={(body) => void patchLinkField(row.id, body)}
                     onRemove={() => void removeLink(row.id)}
                   />
@@ -737,196 +741,260 @@ export default function SupplierEditPage() {
       {tab === "products" ? (
         <div className="min-w-0">{productsPanel}</div>
       ) : (
-        <form id="supplier-edit-form" className="space-y-4" onSubmit={handleSubmit}>
+        <form id="supplier-edit-form" className={formStackClass} onSubmit={handleSubmit}>
           <div className="min-w-0">
             {tab === "basic" && (
-              <div className="space-y-6">
-                <Card title="Dane podstawowe">
-                  <div>
-                    <label className={fieldLabel}>Krótka nazwa *</label>
-                    <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} required />
+              <div className={`${formStackClass} space-y-6`}>
+                <FormSection title="Dane podstawowe">
+                  <div className={formStackClass}>
+                    <FormField label="Krótka nazwa *">
+                      <Input
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        required
+                        density={FORM_FIELD_DENSITY}
+                        focusTone="brand"
+                      />
+                    </FormField>
+                    <FormField label="Pełna nazwa firmy">
+                      <Input
+                        value={companyName}
+                        onChange={(e) => setCompanyName(e.target.value)}
+                        placeholder="np. nazwa prawna na fakturze"
+                        density={FORM_FIELD_DENSITY}
+                        focusTone="brand"
+                      />
+                    </FormField>
+                    <FormField label="NIP">
+                      <Input
+                        value={taxId}
+                        onChange={(e) => setTaxId(e.target.value)}
+                        placeholder="opcjonalnie"
+                        density={FORM_FIELD_DENSITY}
+                        focusTone="brand"
+                      />
+                    </FormField>
+                    <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                      <Checkbox checked={active} onChange={(e) => setActive(e.target.checked)} />
+                      Aktywny
+                    </label>
                   </div>
-                  <div>
-                    <label className={fieldLabel}>Pełna nazwa firmy</label>
-                    <input
-                      className={inputClass}
-                      value={companyName}
-                      onChange={(e) => setCompanyName(e.target.value)}
-                      placeholder="np. nazwa prawna na fakturze"
-                    />
+                </FormSection>
+                <FormSection title="Adres">
+                  <div className={formStackClass}>
+                    <FormField
+                      label="Kraj"
+                      helperText={
+                        country && SUPPLIER_COUNTRY_VALUES.has(country)
+                          ? `UE (VAT): ${SUPPLIER_COUNTRIES.find((x) => x.value === country)?.isEu ? "tak" : "nie"}`
+                          : undefined
+                      }
+                    >
+                      <Select
+                        value={country}
+                        onChange={(e) => setCountry(e.target.value)}
+                        density={FORM_FIELD_DENSITY}
+                        focusTone="brand"
+                        className="bg-white"
+                      >
+                        <option value="">—</option>
+                        {SUPPLIER_COUNTRIES.map((c) => (
+                          <option key={c.value} value={c.value}>
+                            {c.label}
+                          </option>
+                        ))}
+                        {country && !SUPPLIER_COUNTRY_VALUES.has(country) ? (
+                          <option value={country}>{country} (zapis spoza listy — wybierz kraj z listy i zapisz)</option>
+                        ) : null}
+                      </Select>
+                    </FormField>
+                    <FormField label="Miasto">
+                      <Input
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        density={FORM_FIELD_DENSITY}
+                        focusTone="brand"
+                      />
+                    </FormField>
+                    <FormField label="Kod pocztowy">
+                      <Input
+                        value={postalCode}
+                        onChange={(e) => setPostalCode(e.target.value)}
+                        density={FORM_FIELD_DENSITY}
+                        focusTone="brand"
+                      />
+                    </FormField>
+                    <FormField label="Ulica i numer">
+                      <Textarea
+                        value={street}
+                        onChange={(e) => setStreet(e.target.value)}
+                        rows={3}
+                        density={FORM_FIELD_DENSITY}
+                        focusTone="brand"
+                      />
+                    </FormField>
+                    <FormField label="Adres">
+                      <Textarea
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        rows={2}
+                        density={FORM_FIELD_DENSITY}
+                        focusTone="brand"
+                      />
+                    </FormField>
                   </div>
-                  <div>
-                    <label className={fieldLabel}>NIP</label>
-                    <input className={inputClass} value={taxId} onChange={(e) => setTaxId(e.target.value)} placeholder="opcjonalnie" />
-                  </div>
-                  <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-                    <input
-                      type="checkbox"
-                      className="rounded border-slate-300 text-violet-600"
-                      checked={active}
-                      onChange={(e) => setActive(e.target.checked)}
-                    />
-                    Aktywny
-                  </label>
-                </Card>
-                <Card title="Adres">
-                  <div>
-                    <label className={fieldLabel}>Kraj</label>
-                    <select className={inputClass} value={country} onChange={(e) => setCountry(e.target.value)}>
-                      <option value="">—</option>
-                      {SUPPLIER_COUNTRIES.map((c) => (
-                        <option key={c.value} value={c.value}>
-                          {c.label}
-                        </option>
-                      ))}
-                      {country && !SUPPLIER_COUNTRY_VALUES.has(country) ? (
-                        <option value={country}>{country} (zapis spoza listy — wybierz kraj z listy i zapisz)</option>
-                      ) : null}
-                    </select>
-                    {country && SUPPLIER_COUNTRY_VALUES.has(country) ? (
-                      <p className="mt-1 text-xs text-slate-500">
-                        UE (VAT): {SUPPLIER_COUNTRIES.find((x) => x.value === country)?.isEu ? "tak" : "nie"}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div>
-                    <label className={fieldLabel}>Miasto</label>
-                    <input className={inputClass} value={city} onChange={(e) => setCity(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className={fieldLabel}>Kod pocztowy</label>
-                    <input className={inputClass} value={postalCode} onChange={(e) => setPostalCode(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className={fieldLabel}>Ulica i numer</label>
-                    <textarea className={`${inputClass} min-h-[72px]`} value={street} onChange={(e) => setStreet(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className={fieldLabel}>Adres</label>
-                    <textarea className={`${inputClass} min-h-[64px]`} value={address} onChange={(e) => setAddress(e.target.value)} />
-                  </div>
-                </Card>
-                <Card title="Notatki">
-                  <textarea className={`${inputClass} min-h-[64px]`} value={notes} onChange={(e) => setNotes(e.target.value)} />
-                </Card>
+                </FormSection>
+                <FormSection title="Notatki">
+                  <Textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={2}
+                    density={FORM_FIELD_DENSITY}
+                    focusTone="brand"
+                  />
+                </FormSection>
               </div>
             )}
 
             {tab === "trade" && (
-              <Card title="Warunki handlowe">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-800">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5 rounded border-slate-300 text-violet-600"
-                      checked={offersFreeShipping}
-                      onChange={(e) => setOffersFreeShipping(e.target.checked)}
-                    />
-                    <span className="font-medium">Darmowa dostawa przy progu</span>
-                  </label>
-                  <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-800">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5 rounded border-slate-300 text-violet-600"
-                      checked={requiresMoq}
-                      onChange={(e) => setRequiresMoq(e.target.checked)}
-                    />
-                    <span className="font-medium">Minimalne zamówienie (MOQ / wartość)</span>
-                  </label>
+              <FormSection title="Warunki handlowe">
+                <div className={formStackClass}>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-800">
+                      <Checkbox
+                        className="mt-0.5"
+                        checked={offersFreeShipping}
+                        onChange={(e) => setOffersFreeShipping(e.target.checked)}
+                      />
+                      <span className="font-medium">Darmowa dostawa przy progu</span>
+                    </label>
+                    <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-800">
+                      <Checkbox
+                        className="mt-0.5"
+                        checked={requiresMoq}
+                        onChange={(e) => setRequiresMoq(e.target.checked)}
+                      />
+                      <span className="font-medium">Minimalne zamówienie (MOQ / wartość)</span>
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <FormField label="Domyślna waluta">
+                      <Select
+                        value={currency}
+                        onChange={(e) => setCurrency(e.target.value)}
+                        density={FORM_FIELD_DENSITY}
+                        focusTone="brand"
+                        className="bg-white"
+                      >
+                        <option value="">—</option>
+                        {SUPPLIER_CURRENCIES.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                        {currency && !SUPPLIER_CURRENCIES.includes(currency as SupplierCurrencyCode) ? (
+                          <option value={currency}>{currency} (spoza listy — wybierz walutę)</option>
+                        ) : null}
+                      </Select>
+                    </FormField>
+                    <FormField label="Domyślny czas dostawy (dni)">
+                      <Input
+                        type="number"
+                        min={0}
+                        value={leadDays}
+                        onChange={(e) => setLeadDays(e.target.value)}
+                        placeholder="np. 7"
+                        density={FORM_FIELD_DENSITY}
+                        focusTone="brand"
+                      />
+                    </FormField>
+                    <FormField label="Darmowa dostawa od (netto)">
+                      <Input
+                        className="disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                        value={freeShippingThreshold}
+                        onChange={(e) => setFreeShippingThreshold(e.target.value)}
+                        placeholder="np. 500"
+                        inputMode="decimal"
+                        disabled={!offersFreeShipping}
+                        density={FORM_FIELD_DENSITY}
+                        focusTone="brand"
+                      />
+                    </FormField>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <FormField label="Min. wartość zamówienia (netto)">
+                      <Input
+                        className="disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                        value={minOrder}
+                        onChange={(e) => setMinOrder(e.target.value)}
+                        placeholder="0"
+                        inputMode="decimal"
+                        disabled={!requiresMoq}
+                        density={FORM_FIELD_DENSITY}
+                        focusTone="brand"
+                      />
+                    </FormField>
+                    <FormField label="MOQ (min. ilość, szt.)">
+                      <Input
+                        type="number"
+                        min={0}
+                        step={1}
+                        className="disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                        value={moq}
+                        onChange={(e) => setMoq(e.target.value)}
+                        placeholder="opcjonalnie"
+                        disabled={!requiresMoq}
+                        density={FORM_FIELD_DENSITY}
+                        focusTone="brand"
+                      />
+                    </FormField>
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <div>
-                    <label className={fieldLabel}>Domyślna waluta</label>
-                    <select className={inputClass} value={currency} onChange={(e) => setCurrency(e.target.value)}>
-                      <option value="">—</option>
-                      {SUPPLIER_CURRENCIES.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                      {currency && !SUPPLIER_CURRENCIES.includes(currency as SupplierCurrencyCode) ? (
-                        <option value={currency}>{currency} (spoza listy — wybierz walutę)</option>
-                      ) : null}
-                    </select>
-                  </div>
-                  <div>
-                    <label className={fieldLabel}>Domyślny czas dostawy (dni)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      className={inputClass}
-                      value={leadDays}
-                      onChange={(e) => setLeadDays(e.target.value)}
-                      placeholder="np. 7"
-                    />
-                  </div>
-                  <div>
-                    <label className={fieldLabel}>Darmowa dostawa od (netto)</label>
-                    <input
-                      className={`${inputClass} disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400`}
-                      value={freeShippingThreshold}
-                      onChange={(e) => setFreeShippingThreshold(e.target.value)}
-                      placeholder="np. 500"
-                      inputMode="decimal"
-                      disabled={!offersFreeShipping}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className={fieldLabel}>Min. wartość zamówienia (netto)</label>
-                    <input
-                      className={`${inputClass} disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400`}
-                      value={minOrder}
-                      onChange={(e) => setMinOrder(e.target.value)}
-                      placeholder="0"
-                      inputMode="decimal"
-                      disabled={!requiresMoq}
-                    />
-                  </div>
-                  <div>
-                    <label className={fieldLabel}>MOQ (min. ilość, szt.)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      step={1}
-                      className={`${inputClass} disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400`}
-                      value={moq}
-                      onChange={(e) => setMoq(e.target.value)}
-                      placeholder="opcjonalnie"
-                      disabled={!requiresMoq}
-                    />
-                  </div>
-                </div>
-              </Card>
+              </FormSection>
             )}
 
             {tab === "contact" && (
-              <Card title="Kontakt">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className={fieldLabel}>E-mail</label>
-                    <input type="email" className={inputClass} value={email} onChange={(e) => setEmail(e.target.value)} />
+              <FormSection title="Kontakt">
+                <div className={formStackClass}>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <FormField label="E-mail">
+                      <Input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        density={FORM_FIELD_DENSITY}
+                        focusTone="brand"
+                      />
+                    </FormField>
+                    <FormField label="Telefon">
+                      <Input
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        density={FORM_FIELD_DENSITY}
+                        focusTone="brand"
+                      />
+                    </FormField>
                   </div>
-                  <div>
-                    <label className={fieldLabel}>Telefon</label>
-                    <input className={inputClass} value={phone} onChange={(e) => setPhone(e.target.value)} />
-                  </div>
+                  <FormField label="Strona WWW">
+                    <Input
+                      type="url"
+                      value={website}
+                      onChange={(e) => setWebsite(e.target.value)}
+                      density={FORM_FIELD_DENSITY}
+                      focusTone="brand"
+                    />
+                  </FormField>
                 </div>
-                <div>
-                  <label className={fieldLabel}>Strona WWW</label>
-                  <input type="url" className={inputClass} value={website} onChange={(e) => setWebsite(e.target.value)} />
-                </div>
-              </Card>
+              </FormSection>
             )}
 
             {tab === "stats" &&
               (isNew ? (
-                <Card title="Statystyki">
+                <FormSection title="Statystyki">
                   <p className="text-sm text-slate-600">Zapisz dostawcę, aby zobaczyć statystyki.</p>
-                </Card>
+                </FormSection>
               ) : loadedSupplier != null ? (
-                <Card title="Statystyki">
+                <FormSection title="Statystyki">
                   <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
                     <div className="rounded-lg bg-slate-50 px-3 py-2">
                       <dt className="text-xs font-medium text-slate-500">Produkty w ofercie</dt>
@@ -939,18 +1007,18 @@ export default function SupplierEditPage() {
                       <dd className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{loadedSupplier.delivery_count}</dd>
                     </div>
                   </dl>
-                </Card>
+                </FormSection>
               ) : (
                 <p className="text-sm text-slate-500">Wczytywanie…</p>
               ))}
 
             {tab === "history" &&
               (isNew ? (
-                <Card title="Historia współpracy">
+                <FormSection title="Historia współpracy">
                   <p className="text-sm text-slate-600">Zapisz dostawcę, aby zobaczyć historię współpracy.</p>
-                </Card>
+                </FormSection>
               ) : (
-                <Card title="Historia współpracy">
+                <FormSection title="Historia współpracy">
                   {historyLoading ? (
                     <p className="text-sm text-slate-500">Wczytywanie…</p>
                   ) : historySummary != null ? (
@@ -974,11 +1042,11 @@ export default function SupplierEditPage() {
                     <p className="text-sm text-slate-600">Brak danych historii dla tego dostawcy.</p>
                   )}
                   <p className="mt-4">
-                    <Link to={historyModuleHref} className="text-sm font-medium text-violet-700 hover:underline">
+                    <Link to={historyModuleHref} className={`text-sm ${brandLinkTextClass}`}>
                       Pełna historia współpracy →
                     </Link>
                   </p>
-                </Card>
+                </FormSection>
               ))}
 
             {saveErr ? <p className="mt-4 text-sm text-red-600">{saveErr}</p> : null}
@@ -1063,9 +1131,7 @@ function LinkRow({
   return (
     <tr className="border-t border-slate-100">
       <td className="px-2 py-2 align-middle text-center">
-        <input
-          type="checkbox"
-          className="rounded border-slate-300 text-violet-600"
+        <Checkbox
           checked={selected}
           disabled={busy}
           onChange={onToggleSelected}
@@ -1084,8 +1150,10 @@ function LinkRow({
       <td className="px-3 py-2 align-middle font-mono text-xs text-slate-700">{(row.ean ?? "").trim() || "—"}</td>
       <td className="px-3 py-2 align-middle font-mono text-xs text-slate-700">{(row.sku ?? "").trim() || "—"}</td>
       <td className="px-3 py-2 text-right align-middle">
-        <input
+        <Input
           className={inputTableClass}
+          density="compact"
+          focusTone="brand"
           value={price}
           onChange={(e) => setPrice(e.target.value)}
           onBlur={commitPrice}
@@ -1094,8 +1162,10 @@ function LinkRow({
         />
       </td>
       <td className="px-3 py-2 text-right align-middle">
-        <input
+        <Input
           className={inputTableClass}
+          density="compact"
+          focusTone="brand"
           value={lead}
           onChange={(e) => setLead(e.target.value)}
           onBlur={commitLead}
@@ -1104,8 +1174,10 @@ function LinkRow({
         />
       </td>
       <td className="px-3 py-2 text-right align-middle">
-        <input
+        <Input
           className={inputTableClass}
+          density="compact"
+          focusTone="brand"
           value={moq}
           onChange={(e) => setMoq(e.target.value)}
           onBlur={commitMoq}
