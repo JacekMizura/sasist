@@ -8,8 +8,17 @@ import {
   type FamilyGeneratePreview,
 } from "../../../api/productFamiliesApi";
 import { extractApiErrorMessage } from "../../../api/authApi";
-import { Checkbox, GhostButton, PrimaryButton, Select } from "../../../design-system";
-import { pimFieldLabelClass, pimPanelClass, pimStatTileClass } from "../pimUi";
+import {
+  Checkbox,
+  FormField,
+  FormLabel,
+  FormSection,
+  FORM_FIELD_DENSITY,
+  GhostButton,
+  PrimaryButton,
+  Select,
+} from "../../../design-system";
+import { pimStatTileClass } from "../pimUi";
 
 type Props = {
   tenantId: number;
@@ -127,24 +136,35 @@ export function ProductFamilyGeneratorPanel({
     }
   };
 
+  const sectionProps = embedded
+    ? { flat: true as const, className: "mt-4" }
+    : {
+        title: "Generator produktów",
+        description:
+          "Tworzy brakujące kombinacje cech. SKU / katalog — wg kategorii produktu bazowego.",
+      };
+
   if (loading) {
     return (
-      <section className={embedded ? "mt-4 border-t border-slate-100 pt-4" : pimPanelClass}>
+      <FormSection {...sectionProps}>
         <p className="text-sm text-slate-500">Ładowanie generatora…</p>
-      </section>
+      </FormSection>
     );
   }
   if (!preview) return null;
 
   return (
-    <section className={embedded ? "mt-4 border-t border-slate-100 pt-4" : pimPanelClass}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+    <FormSection {...sectionProps}>
+      {embedded ? (
+        <div className="mb-4">
           <h2 className="text-sm font-semibold text-slate-900">Generator produktów</h2>
           <p className="mt-0.5 text-xs text-slate-500">
             Tworzy brakujące kombinacje cech. SKU / katalog — wg kategorii produktu bazowego.
           </p>
         </div>
+      ) : null}
+
+      <div className="mb-4 flex flex-wrap justify-end gap-2">
         <PrimaryButton
           type="button"
           density="compact"
@@ -155,7 +175,7 @@ export function ProductFamilyGeneratorPanel({
         </PrimaryButton>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className={pimStatTileClass}>
           <p className="text-xs text-slate-500">Brakujące kombinacje</p>
           <p className="mt-1 text-xl font-semibold tabular-nums text-amber-700">{preview.missing_count}</p>
@@ -182,12 +202,20 @@ export function ProductFamilyGeneratorPanel({
       ) : null}
 
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-12">
-        <label className="block lg:col-span-4">
-          <span className={pimFieldLabelClass}>Tryb tworzenia</span>
+        <FormField
+          label="Tryb tworzenia"
+          className="lg:col-span-4"
+          helperText={
+            preview.base_product
+              ? `Źródło: ${preview.base_product.name} (#${preview.base_product.id})`
+              : undefined
+          }
+        >
           <Select
             value={mode}
             disabled={busy}
             onChange={(e) => setMode(e.target.value as FamilyGenerateMode)}
+            density={FORM_FIELD_DENSITY}
             className="bg-white"
           >
             <option value="copy_base" disabled={!preview.has_base_product}>
@@ -195,12 +223,7 @@ export function ProductFamilyGeneratorPanel({
             </option>
             <option value="empty">Puste produkty</option>
           </Select>
-          {preview.base_product ? (
-            <p className="mt-1 text-xs text-slate-500">
-              Źródło: {preview.base_product.name} (#{preview.base_product.id})
-            </p>
-          ) : null}
-        </label>
+        </FormField>
         <div className="flex flex-wrap items-end gap-2 lg:col-span-8">
           <GhostButton type="button" density="compact" disabled={busy || !missingKeys.length} onClick={selectAllMissing}>
             Zaznacz wszystkie brakujące
@@ -212,7 +235,7 @@ export function ProductFamilyGeneratorPanel({
       </div>
 
       <div className="mt-4">
-        <p className={pimFieldLabelClass}>Brakujące kombinacje</p>
+        <FormLabel>Brakujące kombinacje</FormLabel>
         {missing.length === 0 ? (
           <p className="mt-2 text-sm text-slate-500">
             {preview.combinations.length === 0
@@ -237,6 +260,6 @@ export function ProductFamilyGeneratorPanel({
           </ul>
         )}
       </div>
-    </section>
+    </FormSection>
   );
 }

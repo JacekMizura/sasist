@@ -4,9 +4,15 @@ import { ExternalLink, Plus, Search } from "lucide-react";
 
 import type { ProductFamilyMember } from "../../../api/productFamiliesApi";
 import type { ProductSearchHit } from "../../../api/productsSearchApi";
-import { IconButton, Input, PrimaryButton, SecondaryButton } from "../../../design-system";
+import {
+  FormSection,
+  FORM_FIELD_DENSITY,
+  IconButton,
+  Input,
+  PrimaryButton,
+  SecondaryButton,
+} from "../../../design-system";
 import { getProductDetailsPath } from "../../Products/productPaths";
-import { pimPanelClass } from "../pimUi";
 import { FamilyProductSearchField } from "./FamilyProductSearchField";
 
 type Props = {
@@ -43,44 +49,37 @@ export function FamilyEditMembersCard({ tenantId, familyId, members, attachBusy,
     });
   }, [members, query]);
 
+  const countLabel = `${filtered.length}${query.trim() ? ` z ${members.length}` : ""} produktów`;
+
   return (
-    <section className={pimPanelClass}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-slate-900">Produkty rodziny</h2>
-          <p className="mt-0.5 text-xs text-slate-500">
-            {filtered.length}
-            {query.trim() ? ` z ${members.length}` : ""} produktów
-          </p>
+    <FormSection title="Produkty rodziny" description={countLabel}>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="relative min-w-[200px]">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Input
+            className="pl-9"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Szukaj w rodzinie…"
+            density={FORM_FIELD_DENSITY}
+            focusTone="brand"
+            aria-label="Szukaj produktów w rodzinie"
+          />
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-[200px]">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              className="pl-9"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Szukaj w rodzinie…"
-              density="comfortable"
-              focusTone="brand"
-              aria-label="Szukaj produktów w rodzinie"
-            />
-          </div>
-          <PrimaryButton type="button" density="compact" onClick={() => setAttachOpen((v) => !v)}>
-            <Plus className="mr-1.5 h-4 w-4" strokeWidth={2.5} aria-hidden />
-            Dołącz produkt
-          </PrimaryButton>
-          <SecondaryButton
-            type="button"
-            density="compact"
-            onClick={() =>
-              navigate(`/products/new?tenant_id=${tenantId}&product_family_id=${familyId}`)
-            }
-          >
-            <Plus className="mr-1.5 h-4 w-4" strokeWidth={2.5} aria-hidden />
-            Nowy produkt
-          </SecondaryButton>
-        </div>
+        <PrimaryButton type="button" density="compact" onClick={() => setAttachOpen((v) => !v)}>
+          <Plus className="mr-1.5 h-4 w-4" strokeWidth={2.5} aria-hidden />
+          Dołącz produkt
+        </PrimaryButton>
+        <SecondaryButton
+          type="button"
+          density="compact"
+          onClick={() =>
+            navigate(`/products/new?tenant_id=${tenantId}&product_family_id=${familyId}`)
+          }
+        >
+          <Plus className="mr-1.5 h-4 w-4" strokeWidth={2.5} aria-hidden />
+          Nowy produkt
+        </SecondaryButton>
       </div>
 
       {attachOpen ? (
@@ -164,6 +163,6 @@ export function FamilyEditMembersCard({ tenantId, familyId, members, attachBusy,
           </table>
         </div>
       )}
-    </section>
+    </FormSection>
   );
 }

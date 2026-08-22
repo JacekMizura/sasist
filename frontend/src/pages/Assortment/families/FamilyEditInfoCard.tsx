@@ -1,7 +1,14 @@
-import { Checkbox, Input } from "../../../design-system";
+import {
+  Checkbox,
+  FormField,
+  FormSection,
+  FORM_FIELD_DENSITY,
+  formStackClass,
+  Input,
+} from "../../../design-system";
 import { FamilyProductSearchField } from "./FamilyProductSearchField";
 import type { ProductSearchHit } from "../../../api/productsSearchApi";
-import { pimFieldLabelClass, pimPanelClass, pimStatTileClass } from "../pimUi";
+import { pimStatTileClass } from "../pimUi";
 
 type Props = {
   name: string;
@@ -38,22 +45,19 @@ export function FamilyEditInfoCard({
   missingCount,
 }: Props) {
   return (
-    <section className={pimPanelClass}>
-      <h2 className="text-sm font-semibold text-slate-900">Informacje</h2>
-      <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <div className="space-y-4 lg:col-span-7">
-          <label className="block">
-            <span className={pimFieldLabelClass}>Nazwa rodziny</span>
+    <FormSection title="Informacje">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className={`${formStackClass} lg:col-span-7`}>
+          <FormField label="Nazwa rodziny">
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="np. Sznurowadła CAT"
-              density="comfortable"
+              density={FORM_FIELD_DENSITY}
               focusTone="brand"
             />
-          </label>
-          <div>
-            <span className={pimFieldLabelClass}>Produkt bazowy</span>
+          </FormField>
+          <FormField label="Produkt bazowy">
             {tenantId != null ? (
               <FamilyProductSearchField
                 tenantId={tenantId}
@@ -65,7 +69,7 @@ export function FamilyEditInfoCard({
             ) : (
               <p className="text-sm text-slate-400">Ładowanie…</p>
             )}
-          </div>
+          </FormField>
           <label className="inline-flex items-center gap-2 text-sm text-slate-700">
             <Checkbox checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
             Rodzina aktywna
@@ -91,6 +95,6 @@ export function FamilyEditInfoCard({
           </div>
         </div>
       </div>
-    </section>
+    </FormSection>
   );
 }

@@ -7,8 +7,15 @@ import {
 } from "../../../api/productCategoriesApi";
 import { previewProductCode } from "../../../api/productCodesApi";
 import { extractApiErrorMessage } from "../../../api/authApi";
-import { Input, PrimaryButton } from "../../../design-system";
-import { pimFieldLabelClass, pimHintClass, pimPanelClass, pimStatTileClass } from "../pimUi";
+import {
+  FormField,
+  FormHelperText,
+  FormSection,
+  FORM_FIELD_DENSITY,
+  Input,
+  PrimaryButton,
+} from "../../../design-system";
+import { pimStatTileClass } from "../pimUi";
 
 const DEFAULT_TPL = "{CODE}-{NNNNN}";
 
@@ -100,57 +107,51 @@ export function CategoryEditNumberingTab({ tenantId, category, onSaved }: Props)
 
   return (
     <div className="max-w-3xl space-y-4">
-      <section className={pimPanelClass}>
-        <h2 className="text-sm font-semibold text-slate-900">Numeracja SKU i katalogowa</h2>
-        <p className={pimHintClass}>
-          Liczniki są osobne per prefiks/szablon. Podgląd pochodzi z centralnego serwisu product_codes.
-        </p>
-
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className={pimFieldLabelClass}>Kod SKU</label>
+      <FormSection
+        title="Numeracja SKU i katalogowa"
+        description="Liczniki są osobne per prefiks/szablon. Podgląd pochodzi z centralnego serwisu product_codes."
+      >
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormField label="Kod SKU">
             <Input
               value={skuCode}
               onChange={(e) => setSkuCode(e.target.value.toUpperCase())}
               className="font-mono"
               placeholder="np. SZN"
-              density="comfortable"
+              density={FORM_FIELD_DENSITY}
               focusTone="brand"
             />
-          </div>
-          <div>
-            <label className={pimFieldLabelClass}>Kod numeru katalogowego</label>
+          </FormField>
+          <FormField label="Kod numeru katalogowego">
             <Input
               value={catalogCode}
               onChange={(e) => setCatalogCode(e.target.value.toUpperCase())}
               className="font-mono"
               placeholder="np. SZN"
-              density="comfortable"
+              density={FORM_FIELD_DENSITY}
               focusTone="brand"
             />
-          </div>
-          <div>
-            <label className={pimFieldLabelClass}>Szablon SKU</label>
+          </FormField>
+          <FormField label="Szablon SKU">
             <Input
               value={skuTemplate}
               onChange={(e) => setSkuTemplate(e.target.value)}
               className="font-mono text-xs"
               placeholder="{CODE}-{NNNNN}"
-              density="comfortable"
+              density={FORM_FIELD_DENSITY}
               focusTone="brand"
             />
-          </div>
-          <div>
-            <label className={pimFieldLabelClass}>Szablon numeru katalogowego</label>
+          </FormField>
+          <FormField label="Szablon numeru katalogowego">
             <Input
               value={catalogTemplate}
               onChange={(e) => setCatalogTemplate(e.target.value)}
               className="font-mono text-xs"
               placeholder="{CODE}-{NNNNN}"
-              density="comfortable"
+              density={FORM_FIELD_DENSITY}
               focusTone="brand"
             />
-          </div>
+          </FormField>
         </div>
 
         <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -184,11 +185,11 @@ export function CategoryEditNumberingTab({ tenantId, category, onSaved }: Props)
           </div>
         </dl>
 
-        <p className="mt-3 text-[11px] text-slate-500">
+        <FormHelperText className="mt-3">
           Tokeny: <code className="font-mono">{"{CODE}"}</code>, <code className="font-mono">{"{NNNNN}"}</code>.
           Zapisz, aby podgląd odświeżył się z zapisanej konfiguracji.
-        </p>
-      </section>
+        </FormHelperText>
+      </FormSection>
 
       <PrimaryButton type="button" density="compact" disabled={saving} onClick={() => void onSave()}>
         {saving ? "Zapisywanie…" : "Zapisz numerację"}

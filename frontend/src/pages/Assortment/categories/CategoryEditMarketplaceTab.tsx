@@ -6,8 +6,16 @@ import {
   type ProductCategoryRead,
 } from "../../../api/productCategoriesApi";
 import { extractApiErrorMessage } from "../../../api/authApi";
-import { Input, PrimaryButton, Textarea } from "../../../design-system";
-import { pimFieldLabelClass, pimHintClass, pimPanelClass } from "../pimUi";
+import {
+  FormField,
+  FormHelperText,
+  FormSection,
+  FORM_FIELD_DENSITY,
+  formStackClass,
+  Input,
+  PrimaryButton,
+  Textarea,
+} from "../../../design-system";
 
 const CHANNELS = [
   { id: "allegro", label: "Allegro" },
@@ -99,20 +107,15 @@ export function CategoryEditMarketplaceTab({ tenantId, category, onSaved }: Prop
   };
 
   return (
-    <div className="max-w-3xl space-y-4">
-      <section className={pimPanelClass}>
-        <h2 className="text-sm font-semibold text-slate-900">Marketplace</h2>
-        <p className={pimHintClass}>
-          Miejsce na przyszłe mapowanie kategorii. Bez synchronizacji — tylko zapis lokalnej struktury.
-        </p>
-      </section>
+    <div className={`max-w-3xl ${formStackClass}`}>
+      <FormHelperText className="mt-0">
+        Miejsce na przyszłe mapowanie kategorii. Bez synchronizacji — tylko zapis lokalnej struktury.
+      </FormHelperText>
 
       {CHANNELS.map((ch) => (
-        <section key={ch.id} className={pimPanelClass}>
-          <h3 className="text-sm font-semibold text-slate-900">{ch.label}</h3>
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label className={pimFieldLabelClass}>ID zewnętrzne</label>
+        <FormSection key={ch.id} title={ch.label}>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <FormField label="ID zewnętrzne">
               <Input
                 value={mapping[ch.id].external_id}
                 onChange={(e) =>
@@ -121,13 +124,12 @@ export function CategoryEditMarketplaceTab({ tenantId, category, onSaved }: Prop
                     [ch.id]: { ...prev[ch.id], external_id: e.target.value },
                   }))
                 }
-                density="comfortable"
+                density={FORM_FIELD_DENSITY}
                 focusTone="brand"
                 className="font-mono text-xs"
               />
-            </div>
-            <div>
-              <label className={pimFieldLabelClass}>Ścieżka / kategoria marketplace</label>
+            </FormField>
+            <FormField label="Ścieżka / kategoria marketplace">
               <Input
                 value={mapping[ch.id].path}
                 onChange={(e) =>
@@ -136,13 +138,12 @@ export function CategoryEditMarketplaceTab({ tenantId, category, onSaved }: Prop
                     [ch.id]: { ...prev[ch.id], path: e.target.value },
                   }))
                 }
-                density="comfortable"
+                density={FORM_FIELD_DENSITY}
                 focusTone="brand"
                 placeholder="np. Dom i ogród › …"
               />
-            </div>
-            <div className="sm:col-span-2">
-              <label className={pimFieldLabelClass}>Notatki</label>
+            </FormField>
+            <FormField label="Notatki" className="sm:col-span-2">
               <Textarea
                 value={mapping[ch.id].notes}
                 onChange={(e) =>
@@ -152,12 +153,12 @@ export function CategoryEditMarketplaceTab({ tenantId, category, onSaved }: Prop
                   }))
                 }
                 rows={2}
-                density="comfortable"
+                density={FORM_FIELD_DENSITY}
                 focusTone="brand"
               />
-            </div>
+            </FormField>
           </div>
-        </section>
+        </FormSection>
       ))}
 
       <PrimaryButton type="button" density="compact" disabled={saving} onClick={() => void onSave()}>

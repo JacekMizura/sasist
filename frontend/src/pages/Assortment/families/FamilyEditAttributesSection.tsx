@@ -1,8 +1,15 @@
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 
 import type { FamilyDisplayType } from "../../../api/productFamiliesApi";
-import { Checkbox, IconButton, Input, SecondaryButton, Select } from "../../../design-system";
-import { pimPanelClass } from "../pimUi";
+import {
+  Checkbox,
+  FormSection,
+  FORM_FIELD_DENSITY,
+  IconButton,
+  Input,
+  SecondaryButton,
+  Select,
+} from "../../../design-system";
 import {
   displayTypeLabel,
   emptyAttr,
@@ -61,7 +68,7 @@ export function FamilyEditAttributesSection({ attributes, setAttributes }: Props
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         {attributes.map((ax, ai) => (
-          <article key={ax.key} className={`${pimPanelClass} flex flex-col`}>
+          <FormSection key={ax.key} className="flex flex-col">
             <div className="flex flex-wrap items-start gap-2">
               <label className="min-w-0 flex-1">
                 <span className="sr-only">Nazwa cechy</span>
@@ -71,7 +78,7 @@ export function FamilyEditAttributesSection({ attributes, setAttributes }: Props
                     setAttributes((prev) => prev.map((x, i) => (i === ai ? { ...x, name: e.target.value } : x)))
                   }
                   placeholder="Nazwa cechy (np. Rozmiar)"
-                  density="comfortable"
+                  density={FORM_FIELD_DENSITY}
                   focusTone="brand"
                   className="font-semibold"
                 />
@@ -275,7 +282,7 @@ export function FamilyEditAttributesSection({ attributes, setAttributes }: Props
               <Plus className="mr-1.5 h-4 w-4" strokeWidth={2.5} aria-hidden />
               Dodaj wartość
             </SecondaryButton>
-          </article>
+          </FormSection>
         ))}
       </div>
     </section>

@@ -56,6 +56,27 @@ export const UI_CANONICAL = {
     component: "Dialog",
     importFrom: "@/design-system",
   },
+  formField: {
+    component: "FormField | FormLabel | FormHelperText | FormError",
+    importFrom: "@/design-system",
+    density: "FORM_FIELD_DENSITY (comfortable)",
+  },
+  formControls: {
+    component: "Input | Select | Textarea | Checkbox | Radio | Switch | SearchInput",
+    importFrom: "@/design-system",
+  },
+  formSection: {
+    component: "FormSection",
+    importFrom: "@/design-system",
+  },
+  formActions: {
+    component: "FormActions",
+    importFrom: "@/design-system",
+  },
+  wizardSteps: {
+    component: "Stepper",
+    importFrom: "@/design-system",
+  },
 } as const;
 
 /** Allowed legacy facade / token islands (Phase A inventory). New files matching *UiTokens must not appear. */

@@ -162,3 +162,86 @@ describe("UI architecture SSOT (Phase B list modules)", () => {
     expect(hits, `Hardcoded orange button fills:\n${hits.join("\n")}`).toEqual([]);
   });
 });
+
+/** Phase C Wave 1 form modules. */
+const PHASE_C_FORM_GLOBS = [
+  "design-system/components/Form.tsx",
+  "modules/inventoryCount/ui/erp/InventoryWizardView.tsx",
+  "modules/inventoryCount/ui/erp/InventoryCountWizardSteps.tsx",
+  "pages/Assortment/families/FamilyEditInfoCard.tsx",
+  "pages/Assortment/families/FamilyEditAttributesSection.tsx",
+  "pages/Assortment/families/FamilyEditMembersCard.tsx",
+  "pages/Assortment/categories/CategoryFormModal.tsx",
+  "pages/Assortment/categories/CategoryEditBasicTab.tsx",
+  "pages/Assortment/categories/CategoryEditNumberingTab.tsx",
+];
+
+function readPhaseCFiles(): { rel: string; src: string }[] {
+  return PHASE_C_FORM_GLOBS.map((rel) => {
+    const full = path.join(SRC_ROOT, rel);
+    if (!fs.existsSync(full)) return null;
+    return { rel, src: fs.readFileSync(full, "utf8") };
+  }).filter((x): x is { rel: string; src: string } => x != null);
+}
+
+const LOCAL_ERP_FIELD_IMPORT = /from\s+["'].*\/theme["'][\s\S]{0,200}\berpField(Input|Label)\b|import\s*\{[^}]*\berpField(Input|Label)\b/;
+const LOCAL_FIELD_HEIGHT = /className=["'`][^"'`]*\bh-(7|8|11|12)\b[^"'`]*rounded-(md|lg)[^"'`]*border[^"'`]*px-3/;
+const LOCAL_VIOLET_FOCUS = /focus:(?:border|ring)-violet-|ring-violet-500/;
+const LOCAL_CHECKBOX_GEOM = /type=["']checkbox["'][^>]*className=["'][^"']*\bh-[45]\s+w-[45]\b/;
+
+describe("UI architecture SSOT (Phase C form modules)", () => {
+  const files = readPhaseCFiles();
+
+  it("exports FormField composition primitives", () => {
+    const form = files.find((f) => f.rel.endsWith("Form.tsx"));
+    expect(form).toBeTruthy();
+    expect(form!.src).toMatch(/export function FormField/);
+    expect(form!.src).toMatch(/export function FormSection/);
+    expect(form!.src).toMatch(/export function FormActions/);
+    expect(form!.src).toMatch(/FORM_FIELD_DENSITY/);
+  });
+
+  it("inventory wizard uses Stepper + FormActions + Input", () => {
+    const view = files.find((f) => f.rel.endsWith("InventoryWizardView.tsx"));
+    expect(view).toBeTruthy();
+    expect(view!.src).toMatch(/\bStepper\b/);
+    expect(view!.src).toMatch(/\bFormActions\b/);
+    expect(view!.src).toMatch(/\bInput\b/);
+    expect(view!.src).not.toMatch(/tabsNavItemClassName/);
+    expect(view!.src).not.toMatch(/\berpFieldInput\b/);
+  });
+
+  it("migrated Wave1 forms do not import erpFieldInput/Label", () => {
+    const hits: string[] = [];
+    for (const { rel, src } of files) {
+      if (rel.includes("theme.ts")) continue;
+      if (LOCAL_ERP_FIELD_IMPORT.test(src) || /\berpFieldInput\b|\berpFieldLabel\b/.test(src)) {
+        hits.push(rel);
+      }
+    }
+    expect(hits, `erpField* still used:\n${hits.join("\n")}`).toEqual([]);
+  });
+
+  it("migrated Wave1 forms do not use violet focus rings", () => {
+    const hits = files.filter((f) => LOCAL_VIOLET_FOCUS.test(f.src)).map((f) => f.rel);
+    expect(hits).toEqual([]);
+  });
+
+  it("migrated Wave1 forms prefer FormSection over pimPanelClass", () => {
+    const hits = files.filter((f) => /\bpimPanelClass\b/.test(f.src)).map((f) => f.rel);
+    expect(hits).toEqual([]);
+  });
+
+  it("does not invent oversized local input height recipes in Wave1 forms", () => {
+    const hits: string[] = [];
+    for (const { rel, src } of files) {
+      if (LOCAL_FIELD_HEIGHT.test(src)) hits.push(rel);
+    }
+    expect(hits, `Local field height recipes:\n${hits.join("\n")}`).toEqual([]);
+  });
+
+  it("does not use custom large checkbox geometry in Wave1 forms", () => {
+    const hits = files.filter((f) => LOCAL_CHECKBOX_GEOM.test(f.src)).map((f) => f.rel);
+    expect(hits).toEqual([]);
+  });
+});

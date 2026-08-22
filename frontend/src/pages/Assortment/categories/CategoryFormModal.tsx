@@ -1,9 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 
 import type { ProductCategoryTreeNode } from "../../../api/productCategoriesApi";
-import { Dialog, GhostButton, Input, PrimaryButton, Select } from "../../../design-system";
+import {
+  Dialog,
+  FormField,
+  FormHelperText,
+  FORM_FIELD_DENSITY,
+  formStackClass,
+  GhostButton,
+  Input,
+  PrimaryButton,
+  Select,
+} from "../../../design-system";
 import { flattenCategoryTree } from "../../../modules/productCategories/categoryTreeUtils";
-import { pimFieldLabelClass } from "../pimUi";
 
 type Props = {
   open: boolean;
@@ -63,25 +72,23 @@ export function CategoryFormModal({
         </>
       }
     >
-      <div className="space-y-4">
-        <p className="text-sm text-slate-500">
+      <div className={formStackClass}>
+        <FormHelperText className="mt-0 text-sm text-slate-500">
           Szybkie dodanie. Numerację, atrybuty i domyślne ustawienia skonfigurujesz na karcie kategorii.
-        </p>
-        <div>
-          <label className={pimFieldLabelClass}>Nazwa</label>
+        </FormHelperText>
+        <FormField label="Nazwa">
           <Input
-            density="comfortable"
+            density={FORM_FIELD_DENSITY}
             focusTone="brand"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="np. Sznurowadła"
             autoFocus
           />
-        </div>
-        <div>
-          <label className={pimFieldLabelClass}>Rodzic</label>
+        </FormField>
+        <FormField label="Rodzic">
           <Select
-            density="comfortable"
+            density={FORM_FIELD_DENSITY}
             focusTone="brand"
             value={parentId}
             onChange={(e) => {
@@ -97,7 +104,7 @@ export function CategoryFormModal({
               </option>
             ))}
           </Select>
-        </div>
+        </FormField>
       </div>
     </Dialog>
   );

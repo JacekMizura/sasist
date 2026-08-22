@@ -12,9 +12,18 @@ import { listSuppliers } from "../../../api/inboundSuppliersApi";
 import api from "../../../api/axios";
 import { extractApiErrorMessage } from "../../../api/authApi";
 import { warehouseService } from "../../../services/warehouseService";
-import { Checkbox, Input, PrimaryButton, Select, Textarea } from "../../../design-system";
+import {
+  Checkbox,
+  FormField,
+  FormSection,
+  FORM_FIELD_DENSITY,
+  formStackClass,
+  Input,
+  PrimaryButton,
+  Select,
+  Textarea,
+} from "../../../design-system";
 import { flattenCategoryTree } from "../../../modules/productCategories/categoryTreeUtils";
-import { pimFieldLabelClass, pimHintClass, pimPanelClass } from "../pimUi";
 
 type Props = {
   tenantId: number;
@@ -125,94 +134,90 @@ export function CategoryEditBasicTab({ tenantId, category, onSaved }: Props) {
   };
 
   return (
-    <div className="space-y-4">
-      <section className={`max-w-3xl space-y-4 ${pimPanelClass}`}>
-        <h2 className="text-sm font-semibold text-slate-900">Podstawowe</h2>
-        <div>
-          <label className={pimFieldLabelClass}>Nazwa</label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} density="comfortable" focusTone="brand" />
-        </div>
-        <div>
-          <label className={pimFieldLabelClass}>Opis</label>
-          <Textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={3}
-            density="comfortable"
-            focusTone="brand"
-          />
-        </div>
-        <div>
-          <label className={pimFieldLabelClass}>Rodzic</label>
-          <Select
-            value={parentId}
-            onChange={(e) => setParentId(e.target.value === "" ? "" : Number(e.target.value))}
-            density="comfortable"
-            focusTone="brand"
-            className="bg-white"
-          >
-            <option value="">— Kategoria główna (korzeń) —</option>
-            {parentOptions.map((n) => (
-              <option key={n.id} value={n.id}>
-                {n.path_names.join(" › ")}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className={pimFieldLabelClass}>Kolejność</label>
+    <div className={`max-w-3xl ${formStackClass}`}>
+      <FormSection title="Podstawowe">
+        <div className={formStackClass}>
+          <FormField label="Nazwa">
             <Input
-              type="number"
-              value={sortOrder}
-              onChange={(e) => setSortOrder(Number.parseInt(e.target.value, 10) || 0)}
-              density="comfortable"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              density={FORM_FIELD_DENSITY}
               focusTone="brand"
             />
-          </div>
-          <div className="flex items-end pb-1">
-            <label className="flex items-center gap-2 text-sm text-slate-800">
-              <Checkbox checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
-              Aktywna
-            </label>
+          </FormField>
+          <FormField label="Opis">
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              density={FORM_FIELD_DENSITY}
+              focusTone="brand"
+            />
+          </FormField>
+          <FormField label="Rodzic">
+            <Select
+              value={parentId}
+              onChange={(e) => setParentId(e.target.value === "" ? "" : Number(e.target.value))}
+              density={FORM_FIELD_DENSITY}
+              focusTone="brand"
+              className="bg-white"
+            >
+              <option value="">— Kategoria główna (korzeń) —</option>
+              {parentOptions.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.path_names.join(" › ")}
+                </option>
+              ))}
+            </Select>
+          </FormField>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Kolejność">
+              <Input
+                type="number"
+                value={sortOrder}
+                onChange={(e) => setSortOrder(Number.parseInt(e.target.value, 10) || 0)}
+                density={FORM_FIELD_DENSITY}
+                focusTone="brand"
+              />
+            </FormField>
+            <div className="flex items-end pb-1">
+              <label className="flex items-center gap-2 text-sm text-slate-800">
+                <Checkbox checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+                Aktywna
+              </label>
+            </div>
           </div>
         </div>
-      </section>
+      </FormSection>
 
-      <section className={`max-w-3xl space-y-4 ${pimPanelClass}`}>
-        <div>
-          <h2 className="text-sm font-semibold text-slate-900">Domyślne ustawienia produktu</h2>
-          <p className={pimHintClass}>
-            Zapisane na kategorii. Dziedziczenie na nowe produkty — w kolejnym etapie.
-          </p>
-        </div>
+      <FormSection
+        title="Domyślne ustawienia produktu"
+        description="Zapisane na kategorii. Dziedziczenie na nowe produkty — w kolejnym etapie."
+      >
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className={pimFieldLabelClass}>Jednostka</label>
+          <FormField label="Jednostka">
             <Input
               value={unit}
               onChange={(e) => setUnit(e.target.value)}
               placeholder="np. szt"
-              density="comfortable"
+              density={FORM_FIELD_DENSITY}
               focusTone="brand"
             />
-          </div>
-          <div>
-            <label className={pimFieldLabelClass}>VAT %</label>
+          </FormField>
+          <FormField label="VAT %">
             <Input
               value={vat}
               onChange={(e) => setVat(e.target.value)}
               placeholder="np. 23"
-              density="comfortable"
+              density={FORM_FIELD_DENSITY}
               focusTone="brand"
             />
-          </div>
-          <div>
-            <label className={pimFieldLabelClass}>Producent</label>
+          </FormField>
+          <FormField label="Producent">
             <Select
               value={manufacturerId}
               onChange={(e) => setManufacturerId(e.target.value === "" ? "" : Number(e.target.value))}
-              density="comfortable"
+              density={FORM_FIELD_DENSITY}
               focusTone="brand"
               className="bg-white"
             >
@@ -223,13 +228,12 @@ export function CategoryEditBasicTab({ tenantId, category, onSaved }: Props) {
                 </option>
               ))}
             </Select>
-          </div>
-          <div>
-            <label className={pimFieldLabelClass}>Szablon etykiety</label>
+          </FormField>
+          <FormField label="Szablon etykiety">
             <Select
               value={labelTemplateId}
               onChange={(e) => setLabelTemplateId(e.target.value === "" ? "" : Number(e.target.value))}
-              density="comfortable"
+              density={FORM_FIELD_DENSITY}
               focusTone="brand"
               className="bg-white"
             >
@@ -240,13 +244,12 @@ export function CategoryEditBasicTab({ tenantId, category, onSaved }: Props) {
                 </option>
               ))}
             </Select>
-          </div>
-          <div>
-            <label className={pimFieldLabelClass}>Domyślny magazyn</label>
+          </FormField>
+          <FormField label="Domyślny magazyn">
             <Select
               value={warehouseId}
               onChange={(e) => setWarehouseId(e.target.value === "" ? "" : Number(e.target.value))}
-              density="comfortable"
+              density={FORM_FIELD_DENSITY}
               focusTone="brand"
               className="bg-white"
             >
@@ -257,13 +260,12 @@ export function CategoryEditBasicTab({ tenantId, category, onSaved }: Props) {
                 </option>
               ))}
             </Select>
-          </div>
-          <div>
-            <label className={pimFieldLabelClass}>Domyślny dostawca</label>
+          </FormField>
+          <FormField label="Domyślny dostawca">
             <Select
               value={supplierId}
               onChange={(e) => setSupplierId(e.target.value === "" ? "" : Number(e.target.value))}
-              density="comfortable"
+              density={FORM_FIELD_DENSITY}
               focusTone="brand"
               className="bg-white"
             >
@@ -274,9 +276,9 @@ export function CategoryEditBasicTab({ tenantId, category, onSaved }: Props) {
                 </option>
               ))}
             </Select>
-          </div>
+          </FormField>
         </div>
-      </section>
+      </FormSection>
 
       <PrimaryButton type="button" density="compact" disabled={saving} onClick={() => void onSave()}>
         {saving ? "Zapisywanie…" : "Zapisz podstawowe"}

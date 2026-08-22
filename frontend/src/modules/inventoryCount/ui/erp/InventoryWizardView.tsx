@@ -2,9 +2,21 @@ import { ArrowRight, CheckCircle2, ClipboardList, RefreshCw, ShieldCheck } from 
 import type { LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { tabsNavItemClassName } from "@/components/layout/TabsNav";
-import { CardButton, PrimaryButton, secondaryButtonClassName } from "@/design-system";
-import { erpFieldInput, erpFieldLabel } from "./theme";
+import {
+  Card,
+  CardButton,
+  FORM_FIELD_DENSITY,
+  FormActions,
+  FormError,
+  FormField,
+  FormSection,
+  Input,
+  PrimaryButton,
+  SecondaryButton,
+  Stepper,
+  formStackClass,
+  secondaryButtonClassName,
+} from "@/design-system";
 
 type Props = {
   step: number;
@@ -97,21 +109,15 @@ export default function InventoryWizardView({
         </p>
       </div>
 
-      <nav className="flex gap-8 border-b border-slate-200" aria-label="Kroki kreatora">
-        {stepLabels.map((label, idx) => (
-          <span
-            key={label}
-            className={tabsNavItemClassName(idx === step, "default")}
-            aria-current={idx === step ? "step" : undefined}
-          >
-            {label}
-          </span>
-        ))}
-      </nav>
+      <Stepper
+        steps={stepLabels.map((label) => ({ label }))}
+        activeIndex={step}
+        aria-label="Kroki kreatora"
+      />
 
       <div className="grid flex-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-6">
-          {error ? <p className="mb-4 text-sm text-rose-600">{error}</p> : null}
+        <FormSection density="comfortable" className="min-w-0">
+          {error ? <FormError className="!mt-0 mb-4">{error}</FormError> : null}
 
           {step === 0 ? (
             <div className="space-y-6">
@@ -127,62 +133,61 @@ export default function InventoryWizardView({
                   />
                 ))}
               </div>
-              <div className="space-y-4 border-t border-slate-100 pt-6">
-                <label className="block">
-                  <span className={erpFieldLabel}>Tytuł inwentaryzacji</span>
-                  <input
+              <div className={`border-t border-slate-100 pt-6 ${formStackClass}`}>
+                <FormField label="Tytuł inwentaryzacji" htmlFor="inv-wizard-title">
+                  <Input
+                    id="inv-wizard-title"
                     type="text"
                     placeholder="np. Roczna inwentaryzacja 2026"
-                    className={erpFieldInput}
+                    density={FORM_FIELD_DENSITY}
                     value={title}
                     onChange={(e) => onTitleChange(e.target.value)}
                   />
-                </label>
-                <label className="block">
-                  <span className={erpFieldLabel}>Opis / notatka</span>
-                  <input
+                </FormField>
+                <FormField label="Opis / notatka" htmlFor="inv-wizard-notes">
+                  <Input
+                    id="inv-wizard-notes"
                     type="text"
                     placeholder="Opcjonalny opis dla zespołu magazynowego"
-                    className={erpFieldInput}
+                    density={FORM_FIELD_DENSITY}
                     value={notes}
                     onChange={(e) => onNotesChange(e.target.value)}
                   />
-                </label>
+                </FormField>
               </div>
             </div>
           ) : (
             <div className="min-h-[280px]">{stepContent}</div>
           )}
-        </div>
+        </FormSection>
 
         <aside className="lg:sticky lg:top-6 lg:self-start">
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <Card variant="section" density="comfortable">
             <h3 className="text-sm font-semibold text-slate-900">Podsumowanie</h3>
             <p className="mt-1 text-xs text-slate-500">Bieżące ustawienia kreatora</p>
             <div className="mt-4">{summaryPanel ?? <p className="text-sm text-slate-500">Wybierz typ inwentaryzacji.</p>}</div>
-          </div>
+          </Card>
         </aside>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
-        <button
-          type="button"
-          disabled={step === 0 || busy}
-          onClick={onBack}
-          className={secondaryButtonClassName("", "compact")}
-        >
-          Wstecz
-        </button>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link to={cancelPath} className={secondaryButtonClassName("", "compact")}>
-            Anuluj
-          </Link>
-          <PrimaryButton type="button" density="compact" disabled={busy} onClick={onNext}>
-            {isLastStep ? "Uruchom inwentaryzację" : "Dalej"}
-            {!isLastStep ? <ArrowRight className="h-4 w-4" aria-hidden /> : null}
-          </PrimaryButton>
-        </div>
-      </div>
+      <FormActions
+        start={
+          <SecondaryButton type="button" disabled={step === 0 || busy} onClick={onBack}>
+            Wstecz
+          </SecondaryButton>
+        }
+        end={
+          <>
+            <Link to={cancelPath} className={secondaryButtonClassName()}>
+              Anuluj
+            </Link>
+            <PrimaryButton type="button" disabled={busy} onClick={onNext}>
+              {isLastStep ? "Uruchom inwentaryzację" : "Dalej"}
+              {!isLastStep ? <ArrowRight className="h-4 w-4" aria-hidden /> : null}
+            </PrimaryButton>
+          </>
+        }
+      />
     </div>
   );
 }

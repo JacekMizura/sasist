@@ -1,15 +1,18 @@
 /**
  * Shared visual tokens for Assortment Product Management (SASIST PIM).
- * Prefer design-system Card / IconButton / typography where possible.
+ * Prefer design-system Form / Card / IconButton / typography where possible.
  */
 
-export const pimPanelClass = "rounded-xl border border-slate-200 bg-white p-5 shadow-sm";
+import { cardClassName, formLabelClass } from "../../design-system";
+
+/** @deprecated Prefer `FormSection` from design-system. */
+export const pimPanelClass = cardClassName("section");
 
 export const pimPanelIdentityClass =
   "mb-6 rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-slate-50/80 p-4 shadow-sm sm:p-5";
 
-export const pimFieldLabelClass =
-  "mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500";
+/** @deprecated Prefer `FormLabel` / `FormField` from design-system. */
+export const pimFieldLabelClass = `mb-1.5 block ${formLabelClass}`;
 
 export const pimIconBadgeClass =
   "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-white";
@@ -23,4 +26,5 @@ export const pimCardHoverClass =
 
 export const pimStatTileClass = "rounded-lg bg-slate-50 px-3 py-2";
 
+/** @deprecated Prefer `FormSection` description or `FormHelperText`. */
 export const pimHintClass = "mt-1 text-xs text-slate-500";

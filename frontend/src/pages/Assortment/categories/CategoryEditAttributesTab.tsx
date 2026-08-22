@@ -7,8 +7,16 @@ import {
   type ProductCategoryRead,
 } from "../../../api/productCategoriesApi";
 import { extractApiErrorMessage } from "../../../api/authApi";
-import { Checkbox, GhostButton, Input, PrimaryButton, Select } from "../../../design-system";
-import { pimFieldLabelClass, pimHintClass, pimPanelClass } from "../pimUi";
+import {
+  Checkbox,
+  FormField,
+  FormSection,
+  FORM_FIELD_DENSITY,
+  GhostButton,
+  Input,
+  PrimaryButton,
+  Select,
+} from "../../../design-system";
 
 export type CategoryAttrType = "text" | "number" | "list" | "color" | "toggle";
 
@@ -94,18 +102,15 @@ export function CategoryEditAttributesTab({ tenantId, category, onSaved }: Props
 
   return (
     <div className="max-w-3xl space-y-4">
-      <section className={pimPanelClass}>
-        <h2 className="text-sm font-semibold text-slate-900">Atrybuty kategorii</h2>
-        <p className={pimHintClass}>
-          Schemat pól pod przyszłe formularze produktów. Walidacja na karcie produktu — później.
-        </p>
-
-        <ul className="mt-4 space-y-3">
+      <FormSection
+        title="Atrybuty kategorii"
+        description="Schemat pól pod przyszłe formularze produktów. Walidacja na karcie produktu — później."
+      >
+        <ul className="space-y-3">
           {attrs.map((a, idx) => (
             <li key={a.key} className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <div>
-                  <label className={pimFieldLabelClass}>Nazwa pola</label>
+                <FormField label="Nazwa pola">
                   <Input
                     value={a.name}
                     onChange={(e) =>
@@ -113,13 +118,12 @@ export function CategoryEditAttributesTab({ tenantId, category, onSaved }: Props
                         prev.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)),
                       )
                     }
-                    density="comfortable"
+                    density={FORM_FIELD_DENSITY}
                     focusTone="brand"
                     placeholder="np. Długość"
                   />
-                </div>
-                <div>
-                  <label className={pimFieldLabelClass}>Typ</label>
+                </FormField>
+                <FormField label="Typ">
                   <Select
                     value={a.type}
                     onChange={(e) =>
@@ -129,7 +133,7 @@ export function CategoryEditAttributesTab({ tenantId, category, onSaved }: Props
                         ),
                       )
                     }
-                    density="comfortable"
+                    density={FORM_FIELD_DENSITY}
                     focusTone="brand"
                     className="bg-white"
                   >
@@ -139,7 +143,7 @@ export function CategoryEditAttributesTab({ tenantId, category, onSaved }: Props
                     <option value="color">Kolor</option>
                     <option value="toggle">Przełącznik</option>
                   </Select>
-                </div>
+                </FormField>
                 <div className="flex items-end justify-between gap-2 pb-1">
                   <label className="flex items-center gap-2 text-sm text-slate-800">
                     <Checkbox
@@ -163,25 +167,26 @@ export function CategoryEditAttributesTab({ tenantId, category, onSaved }: Props
               </div>
               {a.type === "list" ? (
                 <div className="mt-2">
-                  <label className={pimFieldLabelClass}>Opcje (przecinek)</label>
-                  <Input
-                    value={(a.options || []).join(", ")}
-                    onChange={(e) =>
-                      setAttrs((prev) =>
-                        prev.map((x, i) =>
-                          i === idx
-                            ? {
-                                ...x,
-                                options: e.target.value.split(",").map((s) => s.trim()),
-                              }
-                            : x,
-                        ),
-                      )
-                    }
-                    density="comfortable"
-                    focusTone="brand"
-                    placeholder="Czerwony, Niebieski, Zielony"
-                  />
+                  <FormField label="Opcje (przecinek)">
+                    <Input
+                      value={(a.options || []).join(", ")}
+                      onChange={(e) =>
+                        setAttrs((prev) =>
+                          prev.map((x, i) =>
+                            i === idx
+                              ? {
+                                  ...x,
+                                  options: e.target.value.split(",").map((s) => s.trim()),
+                                }
+                              : x,
+                          ),
+                        )
+                      }
+                      density={FORM_FIELD_DENSITY}
+                      focusTone="brand"
+                      placeholder="Czerwony, Niebieski, Zielony"
+                    />
+                  </FormField>
                 </div>
               ) : null}
             </li>
@@ -202,7 +207,7 @@ export function CategoryEditAttributesTab({ tenantId, category, onSaved }: Props
           <Plus className="mr-1 h-4 w-4" strokeWidth={2.5} aria-hidden />
           Dodaj pole
         </GhostButton>
-      </section>
+      </FormSection>
 
       <PrimaryButton type="button" density="compact" disabled={saving} onClick={() => void onSave()}>
         {saving ? "Zapisywanie…" : "Zapisz atrybuty"}

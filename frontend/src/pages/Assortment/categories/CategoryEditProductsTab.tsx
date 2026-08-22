@@ -5,8 +5,13 @@ import toast from "react-hot-toast";
 import api from "../../../api/axios";
 import { extractApiErrorMessage } from "../../../api/authApi";
 import { getProductDetailsPath } from "../../Products/productPaths";
-import { Input, Select } from "../../../design-system";
-import { pimFieldLabelClass, pimPanelClass } from "../pimUi";
+import {
+  FormField,
+  FormSection,
+  FORM_FIELD_DENSITY,
+  Input,
+  Select,
+} from "../../../design-system";
 
 type Row = {
   id: number;
@@ -70,46 +75,38 @@ export function CategoryEditProductsTab({ tenantId, categoryId }: Props) {
     return () => window.clearTimeout(t);
   }, [reload]);
 
-  const sortedHint = useMemo(() => `${rows.length} produktów`, [rows.length]);
+  const sortedHint = useMemo(() => `${rows.length} produktów (główna lub dodatkowa).`, [rows.length]);
 
   return (
-    <section className={pimPanelClass}>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-slate-900">Produkty w kategorii</h2>
-          <p className="mt-1 text-sm text-slate-500">{sortedHint} (główna lub dodatkowa).</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <div className="min-w-[180px]">
-            <label className={pimFieldLabelClass}>Szukaj</label>
-            <Input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Nazwa, SKU, EAN…"
-              density="comfortable"
-              focusTone="brand"
-            />
-          </div>
-          <div>
-            <label className={pimFieldLabelClass}>Sortuj</label>
-            <Select
-              value={`${sortBy}:${sortDir}`}
-              onChange={(e) => {
-                const [b, d] = e.target.value.split(":") as ["name" | "id", "asc" | "desc"];
-                setSortBy(b);
-                setSortDir(d);
-              }}
-              density="comfortable"
-              focusTone="brand"
-              className="bg-white"
-            >
-              <option value="name:asc">Nazwa A→Z</option>
-              <option value="name:desc">Nazwa Z→A</option>
-              <option value="id:desc">ID malejąco</option>
-              <option value="id:asc">ID rosnąco</option>
-            </Select>
-          </div>
-        </div>
+    <FormSection title="Produkty w kategorii" description={sortedHint}>
+      <div className="flex flex-wrap gap-2">
+        <FormField label="Szukaj" className="min-w-[180px]">
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Nazwa, SKU, EAN…"
+            density={FORM_FIELD_DENSITY}
+            focusTone="brand"
+          />
+        </FormField>
+        <FormField label="Sortuj">
+          <Select
+            value={`${sortBy}:${sortDir}`}
+            onChange={(e) => {
+              const [b, d] = e.target.value.split(":") as ["name" | "id", "asc" | "desc"];
+              setSortBy(b);
+              setSortDir(d);
+            }}
+            density={FORM_FIELD_DENSITY}
+            focusTone="brand"
+            className="bg-white"
+          >
+            <option value="name:asc">Nazwa A→Z</option>
+            <option value="name:desc">Nazwa Z→A</option>
+            <option value="id:desc">ID malejąco</option>
+            <option value="id:asc">ID rosnąco</option>
+          </Select>
+        </FormField>
       </div>
 
       {loading ? (
@@ -153,6 +150,6 @@ export function CategoryEditProductsTab({ tenantId, categoryId }: Props) {
           </table>
         </div>
       )}
-    </section>
+    </FormSection>
   );
 }

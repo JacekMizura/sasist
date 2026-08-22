@@ -3,6 +3,15 @@ import { useEffect, useMemo, useState } from "react";
 import { previewInventoryScope } from "@/api/inventoryCountApi";
 import { getWarehouseLocations, type WarehouseLocationItem } from "@/api/warehouseGraphApi";
 import { searchProductsCatalog, type ProductSearchHit } from "@/api/productsSearchApi";
+import {
+  CardButton,
+  Checkbox,
+  FORM_FIELD_DENSITY,
+  FormField,
+  FormLabel,
+  Input,
+  SearchInput,
+} from "@/design-system";
 import { INVENTORY_SCOPE_PRESETS } from "../../inventoryScopePresets";
 import type {
   InventoryCountMode,
@@ -19,17 +28,7 @@ import {
   parseIdList,
 } from "../../inventoryStrategyConfig";
 
-import {
-  erpFieldInput,
-  erpFieldLabel,
-  erpScopeBox,
-  erpSelectCard,
-  erpSelectCardHint,
-  erpSelectCardTitle,
-} from "./theme";
-
-const fieldClass = erpFieldInput;
-const labelClass = `${erpFieldLabel} mb-0`;
+import { erpScopeBox } from "./theme";
 
 function SelectionTag({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
@@ -68,10 +67,17 @@ type OptionCardProps = {
 
 function OptionCard({ selected, title, hint, onSelect }: OptionCardProps) {
   return (
-    <button type="button" onClick={onSelect} className={`w-full text-left ${erpSelectCard(selected)}`}>
-      <p className={erpSelectCardTitle(selected)}>{title}</p>
-      <p className={erpSelectCardHint(selected)}>{hint}</p>
-    </button>
+    <CardButton
+      type="button"
+      active={selected}
+      fullWidth
+      density="comfortable"
+      onClick={onSelect}
+      className="!h-auto !flex-col !items-stretch !justify-start !gap-0 !px-4 !py-3 text-left"
+    >
+      <p className="mb-0.5 text-sm font-semibold text-slate-900">{title}</p>
+      <p className={`text-xs leading-relaxed ${selected ? "text-slate-600" : "text-slate-500"}`}>{hint}</p>
+    </CardButton>
   );
 }
 
@@ -199,7 +205,7 @@ export function InventoryWizardScopeStep({
         </p>
       ) : (
         <>
-          <p className={labelClass}>Zakres inwentaryzacji</p>
+          <FormLabel className="!mb-0">Zakres inwentaryzacji</FormLabel>
           <div className="space-y-2">
             <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Presety operacyjne</p>
             <div className="flex flex-wrap gap-1">
@@ -254,11 +260,12 @@ export function InventoryWizardScopeStep({
                   Zamknij
                 </button>
               </div>
-              <input
-                className={fieldClass}
+              <SearchInput
+                density={FORM_FIELD_DENSITY}
                 placeholder="Szukaj lokalizacji…"
                 value={locSearch}
                 onChange={(e) => setLocSearch(e.target.value)}
+                aria-label="Szukaj lokalizacji"
               />
               <div className="max-h-40 overflow-auto rounded border border-slate-200">
                 {filteredLocations.map((loc) => {
@@ -312,11 +319,12 @@ export function InventoryWizardScopeStep({
                   Zamknij
                 </button>
               </div>
-              <input
-                className={fieldClass}
+              <SearchInput
+                density={FORM_FIELD_DENSITY}
                 placeholder="Szukaj produktu (min. 2 znaki)…"
                 value={prodSearch}
                 onChange={(e) => setProdSearch(e.target.value)}
+                aria-label="Szukaj produktu"
               />
               <div className="max-h-48 overflow-auto rounded border border-slate-200">
                 {prodHits.map((p) => {
@@ -356,35 +364,34 @@ export function InventoryWizardScopeStep({
       ) : null}
 
       {scopeMode === "categories" ? (
-        <label className="block text-xs">
-          <span className={labelClass}>ID kategorii (po przecinku)</span>
-          <input
-            className={fieldClass}
+        <FormField label="ID kategorii (po przecinku)" htmlFor="inv-wizard-category-ids" className="text-xs">
+          <Input
+            id="inv-wizard-category-ids"
+            density={FORM_FIELD_DENSITY}
             placeholder="np. 10, 11"
             defaultValue={(filters.category_ids ?? []).join(", ")}
             onBlur={(e) => patch({ category_ids: parseIdList(e.target.value) })}
           />
-        </label>
+        </FormField>
       ) : null}
 
       {scopeMode === "carriers" ? (
-        <label className="block text-xs">
-          <span className={labelClass}>ID nośników (po przecinku)</span>
-          <input
-            className={fieldClass}
+        <FormField label="ID nośników (po przecinku)" htmlFor="inv-wizard-carrier-ids" className="text-xs">
+          <Input
+            id="inv-wizard-carrier-ids"
+            density={FORM_FIELD_DENSITY}
             placeholder="np. 201, 202"
             defaultValue={(filters.carrier_ids ?? []).join(", ")}
             onBlur={(e) => patch({ carrier_ids: parseIdList(e.target.value) })}
           />
-        </label>
+        </FormField>
       ) : null}
 
       {scopeMode === "dynamic" ? (
         <div className="space-y-2 border-t border-slate-100 pt-2 text-xs">
-          <p className={labelClass}>Filtry dynamiczne</p>
+          <FormLabel className="!mb-0">Filtry dynamiczne</FormLabel>
           <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={Boolean(filters.dynamic?.stock_gt_zero)}
               onChange={(e) =>
                 patch({ dynamic: { ...filters.dynamic, stock_gt_zero: e.target.checked } })
@@ -393,8 +400,7 @@ export function InventoryWizardScopeStep({
             <span>Tylko stany &gt; 0</span>
           </label>
           <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={Boolean(filters.include_zero_stock || filters.dynamic?.include_zero_stock)}
               onChange={(e) =>
                 patch({
@@ -406,8 +412,7 @@ export function InventoryWizardScopeStep({
             <span>Uwzględnij puste lokalizacje (stan = 0)</span>
           </label>
           <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={Boolean(filters.dynamic?.missing_ean)}
               onChange={(e) =>
                 patch({ dynamic: { ...filters.dynamic, missing_ean: e.target.checked } })
@@ -415,10 +420,10 @@ export function InventoryWizardScopeStep({
             />
             <span>Produkty bez EAN</span>
           </label>
-          <label className="block">
-            <span className="text-slate-600">ID producentów (po przecinku)</span>
-            <input
-              className={fieldClass}
+          <FormField label="ID producentów (po przecinku)" htmlFor="inv-wizard-manufacturer-ids">
+            <Input
+              id="inv-wizard-manufacturer-ids"
+              density={FORM_FIELD_DENSITY}
               placeholder="np. 5, 8"
               defaultValue={(filters.dynamic?.manufacturer_ids ?? []).join(", ")}
               onBlur={(e) =>
@@ -430,7 +435,7 @@ export function InventoryWizardScopeStep({
                 })
               }
             />
-          </label>
+          </FormField>
         </div>
       ) : null}
 
@@ -484,7 +489,7 @@ export function InventoryWizardStrategyStep({
   return (
     <div className="space-y-8 text-sm">
       <section>
-        <p className={`${erpFieldLabel} mb-3`}>Tryb liczenia</p>
+        <FormLabel className="!mb-3">Tryb liczenia</FormLabel>
         <div className="flex flex-col gap-3">
           {COUNT_MODE_OPTIONS.map((opt) => (
             <OptionCard
@@ -502,7 +507,7 @@ export function InventoryWizardStrategyStep({
       </section>
 
       <section>
-        <p className={`${erpFieldLabel} mb-3`}>Polityka ruchów magazynowych</p>
+        <FormLabel className="!mb-3">Polityka ruchów magazynowych</FormLabel>
         <div className="flex flex-col gap-3">
           {MOVEMENT_POLICY_OPTIONS.map((opt) => (
             <OptionCard
@@ -517,7 +522,7 @@ export function InventoryWizardStrategyStep({
       </section>
 
       <section>
-        <p className={`${erpFieldLabel} mb-3`}>Wynik po zatwierdzeniu</p>
+        <FormLabel className="!mb-3">Wynik po zatwierdzeniu</FormLabel>
         <div className="flex flex-col gap-3">
           {RESULT_POLICY_OPTIONS.map((opt) => (
             <OptionCard
