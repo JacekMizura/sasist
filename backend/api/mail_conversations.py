@@ -25,7 +25,9 @@ from ..services.mail.conversation_service import (
     send_conversation_reply,
     sidebar_counts,
 )
-from ..services.messaging.email_outbox import render_template_string
+from ..services.messaging.context import build_entity_email_context
+from ..services.messaging.template_vars.render import log_render_gaps, render_template
+from ..models.mail import RELATION_COMPLAINT, RELATION_ORDER, RELATION_RETURN, MailConversationRelation
 
 router = APIRouter(prefix="/conversations", tags=["Mail"])
 
@@ -218,10 +220,41 @@ def post_mail_conversation_reply(
         )
         if tpl is None:
             raise HTTPException(status_code=400, detail="template_not_found")
-        ctx: dict[str, Any] = {}
-        reply_body = render_template_string(tpl.body_template, ctx)
+        ctx: dict[str, Any] = {"tenant_id": int(tenant_id)}
+        rel = (
+            db.query(MailConversationRelation)
+            .filter(
+                MailConversationRelation.tenant_id == int(tenant_id),
+                MailConversationRelation.conversation_id == int(conversation_id),
+                MailConversationRelation.relation_type.in_(
+                    (RELATION_ORDER, RELATION_RETURN, RELATION_COMPLAINT)
+                ),
+            )
+            .order_by(MailConversationRelation.id.asc())
+            .first()
+        )
+        if rel is not None:
+            ctx = build_entity_email_context(
+                db,
+                tenant_id=int(tenant_id),
+                entity_type=str(rel.relation_type),
+                entity_id=int(rel.relation_id),
+            )
+        rendered = render_template(
+            subject_template=tpl.subject_template,
+            body_template=tpl.body_template,
+            context=ctx,
+            body_is_html=True,
+        )
+        log_render_gaps(
+            source="mail_conversation_reply",
+            template_id=int(tpl.id),
+            missing_variables=rendered.missing_variables,
+            unknown_variables=rendered.unknown_variables,
+        )
+        reply_body = rendered.body
         if not reply_subject:
-            reply_subject = render_template_string(tpl.subject_template, ctx)
+            reply_subject = rendered.subject
 
     result, err = send_conversation_reply(
         db,

@@ -10629,11 +10629,52 @@ def ensure_automation_engine_tables(engine: Engine) -> None:
 
 def ensure_messaging_email_tables(engine: Engine) -> None:
     """Message templates + idempotent outbound email outbox for Automation send_email."""
+    from sqlalchemy import inspect
+    from sqlalchemy.orm import sessionmaker
+
     from ..models.messaging import MessageTemplate, OutboundEmailMessage
+    from ..services.messaging.templates import migrate_legacy_entity_scopes
 
     for model in (MessageTemplate, OutboundEmailMessage):
         ensure_model_table_from_orm(engine, model, log_prefix="schema.messaging")
         sync_model_schema(engine, model, log_prefix="schema.messaging")
+
+    # Widen entity_scope for multi-context CSV (ORDER,RETURN,COMPLAINT).
+    try:
+        insp = inspect(engine)
+        if insp.has_table("message_templates"):
+            cols = {c["name"]: c for c in insp.get_columns("message_templates")}
+            col = cols.get("entity_scope")
+            if col is not None:
+                length = getattr(col.get("type"), "length", None)
+                dialect = engine.dialect.name
+                needs_widen = length is not None and int(length) < 128
+                if needs_widen and dialect == "postgresql":
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text(
+                                "ALTER TABLE message_templates ALTER COLUMN entity_scope "
+                                "TYPE VARCHAR(128) USING entity_scope::VARCHAR(128)"
+                            )
+                        )
+                # SQLite: length is advisory; no rebuild.
+    except Exception:
+        logger.exception("[schema.messaging] entity_scope widen failed")
+
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
+    try:
+        changed = migrate_legacy_entity_scopes(session)
+        if changed:
+            session.commit()
+            logger.info("[schema.messaging] migrated entity_scope rows=%s", changed)
+        else:
+            session.rollback()
+    except Exception:
+        session.rollback()
+        logger.exception("[schema.messaging] entity_scope migration failed")
+    finally:
+        session.close()
 
 
 def ensure_mail_module_tables(engine: Engine) -> None:

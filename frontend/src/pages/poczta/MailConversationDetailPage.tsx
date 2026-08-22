@@ -8,6 +8,10 @@ import { listSellasistInputClass } from "../../components/listPage/listSellasist
 import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../api/axios";
+import {
+  getMessageTemplate,
+  previewMessageTemplate,
+} from "../../api/messageTemplatesApi";
 import { usePocztaModuleContext } from "../../modules/poczta/context/PocztaModuleContext";
 import {
   MAIL_DELIVERY_LABELS,
@@ -78,7 +82,9 @@ export default function MailConversationDetailPage() {
   const [tab, setTab] = useState<"messages" | "history">("messages");
   const [loading, setLoading] = useState(true);
   const [replyBody, setReplyBody] = useState("");
+  const [replySubject, setReplySubject] = useState("");
   const [templateId, setTemplateId] = useState<number | "">("");
+  const [applyingTemplate, setApplyingTemplate] = useState(false);
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -125,12 +131,48 @@ export default function MailConversationDetailPage() {
     return undefined;
   }, [detail]);
 
+  const entityId = useMemo(() => {
+    if (!detail) return null;
+    return (
+      detail.relations.order?.id ??
+      detail.relations.return?.id ??
+      detail.relations.complaint?.id ??
+      null
+    );
+  }, [detail]);
+
   const handlePatch = async (payload: Parameters<typeof patchMailConversation>[2]) => {
     if (!canManage || !detail) return;
     const updated = await patchMailConversation(tenantId, convId, payload);
     setDetail(updated);
     const h = await fetchMailConversationHistory(tenantId, convId);
     setHistory(h);
+  };
+
+  /** Apply shared MessageTemplate via canonical preview renderer; keep edits in composer (no re-render on send). */
+  const handleTemplateChange = async (id: number | "") => {
+    setTemplateId(id);
+    if (id === "") return;
+    setApplyingTemplate(true);
+    setErr(null);
+    try {
+      const tpl = await getMessageTemplate(id, tenantId);
+      const rendered = await previewMessageTemplate({
+        tenant_id: tenantId,
+        subject_template: tpl.subject_template || "",
+        body_template: tpl.body_template || "",
+        entity_type: entityScope ?? undefined,
+        entity_id: entityId,
+      });
+      setReplySubject(rendered.subject || "");
+      setReplyBody(rendered.body_html || "");
+      // Clear picker id so send uses composer content (already rendered) — edits are preserved.
+      setTemplateId("");
+    } catch {
+      setErr("Nie udało się zastosować szablonu.");
+    } finally {
+      setApplyingTemplate(false);
+    }
   };
 
   const handleSend = async () => {
@@ -141,11 +183,12 @@ export default function MailConversationDetailPage() {
     try {
       await replyMailConversation(tenantId, convId, {
         body: replyBody.trim(),
+        subject: replySubject.trim() || undefined,
         idempotency_key: idempotencyKey,
         account_id: accountId ?? undefined,
-        template_id: templateId === "" ? undefined : templateId,
       });
       setReplyBody("");
+      setReplySubject("");
       setTemplateId("");
       const [m, d, h] = await Promise.all([
         fetchMailConversationMessages(tenantId, convId),
@@ -319,14 +362,24 @@ export default function MailConversationDetailPage() {
               tenantId={tenantId}
               entityType={entityScope}
               value={templateId}
-              onChange={setTemplateId}
+              onChange={(id) => void handleTemplateChange(id)}
+              disabled={sending || applyingTemplate}
+            />
+            {applyingTemplate ? (
+              <p className="mt-1 text-xs text-slate-500">Stosowanie szablonu…</p>
+            ) : null}
+            <input
+              className={`${listSellasistInputClass} mt-2 w-full`}
+              value={replySubject}
+              onChange={(e) => setReplySubject(e.target.value)}
+              placeholder="Temat (opcjonalnie — domyślnie Re: …)"
               disabled={sending}
             />
             <textarea
-              className={`${listSellasistInputClass} mt-2 min-h-[120px] w-full`}
+              className={`${listSellasistInputClass} mt-2 min-h-[120px] w-full font-mono text-xs`}
               value={replyBody}
               onChange={(e) => setReplyBody(e.target.value)}
-              placeholder="Treść odpowiedzi…"
+              placeholder="Treść odpowiedzi (HTML z szablonu lub zwykły tekst)…"
               disabled={sending}
             />
             {err ? <p className="mt-1 text-xs text-red-600">{err}</p> : null}

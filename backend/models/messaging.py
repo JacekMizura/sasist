@@ -40,8 +40,9 @@ class MessageTemplate(Base):
     code = Column(String(64), nullable=False)
     name = Column(String(255), nullable=False)
     channel = Column(String(16), nullable=False, default="email")
-    #: ORDER | RETURN | COMPLAINT | ALL
-    entity_scope = Column(String(32), nullable=False, default="ALL")
+    #: Supported entity contexts (canonical CSV). Legacy: ALL|ORDER|RETURN|COMPLAINT still parsed.
+    #: Examples: "ORDER", "ORDER,RETURN", "ORDER,RETURN,COMPLAINT"
+    entity_scope = Column(String(128), nullable=False, default="ORDER,RETURN,COMPLAINT")
     subject_template = Column(String(512), nullable=False, default="")
     body_template = Column(Text, nullable=False, default="")
     is_active = Column(Boolean, nullable=False, default=True)

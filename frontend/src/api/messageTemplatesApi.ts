@@ -7,12 +7,31 @@ export type MessageTemplateDto = {
   code: string;
   name: string;
   channel: string;
-  entity_scope: string;
+  supported_contexts: string[];
+  supported_contexts_label?: string;
   subject_template: string;
   body_template: string;
   is_active: boolean;
   created_at?: string | null;
   updated_at?: string | null;
+};
+
+export type MessageTemplateVariableDto = {
+  key: string;
+  token: string;
+  label: string;
+  description: string;
+  group: string;
+  group_label: string;
+  value_kind: "TEXT" | "HTML" | "URL";
+  supported_contexts: string[];
+  aliases: string[];
+};
+
+export type MessageTemplateVariableGroupDto = {
+  id: string;
+  label: string;
+  variables: MessageTemplateVariableDto[];
 };
 
 /** Paths are relative to axios baseURL (already ends with `/api`). */
@@ -49,7 +68,7 @@ export async function createMessageTemplate(body: {
   name: string;
   subject_template?: string;
   body_template?: string;
-  entity_scope?: string;
+  supported_contexts?: string[];
   code?: string;
   warehouse_id?: number | null;
   is_active?: boolean;
@@ -65,7 +84,7 @@ export async function updateMessageTemplate(
     name?: string;
     subject_template?: string;
     body_template?: string;
-    entity_scope?: string;
+    supported_contexts?: string[];
     is_active?: boolean;
   },
 ): Promise<MessageTemplateDto> {
@@ -85,4 +104,84 @@ export async function archiveMessageTemplate(
     { params: { tenant_id: tenantId } },
   );
   return data;
+}
+
+export async function listMessageTemplateVariables(entityType?: string): Promise<MessageTemplateVariableGroupDto[]> {
+  const { data } = await api.get<{ groups: MessageTemplateVariableGroupDto[] }>(`${BASE}/variables`, {
+    params: entityType ? { entity_type: entityType } : undefined,
+  });
+  return Array.isArray(data?.groups) ? data.groups : [];
+}
+
+export async function previewMessageTemplate(body: {
+  tenant_id: number;
+  subject_template: string;
+  body_template: string;
+  entity_type?: string | null;
+  entity_id?: number | null;
+}): Promise<{
+  subject: string;
+  body_html: string;
+  used_live_context: boolean;
+  missing_variables: string[];
+  unknown_variables: string[];
+}> {
+  const { data } = await api.post<{
+    subject: string;
+    body_html: string;
+    used_live_context: boolean;
+    missing_variables?: string[];
+    unknown_variables?: string[];
+  }>(`${BASE}/preview`, body);
+  return {
+    subject: data.subject,
+    body_html: data.body_html,
+    used_live_context: data.used_live_context,
+    missing_variables: Array.isArray(data.missing_variables) ? data.missing_variables : [],
+    unknown_variables: Array.isArray(data.unknown_variables) ? data.unknown_variables : [],
+  };
+}
+
+const ALL_CONTEXTS = ["ORDER", "RETURN", "COMPLAINT"] as const;
+
+/** Map module checkboxes → supported_contexts SSOT. */
+export function supportedContextsFromModules(mods: {
+  order: boolean;
+  returns: boolean;
+  complaints: boolean;
+}): string[] {
+  const selected: string[] = [];
+  if (mods.order) selected.push("ORDER");
+  if (mods.returns) selected.push("RETURN");
+  if (mods.complaints) selected.push("COMPLAINT");
+  return ALL_CONTEXTS.filter((c) => selected.includes(c));
+}
+
+export function modulesFromSupportedContexts(contexts: string[] | null | undefined): {
+  order: boolean;
+  returns: boolean;
+  complaints: boolean;
+} {
+  const set = new Set((contexts || []).map((c) => String(c).toUpperCase()));
+  if (set.size === 0) {
+    return { order: true, returns: true, complaints: true };
+  }
+  return {
+    order: set.has("ORDER"),
+    returns: set.has("RETURN"),
+    complaints: set.has("COMPLAINT"),
+  };
+}
+
+export function formatSupportedContextsLabel(contexts: string[] | null | undefined): string {
+  const list = (contexts || []).map((c) => String(c).toUpperCase());
+  if (list.length === 0 || ALL_CONTEXTS.every((c) => list.includes(c))) return "Wszystkie moduły";
+  const labels: Record<string, string> = {
+    ORDER: "Zamówienia",
+    RETURN: "Zwroty",
+    COMPLAINT: "Reklamacje",
+  };
+  return ALL_CONTEXTS.filter((c) => list.includes(c))
+    .map((c) => labels[c])
+    .join(", ");
 }

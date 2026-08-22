@@ -1,4 +1,15 @@
-﻿**Poczta Phase 2 — correspondence workflow (local, pending commit).**
+﻿**Message templates harden (missing vars + supported_contexts) — ready to commit.**
+- RenderResult: missing_variables / unknown_variables; unknown placeholders kept
+- DB column `entity_scope` stores CSV `ORDER,RETURN,…`; API exposes `supported_contexts`
+- Preview UI amber warning; no send block on gaps
+
+**Message templates UX rebuild (Sellasist-like) — PASS local.**
+- SSOT: `MessageTemplate` + `template_vars` registry/renderer; route `/templates/messages`
+- Editor: TipTap + right variables panel (search/groups/cursor insert); modules via `entity_scope`
+- Poczta: template select → `preview` with ORDER/RETURN/COMPLAINT context → fill subject/body
+- Automation: unchanged path via `email_outbox` → same renderer
+- Skipped without resolvers: paylink, waybills, return_link, allegro_*, missing_cart, field_N, document_no_*
+
 - BE: conversation list/sidebar-counts/detail/messages/reply/mark-read/history API; per-user `MailConversationReadState`; audit events; manual reply → `OutboundEmailMessage` + RFC headers; `mail.manage_conversations`
 - FE: list + sidebar buckets, filters, pagination, detail `/poczta/korespondencja/:id`, composer + MessageTemplatePicker
 - Tests: 27 mail + automation email regression PASS; FE pocztaModuleUi 9 PASS; build PASS

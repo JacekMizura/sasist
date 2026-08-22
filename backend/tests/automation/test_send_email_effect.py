@@ -18,6 +18,7 @@ from backend.models.automation import (
 from backend.models.complaint import Complaint
 from backend.models.complaint_ui_status import ComplaintUiStatus
 from backend.models.messaging import MessageTemplate, OutboundEmailMessage
+from backend.models.mail import MailAccount, MailConversation, MailMessage
 from backend.models.order import Order
 from backend.models.order_ui_status import OrderUiStatus
 from backend.models.return_ui_status import ReturnUiStatus
@@ -62,6 +63,9 @@ def db():
         WmsOrderReturn,
         Complaint,
         MessageTemplate,
+        MailAccount,
+        MailConversation,
+        MailMessage,
         OutboundEmailMessage,
         StatusTransitionEvent,
         AutomationRule,

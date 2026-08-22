@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from datetime import datetime
 from typing import Any, Optional
 
@@ -15,18 +14,15 @@ from ...models.messaging import (
     MessageTemplate,
     OutboundEmailMessage,
 )
+from .template_vars.render import log_render_gaps, render_template, render_template_string
 
-
-_VAR_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_]+)\s*\}\}")
-
-
-def render_template_string(template: str, context: dict[str, Any]) -> str:
-    def repl(m: re.Match[str]) -> str:
-        key = m.group(1)
-        val = context.get(key)
-        return "" if val is None else str(val)
-
-    return _VAR_RE.sub(repl, template or "")
+# Re-export for callers that import from email_outbox.
+__all__ = [
+    "render_template_string",
+    "automation_email_idempotency_key",
+    "normalize_outbound_status",
+    "enqueue_or_get_outbound_email",
+]
 
 
 def automation_email_idempotency_key(execution_id: int, effect_id: int) -> str:
@@ -71,8 +67,19 @@ def enqueue_or_get_outbound_email(
             db.flush()
         return existing, False
 
-    subject = render_template_string(template.subject_template, context)
-    body = render_template_string(template.body_template, context)
+    rendered = render_template(
+        subject_template=template.subject_template,
+        body_template=template.body_template,
+        context=context,
+        body_is_html=True,
+    )
+    log_render_gaps(
+        source="automation_email_enqueue",
+        template_id=int(template.id),
+        missing_variables=rendered.missing_variables,
+        unknown_variables=rendered.unknown_variables,
+    )
+    subject, body = rendered.subject, rendered.body
     row = OutboundEmailMessage(
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id) if warehouse_id is not None else None,

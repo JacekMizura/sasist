@@ -1,3 +1,17 @@
+## 2026-08-22 — Harden message template variables + supported_contexts
+
+- Renderer reports `missing_variables` / `unknown_variables` (unknown tokens kept in text)
+- Preview warning in editor; gaps logged without PII on enqueue/reply/preview
+- `entity_scope` storage → canonical CSV multi-context; API SSOT `supported_contexts[]`
+- Checkbox round-trip ORDER+RETURN preserved; shared filter for Poczta + Automation
+
+## 2026-08-22 — Message templates Sellasist-like UX + variable SSOT
+
+- Registry SSOT: `backend/services/messaging/template_vars/` (`{key}` + legacy `{{key}}`)
+- Shared `render_template` used by automation outbox, Poczta reply, preview API
+- FE: TipTap editor + variables panel; list table at `/templates/messages`; Poczta apply via preview
+- Tests: messaging vars + automation email + FE panel/IA; `npm run build` PASS
+
 ## 2026-08-22 — Fix Poczta React #130 render crash
 
 - Root cause: `MailAccountsPage` `AppEmptyState` missing required `icon` prop → `<undefined />` after API load

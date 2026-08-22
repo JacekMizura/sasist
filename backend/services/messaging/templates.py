@@ -4,17 +4,24 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 from sqlalchemy.orm import Session
 
 from ...models.messaging import MessageTemplate
+from .template_scopes import (
+    coerce_write_contexts,
+    format_contexts_label,
+    normalize_supported_contexts,
+    serialize_supported_contexts,
+    template_supports_entity,
+)
 
 _CODE_RE = re.compile(r"^[a-z0-9][a-z0-9_\-]{1,62}$")
-_SCOPES = frozenset({"ALL", "ORDER", "RETURN", "COMPLAINT"})
 
 
 def template_to_dict(row: MessageTemplate) -> dict[str, Any]:
+    contexts = normalize_supported_contexts(row.entity_scope)
     return {
         "id": int(row.id),
         "tenant_id": int(row.tenant_id),
@@ -22,7 +29,8 @@ def template_to_dict(row: MessageTemplate) -> dict[str, Any]:
         "code": row.code,
         "name": row.name,
         "channel": row.channel,
-        "entity_scope": row.entity_scope,
+        "supported_contexts": contexts,
+        "supported_contexts_label": format_contexts_label(contexts),
         "subject_template": row.subject_template,
         "body_template": row.body_template,
         "is_active": bool(row.is_active),
@@ -51,8 +59,7 @@ def list_email_templates(
         )
     rows = q.order_by(MessageTemplate.name.asc(), MessageTemplate.id.asc()).all()
     if entity_type:
-        et = str(entity_type).upper()
-        rows = [r for r in rows if str(r.entity_scope or "ALL").upper() in ("ALL", et)]
+        rows = [r for r in rows if template_supports_entity(r.entity_scope, entity_type)]
     return rows
 
 
@@ -85,11 +92,8 @@ def get_active_email_template(
         return None, "template_wrong_channel"
     if not bool(row.is_active):
         return None, "template_inactive"
-    if entity_type:
-        scope = str(row.entity_scope or "ALL").upper()
-        et = str(entity_type).upper()
-        if scope not in ("ALL", et):
-            return None, "template_entity_mismatch"
+    if entity_type and not template_supports_entity(row.entity_scope, entity_type):
+        return None, "template_entity_mismatch"
     return row, None
 
 
@@ -105,14 +109,17 @@ def create_email_template(
     name: str,
     subject_template: str,
     body_template: str,
-    entity_scope: str = "ALL",
+    supported_contexts: Optional[Sequence[str]] = None,
+    entity_scope: Optional[str] = None,
     code: Optional[str] = None,
     warehouse_id: Optional[int] = None,
     is_active: bool = True,
 ) -> MessageTemplate:
-    scope = str(entity_scope or "ALL").strip().upper()
-    if scope not in _SCOPES:
-        raise ValueError(f"invalid entity_scope={entity_scope}")
+    contexts = coerce_write_contexts(
+        supported_contexts=supported_contexts,
+        entity_scope=entity_scope,
+    )
+    stored = serialize_supported_contexts(contexts)
     nm = (name or "").strip() or "Bez nazwy"
     cd = (code or "").strip().lower() or _slug_code(nm)
     if not _CODE_RE.match(cd):
@@ -124,7 +131,7 @@ def create_email_template(
         code=cd,
         name=nm,
         channel="email",
-        entity_scope=scope,
+        entity_scope=stored,
         subject_template=subject_template or "",
         body_template=body_template or "",
         is_active=bool(is_active),
@@ -143,6 +150,7 @@ def update_email_template(
     name: Optional[str] = None,
     subject_template: Optional[str] = None,
     body_template: Optional[str] = None,
+    supported_contexts: Optional[Sequence[str]] = None,
     entity_scope: Optional[str] = None,
     is_active: Optional[bool] = None,
 ) -> MessageTemplate:
@@ -152,11 +160,12 @@ def update_email_template(
         row.subject_template = subject_template
     if body_template is not None:
         row.body_template = body_template
-    if entity_scope is not None:
-        scope = str(entity_scope).strip().upper()
-        if scope not in _SCOPES:
-            raise ValueError(f"invalid entity_scope={entity_scope}")
-        row.entity_scope = scope
+    if supported_contexts is not None or entity_scope is not None:
+        contexts = coerce_write_contexts(
+            supported_contexts=supported_contexts,
+            entity_scope=entity_scope if supported_contexts is None else None,
+        )
+        row.entity_scope = serialize_supported_contexts(contexts)
     if is_active is not None:
         row.is_active = bool(is_active)
     row.updated_at = datetime.utcnow()
@@ -168,3 +177,19 @@ def update_email_template(
 def archive_email_template(db: Session, row: MessageTemplate) -> MessageTemplate:
     """Soft-disable — never hard-delete (history / outbox FK)."""
     return update_email_template(db, row, is_active=False)
+
+
+def migrate_legacy_entity_scopes(db: Session) -> int:
+    """Rewrite legacy ALL|single values to canonical CSV. Idempotent."""
+    changed = 0
+    rows = db.query(MessageTemplate).all()
+    for row in rows:
+        raw = row.entity_scope
+        canonical = serialize_supported_contexts(normalize_supported_contexts(raw))
+        if str(raw or "") != canonical:
+            row.entity_scope = canonical
+            db.add(row)
+            changed += 1
+    if changed:
+        db.flush()
+    return changed

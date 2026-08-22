@@ -286,7 +286,13 @@ export async function fetchMailConversationHistory(
 export async function replyMailConversation(
   tenantId: number,
   conversationId: number,
-  payload: { body: string; idempotency_key: string; account_id?: number; template_id?: number },
+  payload: {
+    body: string;
+    idempotency_key: string;
+    account_id?: number;
+    subject?: string;
+    template_id?: number;
+  },
 ): Promise<{ mail_message_id: number; delivery_status: string }> {
   const res = await api.post(`/mail/conversations/${conversationId}/reply`, payload, {
     params: { tenant_id: tenantId },

@@ -33,6 +33,17 @@ vi.mock("../../api/messageTemplatesApi", () => ({
   createMessageTemplate: vi.fn(),
   getMessageTemplate: vi.fn(),
   updateMessageTemplate: vi.fn(),
+  listMessageTemplateVariables: vi.fn().mockResolvedValue([]),
+  previewMessageTemplate: vi.fn().mockResolvedValue({
+    subject: "",
+    body_html: "",
+    used_live_context: false,
+    missing_variables: [],
+    unknown_variables: [],
+  }),
+  supportedContextsFromModules: () => ["ORDER", "RETURN", "COMPLAINT"],
+  modulesFromSupportedContexts: () => ({ order: true, returns: true, complaints: true }),
+  formatSupportedContextsLabel: () => "Wszystkie moduły",
 }));
 
 afterEach(() => {
@@ -102,6 +113,9 @@ describe("Templates module owns Szablony wiadomości", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Szablony wiadomości" })).toBeTruthy();
     });
+    expect(screen.getByRole("button", { name: "+ Dodaj szablon" })).toBeTruthy();
+    expect(screen.getByText("Nazwa")).toBeTruthy();
+    expect(screen.getByText("Temat")).toBeTruthy();
     expect(screen.queryByRole("tablist", { name: "Poczta" })).toBeNull();
     expect(screen.queryByText("Konta pocztowe")).toBeNull();
   });
