@@ -7,6 +7,7 @@ import { OperationalActionButton } from "../../components/operational";
 import {
   moduleListTableClass,
   moduleListThClass,
+  moduleListTheadClass,
   moduleListTdClass,
   moduleTableCardClass,
   ModuleListBreadcrumb,
@@ -232,7 +233,7 @@ export default function MailAccountsPage() {
       ) : (
         <div className={moduleTableCardClass}>
           <table className={moduleListTableClass}>
-            <thead>
+            <thead className={moduleListTheadClass}>
               <tr>
                 <th className={th}>Nazwa</th>
                 <th className={th}>Adres</th>

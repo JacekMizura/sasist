@@ -771,6 +771,31 @@ describe("UI architecture SSOT (ERP table header)", () => {
     expect(src).toMatch(/\bmoduleListTheadClass\b/);
     expect(src).not.toMatch(/<tr className="border-b border-slate-200 bg-white"/);
   });
+
+  it("moduleListThClass list tables pair with moduleListTheadClass on thead", () => {
+    const hits: string[] = [];
+    const skipDirs = new Set(["node_modules", "dist", "__pycache__", ".git"]);
+    function walk(dir: string) {
+      for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (skipDirs.has(ent.name)) continue;
+        const full = path.join(dir, ent.name);
+        if (ent.isDirectory()) {
+          walk(full);
+          continue;
+        }
+        if (!/\.tsx$/.test(ent.name)) continue;
+        const rel = path.relative(SRC_ROOT, full).replace(/\\/g, "/");
+        if (WMS_PATH_RE.test(rel)) continue;
+        const src = fs.readFileSync(full, "utf8");
+        if (!src.includes("moduleListThClass")) continue;
+        if (!src.includes("<thead")) continue;
+        if (src.includes("moduleListTheadClass") || src.includes("PurchasingTableHeader")) continue;
+        hits.push(rel);
+      }
+    }
+    walk(SRC_ROOT);
+    expect(hits, `moduleListTh without moduleListThead:\n${hits.join("\n")}`).toEqual([]);
+  });
 });
 
 describe("UI architecture SSOT (ERP global sidebar)", () => {

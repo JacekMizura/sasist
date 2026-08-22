@@ -15,6 +15,7 @@ import {
   moduleListTableClass,
   moduleListTdClass,
   moduleListThClass,
+  moduleListTheadClass,
   moduleListTwoColumnShellClass,
   moduleTablePaginationFooterClass,
 } from "../../components/listPage/moduleList";
@@ -267,7 +268,7 @@ export default function MailCorrespondencePage() {
           ) : (
             <div className="overflow-x-auto">
               <table className={moduleListTableClass}>
-                <thead>
+                <thead className={moduleListTheadClass}>
                   <tr>
                     <th className={moduleListThClass}>Klient / nadawca</th>
                     <th className={moduleListThClass}>Temat</th>
