@@ -1,4 +1,16 @@
-﻿**Message templates harden (missing vars + supported_contexts) — ready to commit.**
+﻿**Message templates editor UI polish — PASS local (no commit yet).**
+- Layout: editor flex + vars 340–360px sticky; name|type grid; section labels
+- TipTap: rounded border + taller body; vars panel refined (no insert icons)
+- Attachments: compact rows; human labels (Pliki), not raw FILES
+- FE tests 20 PASS; npm run build PASS; backend untouched
+
+**Message templates editor functional polish (channel/preview/attachments) — prior.**
+- White PageLayout; breadcrumbs only (no duplicate H1); channel email|sms|note
+- supported_contexts kept internally (default all); no modules/active UI
+- Preview: structural keep_unresolved; Dialog; unknown always warned
+- Attachments config from order custom fields FILES/SALES_DOCUMENT/SHIPPING_LABEL
+
+**Message templates harden (missing vars + supported_contexts) — ready to commit.**
 - RenderResult: missing_variables / unknown_variables; unknown placeholders kept
 - DB column `entity_scope` stores CSV `ORDER,RETURN,…`; API exposes `supported_contexts`
 - Preview UI amber warning; no send block on gaps

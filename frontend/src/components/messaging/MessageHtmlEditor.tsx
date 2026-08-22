@@ -49,7 +49,7 @@ function ToolbarBtn({
       type="button"
       title={title}
       onClick={onClick}
-      className={`rounded p-1.5 ${active ? "bg-slate-200 text-slate-900" : "text-slate-600 hover:bg-slate-100"}`}
+      className={`rounded-md p-2 ${active ? "bg-slate-200/90 text-slate-900" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}
     >
       {children}
     </button>
@@ -89,18 +89,24 @@ export function MessageHtmlEditor({ value, onChange, onEditorReady, placeholder 
     }
   }, [value, editor]);
 
-  if (!editor) return <div className="min-h-[220px] rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-400">Ładowanie edytora…</div>;
+  if (!editor) {
+    return (
+      <div className="min-h-[280px] rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-400">
+        Ładowanie edytora…
+      </div>
+    );
+  }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex flex-wrap items-center gap-0.5 border-b border-slate-100 bg-slate-50 px-2 py-1.5">
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="flex flex-wrap items-center gap-0.5 border-b border-slate-200 bg-slate-50/80 px-3 py-2">
         <ToolbarBtn title="Cofnij" onClick={() => editor.chain().focus().undo().run()}>
           <Undo2 className="h-4 w-4" />
         </ToolbarBtn>
         <ToolbarBtn title="Ponów" onClick={() => editor.chain().focus().redo().run()}>
           <Redo2 className="h-4 w-4" />
         </ToolbarBtn>
-        <span className="mx-1 h-4 w-px bg-slate-200" />
+        <span className="mx-1.5 h-5 w-px bg-slate-200" />
         <ToolbarBtn title="Pogrubienie" active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()}>
           <Bold className="h-4 w-4" />
         </ToolbarBtn>
@@ -110,7 +116,7 @@ export function MessageHtmlEditor({ value, onChange, onEditorReady, placeholder 
         <ToolbarBtn title="Podkreślenie" active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()}>
           <UnderlineIcon className="h-4 w-4" />
         </ToolbarBtn>
-        <span className="mx-1 h-4 w-px bg-slate-200" />
+        <span className="mx-1.5 h-5 w-px bg-slate-200" />
         <ToolbarBtn title="Do lewej" active={editor.isActive({ textAlign: "left" })} onClick={() => editor.chain().focus().setTextAlign("left").run()}>
           <AlignLeft className="h-4 w-4" />
         </ToolbarBtn>
@@ -120,14 +126,14 @@ export function MessageHtmlEditor({ value, onChange, onEditorReady, placeholder 
         <ToolbarBtn title="Do prawej" active={editor.isActive({ textAlign: "right" })} onClick={() => editor.chain().focus().setTextAlign("right").run()}>
           <AlignRight className="h-4 w-4" />
         </ToolbarBtn>
-        <span className="mx-1 h-4 w-px bg-slate-200" />
+        <span className="mx-1.5 h-5 w-px bg-slate-200" />
         <ToolbarBtn title="Lista" active={editor.isActive("bulletList")} onClick={() => editor.chain().focus().toggleBulletList().run()}>
           <List className="h-4 w-4" />
         </ToolbarBtn>
         <ToolbarBtn title="Numeracja" active={editor.isActive("orderedList")} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
           <ListOrdered className="h-4 w-4" />
         </ToolbarBtn>
-        <span className="mx-1 h-4 w-px bg-slate-200" />
+        <span className="mx-1.5 h-5 w-px bg-slate-200" />
         <ToolbarBtn
           title="Link"
           active={editor.isActive("link")}
@@ -161,7 +167,7 @@ export function MessageHtmlEditor({ value, onChange, onEditorReady, placeholder 
           <Table2 className="h-4 w-4" />
         </ToolbarBtn>
         <select
-          className="ml-2 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
+          className="ml-2 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-700"
           value={editor.isActive("heading", { level: 1 }) ? "h1" : editor.isActive("heading", { level: 2 }) ? "h2" : "p"}
           onChange={(e) => {
             const v = e.target.value;
@@ -177,7 +183,7 @@ export function MessageHtmlEditor({ value, onChange, onEditorReady, placeholder 
       </div>
       <EditorContent
         editor={editor}
-        className="prose prose-sm max-w-none min-h-[240px] px-4 py-3 text-slate-800 focus-within:outline-none [&_.ProseMirror]:min-h-[220px] [&_.ProseMirror]:outline-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0 [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-slate-400 [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)]"
+        className="prose prose-sm max-w-none min-h-[300px] px-4 py-4 text-slate-800 focus-within:outline-none [&_.ProseMirror]:min-h-[280px] [&_.ProseMirror]:outline-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0 [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-slate-400 [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)]"
       />
     </div>
   );

@@ -8,7 +8,7 @@ import { Plus, X } from "lucide-react";
 import PageLayout from "../../components/layout/PageLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { ModuleListBreadcrumb } from "../../components/listPage/moduleList";
-import { Dialog, PrimaryButton, SecondaryButton } from "../../design-system";
+import { Dialog, PrimaryButton, SecondaryButton, typography } from "../../design-system";
 import { useAuth } from "../../context/AuthContext";
 import { useActiveWarehouseContext } from "../../hooks/useActiveWarehouseContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
@@ -37,6 +37,17 @@ import {
 import { MessageVariablesPanel } from "../../components/messaging/MessageVariablesPanel";
 
 const BASE = TEMPLATES_MESSAGES_BASE;
+
+const fieldInputClass =
+  "mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-200";
+
+function attachmentSourceKindLabel(fieldType?: string | null): string {
+  const t = String(fieldType || "").toUpperCase();
+  if (t === "FILES") return "Pliki";
+  if (t === "SALES_DOCUMENT") return "Dokument sprzedaży";
+  if (t === "SHIPPING_LABEL") return "Etykieta wysyłkowa";
+  return "Pole dodatkowe";
+}
 
 function fmtDate(iso?: string | null): string {
   if (!iso) return "—";
@@ -317,14 +328,11 @@ function TemplateEditorPage({ mode }: { mode: "new" | "edit" }) {
   }
 
   const crumbLabel = mode === "new" ? "Nowy szablon" : name || "Edycja";
-  const warningTokens = [
-    ...previewMissing.map((k) => `{${k}}`),
-    ...previewUnknown.map((k) => `{${k}}`),
-  ];
 
   return (
     <PageLayout>
       <PageHeader
+        className="mb-6"
         breadcrumbs={[
           { label: "Szablony" },
           { label: "Szablony wiadomości", to: BASE },
@@ -342,82 +350,95 @@ function TemplateEditorPage({ mode }: { mode: "new" | "edit" }) {
         }
       />
 
-      <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,380px)]">
-        <section className="min-w-0 space-y-4">
-          <label className="block text-sm">
-            <span className="font-medium text-slate-700">Nazwa</span>
-            <input
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          </label>
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_360px] xl:gap-6">
+        <div className="min-w-0 space-y-8">
+          <section className="space-y-4">
+            <h2 className={typography.section}>Dane szablonu</h2>
 
-          <label className="block text-sm">
-            <span className="font-medium text-slate-700">Typ wiadomości</span>
-            <select
-              className="mt-1 w-full max-w-xs rounded-lg border border-slate-200 bg-white px-3 py-2"
-              value={channel}
-              onChange={(e) => setChannel(e.target.value as MessageTemplateChannel)}
-            >
-              <option value="email">E-mail</option>
-              <option value="sms">SMS</option>
-              <option value="note">Notatka</option>
-            </select>
-          </label>
-
-          {isEmail ? (
-            <label className="block text-sm">
-              <span className="font-medium text-slate-700">Temat wiadomości</span>
-              <input
-                ref={subjectRef}
-                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-sm"
-                value={subject}
-                onFocus={() => {
-                  focusTarget.current = "subject";
-                }}
-                onChange={(e) => setSubject(e.target.value)}
-                placeholder="np. Zamówienie {order_id} zostało wysłane"
-              />
-            </label>
-          ) : null}
-
-          <div>
-            <div className="mb-1 text-sm font-medium text-slate-700">Treść wiadomości</div>
-            {isPlain ? (
-              <textarea
-                ref={bodyTextRef}
-                className="min-h-[220px] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-sm"
-                value={bodyText}
-                onFocus={() => {
-                  focusTarget.current = "body";
-                }}
-                onChange={(e) => setBodyText(e.target.value)}
-                placeholder="Treść (zwykły tekst)…"
-              />
-            ) : (
-              <div
-                onFocusCapture={() => {
-                  focusTarget.current = "body";
-                }}
-              >
-                <MessageHtmlEditor
-                  value={bodyHtml}
-                  onChange={setBodyHtml}
-                  onEditorReady={(ed) => {
-                    editorRef.current = ed;
-                  }}
-                  placeholder="Wpisz treść e-mail. Kliknij zmienną po prawej, aby wstawić placeholder."
+            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_240px] sm:items-end">
+              <label className="block min-w-0">
+                <span className={typography.label}>Nazwa</span>
+                <input
+                  className={fieldInputClass}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
                 />
-              </div>
-            )}
-          </div>
+              </label>
+              <label className="block w-full sm:w-[240px]">
+                <span className={typography.label}>Typ wiadomości</span>
+                <select
+                  className={fieldInputClass}
+                  value={channel}
+                  onChange={(e) => setChannel(e.target.value as MessageTemplateChannel)}
+                >
+                  <option value="email">E-mail</option>
+                  <option value="sms">SMS</option>
+                  <option value="note">Notatka</option>
+                </select>
+              </label>
+            </div>
+
+            {isEmail ? (
+              <label className="block">
+                <span className={typography.label}>Temat wiadomości</span>
+                <input
+                  ref={subjectRef}
+                  className={`${fieldInputClass} font-mono`}
+                  value={subject}
+                  onFocus={() => {
+                    focusTarget.current = "subject";
+                  }}
+                  onChange={(e) => setSubject(e.target.value)}
+                  placeholder="np. Zamówienie {order_id} zostało wysłane"
+                />
+              </label>
+            ) : null}
+          </section>
+
+          <section className="space-y-3 border-t border-slate-100 pt-7">
+            <h2 className={typography.section}>Treść</h2>
+            <div>
+              <div className={`mb-1.5 ${typography.label}`}>Treść wiadomości</div>
+              {isPlain ? (
+                <textarea
+                  ref={bodyTextRef}
+                  className={`${fieldInputClass} min-h-[280px] font-mono leading-relaxed`}
+                  value={bodyText}
+                  onFocus={() => {
+                    focusTarget.current = "body";
+                  }}
+                  onChange={(e) => setBodyText(e.target.value)}
+                  placeholder="Treść (zwykły tekst)…"
+                />
+              ) : (
+                <div
+                  onFocusCapture={() => {
+                    focusTarget.current = "body";
+                  }}
+                >
+                  <MessageHtmlEditor
+                    value={bodyHtml}
+                    onChange={setBodyHtml}
+                    onEditorReady={(ed) => {
+                      editorRef.current = ed;
+                    }}
+                    placeholder="Wpisz treść e-mail. Kliknij zmienną po prawej, aby wstawić placeholder."
+                  />
+                </div>
+              )}
+            </div>
+          </section>
 
           {isEmail ? (
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-sm font-semibold text-slate-900">Załączniki</h3>
+            <section className="space-y-3 border-t border-slate-100 pt-7">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className={typography.section}>Załączniki</h2>
+                  <p className={`mt-1.5 ${typography.caption}`}>
+                    Źródła plików dodawanych automatycznie do wiadomości.
+                  </p>
+                </div>
                 <SecondaryButton
                   type="button"
                   density="compact"
@@ -429,22 +450,24 @@ function TemplateEditorPage({ mode }: { mode: "new" | "edit" }) {
                   </span>
                 </SecondaryButton>
               </div>
-              <p className="mt-1 text-xs text-slate-500">
-                Źródła z pól dodatkowych zamówienia (pliki / dokumenty sprzedaży / etykiety).
-              </p>
+
               {attachments.length === 0 ? (
-                <p className="mt-3 text-sm text-slate-500">Brak wybranych załączników.</p>
+                <p className={typography.bodyMuted}>Brak załączników.</p>
               ) : (
-                <ul className="mt-3 divide-y divide-slate-100 border-t border-slate-100">
+                <ul className="divide-y divide-slate-100 border-y border-slate-100">
                   {attachments.map((a) => (
-                    <li key={a.field_id} className="flex items-center justify-between gap-2 py-2 text-sm">
-                      <span>
-                        <span className="font-medium text-slate-800">{a.field_name || a.field_slug || `#${a.field_id}`}</span>
-                        {a.field_type ? <span className="ml-2 text-xs text-slate-400">{a.field_type}</span> : null}
-                      </span>
+                    <li key={a.field_id} className="flex items-center justify-between gap-3 py-2.5">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium text-slate-900">
+                          {a.field_name || a.field_slug || `Pole #${a.field_id}`}
+                        </div>
+                        <div className={typography.caption}>
+                          Pole dodatkowe · {attachmentSourceKindLabel(a.field_type)}
+                        </div>
+                      </div>
                       <button
                         type="button"
-                        className="rounded p-1 text-slate-400 hover:bg-slate-50 hover:text-slate-700"
+                        className="shrink-0 rounded-md p-1.5 text-slate-400 hover:bg-slate-50 hover:text-slate-700"
                         aria-label="Usuń"
                         onClick={() => setAttachments((prev) => prev.filter((x) => x.field_id !== a.field_id))}
                       >
@@ -455,11 +478,11 @@ function TemplateEditorPage({ mode }: { mode: "new" | "edit" }) {
                 </ul>
               )}
               {warehouseId == null ? (
-                <p className="mt-2 text-xs text-amber-700">Wybierz magazyn, aby dodać załączniki z pól zamówienia.</p>
+                <p className="text-xs text-amber-700">Wybierz magazyn, aby dodać załączniki z pól zamówienia.</p>
               ) : null}
-            </div>
+            </section>
           ) : null}
-        </section>
+        </div>
 
         <MessageVariablesPanel groups={groups} loading={varsLoading} onInsert={insertToken} />
       </div>
@@ -476,7 +499,7 @@ function TemplateEditorPage({ mode }: { mode: "new" | "edit" }) {
         }
       >
         {attachSources.length === 0 ? (
-          <p className="text-sm text-slate-500">
+          <p className={typography.bodyMuted}>
             Brak aktywnych pól dodatkowych typu plik / dokument sprzedaży / etykieta w tym magazynie.
           </p>
         ) : (
@@ -485,14 +508,16 @@ function TemplateEditorPage({ mode }: { mode: "new" | "edit" }) {
               <li key={s.field_id}>
                 <button
                   type="button"
-                  className="flex w-full items-center justify-between gap-2 px-1 py-2.5 text-left text-sm hover:bg-slate-50"
+                  className="flex w-full items-center justify-between gap-2 px-1 py-2.5 text-left hover:bg-slate-50"
                   onClick={() => addAttachment(s)}
                 >
-                  <span>
-                    <span className="font-medium text-slate-800">{s.label}</span>
-                    <span className="ml-2 text-xs text-slate-400">{s.field_type}</span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-slate-900">{s.label}</span>
+                    <span className={typography.caption}>
+                      Pole dodatkowe · {attachmentSourceKindLabel(s.field_type)}
+                    </span>
                   </span>
-                  <Plus className="h-4 w-4 text-slate-400" />
+                  <Plus className="h-4 w-4 shrink-0 text-slate-400" />
                 </button>
               </li>
             ))}
@@ -532,20 +557,19 @@ function TemplateEditorPage({ mode }: { mode: "new" | "edit" }) {
           </div>
         ) : null}
         {previewStructural ? (
-          <p className="mb-3 text-xs text-slate-500">
+          <p className={`mb-3 ${typography.caption}`}>
             Podgląd strukturalny — placeholdery pozostają widoczne, bo nie wybrano zamówienia.
           </p>
         ) : null}
         {isEmail ? (
-          <p className="mb-3 text-sm text-slate-700">
-            <span className="font-medium text-slate-900">Temat:</span> {previewSubject || "—"}
+          <p className={`mb-3 ${typography.body}`}>
+            <span className="font-semibold text-slate-900">Temat:</span> {previewSubject || "—"}
           </p>
         ) : null}
         <div
           className="prose prose-sm max-w-none rounded-lg border border-slate-100 bg-white p-4"
           dangerouslySetInnerHTML={{ __html: previewHtml }}
         />
-        {warningTokens.length === 0 && !previewStructural ? null : null}
       </Dialog>
     </PageLayout>
   );

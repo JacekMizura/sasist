@@ -1,3 +1,10 @@
+## 2026-08-22 — Message templates editor UI polish (FE only)
+
+- Grid: Nazwa + Typ (240px); Temat full; sections Dane/Treść/Załączniki
+- Variables panel: border/sticky/search; stronger category headers; no arrow icons
+- TipTap visual shell; attachments as compact rows with Pliki/Dokument/Etykieta labels
+- Tests: messageTemplatesIa + messageTemplateEditor + pocztaRenderCrash PASS; build PASS
+
 ## 2026-08-22 — Harden message template variables + supported_contexts
 
 - Renderer reports `missing_variables` / `unknown_variables` (unknown tokens kept in text)
