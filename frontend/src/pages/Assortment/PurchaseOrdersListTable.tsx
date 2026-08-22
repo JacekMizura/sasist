@@ -6,6 +6,8 @@ import {
   PROPORTIONAL_TABLE_SYSTEM_WIDTHS,
 } from "../../components/listPage/proportionalTableColumns";
 import { useProportionalTableColumns } from "../../components/listPage/useProportionalTableColumns";
+import { OperationalActionButton } from "../../components/operational";
+import { StatusBadge, type StatusTone } from "../../design-system";
 import {
   poListActionsCellClass,
   poListActionsInnerClass,
@@ -16,15 +18,13 @@ import {
   PO_LIST_POS_COL_PX,
   poListNameCellClass,
   poListNameThClass,
-  poListRowActionBtn,
-  poListRowActionBtnDanger,
   poListRowClass,
   poListRowInnerClass,
   poListTableClass,
   poListTdClass,
   poListThClass,
 } from "../../components/purchaseOrders/purchaseOrdersList/purchaseOrdersListTableTokens";
-import { supplierScoreTier } from "../../utils/supplierScoreBadge";
+import { supplierScoreTier, supplierScoreTone } from "../../utils/supplierScoreBadge";
 
 const PO_DYNAMIC_COLUMN_COUNT = 8;
 
@@ -44,20 +44,20 @@ const STATUS_LABEL: Record<DeliveryStatus, string> = {
   cancelled: "Anulowane",
 };
 
-function statusBadgeClass(s: DeliveryStatus): string {
+function deliveryStatusTone(s: DeliveryStatus): StatusTone {
   switch (s) {
     case "draft":
-      return "bg-slate-100 text-slate-800 ring-1 ring-slate-200";
+      return "neutral";
     case "ordered":
-      return "bg-sky-100 text-sky-900 ring-1 ring-sky-200";
+      return "info";
     case "in_transit":
-      return "bg-amber-100 text-amber-950 ring-1 ring-amber-200";
+      return "warning";
     case "received":
-      return "bg-emerald-100 text-emerald-900 ring-1 ring-emerald-200";
+      return "success";
     case "cancelled":
-      return "bg-red-50 text-red-800 ring-1 ring-red-100";
+      return "danger";
     default:
-      return "bg-slate-100 text-slate-700";
+      return "neutral";
   }
 }
 
@@ -171,21 +171,19 @@ export function PurchaseOrdersListTable({
                 </td>
                 <td className={poListTdClass}>
                   <div className={`${poListRowInnerClass} justify-center`}>
-                    <span
-                      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${tier.badgeClass}`}
+                    <StatusBadge
+                      tone={supplierScoreTone(sc)}
                       title={sc != null ? `Punktacja dostawcy: ${sc}` : "Brak danych punktacji"}
                     >
                       {tier.label}
-                    </span>
+                    </StatusBadge>
                   </div>
                 </td>
                 <td className={poListTdClass}>
                   <div className={`${poListRowInnerClass} justify-center`}>
-                    <span
-                      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusBadgeClass(row.status)}`}
-                    >
+                    <StatusBadge tone={deliveryStatusTone(row.status)}>
                       {STATUS_LABEL[row.status] ?? row.status}
-                    </span>
+                    </StatusBadge>
                   </div>
                 </td>
                 <td className={poListTdClass}>
@@ -215,25 +213,21 @@ export function PurchaseOrdersListTable({
                 </td>
                 <td className={poListActionsCellClass} onClick={(e) => e.stopPropagation()}>
                   <div className={poListActionsInnerClass}>
-                    <button
-                      type="button"
-                      className={poListRowActionBtn}
+                    <OperationalActionButton
                       aria-label="Edytuj"
                       title="Edytuj"
                       onClick={() => onEdit(row.id)}
                     >
-                      <Pencil className="h-4 w-4" strokeWidth={2} aria-hidden />
-                    </button>
+                      <Pencil strokeWidth={2} aria-hidden />
+                    </OperationalActionButton>
                     <div className="relative flex shrink-0 justify-center" data-print-menu-root>
-                      <button
-                        type="button"
-                        className={poListRowActionBtn}
+                      <OperationalActionButton
                         aria-label="Drukuj"
                         title="Drukuj / PDF"
                         onClick={() => onPrintMenuToggle(row.id)}
                       >
-                        <Printer className="h-4 w-4" strokeWidth={2} aria-hidden />
-                      </button>
+                        <Printer strokeWidth={2} aria-hidden />
+                      </OperationalActionButton>
                       {printMenuOpenId === row.id ? (
                         <div className="absolute right-0 top-full z-[320] mt-1 w-44 rounded-lg border border-slate-200 bg-white py-1 text-left shadow-lg">
                           <button
@@ -254,18 +248,16 @@ export function PurchaseOrdersListTable({
                       ) : null}
                     </div>
                     {canCreatePz(row) ? (
-                      <button
-                        type="button"
-                        className={poListRowActionBtn}
+                      <OperationalActionButton
                         title="Przyjęcie dostawy (dokument magazynowy)"
+                        aria-label="Przyjęcie dostawy PZ"
                         onClick={() => onPz(row.id)}
                       >
                         <span className="text-xs font-semibold leading-none tabular-nums">PZ</span>
-                      </button>
+                      </OperationalActionButton>
                     ) : null}
-                    <button
-                      type="button"
-                      className={poListRowActionBtnDanger}
+                    <OperationalActionButton
+                      variant="danger"
                       aria-label="Usuń"
                       title={row.status === "draft" ? "Usuń" : "Tylko szkic"}
                       disabled={row.status !== "draft"}
@@ -277,8 +269,8 @@ export function PurchaseOrdersListTable({
                         onDeleteDraft(row.id);
                       }}
                     >
-                      <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden />
-                    </button>
+                      <Trash2 strokeWidth={2} aria-hidden />
+                    </OperationalActionButton>
                   </div>
                 </td>
               </tr>

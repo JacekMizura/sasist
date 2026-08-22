@@ -1,4 +1,5 @@
 import type { ProductCategoryTreeNode } from "../../../api/productCategoriesApi";
+import { moduleTableCardClass } from "../../../components/listPage/moduleList";
 import { CategoryTreeRow } from "./CategoryTreeRow";
 
 type Props = {
@@ -31,7 +32,7 @@ export function CategoryTree({
   depth = 0,
 }: Props) {
   return (
-    <div className={depth === 0 ? "overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm" : ""}>
+    <div className={depth === 0 ? `overflow-hidden ${moduleTableCardClass}` : ""}>
       {nodes.map((node) => {
         const hasChildren = (node.children?.length ?? 0) > 0;
         const expanded = expandedIds.has(node.id);

@@ -68,8 +68,8 @@ export default function ProductCategoriesPage() {
           { label: UI_STRINGS.navigation.categories },
         ]}
         actions={
-          <PrimaryButton type="button" density="compact" onClick={() => openCreate(null)}>
-            <Plus className="mr-1.5 h-4 w-4" strokeWidth={2.5} aria-hidden />
+          <PrimaryButton type="button" onClick={() => openCreate(null)}>
+            <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
             Dodaj kategorię
           </PrimaryButton>
         }
@@ -106,8 +106,8 @@ export default function ProductCategoriesPage() {
             title="Brak kategorii"
             description="Utwórz pierwszą kategorię główną, a następnie dodawaj podkategorie w drzewie."
             action={
-              <PrimaryButton type="button" density="compact" onClick={() => openCreate(null)}>
-                <FolderTree className="mr-1.5 h-4 w-4" strokeWidth={2} aria-hidden />
+              <PrimaryButton type="button" onClick={() => openCreate(null)}>
+                <FolderTree className="h-4 w-4" strokeWidth={2} aria-hidden />
                 Dodaj kategorię
               </PrimaryButton>
             }

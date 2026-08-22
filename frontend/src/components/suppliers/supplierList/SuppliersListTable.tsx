@@ -2,6 +2,7 @@ import type { RefObject } from "react";
 import { Pencil, ShoppingBag, Trash2 } from "lucide-react";
 
 import type { SupplierRead } from "../../../api/inboundSuppliersApi";
+import { StatusBadge } from "../../../design-system";
 import { OperationalActionButton } from "../../operational";
 import { useProportionalTableColumns } from "../../listPage/useProportionalTableColumns";
 import { supplierListColumnLabel } from "./supplierListColumnCatalog";
@@ -10,7 +11,6 @@ import {
   suppliersListActionsCellClass,
   suppliersListActionsInnerClass,
   suppliersListActionsThClass,
-  suppliersListBadgeBaseClass,
   suppliersListCheckboxCellClass,
   suppliersListCheckboxInnerClass,
   suppliersListCheckboxInputClass,
@@ -71,17 +71,8 @@ function RowCheckbox({
 }
 
 function SupplierStatusBadge({ active }: { active: boolean }) {
-  if (active) {
-    return (
-      <span className={`${suppliersListBadgeBaseClass} border-emerald-200 bg-emerald-50 text-emerald-900`}>
-        Aktywny
-      </span>
-    );
-  }
   return (
-    <span className={`${suppliersListBadgeBaseClass} border-slate-200 bg-slate-50 text-slate-600`}>
-      Nieaktywny
-    </span>
+    <StatusBadge tone={active ? "success" : "neutral"}>{active ? "Aktywny" : "Nieaktywny"}</StatusBadge>
   );
 }
 
@@ -109,13 +100,9 @@ function SupplierShippingCell({ row }: { row: SupplierRead }) {
   return (
     <div className={`${suppliersListRowInnerClass} min-w-0 flex-col !items-start gap-1 py-2`}>
       {row.offers_free_shipping === false ? (
-        <span className={`${suppliersListBadgeBaseClass} border-slate-200 bg-slate-50 text-slate-700`}>
-          Tylko płatna
-        </span>
+        <StatusBadge tone="neutral">Tylko płatna</StatusBadge>
       ) : (
-        <span className={`${suppliersListBadgeBaseClass} border-sky-200 bg-sky-50 text-sky-950`}>
-          Darmowa możliwa
-        </span>
+        <StatusBadge tone="info">Darmowa możliwa</StatusBadge>
       )}
       {row.offers_free_shipping !== false && row.free_shipping_threshold != null ? (
         <span className="text-xs tabular-nums text-slate-500">
@@ -131,13 +118,9 @@ function SupplierMoqCell({ row }: { row: SupplierRead }) {
   return (
     <div className={`${suppliersListRowInnerClass} min-w-0 flex-col !items-start gap-1 py-2`}>
       {row.requires_moq === false ? (
-        <span className={`${suppliersListBadgeBaseClass} border-emerald-200 bg-emerald-50 text-emerald-900`}>
-          Bez MOQ
-        </span>
+        <StatusBadge tone="success">Bez MOQ</StatusBadge>
       ) : (
-        <span className={`${suppliersListBadgeBaseClass} border-amber-200 bg-amber-50 text-amber-950`}>
-          MOQ wymagane
-        </span>
+        <StatusBadge tone="warning">MOQ wymagane</StatusBadge>
       )}
       {row.requires_moq !== false ? (
         <span className="text-xs text-slate-500">

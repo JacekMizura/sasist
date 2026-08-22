@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { brandPrimaryButtonClass } from "../../design-system/brandUi";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Award, Banknote, FileText, Receipt, ShoppingCart, Star } from "lucide-react";
 import PageLayout from "../../components/layout/PageLayout";
 import { ListPageHeader } from "../../components/listPage/ListPageHeader";
@@ -33,6 +32,7 @@ import {
   purchasingSelectClass,
 } from "../../modules/purchasing/ui";
 import { AppOverlayPortal } from "../../components/overlay";
+import { PrimaryButton } from "../../design-system";
 
 type Tenant = { id: number; name: string };
 
@@ -456,12 +456,9 @@ export default function PurchaseOrdersPage() {
               ) : (
                 <>
                   <p>Brak zamówień — dodaj zamówienie towaru z menu (+) lub poniżej.</p>
-                  <Link
-                    to={`/goods-orders/new?tenant_id=${tenantId}`}
-                    className={brandPrimaryButtonClass}
-                  >
+                  <PrimaryButton type="button" onClick={() => navigate(`/goods-orders/new?tenant_id=${tenantId}`)}>
                     Dodaj zamówienie towaru
-                  </Link>
+                  </PrimaryButton>
                 </>
               )}
             </div>

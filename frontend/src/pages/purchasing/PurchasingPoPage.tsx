@@ -3,20 +3,26 @@ import { Link } from "react-router-dom";
 import { Eye, ShoppingCart } from "lucide-react";
 import { listPurchaseOrders, type PurchaseOrderListRow } from "../../api/purchasingOrdersApi";
 import { AppEmptyState } from "../../components/app-shell";
+import {
+  moduleListRowClass,
+  moduleListTableClass,
+  moduleListTableScrollClass,
+  moduleListTdClass,
+  moduleListThClass,
+  moduleListTheadClass,
+  moduleTablePaginationFooterClass,
+} from "../../components/listPage/moduleList";
 import { OperationalActionLink } from "../../components/operational";
 import { DataTablePageSizeSelect } from "../../components/table/DataTablePageSizeSelect";
+import { GhostButton } from "../../design-system";
 import { usePurchasingModuleContextOptional } from "../../modules/purchasing/context/PurchasingModuleContext";
 import { usePurchasingTenant } from "../../modules/purchasing/hooks/usePurchasingTenant";
 import {
   PurchasingContentArea,
   PurchasingPageShell,
   PurchasingStatusBadge,
-  PurchasingTableHeader,
   PurchasingTableSection,
-  purchasingBtnGhost,
   purchasingLinkClass,
-  purchasingTableTdClass,
-  purchasingTableThClass,
 } from "../../modules/purchasing/ui";
 import { fmtDate } from "./purchasingPoCommon";
 
@@ -70,7 +76,6 @@ export default function PurchasingPoPage() {
   }, [loadList, refreshSignal]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const td = purchasingTableTdClass;
   const tenantQuery = useMemo(() => `tenant_id=${tenantId}`, [tenantId]);
 
   return (
@@ -96,22 +101,17 @@ export default function PurchasingPoPage() {
               indicatorClass="bg-blue-500"
               action={
                 <div className="flex gap-2">
-                  <button
-                    type="button"
-                    disabled={page <= 1}
-                    className={purchasingBtnGhost}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  >
+                  <GhostButton type="button" density="compact" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
                     Poprzednia
-                  </button>
-                  <button
+                  </GhostButton>
+                  <GhostButton
                     type="button"
+                    density="compact"
                     disabled={page >= totalPages}
-                    className={purchasingBtnGhost}
                     onClick={() => setPage((p) => p + 1)}
                   >
                     Następna
-                  </button>
+                  </GhostButton>
                 </div>
               }
               toolbar={
@@ -139,49 +139,61 @@ export default function PurchasingPoPage() {
                   }
                 />
               ) : (
-                <table className="w-full min-w-[900px] text-left text-sm">
-                  <PurchasingTableHeader>
-                    <tr>
-                      <th className={`${purchasingTableThClass} text-left`}>Numer</th>
-                      <th className={`${purchasingTableThClass} text-left`}>Dostawca</th>
-                      <th className={`${purchasingTableThClass} text-left`}>Utworzono</th>
-                      <th className={`${purchasingTableThClass} text-left`}>Oczekiwana</th>
-                      <th className={`${purchasingTableThClass} text-center`}>Pozycje</th>
-                      <th className={`${purchasingTableThClass} text-right`}>Razem</th>
-                      <th className={`${purchasingTableThClass} text-center`}>Status</th>
-                      <th className={`${purchasingTableThClass} text-right`}>Akcje</th>
-                    </tr>
-                  </PurchasingTableHeader>
-                  <tbody className="divide-y divide-slate-100">
-                    {rows.map((r) => (
-                      <tr key={r.id} className="transition-colors hover:bg-blue-50/30">
-                        <td className={`${td} font-medium text-slate-900`}>{r.order_number}</td>
-                        <td className={`${td} text-slate-800`}>{r.supplier_name}</td>
-                        <td className={`${td} text-slate-500`}>{fmtDate(r.created_at)}</td>
-                        <td className={`${td} text-slate-500`}>{fmtDate(r.expected_date)}</td>
-                        <td className={`${td} text-center tabular-nums`}>{r.item_count}</td>
-                        <td className={`${td} text-right font-medium tabular-nums`}>
-                          {r.total_value.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
-                          {r.currency}
-                        </td>
-                        <td className={`${td} text-center`}>
-                          <PurchasingStatusBadge status={r.status} variant="po" />
-                        </td>
-                        <td className={`${td} text-right`}>
-                          <div className="flex justify-end">
-                            <OperationalActionLink
-                              to={`/purchasing/orders/${r.id}?${tenantQuery}`}
-                              title="Otwórz zamówienie"
-                              aria-label="Otwórz zamówienie"
-                            >
-                              <Eye strokeWidth={2} aria-hidden />
-                            </OperationalActionLink>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <>
+                  <div className={moduleListTableScrollClass}>
+                    <table className={`${moduleListTableClass} min-w-[900px]`}>
+                      <thead className={moduleListTheadClass}>
+                        <tr>
+                          <th className={`${moduleListThClass} text-left`}>Numer</th>
+                          <th className={`${moduleListThClass} text-left`}>Dostawca</th>
+                          <th className={`${moduleListThClass} text-left`}>Utworzono</th>
+                          <th className={`${moduleListThClass} text-left`}>Oczekiwana</th>
+                          <th className={`${moduleListThClass} text-center`}>Pozycje</th>
+                          <th className={`${moduleListThClass} text-right`}>Razem</th>
+                          <th className={`${moduleListThClass} text-center`}>Status</th>
+                          <th className={`${moduleListThClass} text-right`}>Akcje</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((r) => (
+                          <tr key={r.id} className={moduleListRowClass}>
+                            <td className={`${moduleListTdClass} font-medium text-slate-900`}>{r.order_number}</td>
+                            <td className={`${moduleListTdClass} text-slate-800`}>{r.supplier_name}</td>
+                            <td className={`${moduleListTdClass} text-slate-500`}>{fmtDate(r.created_at)}</td>
+                            <td className={`${moduleListTdClass} text-slate-500`}>{fmtDate(r.expected_date)}</td>
+                            <td className={`${moduleListTdClass} text-center tabular-nums`}>{r.item_count}</td>
+                            <td className={`${moduleListTdClass} text-right font-medium tabular-nums`}>
+                              {r.total_value.toLocaleString("pl-PL", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}{" "}
+                              {r.currency}
+                            </td>
+                            <td className={`${moduleListTdClass} text-center`}>
+                              <PurchasingStatusBadge status={r.status} variant="po" />
+                            </td>
+                            <td className={`${moduleListTdClass} text-right`}>
+                              <div className="flex justify-end">
+                                <OperationalActionLink
+                                  to={`/purchasing/orders/${r.id}?${tenantQuery}`}
+                                  title="Otwórz zamówienie"
+                                  aria-label="Otwórz zamówienie"
+                                >
+                                  <Eye strokeWidth={2} aria-hidden />
+                                </OperationalActionLink>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className={moduleTablePaginationFooterClass}>
+                    <span className="text-sm text-slate-600">
+                      Strona {page} / {totalPages} · {total} łącznie
+                    </span>
+                  </div>
+                </>
               )}
             </PurchasingTableSection>
           ) : null

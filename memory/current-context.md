@@ -1,11 +1,24 @@
-﻿**Assortment: remove Size tables + Families UI SSOT — PASS local (no commit yet).**
-- Size tables: FE placeholder only (no BE/DB) — removed nav/route/page/string
+﻿**UI SSOT Phase B — list/table modules PASS (ready to commit in 3 waves).**
+- Documents: StatusBadge badges; OperationalAction* (no emoji); moduleList* table; moduleTablePaginationFooterClass
+- Templates: message + label list row/grid → OperationalAction* + moduleList*; editor untouched
+- Automations: list table/actions off oaList*/oaRowAction* → moduleList* + OperationalAction*; keep oaWorkflow* for editor/groups
+- Inventory: dashboard table rows on moduleList*; documents list already SSOT
+- Categories: OperationalAction* tree actions + StatusBadge
+- Purchasing: PO/suppliers list StatusBadge + OperationalAction*; proportional layout tokens kept
+- Architecture tests Phase B guards; vitest modules + tsc + build PASS
+- STOP before Phase C/D (forms/wizards/settings/WMS industrial/automation editor)
+
+**UI SSOT Phase A — bundled with Phase B commit 1.**
+- filterToolbarBtnApply → Primary orange; operational badge geometry → StatusBadge
+- uiCanonicalMap + uiArchitecture.test.ts
+
+**Assortment: remove Size tables + Families UI SSOT — shipped `a40b5074`.**
+- Size tables: FE placeholder only — removed nav/route/page/string
 - Families: drop PIM tagline; Card listTile + IconButton edit/delete; Primary comfortable
 - Categories: drop Product Management tagline prefix
 
-**Inventory ERP UI SSOT alignment — PASS local (no commit yet).**
-- Root cause: `filterToolbarBtnApply` (amber-600) used as Primary; custom operational badges; overflow-only row actions; ad-hoc list toolbar without pagination
-- Switched to PrimaryButton/StatusBadge/ModuleListPageToolbar/OperationalAction*/listView pageSize
+**Inventory ERP UI SSOT alignment — shipped `2ca55aef`.**
+- PrimaryButton, StatusBadge, ModuleList toolbar, OperationalAction*
 - API unchanged (client pagination like Bundles; limit=200 load)
 
 **Message templates editor UI polish — shipped `2ee94ef6`.**

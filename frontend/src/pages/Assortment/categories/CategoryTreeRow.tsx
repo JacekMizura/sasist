@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import { ChevronRight, Folder, FolderOpen, GripVertical, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronRight, Folder, FolderOpen, GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 
 import type { ProductCategoryTreeNode } from "../../../api/productCategoriesApi";
-import { IconButton } from "../../../design-system";
+import { OperationalActionButton, OperationalActionColumn } from "../../../components/operational";
+import { StatusBadge } from "../../../design-system";
 
 type Props = {
   node: ProductCategoryTreeNode;
@@ -39,19 +39,8 @@ export function CategoryTreeRow({
   onSelectPrimary,
   onToggleAdditional,
 }: Props) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
   const isPrimary = selectedPrimaryId === node.id;
   const isAdditional = selectedAdditionalIds?.has(node.id) ?? false;
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [menuOpen]);
 
   return (
     <div
@@ -123,9 +112,9 @@ export function CategoryTreeRow({
               {isAdditional ? "Dodatkowa" : "+ Dodatkowa"}
             </button>
             {isPrimary ? (
-              <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-800">
+              <StatusBadge tone="primary" density="compact">
                 Główna
-              </span>
+              </StatusBadge>
             ) : null}
           </div>
         ) : (
@@ -139,7 +128,11 @@ export function CategoryTreeRow({
           </button>
         )}
         {!node.is_active ? (
-          <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Nieaktywna</div>
+          <div className="mt-0.5">
+            <StatusBadge tone="neutral" density="compact">
+              Nieaktywna
+            </StatusBadge>
+          </div>
         ) : null}
       </div>
 
@@ -148,54 +141,37 @@ export function CategoryTreeRow({
       </span>
 
       {!selectable ? (
-        <div className="relative shrink-0" ref={menuRef}>
-          <IconButton
-            type="button"
-            density="compact"
-            title="Więcej"
-            onClick={() => setMenuOpen((o) => !o)}
-            className="opacity-70 group-hover:opacity-100"
-          >
-            <MoreHorizontal className="h-4 w-4" strokeWidth={2} aria-hidden />
-          </IconButton>
-          {menuOpen ? (
-            <div className="absolute right-0 z-20 mt-1 w-48 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg">
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onAddChild();
-                }}
-              >
-                <Plus className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                Dodaj podkategorię
-              </button>
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onEdit();
-                }}
-              >
-                <Pencil className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                Edytuj
-              </button>
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-red-600 hover:bg-red-50"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onDelete();
-                }}
-              >
-                <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                Usuń
-              </button>
-            </div>
-          ) : null}
-        </div>
+        <OperationalActionColumn
+          layout="stack"
+          aria-label={`Akcje kategorii ${node.name}`}
+          slots={[
+            <OperationalActionButton
+              key="add"
+              title="Dodaj podkategorię"
+              aria-label={`Dodaj podkategorię do ${node.name}`}
+              onClick={onAddChild}
+            >
+              <Plus className="text-slate-600" strokeWidth={2} aria-hidden />
+            </OperationalActionButton>,
+            <OperationalActionButton
+              key="edit"
+              title="Edytuj"
+              aria-label={`Edytuj ${node.name}`}
+              onClick={onEdit}
+            >
+              <Pencil className="text-slate-600" strokeWidth={2} aria-hidden />
+            </OperationalActionButton>,
+            <OperationalActionButton
+              key="del"
+              variant="danger"
+              title="Usuń"
+              aria-label={`Usuń ${node.name}`}
+              onClick={onDelete}
+            >
+              <Trash2 strokeWidth={2} aria-hidden />
+            </OperationalActionButton>,
+          ]}
+        />
       ) : null}
     </div>
   );

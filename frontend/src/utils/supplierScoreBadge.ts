@@ -1,4 +1,6 @@
 /** Klasy badge punktacji dostawcy (0–100) — spójne z rankingiem i zamówieniami towaru. */
+import type { ColorTone } from "../design-system/tokens";
+
 export function supplierScoreBadgeClass(score: number | null | undefined): string {
   if (score == null || !Number.isFinite(Number(score))) {
     return "bg-slate-100 text-slate-600 ring-slate-200";
@@ -8,6 +10,16 @@ export function supplierScoreBadgeClass(score: number | null | undefined): strin
   if (s >= 70) return "bg-sky-100 text-sky-900 ring-sky-200";
   if (s >= 50) return "bg-amber-100 text-amber-950 ring-amber-200";
   return "bg-red-100 text-red-900 ring-red-200";
+}
+
+/** Tone for design-system StatusBadge (list SSOT). */
+export function supplierScoreTone(score: number | null | undefined): ColorTone {
+  if (score == null || !Number.isFinite(Number(score))) return "neutral";
+  const s = Number(score);
+  if (s >= 90) return "success";
+  if (s >= 70) return "info";
+  if (s >= 50) return "warning";
+  return "danger";
 }
 
 /** Etykieta + badge z liczbową punktacją (lub „—” gdy brak danych). */

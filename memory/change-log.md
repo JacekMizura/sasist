@@ -1,3 +1,19 @@
+## 2026-08-22 — UI SSOT Phase B (lists/tables)
+
+1. Documents + templates: emoji/text actions → OperationalAction*; documentsBadges → StatusBadge; moduleList* + pagination footer
+2. Automations + inventory: AutomationRulesTable/list off oaList*/oaRow*; InventoryDashboardView moduleList*; editor oa* kept
+3. Categories + purchasing: CategoryTreeRow OperationalAction*; PO/suppliers StatusBadge + OperationalAction*
+- Architecture: Phase B guards in uiArchitecture.test.ts; vitest/tsc/build PASS
+- Out of scope: forms/wizards, automation editor, settings, WMS industrial
+
+## 2026-08-22 — UI SSOT Phase A (shared primitives)
+
+- Audit: canonical map + module matrix (canvas `sasist-ui-ssot-audit`)
+- `filterToolbarBtnApply` / FilterApply split → `primaryButtonClass` (no amber CTA)
+- `operationalSemanticBadges` geometry aligned to StatusBadge
+- `design-system/architecture/uiArchitecture.test.ts` + `uiCanonicalMap.ts`
+- Bundled into Phase B commit wave 1
+
 ## 2026-08-22 — Assortment: remove Size tables + Families UI alignment
 
 - Deleted SizeTablesPage + `/size-tables` route/nav/`sizeTables` string (placeholder only; no BE/DB)

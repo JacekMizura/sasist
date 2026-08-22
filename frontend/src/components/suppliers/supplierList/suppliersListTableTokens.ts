@@ -44,7 +44,7 @@ export const suppliersListRowActionBtnAccent = listSellasistRowActionBtn;
 /** @deprecated Prefer `OperationalActionButton variant="danger"`. */
 export const suppliersListRowActionBtnDanger = listSellasistRowActionBtnDanger;
 
-/** Badge status / wysyłka / MOQ — `text-xs font-medium` jak Klienci. */
+/** @deprecated Prefer `StatusBadge` from `@/design-system`. */
 export const suppliersListBadgeBaseClass =
   "inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium";
 

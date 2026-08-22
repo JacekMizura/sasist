@@ -20,8 +20,9 @@ describe("Suppliers list table styling", () => {
     expect(TABLE).not.toContain("text-base font-semibold");
   });
 
-  it("badges use shared base token", () => {
-    expect(TABLE).toContain("suppliersListBadgeBaseClass");
+  it("badges use design-system StatusBadge", () => {
+    expect(TABLE).toContain("StatusBadge");
+    expect(TABLE).not.toContain("suppliersListBadgeBaseClass");
     expect(TABLE).toContain("Darmowa możliwa");
     expect(TABLE).toContain("MOQ wymagane");
   });
