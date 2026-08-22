@@ -26,6 +26,7 @@ import {
   Download,
   Upload,
   MessageSquare,
+  Mail,
   FileText,
   TriangleAlert,
   Route,
@@ -177,6 +178,22 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             Icon: Zap,
             permission: "settings.automation",
           },
+        ],
+      },
+    ],
+  },
+  {
+    id: "poczta",
+    label: "Poczta",
+    Icon: Mail,
+    activePathPrefix: "/poczta",
+    flyoutSections: [
+      {
+        items: [
+          { path: "/poczta/korespondencja", label: "Korespondencja", Icon: Mail, permission: "mail.view" },
+          { path: "/poczta/nadawcza", label: "Skrzynka nadawcza", Icon: Mail, permission: "mail.view" },
+          { path: "/poczta/konta", label: "Konta pocztowe", Icon: Mail, permission: "mail.manage_accounts" },
+          { path: "/poczta/szablony", label: "Szablony", Icon: MessageSquare, permission: "mail.manage_templates" },
         ],
       },
     ],
@@ -380,11 +397,6 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             path: "/templates/print",
             label: "Szablony wydruków",
             Icon: FileText,
-          },
-          {
-            path: "/templates/messages",
-            label: "Szablony wiadomości",
-            Icon: MessageSquare,
           },
           {
             path: "/templates/exports",

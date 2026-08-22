@@ -51,6 +51,9 @@ def tick_operational_workers_once() -> dict[str, Any]:
         out["cart"] = run_cart_lifecycle_worker(db)
         out["documents"] = process_pending_document_jobs(db, limit=20)
         out["email_delivery"] = run_email_delivery_worker(db, limit=20)
+        from .mail_inbound_sync_worker import run_mail_inbound_sync_worker
+
+        out["mail_inbound_sync"] = run_mail_inbound_sync_worker(db, limit_accounts=5)
         out["shelf_replenishment"] = run_replenishment_scan_worker(db)
         out["production_stock_replenishment"] = run_production_stock_replenishment_worker(db)
         db.commit()

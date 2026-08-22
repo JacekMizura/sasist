@@ -307,6 +307,22 @@ PERMISSION_TREE: list[dict[str, Any]] = [
         ],
     ),
     _node(
+        "cat_mail",
+        "Poczta",
+        [
+            _node(
+                "sec_mail",
+                "Korespondencja",
+                [
+                    _leaf("mail.view", "Podgląd korespondencji"),
+                    _leaf("mail.reply", "Odpowiedzi i wysyłka"),
+                    _leaf("mail.manage_accounts", "Konta pocztowe"),
+                    _leaf("mail.manage_templates", "Szablony wiadomości"),
+                ],
+            ),
+        ],
+    ),
+    _node(
         "cat_workforce",
         "WMS",
         [

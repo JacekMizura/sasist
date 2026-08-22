@@ -10636,6 +10636,25 @@ def ensure_messaging_email_tables(engine: Engine) -> None:
         sync_model_schema(engine, model, log_prefix="schema.messaging")
 
 
+def ensure_mail_module_tables(engine: Engine) -> None:
+    """Mail module — accounts, conversations, messages (Phase 1)."""
+    from ..models.mail import (
+        MailAccount,
+        MailConversation,
+        MailConversationRelation,
+        MailMessage,
+    )
+
+    for model in (
+        MailAccount,
+        MailConversation,
+        MailConversationRelation,
+        MailMessage,
+    ):
+        ensure_model_table_from_orm(engine, model, log_prefix="schema.mail")
+        sync_model_schema(engine, model, log_prefix="schema.mail")
+
+
 def ensure_postgres_serial_sequences_synced(engine: Engine) -> int:
     """
     Idempotent: align PostgreSQL SERIAL/IDENTITY sequences with MAX(pk).

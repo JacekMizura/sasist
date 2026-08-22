@@ -203,6 +203,7 @@ from .db.schema_upgrade import (
     ensure_wms_smart_matching_tables,
     ensure_automation_engine_tables,
     ensure_messaging_email_tables,
+    ensure_mail_module_tables,
     ensure_shipping_methods_table_and_order_fk,
     ensure_warehouse_materials_tables,
     ensure_warehouse_materials_bdo_columns,
@@ -347,6 +348,7 @@ from .api.warehouse_template import router as warehouse_template_router
 from .api.label_template import router as label_template_router
 from .api.label_template_portability import router as label_template_portability_router
 from .api.message_templates import router as message_templates_router
+from .api.mail import router as mail_router
 from .api.label_sizes import router as label_sizes_router
 from .api.labels import router as labels_router
 from .api.label_pack import router as label_pack_router
@@ -1904,6 +1906,7 @@ def _upgrade_schema_background() -> None:
         ensure_wms_smart_matching_tables(engine)
         ensure_automation_engine_tables(engine)
         ensure_messaging_email_tables(engine)
+        ensure_mail_module_tables(engine)
         ensure_shipping_methods_table_and_order_fk(engine)
         ensure_warehouse_materials_tables(engine)
         ensure_warehouse_materials_bdo_columns(engine)
@@ -2341,6 +2344,7 @@ _API_ROUTERS = (
     complaint_line_router,
     complaint_shipment_router,
     bdo_packaging_router,
+    mail_router,
 )
 for _r in _API_ROUTERS:
     app.include_router(_r, prefix=API_PREFIX)

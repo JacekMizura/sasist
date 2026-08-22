@@ -224,6 +224,10 @@ import SuppliersPage from "./pages/Assortment/SuppliersPage"
 import SupplierEditPage from "./pages/Assortment/SupplierEditPage"
 import SuppliersLayout from "./pages/Assortment/SuppliersLayout"
 import PurchasingLayout from "./pages/purchasing/PurchasingLayout"
+import PocztaLayout from "./pages/poczta/PocztaLayout"
+import MailCorrespondencePage from "./pages/poczta/MailCorrespondencePage"
+import MailOutboxPlaceholderPage from "./pages/poczta/MailOutboxPlaceholderPage"
+import MailAccountsPage from "./pages/poczta/MailAccountsPage"
 import PurchasingPoDetailPage from "./pages/purchasing/PurchasingPoDetailPage"
 import { PurchasingRedirectTo } from "./pages/purchasing/purchasingRedirects"
 import { PurchasingTabSuspense } from "./modules/purchasing/views/PurchasingTabSuspense"
@@ -391,11 +395,11 @@ function LegacySettingsWmsReturnsRedirect() {
   return <Navigate to={`${to}${loc.search}`} replace />
 }
 
-/** Legacy `/administration/templates/messages/*` → `/templates/messages/*`. */
+/** Legacy `/administration/templates/messages/*` → `/poczta/szablony/*`. */
 function LegacyAdministrationMessageTemplatesRedirect() {
   const loc = useLocation()
   const tail = loc.pathname.replace(/^\/administration\/templates\/messages\/?/, "")
-  const to = tail ? `/templates/messages/${tail}` : "/templates/messages"
+  const to = tail ? `/poczta/szablony/${tail}` : "/poczta/szablony"
   return <Navigate to={`${to}${loc.search}`} replace />
 }
 
@@ -443,7 +447,7 @@ function RedirectDocumentTemplatesToPrint() {
 function RedirectMessageTemplatesToMessages() {
   const loc = useLocation()
   const tail = loc.pathname.replace(/^\/admin\/message-templates\/?/, "")
-  const to = tail ? `/templates/messages/${tail}` : "/templates/messages"
+  const to = tail ? `/poczta/szablony/${tail}` : "/poczta/szablony"
   return <Navigate to={`${to}${loc.search}`} replace />
 }
 
@@ -1086,7 +1090,14 @@ export const router = createBrowserRouter(
                     <Route path=":templateId" element={<DocumentTemplateEditorPage />} />
                   </Route>
                 </Route>
-                <Route path="templates/messages/*" element={<MessageTemplatesModule />} />
+                <Route path="poczta" element={<PocztaLayout />}>
+                  <Route index element={<Navigate to="/poczta/korespondencja" replace />} />
+                  <Route path="korespondencja" element={<MailCorrespondencePage />} />
+                  <Route path="nadawcza" element={<MailOutboxPlaceholderPage />} />
+                  <Route path="konta" element={<MailAccountsPage />} />
+                  <Route path="szablony/*" element={<MessageTemplatesModule />} />
+                </Route>
+                <Route path="templates/messages/*" element={<RedirectMessageTemplatesToMessages />} />
                 <Route path="templates/exports" element={<ExportsPage />} />
                 <Route path="templates/exports/new" element={<ExportEditorPage />} />
                 <Route path="templates/exports/:id" element={<ExportEditorPage />} />
