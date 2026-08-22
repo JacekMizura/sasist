@@ -11,10 +11,12 @@ import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 export const oaInp =
   "h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-300/35";
 /** Pole wyszukiwania z ikoną lupy po lewej — bez px-3, żeby pl-10 nie kolidowało. */
+/** List search migrated to listSellasistInputClass; left for legacy callers. */
 export const oaSearchInp =
   "h-9 w-full min-w-0 rounded-lg border border-slate-200 bg-white py-0 pl-10 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-300/35";
 export const oaInpDense =
   "h-8 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-300/35";
+/** List select migrated to listSellasistInputClass; left for legacy callers. */
 export const oaSel =
   "h-9 min-w-[12rem] shrink-0 cursor-pointer appearance-none rounded-lg border border-slate-200 bg-white py-0 pl-3 pr-8 text-sm text-slate-900 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-300/35";
 export const oaLbl = "block text-xs font-medium text-slate-600";
@@ -24,6 +26,7 @@ export const oaLblCaps =
 
 export const oaBtn =
   "inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-800 transition hover:border-slate-300";
+/** List CTAs use PrimaryButton; editor / groups still use oaBtnPri. */
 export const oaBtnPri = brandPrimaryButtonClass;
 export const oaBtnGhost =
   "inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-white text-sm font-medium text-slate-600 transition hover:border-slate-400 hover:text-slate-900";
@@ -33,6 +36,7 @@ export const oaIconGhost =
   "inline-flex h-9 w-9 min-h-9 min-w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:border hover:border-slate-200 hover:text-slate-800";
 
 /** Przycisk akcji w wierszu listy — min. 36×36 px. */
+/** List rows use OperationalActionButton; groups page may still use these. */
 export const oaRowActionBtn =
   "inline-flex h-9 w-9 min-h-9 min-w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-900";
 export const oaRowActionBtnDanger =
@@ -48,20 +52,26 @@ export const oaChip =
   "inline-flex max-w-full items-center rounded-md border border-slate-200 bg-white px-2 py-0.5 text-xs font-medium text-slate-700";
 
 /** Chip warunku / efektu na liście workflow */
+/** Content chip (condition/effect text), not status geometry — keep. */
 export const oaWorkflowChipClass =
   "inline-block max-w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs leading-snug text-slate-700 shadow-sm";
 
 /** Kompaktowy chip w tabeli listy automatyzacji */
+/** Content chip (condition/effect text), not status geometry — keep. */
 export const oaListChipClass =
   "inline-flex max-w-full items-center rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] leading-tight text-slate-700";
 
 /** Komórki tabeli listy automatyzacji — wiersz 90–120px */
+/** @deprecated list chrome — automation list uses moduleListThClass. */
 export const oaListThClass =
   "whitespace-nowrap px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500";
 export const oaListThSortClass = `${oaListThClass} cursor-pointer select-none hover:text-slate-800`;
+/** @deprecated list chrome — automation list uses moduleListTdClass. */
 export const oaListTdClass = "px-4 py-4 align-top text-sm leading-relaxed text-slate-800";
+/** @deprecated list chrome — automation list uses moduleListRowClass. */
 export const oaListRowClass =
   "group border-b border-slate-100 transition-colors hover:bg-slate-50/40 last:border-b-0 [&>td]:min-h-[7.5rem]";
+/** @deprecated list chrome — automation list uses moduleListTableClass + scroll/card. */
 export const oaListTableClass = "w-full min-w-[1180px] table-fixed text-left text-sm";
 
 /** Badge ORAZ / LUB między warunkami na liście */

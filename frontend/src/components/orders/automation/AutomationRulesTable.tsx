@@ -25,8 +25,9 @@ import {
   moduleListThClass,
   moduleListThSortClass,
   moduleListTheadClass,
-} from "../../listPage/moduleList";
-import { OperationalActionButton, OperationalActionColumn } from "../../operational";
+  moduleTableCardClass,
+} from "@/components/listPage/moduleList";
+import { OperationalActionButton, OperationalActionColumn } from "@/components/operational";
 import { StatusBadge } from "@/design-system";
 import { AutomationConditionSummary } from "./AutomationConditionSummary";
 import { AutomationEffectSummary } from "./AutomationEffectSummary";
@@ -166,18 +167,21 @@ function EffectsCell({
   );
 }
 
+function executionBadgeTone(key: string): "success" | "info" | "neutral" {
+  if (key === "auto") return "success";
+  if (key === "schedule") return "info";
+  return "neutral";
+}
+
 function ExecutionCell({ rule }: { rule: OrderAutomationRule }) {
   const { badges } = formatExecutionListDisplay(rule);
 
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       {badges.map((badge) => (
-        <span
-          key={badge.key}
-          className={`inline-flex w-fit items-center rounded-md border px-2 py-0.5 text-xs font-medium leading-snug ${badge.className}`}
-        >
+        <StatusBadge key={badge.key} tone={executionBadgeTone(badge.key)} density="compact">
           {badge.label}
-        </span>
+        </StatusBadge>
       ))}
     </div>
   );
@@ -413,7 +417,8 @@ export function AutomationRulesTable({
   const [expandedRuleId, setExpandedRuleId] = useState<string | null>(null);
 
   return (
-    <div className={moduleListTableScrollClass}>
+    <div className={moduleTableCardClass}>
+      <div className={moduleListTableScrollClass}>
       <table className={moduleListTableClass} style={{ minWidth: 1180 }}>
         <colgroup>
           <col className="w-10" />
@@ -483,6 +488,7 @@ export function AutomationRulesTable({
           })}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

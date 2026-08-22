@@ -11,7 +11,7 @@ import {
 import { moduleAutomationShellClass } from "../../components/layout/flatSectionTokens";
 import { moduleListEmptyStateClass } from "../../components/listPage/moduleList";
 import { listSellasistInputClass } from "../../components/listPage/listSellasistTokens";
-import { PrimaryButton } from "../../design-system";
+import { PrimaryButton, primaryButtonClassName } from "../../design-system";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useAuth } from "../../context/AuthContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
@@ -226,11 +226,9 @@ export default function OrderAutomationListPage() {
             ))}
           </select>
         </div>
-        <Link to={`${basePath}/new`}>
-          <PrimaryButton type="button" density="compact" className="shrink-0 gap-2">
-            <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
-            Nowa automatyzacja
-          </PrimaryButton>
+        <Link to={`${basePath}/new`} className={primaryButtonClassName("inline-flex shrink-0 gap-2", "compact")}>
+          <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
+          Nowa automatyzacja
         </Link>
       </div>
 
@@ -238,10 +236,8 @@ export default function OrderAutomationListPage() {
         <div className="py-12 text-center">
           <p className="text-sm font-medium text-slate-800">Brak automatyzacji</p>
           <p className="mt-1 text-xs text-slate-500">Dodaj regułę lub zmień filtry.</p>
-          <Link to={`${basePath}/new`} className="mt-4 inline-flex">
-            <PrimaryButton type="button" density="compact">
-              Nowa automatyzacja
-            </PrimaryButton>
+          <Link to={`${basePath}/new`} className={primaryButtonClassName("mt-4 inline-flex", "compact")}>
+            Nowa automatyzacja
           </Link>
         </div>
       ) : (
