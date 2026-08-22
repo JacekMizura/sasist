@@ -25,11 +25,10 @@ export const filterPanelTitleClass = "text-sm font-semibold text-slate-800";
 export const filterToolbarBtnPrimary = primaryButtonClass;
 
 /**
- * Apply / „Filtruj” — warm accent (Sellasist-style).
- * Kept as AccentApply until product folds into Primary.
+ * Apply / „Filtruj” — **same as Primary** (SSOT).
+ * Historically amber Sellasist accent; collapsed to brand orange in UI SSOT Phase A.
  */
-export const filterToolbarBtnApply =
-  "inline-flex h-[2.375rem] items-center justify-center rounded-md bg-amber-600 px-3.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50 focus-visible:ring-offset-1";
+export const filterToolbarBtnApply = primaryButtonClass;
 
 export const filterToolbarBtnSecondary = secondaryButtonClass;
 

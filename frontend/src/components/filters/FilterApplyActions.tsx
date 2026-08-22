@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+import { primaryButtonClass } from "../../design-system";
 import { ChevronDown, ChevronRight, RotateCcw, Star } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -15,11 +15,10 @@ import {
 } from "./filterUiTokens";
 import { AppOverlayPortal } from "../../components/overlay";
 
-const splitApplyLeftClass =
-  "inline-flex h-[2.375rem] items-center justify-center rounded-l-md rounded-r-none bg-amber-600 px-3.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50 focus-visible:ring-offset-1 border-r border-amber-700/80";
+/** Split Filtruj — same Primary orange as {@link filterToolbarBtnApply}. */
+const splitApplyLeftClass = `${primaryButtonClass} !rounded-r-none border-r border-orange-600/40`;
 
-const splitApplyToggleClass =
-  "inline-flex h-[2.375rem] items-center justify-center rounded-r-md rounded-l-none bg-amber-600 px-2 text-white shadow-sm transition hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50 focus-visible:ring-offset-1";
+const splitApplyToggleClass = `${primaryButtonClass} !rounded-l-none !px-2`;
 
 const menuItemClass =
   "flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-slate-700 transition hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-none";
@@ -371,7 +370,7 @@ function ListViewSavePresetModal({
           <button
             type="button"
             disabled={busy}
-            className={brandPrimaryButtonClass}
+            className={primaryButtonClass}
             onClick={() => void handleSave()}
           >
             Zapisz

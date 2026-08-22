@@ -1,9 +1,13 @@
 /**
  * Unified badge semantics for operational lists (success / info / warning / danger / neutral).
- * Use these instead of one-off color mixes so status reads consistently across modules.
+ *
+ * Geometry matches design-system `StatusBadge` (default density): rounded-md, text-xs, px-2 py-0.5.
+ * Prefer `<StatusBadge tone=…>` for new ERP/admin UI; these class strings remain for dense list cells.
  */
+import { radius } from "../../design-system/tokens/radius";
+
 export const operationalBadgeBase =
-  "inline-flex max-w-full min-w-0 items-center justify-center rounded-full border px-2 py-0.5 text-[11px] font-semibold leading-none";
+  `inline-flex max-w-full min-w-0 items-center justify-center ${radius.sm} px-2 py-0.5 text-xs font-semibold leading-none border`;
 
 export const operationalBadgeSuccessClass = `${operationalBadgeBase} border-emerald-200/90 bg-emerald-50 text-emerald-900`;
 

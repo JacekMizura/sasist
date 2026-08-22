@@ -1,3 +1,10 @@
+import { Copy, Eye, Pencil, Trash2 } from "lucide-react";
+
+import {
+  OperationalActionButton,
+  OperationalActionColumn,
+} from "@/components/operational";
+import { StatusBadge } from "@/design-system";
 import { TemplatePreview } from "../../../components/labels/TemplatePreview";
 import { formatLabelSizeMm } from "../../../utils/formatMm";
 import { printModuleTypeLabel } from "../labelPrintModuleTypes";
@@ -17,6 +24,7 @@ import {
   TEMPLATES_LIST_GRID_CARD_RADIUS,
   TEMPLATES_LIST_GRID_CARD_SELECTED_CLASS,
 } from "./templatesListLayout";
+
 type Props = {
   template: TemplateWithMeta;
   selected: boolean;
@@ -98,9 +106,9 @@ export default function TemplateGridCard({
             <div className="flex flex-wrap items-center gap-1.5">
               <p className="truncate text-sm font-semibold text-slate-900">{t.name}</p>
               {t.is_default ? (
-                <span className="rounded-md bg-cyan-100 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-800">
+                <StatusBadge tone="info" density="compact">
                   Domyślny
-                </span>
+                </StatusBadge>
               ) : null}
             </div>
             <p className="mt-1 text-xs text-slate-500">
@@ -110,36 +118,46 @@ export default function TemplateGridCard({
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
-          <button
-            type="button"
-            onClick={onPreview}
-            className="rounded-xl border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:shadow-md"
-          >
-            Podgląd
-          </button>
-          <button
-            type="button"
-            onClick={onEdit}
-            className="rounded-xl border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:shadow-md"
-          >
-            Edytuj
-          </button>
-          <button
-            type="button"
-            onClick={onDuplicate}
-            className="rounded-xl border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:shadow-md"
-          >
-            Duplikuj
-          </button>
-          <button
-            type="button"
-            onClick={onDelete}
-            disabled={deleting}
-            className="rounded-xl border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
-          >
-            {deleting ? "…" : "Usuń"}
-          </button>
+        <div onClick={(e) => e.stopPropagation()}>
+          <OperationalActionColumn
+            aria-label={`Akcje szablonu ${t.name}`}
+            slots={[
+              <OperationalActionButton
+                key="preview"
+                title="Podgląd"
+                aria-label={`Podgląd ${t.name}`}
+                onClick={onPreview}
+              >
+                <Eye strokeWidth={2} aria-hidden />
+              </OperationalActionButton>,
+              <OperationalActionButton
+                key="edit"
+                title="Edytuj"
+                aria-label={`Edytuj ${t.name}`}
+                onClick={onEdit}
+              >
+                <Pencil strokeWidth={2} aria-hidden />
+              </OperationalActionButton>,
+              <OperationalActionButton
+                key="duplicate"
+                title="Duplikuj"
+                aria-label={`Duplikuj ${t.name}`}
+                onClick={onDuplicate}
+              >
+                <Copy strokeWidth={2} aria-hidden />
+              </OperationalActionButton>,
+              <OperationalActionButton
+                key="delete"
+                variant="danger"
+                disabled={deleting}
+                title="Usuń"
+                aria-label={`Usuń ${t.name}`}
+                onClick={onDelete}
+              >
+                <Trash2 strokeWidth={2} aria-hidden />
+              </OperationalActionButton>,
+            ]}
+          />
         </div>
 
         {groups.length > 0 ? (

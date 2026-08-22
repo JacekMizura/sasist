@@ -1,5 +1,11 @@
-import { Eye } from "lucide-react";
+import { Copy, Eye, Link2, Pencil, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
+
+import {
+  OperationalActionButton,
+  OperationalActionColumn,
+} from "@/components/operational";
+import { StatusBadge } from "@/design-system";
 
 type Props = {
   name: string;
@@ -109,9 +115,9 @@ export default function TemplateListRow({
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="truncate text-sm font-semibold text-slate-900">{name}</h3>
           {isDefault ? (
-            <span className="rounded-md bg-cyan-100 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-800">
+            <StatusBadge tone="info" density="compact">
               Domyślny
-            </span>
+            </StatusBadge>
           ) : null}
         </div>
         <p className="mt-1 text-xs text-slate-500">{metaLine}</p>
@@ -122,55 +128,62 @@ export default function TemplateListRow({
         ) : null}
       </div>
 
-      <div
-        className="flex shrink-0 flex-wrap items-center justify-end gap-1.5"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {showPreview && onPreview ? (
-          <button
-            type="button"
-            onClick={onPreview}
-            className="inline-flex items-center gap-1 rounded-xl border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:shadow-md"
-          >
-            <Eye className="h-3.5 w-3.5 text-slate-500" strokeWidth={2} aria-hidden />
-            Podgląd
-          </button>
-        ) : null}
-        {showUsages && onUsages ? (
-          <button
-            type="button"
-            onClick={onUsages}
-            className="rounded-xl border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:shadow-md"
-          >
-            {usagesLabel}
-          </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={onEdit}
-          className="rounded-xl border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:shadow-md"
-        >
-          Edytuj
-        </button>
-        {showDuplicate && onDuplicate ? (
-          <button
-            type="button"
-            onClick={onDuplicate}
-            className="rounded-xl border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:shadow-md"
-          >
-            Duplikuj
-          </button>
-        ) : null}
-        {showDelete && onDelete ? (
-          <button
-            type="button"
-            onClick={onDelete}
-            disabled={deleting}
-            className="rounded-xl border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
-          >
-            {deleting ? "…" : "Usuń"}
-          </button>
-        ) : null}
+      <div className="flex shrink-0 items-start justify-end" onClick={(e) => e.stopPropagation()}>
+        <OperationalActionColumn
+          aria-label={`Akcje szablonu ${name}`}
+          slots={[
+            showPreview && onPreview ? (
+              <OperationalActionButton
+                key="preview"
+                title="Podgląd"
+                aria-label={`Podgląd ${name}`}
+                onClick={onPreview}
+              >
+                <Eye strokeWidth={2} aria-hidden />
+              </OperationalActionButton>
+            ) : null,
+            showUsages && onUsages ? (
+              <OperationalActionButton
+                key="usages"
+                title={usagesLabel}
+                aria-label={`${usagesLabel} — ${name}`}
+                onClick={onUsages}
+              >
+                <Link2 strokeWidth={2} aria-hidden />
+              </OperationalActionButton>
+            ) : null,
+            <OperationalActionButton
+              key="edit"
+              title="Edytuj"
+              aria-label={`Edytuj ${name}`}
+              onClick={onEdit}
+            >
+              <Pencil strokeWidth={2} aria-hidden />
+            </OperationalActionButton>,
+            showDuplicate && onDuplicate ? (
+              <OperationalActionButton
+                key="duplicate"
+                title="Duplikuj"
+                aria-label={`Duplikuj ${name}`}
+                onClick={onDuplicate}
+              >
+                <Copy strokeWidth={2} aria-hidden />
+              </OperationalActionButton>
+            ) : null,
+            showDelete && onDelete ? (
+              <OperationalActionButton
+                key="delete"
+                variant="danger"
+                disabled={deleting}
+                title="Usuń"
+                aria-label={`Usuń ${name}`}
+                onClick={onDelete}
+              >
+                <Trash2 strokeWidth={2} aria-hidden />
+              </OperationalActionButton>
+            ) : null,
+          ]}
+        />
       </div>
     </div>
   );

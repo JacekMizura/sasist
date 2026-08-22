@@ -1,14 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, Routes, Route, useNavigate, useParams } from "react-router-dom";
+import { Routes, Route, useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import type { Editor } from "@tiptap/react";
 import DOMPurify from "isomorphic-dompurify";
-import { Plus, X } from "lucide-react";
+import { Archive, Pencil, Plus, X } from "lucide-react";
 
 import PageLayout from "../../components/layout/PageLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
-import { ModuleListBreadcrumb } from "../../components/listPage/moduleList";
-import { Dialog, PrimaryButton, SecondaryButton, typography } from "../../design-system";
+import {
+  ModuleListBreadcrumb,
+  ModuleTableCard,
+  moduleListEmptyStateClass,
+  moduleListRowClass,
+  moduleListTableClass,
+  moduleListTableScrollClass,
+  moduleListTdClass,
+  moduleListThClass,
+  moduleListTheadClass,
+} from "@/components/listPage/moduleList";
+import {
+  OperationalActionButton,
+  OperationalActionColumn,
+  OperationalActionLink,
+} from "@/components/operational";
+import { Dialog, PrimaryButton, SecondaryButton, StatusBadge, typography } from "../../design-system";
 import { useAuth } from "../../context/AuthContext";
 import { useActiveWarehouseContext } from "../../hooks/useActiveWarehouseContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
@@ -95,64 +110,92 @@ function MessageTemplatesListPage() {
           </PrimaryButton>
         }
       />
-      <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[720px] text-left text-sm">
-          <thead className="border-b border-slate-100 bg-slate-50/80 text-xs uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-4 py-3 font-semibold">Nazwa</th>
-              <th className="px-4 py-3 font-semibold">Typ</th>
-              <th className="px-4 py-3 font-semibold">Temat</th>
-              <th className="px-4 py-3 font-semibold">Ostatnia zmiana</th>
-              <th className="px-4 py-3 text-right font-semibold">Akcje</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-slate-500">
-                  Ładowanie…
-                </td>
-              </tr>
-            ) : rows.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-slate-500">
-                  Brak szablonów. Kliknij „Dodaj szablon”.
-                </td>
-              </tr>
-            ) : (
-              rows.map((t) => (
-                <tr key={t.id} className="border-b border-slate-50 hover:bg-slate-50/60">
-                  <td className="px-4 py-3 font-medium text-slate-900">{t.name}</td>
-                  <td className="px-4 py-3 text-slate-600">{t.channel_label || formatChannelLabel(t.channel)}</td>
-                  <td className="max-w-[260px] truncate px-4 py-3 text-slate-600">
-                    {String(t.channel).toLowerCase() === "email" ? t.subject_template || "—" : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{fmtDate(t.updated_at)}</td>
-                  <td className="px-4 py-3 text-right">
-                    <Link to={`${BASE}/${t.id}/edit`} className="mr-3 text-xs font-medium text-slate-700 underline">
-                      Edytuj
-                    </Link>
-                    {t.is_active ? (
-                      <button
-                        type="button"
-                        className="text-xs text-amber-800 hover:underline"
-                        onClick={() =>
-                          void archiveMessageTemplate(t.id, DAMAGE_TENANT_ID)
-                            .then(() => reload())
-                            .catch(() => toast.error("Nie udało się zarchiwizować"))
-                        }
-                      >
-                        Archiwizuj
-                      </button>
-                    ) : (
-                      <span className="text-xs text-slate-400">Zarchiwizowany</span>
-                    )}
-                  </td>
+      <div className="mt-4">
+        <ModuleTableCard>
+          <div className={moduleListTableScrollClass}>
+            <table className={moduleListTableClass} style={{ minWidth: 720 }}>
+              <thead className={moduleListTheadClass}>
+                <tr>
+                  <th className={moduleListThClass}>Nazwa</th>
+                  <th className={moduleListThClass}>Typ</th>
+                  <th className={moduleListThClass}>Temat</th>
+                  <th className={moduleListThClass}>Ostatnia zmiana</th>
+                  <th className={moduleListThClass}>Status</th>
+                  <th className={`${moduleListThClass} text-center`}>Akcje</th>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} className={moduleListEmptyStateClass}>
+                      Ładowanie…
+                    </td>
+                  </tr>
+                ) : rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className={moduleListEmptyStateClass}>
+                      Brak szablonów. Kliknij „Dodaj szablon”.
+                    </td>
+                  </tr>
+                ) : (
+                  rows.map((t) => (
+                    <tr key={t.id} className={moduleListRowClass}>
+                      <td className={`${moduleListTdClass} font-medium text-slate-900`}>{t.name}</td>
+                      <td className={moduleListTdClass}>
+                        {t.channel_label || formatChannelLabel(t.channel)}
+                      </td>
+                      <td className={`${moduleListTdClass} max-w-[260px] truncate`}>
+                        {String(t.channel).toLowerCase() === "email" ? t.subject_template || "—" : "—"}
+                      </td>
+                      <td className={moduleListTdClass}>{fmtDate(t.updated_at)}</td>
+                      <td className={moduleListTdClass}>
+                        {t.is_active ? (
+                          <StatusBadge tone="success" density="compact">
+                            Aktywny
+                          </StatusBadge>
+                        ) : (
+                          <StatusBadge tone="neutral" density="compact">
+                            Zarchiwizowany
+                          </StatusBadge>
+                        )}
+                      </td>
+                      <td className={`${moduleListTdClass} text-center`} onClick={(e) => e.stopPropagation()}>
+                        <OperationalActionColumn
+                          layout="stack"
+                          aria-label={`Akcje szablonu ${t.name}`}
+                          slots={[
+                            <OperationalActionLink
+                              key="edit"
+                              to={`${BASE}/${t.id}/edit`}
+                              title="Edytuj"
+                              aria-label={`Edytuj ${t.name}`}
+                            >
+                              <Pencil className="text-slate-600" strokeWidth={2} aria-hidden />
+                            </OperationalActionLink>,
+                            t.is_active ? (
+                              <OperationalActionButton
+                                key="archive"
+                                title="Archiwizuj"
+                                aria-label={`Archiwizuj ${t.name}`}
+                                onClick={() =>
+                                  void archiveMessageTemplate(t.id, DAMAGE_TENANT_ID)
+                                    .then(() => reload())
+                                    .catch(() => toast.error("Nie udało się zarchiwizować"))
+                                }
+                              >
+                                <Archive strokeWidth={2} aria-hidden />
+                              </OperationalActionButton>
+                            ) : null,
+                          ]}
+                        />
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </ModuleTableCard>
       </div>
     </PageLayout>
   );

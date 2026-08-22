@@ -95,8 +95,24 @@ Nie twórz `PrimaryButtonCompact` itd.
 ## Status
 
 - `StatusText` — tekst bez badge (Zapisano / Nie zapisano)
-- `StatusBadge` — chip  
-Tones: `success` | `warning` | `danger` | `info` | `neutral`
+- `StatusBadge` — chip (canonical ERP/admin)
+- Listy operacyjne mogą używać `operationalSemanticBadges` — **ta sama geometria** co StatusBadge (Phase A); nowe UI → `StatusBadge`
+
+Tones: `success` | `warning` | `danger` | `info` | `neutral` | `primary`
+
+---
+
+## List / table facet (nie osobny design system)
+
+| Concern | Canonical |
+|---------|-----------|
+| Toolbar listy | `ModuleListPageToolbar` |
+| Table cells | `moduleListThClass` / `moduleListTdClass` |
+| Pagination footer | `moduleTablePaginationFooterClass` |
+| Row actions | `OperationalActionButton` / `Link` / `Column` |
+| Filter apply | `filterToolbarBtnApply` **===** Primary (orange) |
+
+Nie dodawaj `*PrimaryButton` per moduł. Nie hardcoduj `bg-amber-600` jako CTA.
 
 ---
 

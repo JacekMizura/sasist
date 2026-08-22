@@ -24,7 +24,13 @@ import {
   ErpBulkPrintModal,
   stockBulkDocumentType,
 } from "../../components/documentTemplates/ErpBulkPrintModal";
+import {
+  moduleTableCardClass,
+  moduleTablePaginationFooterClass,
+} from "../../components/listPage/moduleList";
+import { listSellasistInputClass } from "../../components/listPage/listSellasistTokens";
 import { DataTablePageSizeSelect } from "../../components/table/DataTablePageSizeSelect";
+import { SecondaryButton } from "../../design-system";
 import WarehouseDocumentsTable from "./WarehouseDocumentsTable";
 import { WarehouseZPzDocumentPage } from "./WarehouseZPzDocumentPage";
 import { detailPath, legacyWarehouseDocumentRedirect } from "./warehouseDocumentRoutePaths";
@@ -37,12 +43,7 @@ import {
 } from "./warehouseDocumentsUi";
 import DocumentsEmptyState from "./DocumentsEmptyState";
 import { DocumentsSectionShell } from "./DocumentsSectionShell";
-import {
-  DocumentsFiltersToolbar,
-  DocumentsKpiRow,
-  DocumentsTableCard,
-  documentsTableSelectCls,
-} from "./documentsDashboardPrimitives";
+import { DocumentsKpiRow } from "./documentsDashboardPrimitives";
 import { useOperationalDocumentSeries } from "./OperationalDocumentSeriesContext";
 import { Z_WAREHOUSE_DOC_CONFIRM, Z_WAREHOUSE_DOC_TOAST } from "./warehouseDocumentOverlayLayers";
 
@@ -355,53 +356,51 @@ export default function DocumentsWarehousePage() {
         title={`Dokumenty magazynowe — ${docTypeTitle}`}
         kpi={<DocumentsKpiRow items={warehouseKpi} />}
         toolbar={
-          <DocumentsFiltersToolbar>
-            <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-              <select
-                aria-label="Wybór organizacji"
-                value={tenantId ?? resolvedTenantId}
-                onChange={(e) => setTenantId(Number(e.target.value))}
-                className={`${documentsTableSelectCls} min-w-[14rem]`}
-              >
-                {tenants.length === 0 ? (
-                  <option value={resolvedTenantId}>#{resolvedTenantId}</option>
-                ) : (
-                  tenants.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))
-                )}
-              </select>
-            </div>
-          </DocumentsFiltersToolbar>
+          <div className="flex w-full min-w-0 flex-col gap-3 border-b border-slate-100 bg-white px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+            <select
+              aria-label="Wybór organizacji"
+              value={tenantId ?? resolvedTenantId}
+              onChange={(e) => setTenantId(Number(e.target.value))}
+              className={`${listSellasistInputClass} min-w-[14rem]`}
+            >
+              {tenants.length === 0 ? (
+                <option value={resolvedTenantId}>#{resolvedTenantId}</option>
+              ) : (
+                tenants.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
         }
       >
         {err ? <p className="text-sm text-red-600">{err}</p> : null}
         {loading ? (
-          <DocumentsTableCard>
+          <div className={moduleTableCardClass}>
             <div className="px-6 py-12 text-center text-sm text-slate-500">Ładowanie…</div>
-          </DocumentsTableCard>
+          </div>
         ) : rows.length === 0 ? (
-          <DocumentsTableCard>
+          <div className={moduleTableCardClass}>
             <DocumentsEmptyState
               icon={ClipboardList}
               title="Nie znaleziono dokumentów"
               description={`Brak zapisów typu ${docTypeTitle} dla wybranej organizacji. Utwórz dokument z modułu magazynowego (np. przyjęcie PZ), aby pojawił się na liście.`}
             />
-          </DocumentsTableCard>
+          </div>
         ) : (
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className={moduleTableCardClass}>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 py-2">
               <div className="flex items-center gap-2">
-                <button
+                <SecondaryButton
                   type="button"
+                  density="compact"
                   disabled={selectedDocIds.size === 0}
                   onClick={() => setBulkPrintOpen(true)}
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
                 >
                   Drukuj zaznaczone ({selectedDocIds.size})
-                </button>
+                </SecondaryButton>
                 {selectedDocIds.size > 0 ? (
                   <button
                     type="button"
@@ -412,71 +411,73 @@ export default function DocumentsWarehousePage() {
                   </button>
                 ) : null}
               </div>
-              <DataTablePageSizeSelect
-                value={pageSize}
-                onChange={(next) => {
-                  setPageSize(next);
-                  setPage(1);
-                }}
-              />
             </div>
-            <DocumentsTableCard>
-              <WarehouseDocumentsTable
-                rows={pagedRows}
-                docType={docTab}
-                printMenuOpenId={printMenuOpenId}
-                onOpenDetail={goToDetail}
-                onDelete={setDeleteConfirmId}
-                onPrintMenuToggle={setPrintMenuOpenId}
-                onPrint={(id) => {
-                  printDocumentPdf(id);
-                  setPrintMenuOpenId(null);
-                }}
-                onDownloadPdf={(id) => {
-                  openDocumentPdf(id);
-                  setPrintMenuOpenId(null);
-                }}
-                onDuplicate={async (id) => {
-                  try {
-                    const d = await duplicateStockDocument(resolvedTenantId, id);
-                    goToDetail(d.id);
-                    void load();
-                  } catch (err: unknown) {
-                    const msg =
-                      err && typeof err === "object" && "response" in err
-                        ? (err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail
-                        : null;
-                    window.alert(msg != null ? String(msg) : "Nie udało się utworzyć kopii.");
-                  }
-                }}
-                selectedIds={selectedDocIds}
-                onToggleSelect={(id) =>
-                  setSelectedDocIds((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(id)) next.delete(id);
-                    else next.add(id);
-                    return next;
-                  })
+            <WarehouseDocumentsTable
+              rows={pagedRows}
+              docType={docTab}
+              printMenuOpenId={printMenuOpenId}
+              onOpenDetail={goToDetail}
+              onDelete={setDeleteConfirmId}
+              onPrintMenuToggle={setPrintMenuOpenId}
+              onPrint={(id) => {
+                printDocumentPdf(id);
+                setPrintMenuOpenId(null);
+              }}
+              onDownloadPdf={(id) => {
+                openDocumentPdf(id);
+                setPrintMenuOpenId(null);
+              }}
+              onDuplicate={async (id) => {
+                try {
+                  const d = await duplicateStockDocument(resolvedTenantId, id);
+                  goToDetail(d.id);
+                  void load();
+                } catch (err: unknown) {
+                  const msg =
+                    err && typeof err === "object" && "response" in err
+                      ? (err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail
+                      : null;
+                  window.alert(msg != null ? String(msg) : "Nie udało się utworzyć kopii.");
                 }
-                onToggleSelectAll={() => {
-                  setSelectedDocIds((prev) => {
-                    const allOnPage = pagedRows.every((r) => prev.has(r.id));
-                    if (allOnPage) return new Set();
-                    return new Set(pagedRows.map((r) => r.id));
-                  });
-                }}
-                allSelected={pagedRows.length > 0 && pagedRows.every((r) => selectedDocIds.has(r.id))}
-              />
-            </DocumentsTableCard>
-            <div className="flex items-center justify-between text-sm text-slate-600">
-              <span>
-                Strona {page} / {totalPages} ({rows.length} łącznie)
-              </span>
-              <div className="flex gap-2">
+              }}
+              selectedIds={selectedDocIds}
+              onToggleSelect={(id) =>
+                setSelectedDocIds((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(id)) next.delete(id);
+                  else next.add(id);
+                  return next;
+                })
+              }
+              onToggleSelectAll={() => {
+                setSelectedDocIds((prev) => {
+                  const allOnPage = pagedRows.every((r) => prev.has(r.id));
+                  if (allOnPage) return new Set();
+                  return new Set(pagedRows.map((r) => r.id));
+                });
+              }}
+              allSelected={pagedRows.length > 0 && pagedRows.every((r) => selectedDocIds.has(r.id))}
+            />
+            <div className={`${moduleTablePaginationFooterClass} px-4`}>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-sm font-medium tabular-nums text-slate-600">
+                  {rows.length === 0
+                    ? "0 z 0"
+                    : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, rows.length)} z ${rows.length}`}
+                </span>
+                <DataTablePageSizeSelect
+                  value={pageSize}
+                  onChange={(next) => {
+                    setPageSize(next);
+                    setPage(1);
+                  }}
+                />
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-1">
                 <button
                   type="button"
                   disabled={page <= 1}
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-medium hover:bg-slate-50 disabled:opacity-40"
+                  className="rounded-md border border-transparent px-2 py-1 text-sm font-medium text-slate-600 hover:bg-slate-200/60 disabled:opacity-40"
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                 >
                   Poprzednia
@@ -484,7 +485,7 @@ export default function DocumentsWarehousePage() {
                 <button
                   type="button"
                   disabled={page >= totalPages}
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-medium hover:bg-slate-50 disabled:opacity-40"
+                  className="rounded-md border border-transparent px-2 py-1 text-sm font-medium text-slate-600 hover:bg-slate-200/60 disabled:opacity-40"
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 >
                   Następna

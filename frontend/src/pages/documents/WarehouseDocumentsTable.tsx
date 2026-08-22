@@ -1,10 +1,25 @@
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
+import { Copy, Download, MoreHorizontal, Pencil, Printer, Trash2 } from "lucide-react";
 
 import type { StockDocumentListRow } from "@/api/stockDocumentsApi";
+import {
+  moduleListRowClass,
+  moduleListTableClass,
+  moduleListTableScrollClass,
+  moduleListTdClass,
+  moduleListThClass,
+  moduleListTheadClass,
+} from "@/components/listPage/moduleList";
+import {
+  OperationalActionButton,
+  OperationalActionColumn,
+} from "@/components/operational";
+import { operationalActionButtonClass } from "@/components/operational/operationalActionButtonTokens";
 import { formatMoneyPl } from "@/utils/formatOrderMoney";
 import { DocumentTypeBadge, ExternalStatusBadge } from "./documentsBadges";
 import PzWorkflowStatusBadges from "../../components/wms/PzWorkflowStatusBadges";
-import { documentsTableTheadCls } from "./documentsDashboardPrimitives";
 import { warehouseDocumentListStatus } from "./warehouseDocumentsUi";
 import {
   getWarehouseDocumentConfig,
@@ -22,6 +37,9 @@ import {
   seriesCode,
   totalQuantity,
 } from "./warehouseDocumentHelpers";
+
+const MENU_Z = 10050;
+const MENU_MIN_WIDTH = 176;
 
 function formatDateShort(iso: string) {
   try {
@@ -48,6 +66,124 @@ function alignClass(col: WarehouseListColumnId): string {
   return "text-left";
 }
 
+function RowOverflowMenu({
+  docId,
+  onDuplicate,
+  onDownloadPdf,
+}: {
+  docId: number;
+  onDuplicate: (id: number) => void;
+  onDownloadPdf: (id: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+
+  const updateMenuPos = () => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const left = Math.max(8, Math.min(rect.right - MENU_MIN_WIDTH, window.innerWidth - MENU_MIN_WIDTH - 8));
+    let top = rect.bottom + 4;
+    const estimatedHeight = 120;
+    if (top + estimatedHeight > window.innerHeight - 8) {
+      top = Math.max(8, rect.top - estimatedHeight - 4);
+    }
+    setMenuPos({ top, left });
+  };
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const id = requestAnimationFrame(updateMenuPos);
+    window.addEventListener("scroll", updateMenuPos, true);
+    window.addEventListener("resize", updateMenuPos);
+    return () => {
+      cancelAnimationFrame(id);
+      window.removeEventListener("scroll", updateMenuPos, true);
+      window.removeEventListener("resize", updateMenuPos);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (rootRef.current?.contains(t)) return;
+      if (menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const menu =
+    open && typeof document !== "undefined" ? (
+      <div
+        ref={menuRef}
+        role="menu"
+        className="overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-xl shadow-slate-200/60"
+        style={
+          menuPos
+            ? { position: "fixed", top: menuPos.top, left: menuPos.left, minWidth: MENU_MIN_WIDTH, zIndex: MENU_Z }
+            : { position: "fixed", visibility: "hidden", zIndex: MENU_Z }
+        }
+      >
+        <button
+          type="button"
+          role="menuitem"
+          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-slate-800 hover:bg-slate-50"
+          onClick={() => {
+            void onDuplicate(docId);
+            setOpen(false);
+          }}
+        >
+          <Copy className="h-4 w-4 shrink-0 text-slate-500" aria-hidden />
+          Duplikuj
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-slate-800 hover:bg-slate-50"
+          onClick={() => {
+            onDownloadPdf(docId);
+            setOpen(false);
+          }}
+        >
+          <Download className="h-4 w-4 shrink-0 text-slate-500" aria-hidden />
+          Pobierz PDF
+        </button>
+      </div>
+    ) : null;
+
+  return (
+    <>
+      <div ref={rootRef}>
+        <button
+          ref={triggerRef}
+          type="button"
+          aria-expanded={open}
+          aria-haspopup="menu"
+          aria-label="Więcej akcji"
+          title="Więcej"
+          onClick={() => setOpen((v) => !v)}
+          className={operationalActionButtonClass}
+        >
+          <MoreHorizontal strokeWidth={2} aria-hidden />
+        </button>
+      </div>
+      {menu && createPortal(menu, document.body)}
+    </>
+  );
+}
+
 type Props = {
   rows: StockDocumentListRow[];
   docType: string;
@@ -67,10 +203,8 @@ type Props = {
 export default function WarehouseDocumentsTable({
   rows,
   docType,
-  printMenuOpenId,
   onOpenDetail,
   onDelete,
-  onPrintMenuToggle,
   onPrint,
   onDownloadPdf,
   onDuplicate,
@@ -99,7 +233,7 @@ export default function WarehouseDocumentsTable({
     switch (col) {
       case "documentNumber":
         return (
-          <span className="font-mono text-lg font-bold tabular-nums text-slate-900">
+          <span className="font-mono text-base font-semibold tabular-nums text-slate-900">
             {documentDisplayNumber(r)}
           </span>
         );
@@ -169,54 +303,44 @@ export default function WarehouseDocumentsTable({
         return <span className="text-slate-800">{mmToLabel(r)}</span>;
       case "actions":
         return (
-          <div className="flex flex-wrap items-center justify-end gap-1" data-print-menu-root>
-            <button
-              type="button"
-              aria-label="Edytuj"
-              title="Edytuj"
-              onClick={() => onOpenDetail(r.id)}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-lg leading-none hover:bg-slate-50"
-            >
-              ✏️
-            </button>
-            <button
-              type="button"
-              aria-label="Usuń"
-              title="Usuń"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(r.id);
-              }}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-lg leading-none text-rose-900 hover:bg-rose-100"
-            >
-              🗑
-            </button>
-            <div className="relative inline-flex">
-              <button
-                type="button"
-                aria-label="Drukuj"
-                title="Drukuj"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPrint(r.id);
-                }}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-lg leading-none hover:bg-slate-50"
-              >
-                🖨
-              </button>
-            </div>
-            <button
-              type="button"
-              aria-label="Duplikuj"
-              title="Duplikuj"
-              onClick={(e) => {
-                e.stopPropagation();
-                void onDuplicate(r.id);
-              }}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-lg leading-none hover:bg-slate-50"
-            >
-              📋
-            </button>
+          <div data-print-menu-root>
+            <OperationalActionColumn
+              layout="stack"
+              aria-label={`Akcje dokumentu ${documentDisplayNumber(r)}`}
+              slots={[
+                <OperationalActionButton
+                  key="edit"
+                  title="Edytuj"
+                  aria-label="Edytuj"
+                  onClick={() => onOpenDetail(r.id)}
+                >
+                  <Pencil className="text-slate-600" strokeWidth={2} aria-hidden />
+                </OperationalActionButton>,
+                <OperationalActionButton
+                  key="print"
+                  title="Drukuj"
+                  aria-label="Drukuj"
+                  onClick={() => onPrint(r.id)}
+                >
+                  <Printer className="text-slate-600" strokeWidth={2} aria-hidden />
+                </OperationalActionButton>,
+                <OperationalActionButton
+                  key="del"
+                  variant="danger"
+                  title="Usuń"
+                  aria-label="Usuń"
+                  onClick={() => onDelete(r.id)}
+                >
+                  <Trash2 strokeWidth={2} aria-hidden />
+                </OperationalActionButton>,
+                <RowOverflowMenu
+                  key="more"
+                  docId={r.id}
+                  onDuplicate={onDuplicate}
+                  onDownloadPdf={onDownloadPdf}
+                />,
+              ]}
+            />
           </div>
         );
       default:
@@ -224,15 +348,13 @@ export default function WarehouseDocumentsTable({
     }
   }
 
-  const minWidth = Math.max(720, columns.length * 110);
-
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-left text-base" style={{ minWidth: `${minWidth}px` }}>
-        <thead className={`text-left ${documentsTableTheadCls}`}>
+    <div className={moduleListTableScrollClass}>
+      <table className={moduleListTableClass}>
+        <thead className={moduleListTheadClass}>
           <tr>
             {selectionEnabled ? (
-              <th className="w-12 px-3 py-3.5">
+              <th className={`${moduleListThClass} w-12`}>
                 <input
                   type="checkbox"
                   checked={allSelected}
@@ -242,10 +364,7 @@ export default function WarehouseDocumentsTable({
               </th>
             ) : null}
             {columns.map((col) => (
-              <th
-                key={col}
-                className={`px-4 py-3.5 text-xs font-bold uppercase tracking-wide text-slate-500 sm:px-5 sm:text-sm ${alignClass(col)}`}
-              >
+              <th key={col} className={`${moduleListThClass} ${alignClass(col)}`}>
                 {WAREHOUSE_COLUMN_LABELS[col]}
               </th>
             ))}
@@ -264,10 +383,10 @@ export default function WarehouseDocumentsTable({
                   onOpenDetail(r.id);
                 }
               }}
-              className="cursor-pointer border-t border-slate-100 transition-colors odd:bg-white even:bg-slate-50/40 hover:bg-slate-100/80"
+              className={moduleListRowClass}
             >
               {selectionEnabled ? (
-                <td className="w-12 px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                <td className={`${moduleListTdClass} w-12 text-center`} onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
                     checked={selectedIds?.has(r.id) ?? false}
@@ -279,7 +398,7 @@ export default function WarehouseDocumentsTable({
               {columns.map((col) => (
                 <td
                   key={col}
-                  className={`px-4 py-4 sm:px-5 sm:py-5 ${alignClass(col)}`}
+                  className={`${moduleListTdClass} ${alignClass(col)}`}
                   onClick={col === "actions" ? (e) => e.stopPropagation() : undefined}
                 >
                   {col === "customer" && r.order_id != null ? (

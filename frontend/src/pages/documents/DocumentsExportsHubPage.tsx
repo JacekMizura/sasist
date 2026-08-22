@@ -1,17 +1,13 @@
 import { Link } from "react-router-dom";
-import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { FolderOutput } from "lucide-react";
 
+import { listSellasistInputClass } from "../../components/listPage/listSellasistTokens";
+import { moduleTableCardClass } from "../../components/listPage/moduleList";
+import { PrimaryButton } from "../../design-system";
 import { DocumentsSectionShell } from "./DocumentsSectionShell";
 import DocumentsEmptyState from "./DocumentsEmptyState";
-import {
-  DocumentsFiltersToolbar,
-  DocumentsKpiRow,
-  DocumentsTableCard,
-  documentsFilterInputCls,
-} from "./documentsDashboardPrimitives";
+import { DocumentsKpiRow } from "./documentsDashboardPrimitives";
 
-const btnPrimary = brandPrimaryButtonClass;
 export default function DocumentsExportsHubPage() {
   return (
     <DocumentsSectionShell
@@ -27,11 +23,11 @@ export default function DocumentsExportsHubPage() {
         />
       }
       toolbar={
-        <DocumentsFiltersToolbar>
+        <div className="flex flex-col gap-3 border-b border-slate-100 bg-white px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center">
           <input
             type="search"
             placeholder="Szukaj w historii eksportów…"
-            className={`${documentsFilterInputCls} w-full min-w-0 sm:max-w-md`}
+            className={`${listSellasistInputClass} w-full min-w-0 sm:max-w-md`}
             disabled
             aria-disabled="true"
           />
@@ -42,21 +38,23 @@ export default function DocumentsExportsHubPage() {
             </Link>
             .
           </p>
-        </DocumentsFiltersToolbar>
+        </div>
       }
     >
-      <DocumentsTableCard>
+      <div className={moduleTableCardClass}>
         <DocumentsEmptyState
           icon={FolderOutput}
           title="Eksporty w centrum ustawień"
           description="Tu przekierujemy Cię do nowego kreatora eksportów: encje, pola, filtry i historia paczek — ten sam styl co import CSV."
           action={
-            <Link to="/templates/exports" className={btnPrimary}>
-              Otwórz eksporty
+            <Link to="/templates/exports">
+              <PrimaryButton type="button" density="compact">
+                Otwórz eksporty
+              </PrimaryButton>
             </Link>
           }
         />
-      </DocumentsTableCard>
+      </div>
     </DocumentsSectionShell>
   );
 }

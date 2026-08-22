@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Layers, Pencil, Plus, Trash2 } from "lucide-react";
 import {
@@ -23,11 +22,17 @@ import DocumentsEmptyState from "./DocumentsEmptyState";
 import { DocumentsSectionShell } from "./DocumentsSectionShell";
 import { OperationalActionButton, OperationalActionLink } from "../../components/operational";
 import {
-  DocumentsFiltersToolbar,
-  DocumentsKpiRow,
-  DocumentsTableCard,
-  documentsTableTheadCls,
-} from "./documentsDashboardPrimitives";
+  moduleBulkDangerBtnClass,
+  moduleListRowClass,
+  moduleListTableClass,
+  moduleListTableScrollClass,
+  moduleListTdClass,
+  moduleListThClass,
+  moduleListTheadClass,
+  moduleTableCardClass,
+} from "../../components/listPage/moduleList";
+import { DocumentsKpiRow } from "./documentsDashboardPrimitives";
+import { PrimaryButton } from "../../design-system";
 
 export default function DocumentSeriesListPage() {
   const navigate = useNavigate();
@@ -174,18 +179,14 @@ export default function DocumentSeriesListPage() {
       <DocumentsSectionShell
         title="Serie dokumentów"
         actions={
-          <button
-            type="button"
-            onClick={() => navigate("/documents/series/new")}
-            className={brandPrimaryButtonClass}
-          >
+          <PrimaryButton type="button" density="compact" onClick={() => navigate("/documents/series/new")}>
             <Plus className="h-4 w-4 shrink-0" aria-hidden />
             Utwórz serię
-          </button>
+          </PrimaryButton>
         }
         kpi={<DocumentsKpiRow items={seriesKpi} />}
         toolbar={
-          <DocumentsFiltersToolbar>
+          <div className="flex flex-col gap-3 border-b border-slate-100 bg-white px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center">
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input type="checkbox" checked={allSelected} onChange={toggleAll} disabled={visibleRows.length === 0} />
               Zaznacz wszystkie
@@ -194,7 +195,7 @@ export default function DocumentSeriesListPage() {
               type="button"
               disabled={selected.size === 0 || bulkBusy}
               onClick={() => void onBulkDelete()}
-              className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-900 hover:bg-red-100 disabled:opacity-50"
+              className={moduleBulkDangerBtnClass}
             >
               {bulkBusy ? "…" : `Usuń zaznaczone (${selected.size})`}
             </button>
@@ -205,103 +206,96 @@ export default function DocumentSeriesListPage() {
                 Wszystkie serie operacyjne dla wybranego magazynu.
               </span>
             )}
-          </DocumentsFiltersToolbar>
+          </div>
         }
       >
         {err ? (
           <p className="mb-4 rounded-lg border border-red-100 bg-red-50/90 px-4 py-2.5 text-sm text-red-700">{err}</p>
         ) : null}
 
-        <DocumentsTableCard>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[72rem] text-left text-sm">
-            <thead className={`text-left text-xs font-semibold uppercase tracking-wide text-slate-500 ${documentsTableTheadCls}`}>
-              <tr>
-                <th className="w-10 p-3" />
-                <th className="p-3">Nazwa</th>
-                <th className="p-3">Prefiks</th>
-                <th className="p-3">Typ</th>
-                <th className="p-3">Podtyp</th>
-                <th className="p-3">VAT</th>
-                <th className="p-3">Szablon druku</th>
-                <th className="p-3">Efekt mag.</th>
-                <th className="p-3">Numeracja</th>
-                <th className="p-3">Usuwanie</th>
-                <th className="w-24 p-3 text-right">Akcje</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleRows.length === 0 && !loading ? (
+        <div className={moduleTableCardClass}>
+          <div className={moduleListTableScrollClass}>
+            <table className={moduleListTableClass} style={{ minWidth: "72rem" }}>
+              <thead className={moduleListTheadClass}>
                 <tr>
-                  <td colSpan={11} className="p-0">
-                    <DocumentsEmptyState
-                      icon={Layers}
-                      title="Brak serii w magazynie"
-                      description="Dodaj serie numeracyjne (FV, PA, KOR, PZ, WZ, MM, RW, PW) — zdefiniuj prefiks, typ dokumentu i powiązanie z szablonem druku."
-                      action={
-                        <button
-                          type="button"
-                          onClick={() => navigate("/documents/series/new")}
-                          className={brandPrimaryButtonClass}
-                        >
-                          <Plus className="h-4 w-4 shrink-0" aria-hidden />
-                          Utwórz serię
-                        </button>
-                      }
-                    />
-                  </td>
+                  <th className={`${moduleListThClass} w-10`} />
+                  <th className={moduleListThClass}>Nazwa</th>
+                  <th className={moduleListThClass}>Prefiks</th>
+                  <th className={moduleListThClass}>Typ</th>
+                  <th className={moduleListThClass}>Podtyp</th>
+                  <th className={moduleListThClass}>VAT</th>
+                  <th className={moduleListThClass}>Szablon druku</th>
+                  <th className={moduleListThClass}>Efekt mag.</th>
+                  <th className={moduleListThClass}>Numeracja</th>
+                  <th className={moduleListThClass}>Usuwanie</th>
+                  <th className={`${moduleListThClass} w-24 text-right`}>Akcje</th>
                 </tr>
-              ) : (
-                visibleRows.map((r) => (
-                  <tr
-                    key={r.id}
-                    className="border-b border-slate-100 transition-colors odd:bg-white even:bg-slate-50/40 hover:bg-slate-100/80"
-                  >
-                    <td className="p-3">
-                      <input
-                        type="checkbox"
-                        checked={selected.has(r.id)}
-                        onChange={() => toggleOne(r.id)}
-                        aria-label={`Zaznacz ${r.name}`}
+              </thead>
+              <tbody>
+                {visibleRows.length === 0 && !loading ? (
+                  <tr>
+                    <td colSpan={11} className="p-0">
+                      <DocumentsEmptyState
+                        icon={Layers}
+                        title="Brak serii w magazynie"
+                        description="Dodaj serie numeracyjne (FV, PA, KOR, PZ, WZ, MM, RW, PW) — zdefiniuj prefiks, typ dokumentu i powiązanie z szablonem druku."
+                        action={
+                          <PrimaryButton type="button" density="compact" onClick={() => navigate("/documents/series/new")}>
+                            <Plus className="h-4 w-4 shrink-0" aria-hidden />
+                            Utwórz serię
+                          </PrimaryButton>
+                        }
                       />
                     </td>
-                    <td className="p-3 font-medium text-slate-900">{r.name}</td>
-                    <td className="p-3 font-mono text-xs text-slate-700">{r.prefix || "—"}</td>
-                    <td className="p-3">{documentSeriesTypeLabelPl(r.type)}</td>
-                    <td className="p-3">{documentSeriesSubtypeLabelPl(r.subtype)}</td>
-                    <td className="p-3 text-xs">{vatColumnSummaryPl(r)}</td>
-                    <td className="max-w-[12rem] truncate p-3 text-xs" title={printTemplateSummaryPl(r)}>
-                      {printTemplateSummaryPl(r)}
-                    </td>
-                    <td className="p-3">{r.warehouse_effect ? "tak" : "nie"}</td>
-                    <td className="p-3 text-xs text-slate-800">{numberingSummaryForListRow(r)}</td>
-                    <td className="p-3 text-xs">{deleteModeLabelPl(r.delete_mode)}</td>
-                    <td className="p-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <OperationalActionLink
-                          to={`/documents/series/${r.id}`}
-                          title="Edytuj serię"
-                          aria-label="Edytuj serię"
-                        >
-                          <Pencil strokeWidth={2} aria-hidden />
-                        </OperationalActionLink>
-                        <OperationalActionButton
-                          variant="danger"
-                          title="Usuń serię"
-                          aria-label="Usuń serię"
-                          onClick={() => void onDeleteOne(r.id)}
-                        >
-                          <Trash2 strokeWidth={2} aria-hidden />
-                        </OperationalActionButton>
-                      </div>
-                    </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  visibleRows.map((r) => (
+                    <tr key={r.id} className={moduleListRowClass}>
+                      <td className={moduleListTdClass}>
+                        <input
+                          type="checkbox"
+                          checked={selected.has(r.id)}
+                          onChange={() => toggleOne(r.id)}
+                          aria-label={`Zaznacz ${r.name}`}
+                        />
+                      </td>
+                      <td className={`${moduleListTdClass} font-medium text-slate-900`}>{r.name}</td>
+                      <td className={`${moduleListTdClass} font-mono text-xs text-slate-700`}>{r.prefix || "—"}</td>
+                      <td className={moduleListTdClass}>{documentSeriesTypeLabelPl(r.type)}</td>
+                      <td className={moduleListTdClass}>{documentSeriesSubtypeLabelPl(r.subtype)}</td>
+                      <td className={`${moduleListTdClass} text-xs`}>{vatColumnSummaryPl(r)}</td>
+                      <td className={`${moduleListTdClass} max-w-[12rem] truncate text-xs`} title={printTemplateSummaryPl(r)}>
+                        {printTemplateSummaryPl(r)}
+                      </td>
+                      <td className={moduleListTdClass}>{r.warehouse_effect ? "tak" : "nie"}</td>
+                      <td className={`${moduleListTdClass} text-xs text-slate-800`}>{numberingSummaryForListRow(r)}</td>
+                      <td className={`${moduleListTdClass} text-xs`}>{deleteModeLabelPl(r.delete_mode)}</td>
+                      <td className={moduleListTdClass}>
+                        <div className="flex items-center justify-end gap-1">
+                          <OperationalActionLink
+                            to={`/documents/series/${r.id}`}
+                            title="Edytuj serię"
+                            aria-label="Edytuj serię"
+                          >
+                            <Pencil strokeWidth={2} aria-hidden />
+                          </OperationalActionLink>
+                          <OperationalActionButton
+                            variant="danger"
+                            title="Usuń serię"
+                            aria-label="Usuń serię"
+                            onClick={() => void onDeleteOne(r.id)}
+                          >
+                            <Trash2 strokeWidth={2} aria-hidden />
+                          </OperationalActionButton>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-        </DocumentsTableCard>
+        </div>
       </DocumentsSectionShell>
     </>
   );
