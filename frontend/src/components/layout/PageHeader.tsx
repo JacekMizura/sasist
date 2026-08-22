@@ -30,7 +30,7 @@ export function PageHeader({ title, actions, subtitle, breadcrumbs = [], tabs, c
 
   const breadcrumbNav =
     breadcrumbs.length > 0 ? (
-      <nav className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-slate-500" aria-label="Ścieżka nawigacji">
+      <nav className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-slate-600" aria-label="Ścieżka nawigacji">
         <Link
           to="/dashboard"
           className="inline-flex items-center gap-1 font-medium text-slate-500 transition hover:text-slate-800"
@@ -40,13 +40,13 @@ export function PageHeader({ title, actions, subtitle, breadcrumbs = [], tabs, c
         </Link>
         {breadcrumbs.map((item, idx) => (
           <span key={`${item.label}-${idx}`} className="inline-flex items-center gap-1.5">
-            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-300" aria-hidden />
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
             {item.to ? (
-              <Link to={item.to} className="font-medium text-slate-500 transition hover:text-slate-800">
+              <Link to={item.to} className="font-medium text-slate-600 transition hover:text-slate-800">
                 {item.label}
               </Link>
             ) : (
-              <span className="font-medium text-slate-600">{item.label}</span>
+              <span className="font-semibold text-slate-900">{item.label}</span>
             )}
           </span>
         ))}

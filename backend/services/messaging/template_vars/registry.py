@@ -23,15 +23,15 @@ VarGroup = Literal[
 GROUP_LABELS: dict[str, str] = {
     "order": "Zamówienie",
     "customer": "Klient",
-    "billing": "Adres fakturowy",
+    "billing": "Adres faktury",
     "shipping": "Adres dostawy",
-    "payment": "Płatność",
-    "delivery": "Dostawa",
+    "payment": "Płatność i dostawa",
+    "delivery": "Płatność i dostawa",
     "products": "Produkty",
     "documents": "Dokumenty",
-    "shop": "Sklep / firma",
-    "return": "Zwrot",
-    "complaint": "Reklamacja",
+    "shop": "Sklep",
+    "return": "Zwrot / reklamacja",
+    "complaint": "Zwrot / reklamacja",
 }
 
 
@@ -262,23 +262,37 @@ def list_variable_catalog(*, entity_type: str | None = None) -> list[dict]:
 
 
 def list_variable_groups(*, entity_type: str | None = None) -> list[dict]:
+    """Group catalog; merge registry groups that share the same display label."""
     items = list_variable_catalog(entity_type=entity_type)
-    by_group: dict[str, list[dict]] = {}
+    label_order: list[str] = []
+    by_label: dict[str, list[dict]] = {}
     for it in items:
-        by_group.setdefault(it["group"], []).append(it)
-    order = list(GROUP_LABELS.keys())
+        label = GROUP_LABELS.get(it["group"], it["group"])
+        if label not in by_label:
+            by_label[label] = []
+            label_order.append(label)
+        by_label[label].append(it)
+    # Stable order following GROUP_LABELS first-seen labels
+    preferred: list[str] = []
+    seen_labels: set[str] = set()
+    for g in GROUP_LABELS:
+        lab = GROUP_LABELS[g]
+        if lab in by_label and lab not in seen_labels:
+            preferred.append(lab)
+            seen_labels.add(lab)
+    for lab in label_order:
+        if lab not in seen_labels:
+            preferred.append(lab)
     groups: list[dict] = []
-    for g in order:
-        if g not in by_group:
+    for lab in preferred:
+        vars_ = by_label.get(lab) or []
+        if not vars_:
             continue
         groups.append(
             {
-                "id": g,
-                "label": GROUP_LABELS[g],
-                "variables": by_group[g],
+                "id": lab.lower().replace(" ", "_").replace("/", "_"),
+                "label": lab,
+                "variables": vars_,
             }
         )
-    for g, vars_ in by_group.items():
-        if g not in order:
-            groups.append({"id": g, "label": g, "variables": vars_})
     return groups

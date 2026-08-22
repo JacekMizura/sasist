@@ -42,6 +42,7 @@ export function MessageTemplatePicker({
       entityType,
       warehouseId,
       activeOnly: true,
+      channel: "email",
     })
       .then((rows) => {
         if (!cancelled) setTemplates(rows);

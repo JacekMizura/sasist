@@ -34,16 +34,20 @@ vi.mock("../../api/messageTemplatesApi", () => ({
   getMessageTemplate: vi.fn(),
   updateMessageTemplate: vi.fn(),
   listMessageTemplateVariables: vi.fn().mockResolvedValue([]),
+  listMessageTemplateAttachmentSources: vi.fn().mockResolvedValue([]),
   previewMessageTemplate: vi.fn().mockResolvedValue({
     subject: "",
     body_html: "",
     used_live_context: false,
+    structural_preview: true,
     missing_variables: [],
     unknown_variables: [],
   }),
-  supportedContextsFromModules: () => ["ORDER", "RETURN", "COMPLAINT"],
-  modulesFromSupportedContexts: () => ({ order: true, returns: true, complaints: true }),
-  formatSupportedContextsLabel: () => "Wszystkie moduły",
+  formatChannelLabel: (c: string) => c || "E-mail",
+}));
+
+vi.mock("../../hooks/useActiveWarehouseContext", () => ({
+  useActiveWarehouseContext: () => ({ warehouseId: 1 }),
 }));
 
 afterEach(() => {

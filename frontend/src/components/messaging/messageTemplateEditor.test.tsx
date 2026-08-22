@@ -44,7 +44,7 @@ const GROUPS: MessageTemplateVariableGroupDto[] = [
   },
   {
     id: "billing",
-    label: "Adres fakturowy",
+    label: "Adres faktury",
     variables: [
       {
         key: "bill_address_city",
@@ -52,7 +52,7 @@ const GROUPS: MessageTemplateVariableGroupDto[] = [
         label: "Miasto (faktura)",
         description: "Miasto",
         group: "billing",
-        group_label: "Adres fakturowy",
+        group_label: "Adres faktury",
         value_kind: "TEXT",
         supported_contexts: ["ORDER"],
         aliases: [],
@@ -66,7 +66,7 @@ describe("MessageVariablesPanel", () => {
     const onInsert = vi.fn();
     render(createElement(MessageVariablesPanel, { groups: GROUPS, onInsert }));
     expect(screen.getByText("Zamówienie")).toBeTruthy();
-    expect(screen.getByText("Adres fakturowy")).toBeTruthy();
+    expect(screen.getByText("Adres faktury")).toBeTruthy();
     fireEvent.click(screen.getByText("{order_id}"));
     expect(onInsert).toHaveBeenCalledWith("{order_id}");
   });
@@ -95,17 +95,11 @@ describe("insertTokenIntoInput", () => {
   });
 });
 
-describe("supportedContextsFromModules", () => {
-  it("round-trips ORDER+RETURN without mapping to ALL", async () => {
-    const { supportedContextsFromModules, modulesFromSupportedContexts } = await import(
-      "../../api/messageTemplatesApi"
-    );
-    const ctx = supportedContextsFromModules({ order: true, returns: true, complaints: false });
-    expect(ctx).toEqual(["ORDER", "RETURN"]);
-    expect(modulesFromSupportedContexts(ctx)).toEqual({
-      order: true,
-      returns: true,
-      complaints: false,
-    });
+describe("messageTemplatesApi channel helpers", () => {
+  it("formatChannelLabel covers email/sms/note", async () => {
+    const { formatChannelLabel } = await import("../../api/messageTemplatesApi");
+    expect(formatChannelLabel("email")).toBe("E-mail");
+    expect(formatChannelLabel("sms")).toBe("SMS");
+    expect(formatChannelLabel("note")).toBe("Notatka");
   });
 });

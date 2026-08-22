@@ -10,13 +10,13 @@ type Props = {
   items: ModuleListBreadcrumbItem[];
 };
 
-/** Spójna ścieżka nawigacji list modułu (wzorzec zwrotów). */
+/** Spójna ścieżka nawigacji list/modułu — czytelne separatory. */
 export function ModuleListBreadcrumb({ items }: Props) {
   return (
-    <nav className="mb-2 flex flex-wrap items-center gap-2 text-sm text-slate-400" aria-label="Ścieżka nawigacji">
+    <nav className="mb-2 flex flex-wrap items-center gap-1.5 text-sm text-slate-600" aria-label="Ścieżka nawigacji">
       <Link
         to="/dashboard"
-        className="inline-flex items-center gap-1 transition hover:text-slate-900"
+        className="inline-flex items-center gap-1 text-slate-500 transition hover:text-slate-900"
         aria-label="Panel"
       >
         <Home className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
@@ -24,12 +24,12 @@ export function ModuleListBreadcrumb({ items }: Props) {
       {items.map((item, i) => {
         const isLast = i === items.length - 1;
         return (
-          <span key={`${item.label}-${i}`} className="inline-flex items-center gap-2">
-            <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span key={`${item.label}-${i}`} className="inline-flex items-center gap-1.5">
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
             {isLast || !item.to ? (
-              <span className="font-medium text-slate-900">{item.label}</span>
+              <span className="font-semibold text-slate-900">{item.label}</span>
             ) : (
-              <Link to={item.to} className="transition hover:text-slate-900">
+              <Link to={item.to} className="font-medium text-slate-600 transition hover:text-slate-900">
                 {item.label}
               </Link>
             )}

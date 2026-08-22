@@ -87,13 +87,16 @@ def render_template_string(
     context: dict[str, Any],
     *,
     for_html: bool = False,
+    keep_unresolved: bool = False,
 ) -> RenderStringResult:
     """
     Replace {key} / {{key}} placeholders.
 
     - Known + value → substituted (TEXT escaped when for_html)
-    - Known + missing/empty → "" + missing_variables
-    - Unknown (not in registry) → placeholder kept + unknown_variables
+    - Known + missing/empty:
+        keep_unresolved=False (send/live) → "" + missing_variables
+        keep_unresolved=True (structural preview) → keep token, no missing
+    - Unknown (not in registry) → placeholder kept + unknown_variables (always)
     """
     missing: list[str] = []
     unknown: list[str] = []
@@ -106,6 +109,8 @@ def render_template_string(
             return m.group(0)
         raw = _lookup(context, key)
         if _is_empty(raw):
+            if keep_unresolved:
+                return m.group(0)
             missing.append(defn.key)
             return ""
         return _format_value(defn.key, raw, for_html=for_html)
@@ -124,10 +129,15 @@ def render_template(
     body_template: str,
     context: dict[str, Any],
     body_is_html: bool = True,
+    keep_unresolved: bool = False,
 ) -> RenderResult:
     """Render subject (plain) + body (HTML-aware) with gap reporting."""
-    subj = render_template_string(subject_template, context, for_html=False)
-    body = render_template_string(body_template, context, for_html=body_is_html)
+    subj = render_template_string(
+        subject_template, context, for_html=False, keep_unresolved=keep_unresolved
+    )
+    body = render_template_string(
+        body_template, context, for_html=body_is_html, keep_unresolved=keep_unresolved
+    )
     return RenderResult(
         subject=subj.text,
         body=body.text,

@@ -3,24 +3,28 @@ import { Link, Routes, Route, useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import type { Editor } from "@tiptap/react";
 import DOMPurify from "isomorphic-dompurify";
+import { Plus, X } from "lucide-react";
 
 import PageLayout from "../../components/layout/PageLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { ModuleListBreadcrumb } from "../../components/listPage/moduleList";
-import { PrimaryButton } from "../../design-system";
+import { Dialog, PrimaryButton, SecondaryButton } from "../../design-system";
 import { useAuth } from "../../context/AuthContext";
+import { useActiveWarehouseContext } from "../../hooks/useActiveWarehouseContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import {
   archiveMessageTemplate,
   createMessageTemplate,
-  formatSupportedContextsLabel,
+  formatChannelLabel,
   getMessageTemplate,
+  listMessageTemplateAttachmentSources,
   listMessageTemplateVariables,
   listMessageTemplates,
-  modulesFromSupportedContexts,
   previewMessageTemplate,
-  supportedContextsFromModules,
   updateMessageTemplate,
+  type MessageTemplateAttachmentRef,
+  type MessageTemplateAttachmentSourceDto,
+  type MessageTemplateChannel,
   type MessageTemplateDto,
   type MessageTemplateVariableGroupDto,
 } from "../../api/messageTemplatesApi";
@@ -51,7 +55,11 @@ function MessageTemplatesListPage() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await listMessageTemplates({ tenantId: DAMAGE_TENANT_ID, activeOnly: false });
+      const data = await listMessageTemplates({
+        tenantId: DAMAGE_TENANT_ID,
+        activeOnly: false,
+        channel: "all",
+      });
       setRows(data);
     } catch {
       toast.error("Nie udało się wczytać szablonów");
@@ -70,21 +78,19 @@ function MessageTemplatesListPage() {
       <ModuleListBreadcrumb items={[{ label: "Szablony" }, { label: "Szablony wiadomości" }]} />
       <PageHeader
         title="Szablony wiadomości"
-        subtitle="Współdzielone szablony e-mail dla Poczty i automatyzacji."
         actions={
           <PrimaryButton type="button" density="compact" onClick={() => navigate(`${BASE}/new`)}>
             + Dodaj szablon
           </PrimaryButton>
         }
       />
-      <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table className="w-full min-w-[720px] text-left text-sm">
-          <thead className="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+          <thead className="border-b border-slate-100 bg-slate-50/80 text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-3 font-semibold">Nazwa</th>
+              <th className="px-4 py-3 font-semibold">Typ</th>
               <th className="px-4 py-3 font-semibold">Temat</th>
-              <th className="px-4 py-3 font-semibold">Dostępne moduły</th>
-              <th className="px-4 py-3 font-semibold">Aktywny</th>
               <th className="px-4 py-3 font-semibold">Ostatnia zmiana</th>
               <th className="px-4 py-3 text-right font-semibold">Akcje</th>
             </tr>
@@ -92,34 +98,23 @@ function MessageTemplatesListPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-slate-500">
+                <td colSpan={5} className="px-4 py-10 text-center text-slate-500">
                   Ładowanie…
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-slate-500">
+                <td colSpan={5} className="px-4 py-10 text-center text-slate-500">
                   Brak szablonów. Kliknij „Dodaj szablon”.
                 </td>
               </tr>
             ) : (
               rows.map((t) => (
-                <tr key={t.id} className="border-b border-slate-50 hover:bg-slate-50/80">
+                <tr key={t.id} className="border-b border-slate-50 hover:bg-slate-50/60">
                   <td className="px-4 py-3 font-medium text-slate-900">{t.name}</td>
-                  <td className="max-w-[240px] truncate px-4 py-3 text-slate-600">{t.subject_template || "—"}</td>
-                  <td className="px-4 py-3 text-slate-600">
-                    {t.supported_contexts_label || formatSupportedContextsLabel(t.supported_contexts)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={
-                        t.is_active
-                          ? "rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800"
-                          : "rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600"
-                      }
-                    >
-                      {t.is_active ? "Tak" : "Nie"}
-                    </span>
+                  <td className="px-4 py-3 text-slate-600">{t.channel_label || formatChannelLabel(t.channel)}</td>
+                  <td className="max-w-[260px] truncate px-4 py-3 text-slate-600">
+                    {String(t.channel).toLowerCase() === "email" ? t.subject_template || "—" : "—"}
                   </td>
                   <td className="px-4 py-3 text-slate-600">{fmtDate(t.updated_at)}</td>
                   <td className="px-4 py-3 text-right">
@@ -138,7 +133,9 @@ function MessageTemplatesListPage() {
                       >
                         Archiwizuj
                       </button>
-                    ) : null}
+                    ) : (
+                      <span className="text-xs text-slate-400">Zarchiwizowany</span>
+                    )}
                   </td>
                 </tr>
               ))
@@ -153,22 +150,32 @@ function MessageTemplatesListPage() {
 function TemplateEditorPage({ mode }: { mode: "new" | "edit" }) {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const { warehouseId } = useActiveWarehouseContext();
   const [loading, setLoading] = useState(mode === "edit");
   const [name, setName] = useState("");
+  const [channel, setChannel] = useState<MessageTemplateChannel>("email");
   const [subject, setSubject] = useState("");
   const [bodyHtml, setBodyHtml] = useState("<p></p>");
-  const [active, setActive] = useState(true);
-  const [mods, setMods] = useState({ order: true, returns: true, complaints: true });
+  const [bodyText, setBodyText] = useState("");
+  const [attachments, setAttachments] = useState<MessageTemplateAttachmentRef[]>([]);
+  const [attachSources, setAttachSources] = useState<MessageTemplateAttachmentSourceDto[]>([]);
+  const [attachPickerOpen, setAttachPickerOpen] = useState(false);
   const [groups, setGroups] = useState<MessageTemplateVariableGroupDto[]>([]);
   const [varsLoading, setVarsLoading] = useState(true);
-  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
-  const [previewSubject, setPreviewSubject] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState("");
+  const [previewSubject, setPreviewSubject] = useState("");
   const [previewMissing, setPreviewMissing] = useState<string[]>([]);
   const [previewUnknown, setPreviewUnknown] = useState<string[]>([]);
+  const [previewStructural, setPreviewStructural] = useState(true);
   const [busy, setBusy] = useState(false);
   const subjectRef = useRef<HTMLInputElement>(null);
+  const bodyTextRef = useRef<HTMLTextAreaElement>(null);
   const focusTarget = useRef<"subject" | "body">("body");
   const editorRef = useRef<Editor | null>(null);
+
+  const isEmail = channel === "email";
+  const isPlain = channel === "sms" || channel === "note";
 
   useEffect(() => {
     void listMessageTemplateVariables()
@@ -178,24 +185,48 @@ function TemplateEditorPage({ mode }: { mode: "new" | "edit" }) {
   }, []);
 
   useEffect(() => {
+    if (!isEmail || warehouseId == null) {
+      setAttachSources([]);
+      return;
+    }
+    void listMessageTemplateAttachmentSources({
+      tenantId: DAMAGE_TENANT_ID,
+      warehouseId: Number(warehouseId),
+    })
+      .then(setAttachSources)
+      .catch(() => setAttachSources([]));
+  }, [isEmail, warehouseId]);
+
+  useEffect(() => {
     if (mode !== "edit") return;
     const tid = Number(id);
     if (!Number.isFinite(tid)) return;
     void getMessageTemplate(tid, DAMAGE_TENANT_ID)
       .then((row) => {
+        const ch = (String(row.channel || "email").toLowerCase() || "email") as MessageTemplateChannel;
         setName(row.name);
+        setChannel(ch === "sms" || ch === "note" ? ch : "email");
         setSubject(row.subject_template || "");
-        setBodyHtml(row.body_template || "<p></p>");
-        setActive(row.is_active);
-        setMods(modulesFromSupportedContexts(row.supported_contexts));
+        setAttachments(Array.isArray(row.attachments) ? row.attachments : []);
+        if (ch === "sms" || ch === "note") {
+          setBodyText(row.body_template || "");
+          setBodyHtml("<p></p>");
+        } else {
+          setBodyHtml(row.body_template || "<p></p>");
+          setBodyText("");
+        }
       })
       .catch(() => toast.error("Nie znaleziono szablonu"))
       .finally(() => setLoading(false));
   }, [mode, id]);
 
   const insertToken = (token: string) => {
-    if (focusTarget.current === "subject") {
+    if (isEmail && focusTarget.current === "subject") {
       insertTokenIntoInput(subjectRef.current, token, subject, setSubject);
+      return;
+    }
+    if (isPlain) {
+      insertTokenIntoInput(bodyTextRef.current, token, bodyText, setBodyText);
       return;
     }
     if (!insertTokenIntoEditor(editorRef.current, token)) {
@@ -207,13 +238,19 @@ function TemplateEditorPage({ mode }: { mode: "new" | "edit" }) {
     try {
       const res = await previewMessageTemplate({
         tenant_id: DAMAGE_TENANT_ID,
-        subject_template: subject,
-        body_template: bodyHtml,
+        subject_template: isEmail ? subject : "",
+        body_template: isPlain ? bodyText : bodyHtml,
       });
       setPreviewSubject(res.subject);
-      setPreviewHtml(DOMPurify.sanitize(res.body_html || ""));
+      setPreviewHtml(
+        isPlain
+          ? `<pre class="whitespace-pre-wrap font-sans text-sm">${DOMPurify.sanitize(res.body_html || "")}</pre>`
+          : DOMPurify.sanitize(res.body_html || ""),
+      );
       setPreviewMissing(res.missing_variables || []);
       setPreviewUnknown(res.unknown_variables || []);
+      setPreviewStructural(res.structural_preview);
+      setPreviewOpen(true);
     } catch {
       toast.error("Podgląd nie powiódł się");
     }
@@ -224,33 +261,26 @@ function TemplateEditorPage({ mode }: { mode: "new" | "edit" }) {
       toast.error("Podaj nazwę szablonu");
       return;
     }
-    const supported_contexts = supportedContextsFromModules(mods);
-    if (supported_contexts.length === 0) {
-      toast.error("Zaznacz co najmniej jeden dostępny moduł");
-      return;
-    }
     setBusy(true);
+    const payload = {
+      name: name.trim(),
+      channel,
+      subject_template: isEmail ? subject : "",
+      body_template: isPlain ? bodyText : bodyHtml,
+      attachments: isEmail ? attachments : [],
+      is_active: true,
+    };
     try {
       if (mode === "new") {
         const row = await createMessageTemplate({
           tenant_id: DAMAGE_TENANT_ID,
-          name: name.trim(),
-          subject_template: subject,
-          body_template: bodyHtml,
-          supported_contexts,
-          is_active: active,
+          ...payload,
         });
         toast.success("Utworzono szablon");
         navigate(`${BASE}/${row.id}/edit`, { replace: true });
       } else {
         const tid = Number(id);
-        await updateMessageTemplate(tid, DAMAGE_TENANT_ID, {
-          name: name.trim(),
-          subject_template: subject,
-          body_template: bodyHtml,
-          supported_contexts,
-          is_active: active,
-        });
+        await updateMessageTemplate(tid, DAMAGE_TENANT_ID, payload);
         toast.success("Zapisano");
       }
     } catch {
@@ -258,6 +288,24 @@ function TemplateEditorPage({ mode }: { mode: "new" | "edit" }) {
     } finally {
       setBusy(false);
     }
+  };
+
+  const addAttachment = (src: MessageTemplateAttachmentSourceDto) => {
+    if (attachments.some((a) => a.field_id === src.field_id)) {
+      setAttachPickerOpen(false);
+      return;
+    }
+    setAttachments((prev) => [
+      ...prev,
+      {
+        source: "order_custom_field",
+        field_id: src.field_id,
+        field_slug: src.field_slug,
+        field_name: src.field_name,
+        field_type: src.field_type,
+      },
+    ]);
+    setAttachPickerOpen(false);
   };
 
   if (loading) {
@@ -268,32 +316,25 @@ function TemplateEditorPage({ mode }: { mode: "new" | "edit" }) {
     );
   }
 
-  const title = mode === "new" ? "Nowy szablon" : name || "Edycja szablonu";
-  const gapTokens = [
+  const crumbLabel = mode === "new" ? "Nowy szablon" : name || "Edycja";
+  const warningTokens = [
     ...previewMissing.map((k) => `{${k}}`),
     ...previewUnknown.map((k) => `{${k}}`),
   ];
 
   return (
-    <PageLayout flush>
-      <ModuleListBreadcrumb
-        items={[
+    <PageLayout>
+      <PageHeader
+        breadcrumbs={[
           { label: "Szablony" },
           { label: "Szablony wiadomości", to: BASE },
-          { label: mode === "new" ? "Nowy szablon" : "Edycja" },
+          { label: crumbLabel },
         ]}
-      />
-      <PageHeader
-        title={title}
         actions={
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              onClick={() => void handlePreview()}
-            >
+            <SecondaryButton type="button" density="compact" onClick={() => void handlePreview()}>
               Podgląd
-            </button>
+            </SecondaryButton>
             <PrimaryButton type="button" density="compact" disabled={busy} onClick={() => void handleSave()}>
               Zapisz
             </PrimaryButton>
@@ -301,129 +342,211 @@ function TemplateEditorPage({ mode }: { mode: "new" | "edit" }) {
         }
       />
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,400px)]">
-        <section className="min-w-0 space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-900">Ustawienia</h2>
-
+      <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,380px)]">
+        <section className="min-w-0 space-y-4">
           <label className="block text-sm">
             <span className="font-medium text-slate-700">Nazwa</span>
             <input
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
             />
           </label>
 
-          <fieldset>
-            <legend className="text-sm font-medium text-slate-700">Dostępne moduły</legend>
-            <p className="mt-1 text-xs text-slate-500">
-              Określa, dla jakich encji szablon pojawia się w Poczcie i Automatyzacjach. Poczta i Automatyzacje
-              zawsze korzystają z tej samej listy MessageTemplate (SSOT).
-            </p>
-            <div className="mt-2 flex flex-wrap gap-4 text-sm text-slate-700">
-              {(
-                [
-                  ["order", "Zamówienia"],
-                  ["returns", "Zwroty"],
-                  ["complaints", "Reklamacje"],
-                ] as const
-              ).map(([key, label]) => (
-                <label key={key} className="inline-flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={mods[key]}
-                    onChange={(e) => setMods((m) => ({ ...m, [key]: e.target.checked }))}
-                  />
-                  {label}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-
           <label className="block text-sm">
-            <span className="font-medium text-slate-700">Temat wiadomości</span>
-            <input
-              ref={subjectRef}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-sm"
-              value={subject}
-              onFocus={() => {
-                focusTarget.current = "subject";
-              }}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder="np. Zamówienie {order_id} zostało wysłane"
-            />
+            <span className="font-medium text-slate-700">Typ wiadomości</span>
+            <select
+              className="mt-1 w-full max-w-xs rounded-lg border border-slate-200 bg-white px-3 py-2"
+              value={channel}
+              onChange={(e) => setChannel(e.target.value as MessageTemplateChannel)}
+            >
+              <option value="email">E-mail</option>
+              <option value="sms">SMS</option>
+              <option value="note">Notatka</option>
+            </select>
           </label>
+
+          {isEmail ? (
+            <label className="block text-sm">
+              <span className="font-medium text-slate-700">Temat wiadomości</span>
+              <input
+                ref={subjectRef}
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-sm"
+                value={subject}
+                onFocus={() => {
+                  focusTarget.current = "subject";
+                }}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="np. Zamówienie {order_id} zostało wysłane"
+              />
+            </label>
+          ) : null}
 
           <div>
             <div className="mb-1 text-sm font-medium text-slate-700">Treść wiadomości</div>
-            <div
-              onFocusCapture={() => {
-                focusTarget.current = "body";
-              }}
-            >
-              <MessageHtmlEditor
-                value={bodyHtml}
-                onChange={setBodyHtml}
-                onEditorReady={(ed) => {
-                  editorRef.current = ed;
+            {isPlain ? (
+              <textarea
+                ref={bodyTextRef}
+                className="min-h-[220px] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-sm"
+                value={bodyText}
+                onFocus={() => {
+                  focusTarget.current = "body";
                 }}
-                placeholder="Wpisz treść e-mail. Kliknij zmienną po prawej, aby wstawić placeholder."
+                onChange={(e) => setBodyText(e.target.value)}
+                placeholder="Treść (zwykły tekst)…"
               />
-            </div>
+            ) : (
+              <div
+                onFocusCapture={() => {
+                  focusTarget.current = "body";
+                }}
+              >
+                <MessageHtmlEditor
+                  value={bodyHtml}
+                  onChange={setBodyHtml}
+                  onEditorReady={(ed) => {
+                    editorRef.current = ed;
+                  }}
+                  placeholder="Wpisz treść e-mail. Kliknij zmienną po prawej, aby wstawić placeholder."
+                />
+              </div>
+            )}
           </div>
 
-          <label className="inline-flex items-center gap-2 text-sm text-slate-700">
-            <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
-            Aktywny
-          </label>
-
-          <Link to={BASE} className="inline-block text-sm font-medium text-slate-600 hover:text-slate-900">
-            ← Wróć do listy
-          </Link>
+          {isEmail ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-slate-900">Załączniki</h3>
+                <SecondaryButton
+                  type="button"
+                  density="compact"
+                  onClick={() => setAttachPickerOpen(true)}
+                  disabled={warehouseId == null}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    <Plus className="h-3.5 w-3.5" /> Dodaj załącznik
+                  </span>
+                </SecondaryButton>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">
+                Źródła z pól dodatkowych zamówienia (pliki / dokumenty sprzedaży / etykiety).
+              </p>
+              {attachments.length === 0 ? (
+                <p className="mt-3 text-sm text-slate-500">Brak wybranych załączników.</p>
+              ) : (
+                <ul className="mt-3 divide-y divide-slate-100 border-t border-slate-100">
+                  {attachments.map((a) => (
+                    <li key={a.field_id} className="flex items-center justify-between gap-2 py-2 text-sm">
+                      <span>
+                        <span className="font-medium text-slate-800">{a.field_name || a.field_slug || `#${a.field_id}`}</span>
+                        {a.field_type ? <span className="ml-2 text-xs text-slate-400">{a.field_type}</span> : null}
+                      </span>
+                      <button
+                        type="button"
+                        className="rounded p-1 text-slate-400 hover:bg-slate-50 hover:text-slate-700"
+                        aria-label="Usuń"
+                        onClick={() => setAttachments((prev) => prev.filter((x) => x.field_id !== a.field_id))}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {warehouseId == null ? (
+                <p className="mt-2 text-xs text-amber-700">Wybierz magazyn, aby dodać załączniki z pól zamówienia.</p>
+              ) : null}
+            </div>
+          ) : null}
         </section>
 
         <MessageVariablesPanel groups={groups} loading={varsLoading} onInsert={insertToken} />
       </div>
 
-      {previewHtml != null ? (
-        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-slate-900">Podgląd</h3>
-            <button
-              type="button"
-              className="text-xs text-slate-500 underline"
-              onClick={() => {
-                setPreviewHtml(null);
-                setPreviewMissing([]);
-                setPreviewUnknown([]);
-              }}
-            >
-              Zamknij
-            </button>
+      <Dialog
+        open={attachPickerOpen}
+        onClose={() => setAttachPickerOpen(false)}
+        title="Dodaj załącznik"
+        size="md"
+        footer={
+          <SecondaryButton type="button" density="compact" onClick={() => setAttachPickerOpen(false)}>
+            Zamknij
+          </SecondaryButton>
+        }
+      >
+        {attachSources.length === 0 ? (
+          <p className="text-sm text-slate-500">
+            Brak aktywnych pól dodatkowych typu plik / dokument sprzedaży / etykieta w tym magazynie.
+          </p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {attachSources.map((s) => (
+              <li key={s.field_id}>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between gap-2 px-1 py-2.5 text-left text-sm hover:bg-slate-50"
+                  onClick={() => addAttachment(s)}
+                >
+                  <span>
+                    <span className="font-medium text-slate-800">{s.label}</span>
+                    <span className="ml-2 text-xs text-slate-400">{s.field_type}</span>
+                  </span>
+                  <Plus className="h-4 w-4 text-slate-400" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Dialog>
+
+      <Dialog
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        title="Podgląd szablonu"
+        size="lg"
+        footer={
+          <SecondaryButton type="button" density="compact" onClick={() => setPreviewOpen(false)}>
+            Zamknij
+          </SecondaryButton>
+        }
+      >
+        {previewUnknown.length > 0 ? (
+          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+            <p className="font-medium">Nieznane zmienne (spoza katalogu)</p>
+            <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1 font-mono text-xs">
+              {previewUnknown.map((k) => (
+                <li key={k}>{`{${k}}`}</li>
+              ))}
+            </ul>
           </div>
-          {gapTokens.length > 0 ? (
-            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-              <p className="font-medium">Nie udało się uzupełnić części zmiennych</p>
-              <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1 font-mono text-xs">
-                {gapTokens.map((t) => (
-                  <li key={t}>{t}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          <p className="mb-3 text-sm text-slate-600">
-            <span className="font-medium text-slate-800">Temat:</span> {previewSubject || "—"}
+        ) : null}
+        {!previewStructural && previewMissing.length > 0 ? (
+          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+            <p className="font-medium">Nie udało się uzupełnić części zmiennych</p>
+            <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1 font-mono text-xs">
+              {previewMissing.map((k) => (
+                <li key={k}>{`{${k}}`}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {previewStructural ? (
+          <p className="mb-3 text-xs text-slate-500">
+            Podgląd strukturalny — placeholdery pozostają widoczne, bo nie wybrano zamówienia.
           </p>
-          <div
-            className="prose prose-sm max-w-none rounded-lg border border-slate-100 bg-slate-50 p-4"
-            dangerouslySetInnerHTML={{ __html: previewHtml }}
-          />
-          <p className="mt-2 text-xs text-slate-400">
-            Bez wybranego zamówienia placeholdery mogą pozostać puste lub nierozwiązane — podgląd nie zapisuje zmian.
+        ) : null}
+        {isEmail ? (
+          <p className="mb-3 text-sm text-slate-700">
+            <span className="font-medium text-slate-900">Temat:</span> {previewSubject || "—"}
           </p>
-        </div>
-      ) : null}
+        ) : null}
+        <div
+          className="prose prose-sm max-w-none rounded-lg border border-slate-100 bg-white p-4"
+          dangerouslySetInnerHTML={{ __html: previewHtml }}
+        />
+        {warningTokens.length === 0 && !previewStructural ? null : null}
+      </Dialog>
     </PageLayout>
   );
 }

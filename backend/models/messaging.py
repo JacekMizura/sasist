@@ -26,7 +26,7 @@ EMAIL_FAILED = "FAILED"
 
 
 class MessageTemplate(Base):
-    """Tenant-owned message template (email channel for Automation Engine)."""
+    """Tenant-owned message template (email / sms / note) — SSOT for Automation + Poczta."""
 
     __tablename__ = "message_templates"
     __table_args__ = (
@@ -39,12 +39,15 @@ class MessageTemplate(Base):
     warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=True, index=True)
     code = Column(String(64), nullable=False)
     name = Column(String(255), nullable=False)
+    #: email | sms | note
     channel = Column(String(16), nullable=False, default="email")
     #: Supported entity contexts (canonical CSV). Legacy: ALL|ORDER|RETURN|COMPLAINT still parsed.
     #: Examples: "ORDER", "ORDER,RETURN", "ORDER,RETURN,COMPLAINT"
     entity_scope = Column(String(128), nullable=False, default="ORDER,RETURN,COMPLAINT")
     subject_template = Column(String(512), nullable=False, default="")
     body_template = Column(Text, nullable=False, default="")
+    #: JSON list of attachment sources, e.g. [{"source":"order_custom_field","field_id":1}]
+    attachments_json = Column(Text, nullable=False, default="[]")
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)

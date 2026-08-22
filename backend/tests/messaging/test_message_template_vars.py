@@ -17,6 +17,7 @@ from backend.models.product import Product
 from backend.models.tenant import Tenant
 from backend.models.warehouse import Warehouse
 from backend.services.messaging.context import build_entity_email_context
+from backend.services.messaging.template_channels import normalize_channel
 from backend.services.messaging.template_scopes import (
     normalize_supported_contexts,
     serialize_supported_contexts,
@@ -134,10 +135,17 @@ def test_render_resolved_no_gaps():
     assert render_template_string("Status {{status_name}}", ctx).text == "Status OK"
 
 
-def test_known_missing_variable():
+def test_known_missing_variable_live():
     r = render_template_string("Zamówienie {order_id} wysłane", {})
     assert r.text == "Zamówienie  wysłane"
     assert r.missing_variables == ["order_id"]
+    assert r.unknown_variables == []
+
+
+def test_structural_preview_keeps_known_placeholders():
+    r = render_template_string("Zamówienie {order_id} wysłane", {}, keep_unresolved=True)
+    assert r.text == "Zamówienie {order_id} wysłane"
+    assert r.missing_variables == []
     assert r.unknown_variables == []
 
 
@@ -146,6 +154,19 @@ def test_unknown_placeholder_kept():
     assert r.text == "X {waybill} Y"
     assert r.unknown_variables == ["waybill"]
     assert r.missing_variables == []
+
+
+def test_structural_unknown_still_reported():
+    rendered = render_template(
+        subject_template="{order_id}",
+        body_template="{nope}",
+        context={},
+        keep_unresolved=True,
+    )
+    assert rendered.subject == "{order_id}"
+    assert "{nope}" in rendered.body
+    assert rendered.missing_variables == []
+    assert rendered.unknown_variables == ["nope"]
 
 
 def test_multiple_missing_deduped_subject_and_body():
@@ -237,6 +258,55 @@ def test_supported_contexts_persist_and_filter(db):
     assert {t.code for t in list_email_templates(db, tenant_id=1, entity_type="COMPLAINT")} == {"rc_tpl"}
 
 
+def test_channel_sms_note_clear_subject_and_attachments(db):
+    sms = create_email_template(
+        db,
+        tenant_id=1,
+        name="SMS",
+        subject_template="ignored",
+        body_template="Cześć {order_id}",
+        channel="sms",
+        attachments=[{"source": "order_custom_field", "field_id": 1}],
+        code="sms1",
+    )
+    note = create_email_template(
+        db,
+        tenant_id=1,
+        name="Note",
+        subject_template="ignored",
+        body_template="Notatka",
+        channel="note",
+        code="note1",
+    )
+    db.commit()
+    assert template_to_dict(sms)["channel"] == "sms"
+    assert template_to_dict(sms)["subject_template"] == ""
+    assert template_to_dict(sms)["attachments"] == []
+    assert template_to_dict(note)["channel"] == "note"
+    emails = list_email_templates(db, tenant_id=1, channel="email")
+    assert all(normalize_channel(r.channel) == "email" for r in emails)
+    all_rows = list_email_templates(db, tenant_id=1, channel=None)
+    assert {normalize_channel(r.channel) for r in all_rows} >= {"sms", "note"}
+
+
+def test_email_attachments_persist(db):
+    row = create_email_template(
+        db,
+        tenant_id=1,
+        name="With att",
+        subject_template="S",
+        body_template="B",
+        channel="email",
+        attachments=[{"source": "order_custom_field", "field_id": 9, "field_name": "Faktura"}],
+        code="att1",
+    )
+    db.commit()
+    d = template_to_dict(row)
+    assert d["attachments"] == [
+        {"source": "order_custom_field", "field_id": 9, "field_name": "Faktura"},
+    ]
+
+
 def test_migrate_legacy_all_and_singles(db):
     db.add(
         MessageTemplate(
@@ -247,6 +317,7 @@ def test_migrate_legacy_all_and_singles(db):
             entity_scope="ALL",
             subject_template="",
             body_template="",
+            attachments_json="[]",
             is_active=True,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
@@ -261,6 +332,7 @@ def test_migrate_legacy_all_and_singles(db):
             entity_scope="ORDER",
             subject_template="",
             body_template="",
+            attachments_json="[]",
             is_active=True,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
