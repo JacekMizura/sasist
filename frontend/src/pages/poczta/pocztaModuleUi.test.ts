@@ -15,7 +15,7 @@ describe("Poczta module Phase 1 UI", () => {
     expect(tabs).toContain("/poczta/korespondencja");
     expect(tabs).not.toContain("/poczta/nadawcza");
     expect(tabs).toContain("/poczta/konta");
-    expect(tabs).toContain("/poczta/szablony");
+    expect(tabs).not.toContain("/poczta/szablony");
   });
 
   it("main nav includes Poczta category", () => {
@@ -36,9 +36,10 @@ describe("Poczta module Phase 1 UI", () => {
     expect(page).toContain("moduleListTableClass");
   });
 
-  it("templates canonical path is /poczta/szablony", () => {
+  it("message templates canonical path is /templates/messages", () => {
     const paths = read("pages/Templates/templatesPaths.ts");
-    expect(paths).toContain('"/poczta/szablony"');
+    expect(paths).toContain('TEMPLATES_MESSAGES_BASE = "/templates/messages"');
+    expect(paths).not.toContain('"/poczta/szablony"');
   });
 });
 

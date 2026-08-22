@@ -30,7 +30,7 @@ describe("Poczta application navigation exposure", () => {
     expect(tabs).not.toContain("/poczta/nadawcza");
     expect(tabs).toContain("Korespondencja");
     expect(tabs).toContain("Konta pocztowe");
-    expect(tabs).toContain("Szablony");
+    expect(tabs).not.toContain("Szablony");
   });
 
   it("App redirects /poczta and legacy nadawcza route", () => {
@@ -39,11 +39,11 @@ describe("Poczta application navigation exposure", () => {
     expect(app).toContain('path="nadawcza" element={<Navigate to="/poczta/korespondencja"');
   });
 
-  it("templates render embedded inside poczta shell", () => {
+  it("message templates live under Templates module, not Poczta shell", () => {
     const app = read("App.tsx");
-    expect(app).toContain("<MessageTemplatesModule embedded />");
-    const mod = read("pages/admin/MessageTemplatesModule.tsx");
-    expect(mod).toContain("embedded?: boolean");
+    expect(app).toContain('path="templates/messages/*" element={<MessageTemplatesModule />}');
+    expect(app).toContain("RedirectPocztaSzablonyToMessages");
+    expect(app).not.toContain("<MessageTemplatesModule embedded");
   });
 
   it("nav flyout access helper gates poczta by mail permissions", () => {

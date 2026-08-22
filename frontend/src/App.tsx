@@ -395,11 +395,11 @@ function LegacySettingsWmsReturnsRedirect() {
   return <Navigate to={`${to}${loc.search}`} replace />
 }
 
-/** Legacy `/administration/templates/messages/*` → `/poczta/szablony/*`. */
+/** Legacy `/administration/templates/messages/*` → `/templates/messages/*`. */
 function LegacyAdministrationMessageTemplatesRedirect() {
   const loc = useLocation()
   const tail = loc.pathname.replace(/^\/administration\/templates\/messages\/?/, "")
-  const to = tail ? `/poczta/szablony/${tail}` : "/poczta/szablony"
+  const to = tail ? `/templates/messages/${tail}` : "/templates/messages"
   return <Navigate to={`${to}${loc.search}`} replace />
 }
 
@@ -447,7 +447,15 @@ function RedirectDocumentTemplatesToPrint() {
 function RedirectMessageTemplatesToMessages() {
   const loc = useLocation()
   const tail = loc.pathname.replace(/^\/admin\/message-templates\/?/, "")
-  const to = tail ? `/poczta/szablony/${tail}` : "/poczta/szablony"
+  const to = tail ? `/templates/messages/${tail}` : "/templates/messages"
+  return <Navigate to={`${to}${loc.search}`} replace />
+}
+
+/** Legacy `/poczta/szablony/*` → `/templates/messages/*`. */
+function RedirectPocztaSzablonyToMessages() {
+  const loc = useLocation()
+  const tail = loc.pathname.replace(/^\/poczta\/szablony\/?/, "")
+  const to = tail ? `/templates/messages/${tail}` : "/templates/messages"
   return <Navigate to={`${to}${loc.search}`} replace />
 }
 
@@ -1096,9 +1104,9 @@ export const router = createBrowserRouter(
                   <Route path="korespondencja/:conversationId" element={<MailConversationDetailPage />} />
                   <Route path="nadawcza" element={<Navigate to="/poczta/korespondencja" replace />} />
                   <Route path="konta" element={<MailAccountsPage />} />
-                  <Route path="szablony/*" element={<MessageTemplatesModule embedded />} />
+                  <Route path="szablony/*" element={<RedirectPocztaSzablonyToMessages />} />
                 </Route>
-                <Route path="templates/messages/*" element={<RedirectMessageTemplatesToMessages />} />
+                <Route path="templates/messages/*" element={<MessageTemplatesModule />} />
                 <Route path="templates/exports" element={<ExportsPage />} />
                 <Route path="templates/exports/new" element={<ExportEditorPage />} />
                 <Route path="templates/exports/:id" element={<ExportEditorPage />} />

@@ -26,40 +26,22 @@ function MessageTemplatesShell({
   subtitle,
   actions,
   children,
-  embedded = false,
 }: {
   title: string;
   subtitle?: string;
   actions?: ReactNode;
   children: ReactNode;
-  embedded?: boolean;
 }) {
-  if (embedded) {
-    return (
-      <div className="space-y-4">
-        <ModuleListBreadcrumb
-          items={[{ label: "Poczta", to: "/poczta/korespondencja" }, { label: "Szablony" }]}
-        />
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900">{title}</h1>
-            {subtitle ? <p className="text-sm text-slate-500">{subtitle}</p> : null}
-          </div>
-          {actions ? <div className="shrink-0">{actions}</div> : null}
-        </div>
-        <div className="max-w-4xl space-y-4">{children}</div>
-      </div>
-    );
-  }
   return (
     <PageLayout>
+      <ModuleListBreadcrumb items={[{ label: "Szablony" }, { label: "Szablony wiadomości" }]} />
       <PageHeader title={title} subtitle={subtitle} actions={actions} />
       <div className="mt-6 max-w-4xl space-y-4">{children}</div>
     </PageLayout>
   );
 }
 
-function MessageTemplatesListPage({ embedded = false }: { embedded?: boolean }) {
+function MessageTemplatesListPage() {
   const navigate = useNavigate();
   const [rows, setRows] = useState<MessageTemplateDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,9 +68,8 @@ function MessageTemplatesListPage({ embedded = false }: { embedded?: boolean }) 
 
   return (
     <MessageTemplatesShell
-      embedded={embedded}
       title="Szablony wiadomości"
-      subtitle="Szablony e-mail używane przez automatyzacje (ORDER / RETURN / COMPLAINT)."
+      subtitle="Współdzielone szablony e-mail używane w Poczcie i automatyzacjach."
       actions={
         <PrimaryButton type="button" density="compact" onClick={() => navigate(`${BASE}/new`)}>
           Dodaj szablon
@@ -98,8 +79,8 @@ function MessageTemplatesListPage({ embedded = false }: { embedded?: boolean }) 
       {loading ? <p className="text-sm text-slate-500">Ładowanie…</p> : null}
       {!loading && rows.length === 0 ? (
         <div className="rounded-xl border border-slate-200/90 bg-white px-6 py-14 text-center shadow-sm">
-          <p className="text-sm font-medium text-slate-800">Brak szablonów wiadomości e-mail.</p>
-          <p className="mt-1 text-sm text-slate-500">Utwórz pierwszy szablon, aby użyć go w automatyzacjach.</p>
+          <p className="text-sm font-medium text-slate-800">Brak szablonów wiadomości.</p>
+          <p className="mt-1 text-sm text-slate-500">Utwórz pierwszy szablon, aby użyć go w Poczcie lub automatyzacjach.</p>
         </div>
       ) : null}
       <ul className="space-y-2">
@@ -228,10 +209,10 @@ function TemplateForm({
   );
 }
 
-function MessageTemplatesNewPage({ embedded = false }: { embedded?: boolean }) {
+function MessageTemplatesNewPage() {
   const navigate = useNavigate();
   return (
-    <MessageTemplatesShell embedded={embedded} title="Nowy szablon wiadomości" subtitle="Szablon e-mail dla automatyzacji.">
+    <MessageTemplatesShell title="Nowy szablon wiadomości" subtitle="Szablon e-mail współdzielony w systemie.">
       <Link to={BASE} className="text-sm font-medium text-slate-600 hover:text-slate-900">
         ← Wróć do listy
       </Link>
@@ -250,7 +231,7 @@ function MessageTemplatesNewPage({ embedded = false }: { embedded?: boolean }) {
   );
 }
 
-function MessageTemplatesEditPage({ embedded = false }: { embedded?: boolean }) {
+function MessageTemplatesEditPage() {
   const { id } = useParams<{ id: string }>();
   const [row, setRow] = useState<MessageTemplateDto | null>(null);
 
@@ -263,7 +244,10 @@ function MessageTemplatesEditPage({ embedded = false }: { embedded?: boolean }) 
   }, [id]);
 
   return (
-    <MessageTemplatesShell embedded={embedded} title="Edycja szablonu wiadomości" subtitle="Zmiany nie wpływają na już zlecone wiadomości w outboxie.">
+    <MessageTemplatesShell
+      title="Edycja szablonu wiadomości"
+      subtitle="Zmiany nie wpływają na już zlecone wiadomości w outboxie."
+    >
       <Link to={BASE} className="text-sm font-medium text-slate-600 hover:text-slate-900">
         ← Wróć do listy
       </Link>
@@ -287,14 +271,14 @@ function MessageTemplatesEditPage({ embedded = false }: { embedded?: boolean }) 
   );
 }
 
-/** Trasy: `/poczta/szablony` (+ legacy `/templates/messages`). */
-export default function MessageTemplatesModule({ embedded = false }: { embedded?: boolean }) {
+/** Canonical route: `/templates/messages`. */
+export default function MessageTemplatesModule() {
   useAuth();
   return (
     <Routes>
-      <Route index element={<MessageTemplatesListPage embedded={embedded} />} />
-      <Route path="new" element={<MessageTemplatesNewPage embedded={embedded} />} />
-      <Route path=":id/edit" element={<MessageTemplatesEditPage embedded={embedded} />} />
+      <Route index element={<MessageTemplatesListPage />} />
+      <Route path="new" element={<MessageTemplatesNewPage />} />
+      <Route path=":id/edit" element={<MessageTemplatesEditPage />} />
     </Routes>
   );
 }

@@ -121,6 +121,7 @@ describe("Poczta runtime render — React #130 regression", () => {
     );
     expect(screen.getByText("Korespondencja")).toBeTruthy();
     expect(screen.getByText("Konta pocztowe")).toBeTruthy();
+    expect(screen.queryByText("Szablony")).toBeNull();
   });
 
   it("C. renders /poczta/korespondencja without crash", async () => {
@@ -137,22 +138,25 @@ describe("Poczta runtime render — React #130 regression", () => {
     });
   });
 
-  it("E. renders /poczta/szablony embedded without crash", () => {
-    const html = renderToString(
+  it("E. renders /templates/messages without Poczta chrome", async () => {
+    render(
       createElement(
         MemoryRouter,
-        { initialEntries: ["/poczta/szablony"] },
+        { initialEntries: ["/templates/messages"] },
         createElement(
           Routes,
           null,
           createElement(Route, {
-            path: "/poczta/szablony/*",
-            element: createElement(MessageTemplatesModule, { embedded: true }),
+            path: "/templates/messages/*",
+            element: createElement(MessageTemplatesModule),
           }),
         ),
       ),
     );
-    expect(html).toContain("Szablony");
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Szablony wiadomości" })).toBeTruthy();
+    });
+    expect(screen.queryByRole("tablist", { name: "Poczta" })).toBeNull();
   });
 
   it("AppEmptyState without icon throws invalid element type (bug shape)", () => {

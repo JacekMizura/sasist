@@ -203,12 +203,6 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             Icon: Mail,
             permissionsAny: ["mail.manage_accounts", "mail.view"],
           },
-          {
-            path: "/poczta/szablony",
-            label: "Szablony",
-            Icon: MessageSquare,
-            permissionsAny: ["mail.manage_templates", "mail.view"],
-          },
         ],
       },
     ],
@@ -412,6 +406,11 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             path: "/templates/print",
             label: "Szablony wydruków",
             Icon: FileText,
+          },
+          {
+            path: "/templates/messages",
+            label: "Szablony wiadomości",
+            Icon: MessageSquare,
           },
           {
             path: "/templates/exports",

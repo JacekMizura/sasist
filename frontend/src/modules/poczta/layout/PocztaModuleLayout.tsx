@@ -37,7 +37,7 @@ function PocztaTabBar() {
             <NavLink
               key={tab.path}
               to={tabHref(tab.path, tabLinkSearch)}
-              end={tab.end ?? tab.path === "/poczta/szablony"}
+              end={tab.end}
               role="tab"
               className={({ isActive }) => tabsNavItemClassName(isActive)}
             >

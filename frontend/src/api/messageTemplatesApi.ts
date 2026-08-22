@@ -15,6 +15,9 @@ export type MessageTemplateDto = {
   updated_at?: string | null;
 };
 
+/** Paths are relative to axios baseURL (already ends with `/api`). */
+const BASE = "/message-templates";
+
 export async function listMessageTemplates(opts: {
   tenantId: number;
   entityType?: string;
@@ -27,7 +30,7 @@ export async function listMessageTemplates(opts: {
   if (opts.entityType) params.entity_type = opts.entityType;
   if (opts.warehouseId != null) params.warehouse_id = opts.warehouseId;
   if (opts.activeOnly != null) params.active_only = opts.activeOnly;
-  const { data } = await api.get<MessageTemplateDto[]>("/api/message-templates/", { params });
+  const { data } = await api.get<MessageTemplateDto[]>(`${BASE}/`, { params });
   return Array.isArray(data) ? data : [];
 }
 
@@ -35,7 +38,7 @@ export async function getMessageTemplate(
   templateId: number,
   tenantId: number,
 ): Promise<MessageTemplateDto> {
-  const { data } = await api.get<MessageTemplateDto>(`/api/message-templates/${templateId}`, {
+  const { data } = await api.get<MessageTemplateDto>(`${BASE}/${templateId}`, {
     params: { tenant_id: tenantId },
   });
   return data;
@@ -51,7 +54,7 @@ export async function createMessageTemplate(body: {
   warehouse_id?: number | null;
   is_active?: boolean;
 }): Promise<MessageTemplateDto> {
-  const { data } = await api.post<MessageTemplateDto>("/api/message-templates/", body);
+  const { data } = await api.post<MessageTemplateDto>(`${BASE}/`, body);
   return data;
 }
 
@@ -66,7 +69,7 @@ export async function updateMessageTemplate(
     is_active?: boolean;
   },
 ): Promise<MessageTemplateDto> {
-  const { data } = await api.patch<MessageTemplateDto>(`/api/message-templates/${templateId}`, body, {
+  const { data } = await api.patch<MessageTemplateDto>(`${BASE}/${templateId}`, body, {
     params: { tenant_id: tenantId },
   });
   return data;
@@ -77,7 +80,7 @@ export async function archiveMessageTemplate(
   tenantId: number,
 ): Promise<MessageTemplateDto> {
   const { data } = await api.post<MessageTemplateDto>(
-    `/api/message-templates/${templateId}/archive`,
+    `${BASE}/${templateId}/archive`,
     {},
     { params: { tenant_id: tenantId } },
   );
