@@ -1,4 +1,11 @@
-/** Tokeny tabeli listy producentów — spójne z Klientami / Polami dodatkowymi. */
+/**
+ * Tokeny tabeli listy producentów — nagłówki jak Products/Klienci; akcje przez `OperationalActionButton`.
+ */
+import {
+  listSellasistRowActionBtn,
+  listSellasistRowActionBtnDanger,
+} from "../../listPage/listSellasistTokens";
+
 export const manufacturersListTableClass = "w-full table-fixed text-left text-sm";
 export const manufacturersListThClass =
   "sticky top-0 z-10 whitespace-nowrap bg-white px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 shadow-[inset_0_-1px_0_0_rgb(226,232,240)]";
@@ -29,19 +36,27 @@ export const manufacturersListNameCellClass = "min-w-0 px-4 py-0 align-middle te
 export const manufacturersListNameThClass =
   "sticky top-0 z-10 min-w-0 bg-white px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 shadow-[inset_0_-1px_0_0_rgb(226,232,240)]";
 
-/** Kolumna akcji — stała 120 px, sticky prawa, poza podziałem fr. */
-export const manufacturersListActionsColWidth = "120px";
+/** Dwa przyciski 40×40 — jak Products/Klienci (`88px`). */
+export const manufacturersListActionsColWidth = "88px";
 export const manufacturersListActionsCellClass =
-  "sticky right-0 z-[2] box-border w-[120px] min-w-[120px] max-w-[120px] bg-inherit px-2 py-0 align-middle";
+  "sticky right-0 z-[2] box-border w-[88px] min-w-[88px] max-w-[88px] shrink-0 bg-inherit px-1 py-0 align-middle";
 export const manufacturersListActionsThClass =
-  "sticky right-0 top-0 z-[3] box-border w-[120px] min-w-[120px] max-w-[120px] bg-white px-2 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 shadow-[inset_0_-1px_0_0_rgb(226,232,240)]";
+  "sticky right-0 top-0 z-[3] box-border w-[88px] min-w-[88px] max-w-[88px] shrink-0 bg-white px-1 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 shadow-[inset_0_-1px_0_0_rgb(226,232,240)]";
 export const manufacturersListActionsInnerClass =
-  "flex min-h-[3.5rem] flex-row items-center justify-end gap-2";
-export const manufacturersListRowActionBtn =
-  "inline-flex h-9 w-9 min-h-9 min-w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-900";
-export const manufacturersListRowActionBtnDanger =
-  `${manufacturersListRowActionBtn} text-red-600 hover:border-red-200 hover:text-red-700`;
+  "flex min-h-[3.5rem] flex-row flex-nowrap items-center justify-center gap-1";
+
+/** @deprecated Prefer `OperationalActionButton`. */
+export const manufacturersListRowActionBtn = listSellasistRowActionBtn;
+/** @deprecated Prefer `OperationalActionButton variant="danger"`. */
+export const manufacturersListRowActionBtnDanger = listSellasistRowActionBtnDanger;
 
 /** Stały obszar logo 40×40 px — wyrównanie wizualne wierszy. */
 export const manufacturersListLogoBoxClass =
   "flex h-10 w-10 shrink-0 items-center justify-center";
+
+/** Badge status / etykiety — `text-xs font-medium` jak Klienci. */
+export const manufacturersListBadgeBaseClass =
+  "inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium";
+
+/** Proporcjonalny układ — węższa kolumna akcji (2×40px). */
+export const MANUFACTURERS_LIST_TABLE_LAYOUT = { actionsPx: 88 } as const;

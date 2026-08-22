@@ -2,6 +2,7 @@ import type { RefObject } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 
 import type { ManufacturerRead } from "../../../api/manufacturersApi";
+import { OperationalActionButton } from "../../operational";
 import { useProportionalTableColumns } from "../../listPage/useProportionalTableColumns";
 import { ManufacturerLogo } from "./ManufacturerLogo";
 import { manufacturerListColumnLabel } from "./manufacturerListColumnCatalog";
@@ -13,6 +14,7 @@ import {
   manufacturersListActionsCellClass,
   manufacturersListActionsInnerClass,
   manufacturersListActionsThClass,
+  manufacturersListBadgeBaseClass,
   manufacturersListCheckboxCellClass,
   manufacturersListCheckboxInnerClass,
   manufacturersListCheckboxInputClass,
@@ -21,13 +23,12 @@ import {
   manufacturersListLogoThClass,
   manufacturersListNameCellClass,
   manufacturersListNameThClass,
-  manufacturersListRowActionBtn,
-  manufacturersListRowActionBtnDanger,
   manufacturersListRowClass,
   manufacturersListRowInnerClass,
   manufacturersListTableClass,
   manufacturersListTdClass,
   manufacturersListThClass,
+  MANUFACTURERS_LIST_TABLE_LAYOUT,
 } from "./manufacturersListTableTokens";
 
 export type ManufacturersListTableProps = {
@@ -75,13 +76,13 @@ function RowCheckbox({
 function ManufacturerStatusBadge({ active }: { active: boolean }) {
   if (active) {
     return (
-      <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-900 ring-1 ring-emerald-200">
+      <span className={`${manufacturersListBadgeBaseClass} border-emerald-200 bg-emerald-50 text-emerald-900`}>
         Aktywny
       </span>
     );
   }
   return (
-    <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
+    <span className={`${manufacturersListBadgeBaseClass} border-slate-200 bg-slate-50 text-slate-600`}>
       Nieaktywny
     </span>
   );
@@ -91,7 +92,7 @@ function ManufacturerNameCell({ row }: { row: ManufacturerRead }) {
   const nameLines = manufacturerNameLines(row);
   return (
     <div className={`${manufacturersListRowInnerClass} min-w-0 flex-col !items-start gap-0.5 py-2`}>
-      <span className="block max-w-full truncate text-base font-semibold text-slate-900" title={nameLines.title}>
+      <span className="block max-w-full truncate text-sm font-medium text-slate-900" title={nameLines.title}>
         {nameLines.title}
       </span>
       {nameLines.companyLine ? (
@@ -200,7 +201,7 @@ export function ManufacturersListTable({
   onProductsClick,
 }: ManufacturersListTableProps) {
   const { containerRef, widths, contentMinWidthPx, needsHorizontalScroll } =
-    useProportionalTableColumns(columnOrder.length);
+    useProportionalTableColumns(columnOrder.length, MANUFACTURERS_LIST_TABLE_LAYOUT);
 
   return (
     <div
@@ -274,25 +275,22 @@ export function ManufacturersListTable({
                 ))}
                 <td className={manufacturersListActionsCellClass}>
                   <div className={manufacturersListActionsInnerClass}>
-                    <button
-                      type="button"
-                      className={manufacturersListRowActionBtn}
-                      title="Edytuj"
-                      aria-label="Edytuj"
+                    <OperationalActionButton
+                      title="Edytuj producenta"
+                      aria-label="Edytuj producenta"
                       onClick={() => onEdit(row.id)}
                     >
-                      <Pencil className="h-4 w-4 shrink-0" strokeWidth={2} />
-                    </button>
-                    <button
-                      type="button"
-                      className={manufacturersListRowActionBtnDanger}
+                      <Pencil strokeWidth={2} aria-hidden />
+                    </OperationalActionButton>
+                    <OperationalActionButton
+                      variant="danger"
                       title={row.product_count > 0 ? "Dezaktywuj producenta" : "Usuń producenta"}
                       aria-label={row.product_count > 0 ? "Dezaktywuj producenta" : "Usuń producenta"}
                       disabled={busy}
                       onClick={() => onDelete(row)}
                     >
-                      <Trash2 className="h-4 w-4 shrink-0" strokeWidth={2} />
-                    </button>
+                      <Trash2 strokeWidth={2} aria-hidden />
+                    </OperationalActionButton>
                   </div>
                 </td>
               </tr>

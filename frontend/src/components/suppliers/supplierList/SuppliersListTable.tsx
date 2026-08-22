@@ -2,7 +2,7 @@ import type { RefObject } from "react";
 import { Pencil, ShoppingBag, Trash2 } from "lucide-react";
 
 import type { SupplierRead } from "../../../api/inboundSuppliersApi";
-import { PROPORTIONAL_TABLE_NO_LOGO } from "../../listPage/proportionalTableColumns";
+import { OperationalActionButton } from "../../operational";
 import { useProportionalTableColumns } from "../../listPage/useProportionalTableColumns";
 import { supplierListColumnLabel } from "./supplierListColumnCatalog";
 import { supplierListCellOrDash, supplierNameLines } from "./supplierListCellPresentation";
@@ -10,20 +10,19 @@ import {
   suppliersListActionsCellClass,
   suppliersListActionsInnerClass,
   suppliersListActionsThClass,
+  suppliersListBadgeBaseClass,
   suppliersListCheckboxCellClass,
   suppliersListCheckboxInnerClass,
   suppliersListCheckboxInputClass,
   suppliersListCheckboxThClass,
   suppliersListNameCellClass,
   suppliersListNameThClass,
-  suppliersListRowActionBtn,
-  suppliersListRowActionBtnAccent,
-  suppliersListRowActionBtnDanger,
   suppliersListRowClass,
   suppliersListRowInnerClass,
   suppliersListTableClass,
   suppliersListTdClass,
   suppliersListThClass,
+  SUPPLIERS_LIST_TABLE_LAYOUT,
 } from "./suppliersListTableTokens";
 
 export type SuppliersListTableProps = {
@@ -74,13 +73,13 @@ function RowCheckbox({
 function SupplierStatusBadge({ active }: { active: boolean }) {
   if (active) {
     return (
-      <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-900 ring-1 ring-emerald-200">
+      <span className={`${suppliersListBadgeBaseClass} border-emerald-200 bg-emerald-50 text-emerald-900`}>
         Aktywny
       </span>
     );
   }
   return (
-    <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
+    <span className={`${suppliersListBadgeBaseClass} border-slate-200 bg-slate-50 text-slate-600`}>
       Nieaktywny
     </span>
   );
@@ -90,7 +89,7 @@ function SupplierNameCell({ row }: { row: SupplierRead }) {
   const lines = supplierNameLines(row);
   return (
     <div className={`${suppliersListRowInnerClass} min-w-0 flex-col !items-start gap-0.5 py-2`}>
-      <span className="block max-w-full truncate text-base font-semibold text-slate-900" title={lines.title}>
+      <span className="block max-w-full truncate text-sm font-medium text-slate-900" title={lines.title}>
         {lines.title}
       </span>
       {lines.companyLine ? (
@@ -110,11 +109,11 @@ function SupplierShippingCell({ row }: { row: SupplierRead }) {
   return (
     <div className={`${suppliersListRowInnerClass} min-w-0 flex-col !items-start gap-1 py-2`}>
       {row.offers_free_shipping === false ? (
-        <span className="inline-flex w-fit rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+        <span className={`${suppliersListBadgeBaseClass} border-slate-200 bg-slate-50 text-slate-700`}>
           Tylko płatna
         </span>
       ) : (
-        <span className="inline-flex w-fit rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-950 ring-1 ring-sky-200">
+        <span className={`${suppliersListBadgeBaseClass} border-sky-200 bg-sky-50 text-sky-950`}>
           Darmowa możliwa
         </span>
       )}
@@ -132,11 +131,11 @@ function SupplierMoqCell({ row }: { row: SupplierRead }) {
   return (
     <div className={`${suppliersListRowInnerClass} min-w-0 flex-col !items-start gap-1 py-2`}>
       {row.requires_moq === false ? (
-        <span className="inline-flex w-fit rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-900 ring-1 ring-emerald-200">
+        <span className={`${suppliersListBadgeBaseClass} border-emerald-200 bg-emerald-50 text-emerald-900`}>
           Bez MOQ
         </span>
       ) : (
-        <span className="inline-flex w-fit rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-950 ring-1 ring-amber-200">
+        <span className={`${suppliersListBadgeBaseClass} border-amber-200 bg-amber-50 text-amber-950`}>
           MOQ wymagane
         </span>
       )}
@@ -267,7 +266,7 @@ export function SuppliersListTable({
 }: SuppliersListTableProps) {
   const { containerRef, widths, contentMinWidthPx, needsHorizontalScroll } = useProportionalTableColumns(
     columnOrder.length,
-    PROPORTIONAL_TABLE_NO_LOGO,
+    SUPPLIERS_LIST_TABLE_LAYOUT,
   );
 
   return (
@@ -340,35 +339,31 @@ export function SuppliersListTable({
                 ))}
                 <td className={suppliersListActionsCellClass}>
                   <div className={suppliersListActionsInnerClass}>
-                    <button
-                      type="button"
-                      className={suppliersListRowActionBtnAccent}
+                    <OperationalActionButton
+                      variant="accent"
                       title="Nowe zamówienie"
                       aria-label="Nowe zamówienie"
                       disabled={newOrderBusyId === row.id}
                       onClick={() => onNewOrder(row.id)}
                     >
-                      <ShoppingBag className="h-4 w-4 shrink-0" strokeWidth={2} />
-                    </button>
-                    <button
-                      type="button"
-                      className={suppliersListRowActionBtn}
-                      title="Edytuj"
-                      aria-label="Edytuj"
+                      <ShoppingBag strokeWidth={2} aria-hidden />
+                    </OperationalActionButton>
+                    <OperationalActionButton
+                      title="Edytuj dostawcę"
+                      aria-label="Edytuj dostawcę"
                       onClick={() => onEdit(row.id)}
                     >
-                      <Pencil className="h-4 w-4 shrink-0" strokeWidth={2} />
-                    </button>
-                    <button
-                      type="button"
-                      className={suppliersListRowActionBtnDanger}
+                      <Pencil strokeWidth={2} aria-hidden />
+                    </OperationalActionButton>
+                    <OperationalActionButton
+                      variant="danger"
                       title="Usuń / dezaktywuj"
-                      aria-label="Usuń"
+                      aria-label="Usuń dostawcę"
                       disabled={busy}
                       onClick={() => onDelete(row)}
                     >
-                      <Trash2 className="h-4 w-4 shrink-0" strokeWidth={2} />
-                    </button>
+                      <Trash2 strokeWidth={2} aria-hidden />
+                    </OperationalActionButton>
                   </div>
                 </td>
               </tr>

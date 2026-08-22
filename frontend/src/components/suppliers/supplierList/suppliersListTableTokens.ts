@@ -1,4 +1,12 @@
-/** Tokeny tabeli listy dostawców — proporcjonalny układ jak Producenci (bez logo). */
+/**
+ * Tokeny tabeli listy dostawców — proporcjonalny układ; akcje przez `OperationalActionButton`.
+ */
+import {
+  listSellasistRowActionBtn,
+  listSellasistRowActionBtnDanger,
+} from "../../listPage/listSellasistTokens";
+import { PROPORTIONAL_TABLE_NO_LOGO } from "../../listPage/proportionalTableColumns";
+
 export const suppliersListTableClass = "w-full table-fixed text-left text-sm";
 export const suppliersListThClass =
   "sticky top-0 z-10 whitespace-nowrap bg-white px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 shadow-[inset_0_-1px_0_0_rgb(226,232,240)]";
@@ -20,15 +28,28 @@ export const suppliersListNameCellClass = "min-w-0 px-4 py-0 align-middle text-s
 export const suppliersListNameThClass =
   "sticky top-0 z-10 min-w-0 bg-white px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 shadow-[inset_0_-1px_0_0_rgb(226,232,240)]";
 
+/** Trzy przyciski 40×40 w rzędzie. */
+export const suppliersListActionsColWidth = "128px";
 export const suppliersListActionsCellClass =
-  "sticky right-0 z-[2] box-border w-[120px] min-w-[120px] max-w-[120px] bg-inherit px-1 py-0 align-middle";
+  "sticky right-0 z-[2] box-border w-[128px] min-w-[128px] max-w-[128px] shrink-0 bg-inherit px-1 py-0 align-middle";
 export const suppliersListActionsThClass =
-  "sticky right-0 top-0 z-[3] box-border w-[120px] min-w-[120px] max-w-[120px] bg-white px-1 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 shadow-[inset_0_-1px_0_0_rgb(226,232,240)]";
+  "sticky right-0 top-0 z-[3] box-border w-[128px] min-w-[128px] max-w-[128px] shrink-0 bg-white px-1 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 shadow-[inset_0_-1px_0_0_rgb(226,232,240)]";
 export const suppliersListActionsInnerClass =
-  "flex min-h-[3.5rem] flex-row items-center justify-end gap-1";
-export const suppliersListRowActionBtn =
-  "inline-flex h-9 w-9 min-h-9 min-w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-900";
-export const suppliersListRowActionBtnAccent =
-  `${suppliersListRowActionBtn} text-violet-700 hover:border-violet-200 hover:text-violet-900`;
-export const suppliersListRowActionBtnDanger =
-  `${suppliersListRowActionBtn} text-red-600 hover:border-red-200 hover:text-red-700`;
+  "flex min-h-[3.5rem] flex-row flex-nowrap items-center justify-end gap-1";
+
+/** @deprecated Prefer `OperationalActionButton`. */
+export const suppliersListRowActionBtn = listSellasistRowActionBtn;
+/** @deprecated Prefer `OperationalActionButton variant="accent"`. */
+export const suppliersListRowActionBtnAccent = listSellasistRowActionBtn;
+/** @deprecated Prefer `OperationalActionButton variant="danger"`. */
+export const suppliersListRowActionBtnDanger = listSellasistRowActionBtnDanger;
+
+/** Badge status / wysyłka / MOQ — `text-xs font-medium` jak Klienci. */
+export const suppliersListBadgeBaseClass =
+  "inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium";
+
+/** Proporcjonalny układ bez logo; szersza kolumna akcji (3×40px). */
+export const SUPPLIERS_LIST_TABLE_LAYOUT = {
+  ...PROPORTIONAL_TABLE_NO_LOGO,
+  actionsPx: 128,
+} as const;

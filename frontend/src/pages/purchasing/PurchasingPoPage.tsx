@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ShoppingCart } from "lucide-react";
+import { Eye, ShoppingCart } from "lucide-react";
 import { listPurchaseOrders, type PurchaseOrderListRow } from "../../api/purchasingOrdersApi";
 import { AppEmptyState } from "../../components/app-shell";
+import { OperationalActionLink } from "../../components/operational";
 import { DataTablePageSizeSelect } from "../../components/table/DataTablePageSizeSelect";
 import { usePurchasingModuleContextOptional } from "../../modules/purchasing/context/PurchasingModuleContext";
 import { usePurchasingTenant } from "../../modules/purchasing/hooks/usePurchasingTenant";
@@ -161,8 +162,8 @@ export default function PurchasingPoPage() {
                   <tbody className="divide-y divide-slate-100">
                     {rows.map((r) => (
                       <tr key={r.id} className="transition-colors hover:bg-blue-50/30">
-                        <td className={`${td} font-medium`}>{r.order_number}</td>
-                        <td className={td}>{r.supplier_name}</td>
+                        <td className={`${td} font-medium text-slate-900`}>{r.order_number}</td>
+                        <td className={`${td} text-slate-800`}>{r.supplier_name}</td>
                         <td className={`${td} text-slate-500`}>{fmtDate(r.created_at)}</td>
                         <td className={`${td} text-slate-500`}>{fmtDate(r.expected_date)}</td>
                         <td className={`${td} text-center tabular-nums`}>{r.item_count}</td>
@@ -174,12 +175,15 @@ export default function PurchasingPoPage() {
                           <PurchasingStatusBadge status={r.status} variant="po" />
                         </td>
                         <td className={`${td} text-right`}>
-                          <Link
-                            to={`/purchasing/orders/${r.id}?${tenantQuery}`}
-                            className={purchasingLinkClass}
-                          >
-                            Otwórz
-                          </Link>
+                          <div className="flex justify-end">
+                            <OperationalActionLink
+                              to={`/purchasing/orders/${r.id}?${tenantQuery}`}
+                              title="Otwórz zamówienie"
+                              aria-label="Otwórz zamówienie"
+                            >
+                              <Eye strokeWidth={2} aria-hidden />
+                            </OperationalActionLink>
+                          </div>
                         </td>
                       </tr>
                     ))}
