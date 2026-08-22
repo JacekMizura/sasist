@@ -59,12 +59,13 @@ describe("Poczta application navigation exposure", () => {
     expect(page).toContain("/poczta/konta");
   });
 
-  it("accounts page is routable with add button", () => {
+  it("accounts page is routable with add button and empty-state icon", () => {
     const app = read("App.tsx");
     expect(app).toContain('path="konta" element={<MailAccountsPage />}');
     const page = read("pages/poczta/MailAccountsPage.tsx");
     expect(page).toContain("Dodaj konto");
     expect(page).toContain("brandPrimaryButtonClass");
+    expect(page).toMatch(/<AppEmptyState[\s\S]*icon=\{/);
   });
 
   it("conversation detail route registered", () => {

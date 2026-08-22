@@ -1,5 +1,5 @@
-import { useEffect, type LucideIcon } from "react";
-import { ChevronRight } from "lucide-react";
+import { useEffect } from "react";
+import { ChevronRight, type LucideIcon } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import {

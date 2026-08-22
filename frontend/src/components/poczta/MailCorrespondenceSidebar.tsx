@@ -43,7 +43,7 @@ export function MailCorrespondenceSidebar({
       <PanelStatusSidebarHeader title="Korespondencja" onToggleCollapsed={onToggleCollapsed} />
       {MAIL_SIDEBAR_SECTIONS.map((section) => (
         <div key={section.title}>
-          <p className={panelTreeMetaRowClass}>{section.title}</p>
+          <p className={panelTreeMetaRowClass(false)}>{section.title}</p>
           <ul className="mt-1 space-y-0.5">
             {section.items.map((item) => {
               const active = activeBucket === item.bucket;

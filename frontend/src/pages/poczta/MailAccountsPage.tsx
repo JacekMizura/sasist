@@ -135,6 +135,7 @@ export default function MailAccountsPage() {
         <p className="text-sm text-slate-500">Ładowanie…</p>
       ) : rows.length === 0 ? (
         <AppEmptyState
+          icon={Cable}
           title="Brak kont pocztowych"
           description="Dodaj pierwsze konto, aby rozpocząć synchronizację korespondencji."
           action={

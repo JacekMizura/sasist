@@ -1,4 +1,4 @@
-import type { TabItem } from "../../../components/TopTabsNavigation";
+import type { TabItem } from "../../components/TopTabsNavigation";
 
 /** Główne zakładki modułu Poczta (outbox tab — Phase 3). */
 export const POCZTA_TABS: TabItem[] = [
