@@ -1,6 +1,12 @@
 import type { ManualExecutionMode, OrderAutomationModuleSettings } from "../../../types/orderAutomation";
 import { DEFAULT_MANUAL_CONFIRM_MESSAGE } from "../../../utils/orderAutomationModuleSettings";
-import { oaBtn, oaBtnPri, oaInp, oaLbl } from "./orderAutomationUiTokens";
+import {
+  FORM_FIELD_DENSITY,
+  FormField,
+  PrimaryButton,
+  SecondaryButton,
+  Textarea,
+} from "../../../design-system";
 
 function RadioOption<T extends string>({
   name,
@@ -124,10 +130,10 @@ export function AutomationModuleActivatorSettingsForm({ settings, onChange, onCh
       </div>
 
       {settings.executionMode === "confirm" ? (
-        <label className={oaLbl}>
-          Treść okna potwierdzenia
-          <textarea
-            className={`${oaInp} mt-1 min-h-[4.5rem] resize-y py-2`}
+        <FormField label="Treść okna potwierdzenia">
+          <Textarea
+            density={FORM_FIELD_DENSITY}
+            className="min-h-[4.5rem] resize-y"
             rows={3}
             value={settings.confirmMessage}
             placeholder={DEFAULT_MANUAL_CONFIRM_MESSAGE}
@@ -136,7 +142,7 @@ export function AutomationModuleActivatorSettingsForm({ settings, onChange, onCh
               onChange({ confirmMessage: e.target.value.trim() || DEFAULT_MANUAL_CONFIRM_MESSAGE })
             }
           />
-        </label>
+        </FormField>
       ) : null}
 
       {settings.executionMode === "confirm" ? (
@@ -144,12 +150,12 @@ export function AutomationModuleActivatorSettingsForm({ settings, onChange, onCh
           <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Podgląd okna potwierdzenia</p>
           <p className="mt-3 text-sm text-slate-700">{confirmText}</p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" className={oaBtn} disabled>
+            <SecondaryButton type="button" disabled>
               Anuluj
-            </button>
-            <button type="button" className={oaBtnPri} disabled>
+            </SecondaryButton>
+            <PrimaryButton type="button" disabled>
               Potwierdź
-            </button>
+            </PrimaryButton>
           </div>
         </div>
       ) : null}

@@ -24,7 +24,7 @@ import {
 import { AutomationCategoryPickerModal } from "./AutomationCategoryPickerModal";
 import { OrderUiStatusField } from "../OrderUiStatusField";
 import { AutomationValueBadges } from "./AutomationValueBadges";
-import { oaInp } from "./orderAutomationUiTokens";
+import { Input } from "../../../design-system";
 
 const sentenceTriggerClass =
   "inline-flex h-8 max-w-full min-w-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-left text-sm font-medium text-slate-900 transition hover:border-slate-300";
@@ -143,16 +143,16 @@ export function AutomationConditionConfigFields({
             totalOptionCount={selectOptions.length}
           />
         ) : meta?.valueKind === "number" ? (
-          <input
-            className={`${oaInp} h-8`}
+          <Input
+            density="compact"
             type="number"
             value={values[0] ?? ""}
             placeholder="Wartość…"
             onChange={(e) => onPatch({ value: e.target.value.trim() ? [e.target.value.trim()] : [] })}
           />
         ) : (
-          <input
-            className={`${oaInp} h-8`}
+          <Input
+            density="compact"
             value={values[0] ?? ""}
             placeholder="Wartość…"
             onChange={(e) => onPatch({ value: e.target.value.trim() ? [e.target.value.trim()] : [] })}

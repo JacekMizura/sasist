@@ -5,11 +5,10 @@ import type {
   OrderAutomationRunMode,
 } from "../../../types/orderAutomation";
 import { isScheduleWindowValid } from "../../../utils/orderAutomationValidation";
+import { FORM_FIELD_DENSITY, Input } from "../../../design-system";
 import { AutomationManualTriggerSection } from "./AutomationManualTriggerSection";
 import {
   oaEditorHeaderCardClass,
-  oaInp,
-  oaInpDense,
   oaLaunchTileClass,
 } from "./orderAutomationUiTokens";
 
@@ -56,9 +55,10 @@ function TimeField({
 }) {
   return (
     <div className="relative">
-      <input
+      <Input
         type="time"
-        className={`${oaInp} w-[7.5rem] pr-9 ${invalid ? "border-red-400" : ""}`}
+        density={FORM_FIELD_DENSITY}
+        className={`w-[7.5rem] pr-9 ${invalid ? "border-red-400" : ""}`}
         value={value}
         onChange={(e) => onChange(e.target.value || "08:00")}
       />
@@ -195,11 +195,12 @@ export function AutomationExecutionSettingsSection({
             <div className="max-w-md space-y-5">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm text-slate-700">Opóźnij wykonanie o</span>
-                <input
+                <Input
                   type="number"
                   min={0}
                   step={1}
-                  className={`${oaInpDense} w-20 text-center`}
+                  density="compact"
+                  className="w-20 text-center"
                   value={delayMinutes}
                   onChange={(e) =>
                     onChange({ delayMinutes: Math.max(0, Math.floor(Number(e.target.value) || 0)) })

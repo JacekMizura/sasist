@@ -10,13 +10,13 @@ import type {
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../types/orderUiStatus";
 import type { ConditionOption } from "../../../utils/orderAutomationConditionOptions";
 import { IconButton } from "../../../design-system/components/Button/IconButton";
+import { PrimaryButton } from "../../../design-system";
 import { AutomationConditionConfigFields } from "./AutomationConditionConfigFields";
 import { AutomationConditionSummary } from "./AutomationConditionSummary";
 import { AutomationEffectConfigFields } from "./AutomationEffectConfigFields";
 import { AutomationEffectSummary } from "./AutomationEffectSummary";
 import { buildOrderUiStatusBriefById } from "./buildOrderUiStatusNameById";
 import {
-  oaBtnPri,
   oaWorkflowAddCtaCondition,
   oaWorkflowAddCtaEffect,
   oaWorkflowFlowArrowClass,
@@ -171,10 +171,10 @@ function ConditionRow({
                   onPatch={onPatch}
                 />
                 <div className="flex justify-end">
-                  <button type="button" className={`${oaBtnPri} h-8 gap-1.5 px-3 text-xs`} onClick={onFinishEdit}>
+                  <PrimaryButton type="button" density="compact" className="gap-1.5" onClick={onFinishEdit}>
                     <Check className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden />
                     Zakończ edycję
-                  </button>
+                  </PrimaryButton>
                 </div>
               </div>
             ) : null}
@@ -252,10 +252,10 @@ function EffectRow({
                   onPatchPayload={onPatchPayload}
                 />
                 <div className="flex justify-end">
-                  <button type="button" className={`${oaBtnPri} h-8 gap-1.5 px-3 text-xs`} onClick={onFinishEdit}>
+                  <PrimaryButton type="button" density="compact" className="gap-1.5" onClick={onFinishEdit}>
                     <Check className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden />
                     Zakończ edycję
-                  </button>
+                  </PrimaryButton>
                 </div>
               </div>
             ) : null}

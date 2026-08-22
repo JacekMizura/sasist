@@ -3,42 +3,52 @@
  *
  * Phase B list migration: list table/row-action tokens (`oaList*`, `oaRowAction*`)
  * are superseded on the automation rules list by `moduleList*` + `OperationalAction*`.
- * Keep editor/workflow tokens below — used by OrderAutomationEditorPage and workflow UI.
+ * Phase D1 editor migration: field/button primitives (`oaInp*`, `oaBtn*`, `oaLbl*`)
+ * superseded by Form SSOT (`Input`/`Select`/`FormLabel`/`PrimaryButton`…).
+ * Keep editor/workflow layout tokens below — used by OrderAutomationEditorPage and workflow UI.
  */
 
 import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 
+/** @deprecated Prefer Input with density={FORM_FIELD_DENSITY}. */
 export const oaInp =
   "h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-300/35";
 /** Pole wyszukiwania z ikoną lupy po lewej — bez px-3, żeby pl-10 nie kolidowało. */
-/** List search migrated to listSellasistInputClass; left for legacy callers. */
+/** @deprecated Prefer SearchInput or listSellasistInputClass. */
 export const oaSearchInp =
   "h-9 w-full min-w-0 rounded-lg border border-slate-200 bg-white py-0 pl-10 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-300/35";
+/** @deprecated Prefer Input density="compact". */
 export const oaInpDense =
   "h-8 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-300/35";
-/** List select migrated to listSellasistInputClass; left for legacy callers. */
+/** @deprecated Prefer Select + FORM_FIELD_DENSITY / listSellasistInputClass. */
 export const oaSel =
   "h-9 min-w-[12rem] shrink-0 cursor-pointer appearance-none rounded-lg border border-slate-200 bg-white py-0 pl-3 pr-8 text-sm text-slate-900 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-300/35";
+/** @deprecated Prefer FormLabel or FormField label. */
 export const oaLbl = "block text-xs font-medium text-slate-600";
-/** Uppercase field label (editor header card). */
+/** @deprecated Prefer FormLabel + uppercase className. */
 export const oaLblCaps =
   "mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500";
 
+/** @deprecated Prefer SecondaryButton. */
 export const oaBtn =
   "inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-800 transition hover:border-slate-300";
-/** List CTAs use PrimaryButton; editor / groups still use oaBtnPri. */
+/** @deprecated Prefer PrimaryButton. */
 export const oaBtnPri = brandPrimaryButtonClass;
+/** @deprecated Prefer GhostButton (dashed full-width). */
 export const oaBtnGhost =
   "inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-white text-sm font-medium text-slate-600 transition hover:border-slate-400 hover:text-slate-900";
+/** @deprecated Prefer DangerButton. */
 export const oaBtnDanger =
   "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-3 text-sm font-medium text-red-700 transition hover:bg-red-50";
+/** @deprecated Prefer IconButton. */
 export const oaIconGhost =
   "inline-flex h-9 w-9 min-h-9 min-w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:border hover:border-slate-200 hover:text-slate-800";
 
 /** Przycisk akcji w wierszu listy — min. 36×36 px. */
-/** List rows use OperationalActionButton; groups page may still use these. */
+/** @deprecated Prefer IconButton / OperationalActionButton. */
 export const oaRowActionBtn =
   "inline-flex h-9 w-9 min-h-9 min-w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-900";
+/** @deprecated Prefer IconButton tone="danger" / OperationalActionButton variant="danger". */
 export const oaRowActionBtnDanger =
   `${oaRowActionBtn} text-red-600 hover:border-red-200 hover:text-red-700`;
 

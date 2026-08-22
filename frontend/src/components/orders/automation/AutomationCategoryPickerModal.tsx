@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ChevronRight, X } from "lucide-react";
 
 import type { AutomationCategoryStep } from "./AutomationCategoryStepMenu";
-import { oaBtn } from "./orderAutomationUiTokens";
+import { SecondaryButton } from "../../../design-system";
 import { AppOverlayPortal } from "../../../components/overlay";
 
 type Props = {
@@ -112,9 +112,9 @@ export function AutomationCategoryPickerModal({ open, title, categories, onClose
         </div>
 
         <div className="flex justify-end border-t border-gray-200 px-3 py-2.5">
-          <button type="button" className={oaBtn} onClick={onClose}>
+          <SecondaryButton type="button" density="compact" onClick={onClose}>
             Anuluj
-          </button>
+          </SecondaryButton>
         </div>
       </div>
     </div>

@@ -25,7 +25,8 @@ import {
   OrderCustomFieldsTable,
   orderCustomFieldsSortableIds,
 } from "../../components/orders/customFields/OrderCustomFieldsTable";
-import { oaBtnDanger, oaBtnPri, oaSearchInp } from "../../components/orders/automation/orderAutomationUiTokens";
+import { listSellasistInputClass } from "../../components/listPage/listSellasistTokens";
+import { DangerButton, PrimaryButton } from "../../design-system";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { useAuth } from "../../context/AuthContext";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
@@ -285,10 +286,10 @@ export default function OrderCustomFieldsListPage() {
             <p className="mt-1 text-sm text-slate-500">{orderCustomFieldCountLabel(rows.length)}</p>
           ) : null}
         </div>
-        <button type="button" onClick={() => navigate("/orders/custom-fields/new")} className={oaBtnPri}>
+        <PrimaryButton type="button" onClick={() => navigate("/orders/custom-fields/new")}>
           <Plus className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
           Dodaj pole
-        </button>
+        </PrimaryButton>
       </div>
 
       <div className="relative mb-4 max-w-xl">
@@ -301,7 +302,7 @@ export default function OrderCustomFieldsListPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Szukaj pola…"
-          className={oaSearchInp}
+          className={`${listSellasistInputClass} !h-9 w-full py-0 pl-10 pr-3`}
           type="search"
           aria-label="Szukaj pola"
         />
@@ -328,14 +329,9 @@ export default function OrderCustomFieldsListPage() {
           <span className="text-sm font-medium text-slate-800">
             Zaznaczono: <span className="tabular-nums">{selectedCount}</span>
           </span>
-          <button
-            type="button"
-            className={oaBtnDanger}
-            disabled={bulkBusy}
-            onClick={() => void onBulkDelete()}
-          >
+          <DangerButton type="button" disabled={bulkBusy} onClick={() => void onBulkDelete()}>
             Usuń zaznaczone
-          </button>
+          </DangerButton>
         </div>
       ) : null}
 
@@ -350,10 +346,10 @@ export default function OrderCustomFieldsListPage() {
           <p className="mt-1 max-w-sm text-sm text-slate-500">
             Zdefiniuj pola widoczne na kartach zamówień — tekst, liczby, listy, załączniki i więcej.
           </p>
-          <button type="button" className={`${oaBtnPri} mt-6`} onClick={() => navigate("/orders/custom-fields/new")}>
+          <PrimaryButton type="button" className="mt-6" onClick={() => navigate("/orders/custom-fields/new")}>
             <Plus className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
             Dodaj pierwsze pole
-          </button>
+          </PrimaryButton>
         </div>
       ) : displayRows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-200 px-6 py-12 text-center">

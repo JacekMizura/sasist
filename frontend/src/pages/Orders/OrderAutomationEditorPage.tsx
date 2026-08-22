@@ -37,14 +37,16 @@ import { AutomationAnchorMenu, type AutomationAnchorMenuGroup } from "../../comp
 import { buildOrderUiStatusNameById } from "../../components/orders/automation/buildOrderUiStatusNameById";
 import { moduleAutomationShellClass } from "../../components/layout/flatSectionTokens";
 import { ModuleListBreadcrumb } from "../../components/listPage/moduleList";
+import { oaEditorHeaderCardClass } from "../../components/orders/automation/orderAutomationUiTokens";
 import {
-  oaBtn,
-  oaBtnPri,
-  oaBtnDanger,
-  oaEditorHeaderCardClass,
-  oaInp,
-  oaLblCaps,
-} from "../../components/orders/automation/orderAutomationUiTokens";
+  DangerButton,
+  FORM_FIELD_DENSITY,
+  FormLabel,
+  Input,
+  PrimaryButton,
+  SecondaryButton,
+  inputClassName,
+} from "../../design-system";
 import { AppOverlayPortal } from "../../components/overlay";
 
 function defaultRule(): OrderAutomationRule {
@@ -420,22 +422,27 @@ export default function OrderAutomationEditorPage() {
 
       <div className={`${oaEditorHeaderCardClass} mb-8 mt-4`}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-4">
-          <label className="min-w-0 flex-1">
-            <span className={oaLblCaps}>Nazwa automatyzacji</span>
-            <input
+          <div className="min-w-0 flex-1">
+            <FormLabel className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              Nazwa automatyzacji
+            </FormLabel>
+            <Input
               type="text"
-              className={`${oaInp} ${nameInvalid ? "border-red-400 ring-2 ring-red-200" : ""}`}
+              density={FORM_FIELD_DENSITY}
+              className={nameInvalid ? "border-red-400 ring-2 ring-red-200" : ""}
               value={draft.name}
               placeholder="np. Zmiana statusu po opłaceniu"
               onBlur={() => setNameTouched(true)}
               onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
             />
-          </label>
+          </div>
           <div className="w-full shrink-0 sm:w-44">
-            <span className={oaLblCaps}>Grupa</span>
+            <FormLabel className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              Grupa
+            </FormLabel>
             <button
               type="button"
-              className={`${oaInp} flex items-center justify-between text-left`}
+              className={`${inputClassName(FORM_FIELD_DENSITY)} flex items-center justify-between text-left`}
               onClick={(e) => {
                 groupMenuAnchorRef.current = e.currentTarget;
                 setGroupMenuOpen(true);
@@ -460,12 +467,12 @@ export default function OrderAutomationEditorPage() {
             <span className="text-sm font-medium text-slate-800">Aktywna</span>
           </label>
           <div className="flex shrink-0 flex-wrap gap-2 lg:ml-auto">
-            <button type="button" className={`${oaBtn} gap-2`} onClick={() => setTestOpen(true)}>
+            <SecondaryButton type="button" className="gap-2" onClick={() => setTestOpen(true)}>
               <FlaskConical className="h-4 w-4" /> Test
-            </button>
-            <button type="button" className={`${oaBtnPri} min-h-10 px-5`} onClick={() => void save()} disabled={!canSave}>
+            </SecondaryButton>
+            <PrimaryButton type="button" className="min-h-10 px-5" onClick={() => void save()} disabled={!canSave}>
               Zapisz
-            </button>
+            </PrimaryButton>
           </div>
         </div>
         {nameInvalid ? <p className="mt-2 text-xs text-red-600">Nazwa jest wymagana</p> : null}
@@ -575,9 +582,8 @@ export default function OrderAutomationEditorPage() {
               executionLogs={executionLogs}
               ruleName={draft.name}
             />
-            <button
+            <DangerButton
               type="button"
-              className={oaBtnDanger}
               onClick={() => {
                 if (!window.confirm("Usunąć tę automatyzację?")) return;
                 void (async () => {
@@ -592,14 +598,14 @@ export default function OrderAutomationEditorPage() {
               }}
             >
               Usuń automatyzację
-            </button>
+            </DangerButton>
           </div>
         ) : null}
 
         <div className="pt-2">
-          <button type="button" className={oaBtn} onClick={() => navigate(baseList)}>
+          <SecondaryButton type="button" onClick={() => navigate(baseList)}>
             Anuluj
-          </button>
+          </SecondaryButton>
         </div>
       </div>
 
@@ -657,10 +663,11 @@ export default function OrderAutomationEditorPage() {
               Dry-run na backendzie (warunki + plan efektów). Bez side-effectów przy domyślnym teście.
             </p>
             <div className="mt-6 flex justify-end gap-2">
-              <button type="button" className={oaBtn} onClick={() => setTestOpen(false)}>Zamknij</button>
-              <button
+              <SecondaryButton type="button" onClick={() => setTestOpen(false)}>
+                Zamknij
+              </SecondaryButton>
+              <PrimaryButton
                 type="button"
-                className={oaBtnPri}
                 onClick={() => {
                   void (async () => {
                     try {
@@ -679,7 +686,7 @@ export default function OrderAutomationEditorPage() {
                 }}
               >
                 Uruchom test (dry-run)
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>

@@ -9,7 +9,14 @@ import { useAuth } from "../../context/AuthContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import type { OrderAutomationActionGroup } from "../../utils/orderAutomationLocalStore";
 import { loadActionGroups, newUid, saveActionGroups } from "../../utils/orderAutomationLocalStore";
-import { oaBtn, oaBtnPri, oaInp, oaLbl, oaRowActionBtn, oaRowActionBtnDanger } from "../../components/orders/automation/orderAutomationUiTokens";
+import {
+  FORM_FIELD_DENSITY,
+  FormField,
+  IconButton,
+  Input,
+  PrimaryButton,
+  SecondaryButton,
+} from "../../design-system";
 
 export default function OrderAutomationGroupsPage() {
   const { warehouse } = useWarehouse();
@@ -128,19 +135,18 @@ export default function OrderAutomationGroupsPage() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
         <p className="text-sm text-slate-500">Grupy organizują reguły na liście automatyzacji.</p>
         {!adding ? (
-          <button type="button" onClick={startAdd} className={`${oaBtnPri} gap-2`}>
+          <PrimaryButton type="button" onClick={startAdd} className="gap-2">
             <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
             Dodaj grupę
-          </button>
+          </PrimaryButton>
         ) : null}
       </div>
 
       {adding ? (
         <div className="mb-8 max-w-md space-y-3">
-          <label className={oaLbl}>
-            Nazwa grupy
-            <input
-              className={oaInp}
+          <FormField label="Nazwa grupy">
+            <Input
+              density={FORM_FIELD_DENSITY}
               value={newName}
               placeholder="Np. Integracje"
               autoFocus
@@ -150,10 +156,14 @@ export default function OrderAutomationGroupsPage() {
                 if (e.key === "Escape") cancelAdd();
               }}
             />
-          </label>
+          </FormField>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className={oaBtnPri} onClick={commitAdd}>Zapisz</button>
-            <button type="button" className={oaBtn} onClick={cancelAdd}>Anuluj</button>
+            <PrimaryButton type="button" onClick={commitAdd}>
+              Zapisz
+            </PrimaryButton>
+            <SecondaryButton type="button" onClick={cancelAdd}>
+              Anuluj
+            </SecondaryButton>
           </div>
         </div>
       ) : null}
@@ -162,39 +172,58 @@ export default function OrderAutomationGroupsPage() {
         <div className="py-10">
           <p className="text-sm font-medium text-slate-800">Brak grup akcji</p>
           <p className="mt-1 text-sm text-slate-500">Utwórz grupę, aby logicznie układać reguły na liście automatyzacji.</p>
-          <button type="button" onClick={startAdd} className={`${oaBtnPri} mt-4 gap-2`}>
+          <PrimaryButton type="button" onClick={startAdd} className="mt-4 gap-2">
             <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
             Dodaj grupę
-          </button>
+          </PrimaryButton>
         </div>
       ) : sorted.length > 0 ? (
         <ul className="divide-y divide-gray-200">
           {sorted.map((g, i) => (
             <li key={g.id} className="flex flex-wrap items-center gap-3 py-4 first:pt-0">
               <div className="flex items-center gap-1">
-                <button type="button" aria-label="Wyżej" disabled={i === 0} className={oaRowActionBtn} onClick={() => move(g.id, -1)}>
+                <IconButton type="button" aria-label="Wyżej" disabled={i === 0} onClick={() => move(g.id, -1)}>
                   <ArrowUp className="h-4 w-4" strokeWidth={2} />
-                </button>
-                <button type="button" aria-label="Niżej" disabled={i === sorted.length - 1} className={oaRowActionBtn} onClick={() => move(g.id, 1)}>
+                </IconButton>
+                <IconButton
+                  type="button"
+                  aria-label="Niżej"
+                  disabled={i === sorted.length - 1}
+                  onClick={() => move(g.id, 1)}
+                >
                   <ArrowDown className="h-4 w-4" strokeWidth={2} />
-                </button>
+                </IconButton>
               </div>
 
               <div className="min-w-0 flex-1">
                 {editingId === g.id ? (
                   <div className="flex max-w-xl flex-wrap items-center gap-2">
-                    <input
-                      className={`${oaInp} flex-1`}
+                    <Input
+                      density={FORM_FIELD_DENSITY}
+                      className="flex-1"
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") commitEdit();
-                        if (e.key === "Escape") { setEditingId(null); reload(); }
+                        if (e.key === "Escape") {
+                          setEditingId(null);
+                          reload();
+                        }
                       }}
                       autoFocus
                     />
-                    <button type="button" className={oaBtnPri} onClick={commitEdit}>Zapisz</button>
-                    <button type="button" className={oaBtn} onClick={() => { setEditingId(null); reload(); }}>Anuluj</button>
+                    <PrimaryButton type="button" onClick={commitEdit}>
+                      Zapisz
+                    </PrimaryButton>
+                    <SecondaryButton
+                      type="button"
+                      onClick={() => {
+                        setEditingId(null);
+                        reload();
+                      }}
+                    >
+                      Anuluj
+                    </SecondaryButton>
                   </div>
                 ) : (
                   <span className="text-sm font-medium text-slate-900">{g.name}</span>
@@ -203,12 +232,18 @@ export default function OrderAutomationGroupsPage() {
 
               {editingId !== g.id ? (
                 <div className="flex items-center gap-1">
-                  <button type="button" className={oaRowActionBtn} title="Edytuj" aria-label="Edytuj" onClick={() => startEdit(g)}>
+                  <IconButton type="button" title="Edytuj" aria-label="Edytuj" onClick={() => startEdit(g)}>
                     <Pencil className="h-4 w-4" strokeWidth={2} />
-                  </button>
-                  <button type="button" className={oaRowActionBtnDanger} title="Usuń" aria-label="Usuń" onClick={() => removeGroup(g.id)}>
+                  </IconButton>
+                  <IconButton
+                    type="button"
+                    tone="danger"
+                    title="Usuń"
+                    aria-label="Usuń"
+                    onClick={() => removeGroup(g.id)}
+                  >
                     <Trash2 className="h-4 w-4" strokeWidth={2} />
-                  </button>
+                  </IconButton>
                 </div>
               ) : null}
             </li>

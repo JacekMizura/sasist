@@ -4,9 +4,15 @@ import { ChevronDown } from "lucide-react";
 import type { OrderAutomationManualTrigger } from "../../../types/orderAutomation";
 import { getManualIconComponent } from "@/modules/orders/automation/utils/orderAutomationManualIcons";
 import { resolveManualTriggerColor } from "../../../utils/orderAutomationManualTrigger";
+import {
+  FORM_FIELD_DENSITY,
+  FormField,
+  Input,
+  inputClassName,
+} from "../../../design-system";
 import { AutomationIconGridPicker } from "./AutomationIconGridPicker";
 import { ManualTriggerButtonPreview } from "./ManualTriggerButtonPreview";
-import { oaEditorHeaderCardClass, oaInp, oaInpDense, oaLbl } from "./orderAutomationUiTokens";
+import { oaEditorHeaderCardClass } from "./orderAutomationUiTokens";
 
 type Props = {
   manualTrigger: OrderAutomationManualTrigger;
@@ -99,23 +105,21 @@ export function AutomationManualTriggerSection({ manualTrigger, onChange }: Prop
             <p className="text-sm font-semibold text-slate-900">Wygląd przycisku</p>
             <div className="mt-4 grid gap-6 lg:grid-cols-2 lg:items-stretch">
               <div className="space-y-4">
-                <label className={oaLbl}>
-                  Nazwa przycisku
-                  <input
+                <FormField label="Nazwa przycisku">
+                  <Input
                     type="text"
-                    className={`${oaInp} mt-1.5`}
+                    density={FORM_FIELD_DENSITY}
                     value={manualTrigger.label}
                     placeholder="np. Nadaj przesyłkę"
                     onChange={(e) => patch({ label: e.target.value })}
                   />
-                </label>
+                </FormField>
 
-                <div>
-                  <span className={oaLbl}>Ikona przycisku</span>
+                <FormField label="Ikona przycisku">
                   <button
                     type="button"
                     ref={iconPickerAnchorRef}
-                    className={`${oaInp} mt-1.5 flex w-full items-center justify-between text-left`}
+                    className={`${inputClassName(FORM_FIELD_DENSITY)} flex w-full items-center justify-between text-left`}
                     onClick={() => setIconPickerOpen(true)}
                   >
                     <span className="flex items-center gap-2">
@@ -124,20 +128,20 @@ export function AutomationManualTriggerSection({ manualTrigger, onChange }: Prop
                     </span>
                     <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
                   </button>
-                </div>
+                </FormField>
 
-                <label className={oaLbl}>
-                  Kolor przycisku
-                  <div className="mt-1.5 flex items-center gap-3">
+                <FormField label="Kolor przycisku">
+                  <div className="flex items-center gap-3">
                     <input
                       type="color"
                       className="h-10 w-14 cursor-pointer rounded-lg border border-slate-200 p-0.5"
                       value={colorValue}
                       onChange={(e) => patch({ color: e.target.value })}
                     />
-                    <input
+                    <Input
                       type="text"
-                      className={`${oaInpDense} flex-1 font-mono text-xs`}
+                      density="compact"
+                      className="flex-1 font-mono text-xs"
                       value={colorValue}
                       onChange={(e) => {
                         const v = e.target.value.trim();
@@ -148,7 +152,7 @@ export function AutomationManualTriggerSection({ manualTrigger, onChange }: Prop
                       placeholder="#0f172a"
                     />
                   </div>
-                </label>
+                </FormField>
               </div>
 
               <div className="flex min-h-[14rem] flex-col rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-5 lg:min-h-0">
@@ -194,16 +198,16 @@ export function AutomationManualTriggerSection({ manualTrigger, onChange }: Prop
 
             <div className={`${oaEditorHeaderCardClass} space-y-4`}>
               <p className="text-sm font-semibold text-slate-900">Skrót klawiaturowy</p>
-              <label className={oaLbl}>
-                Skrót
-                <input
+              <FormField label="Skrót">
+                <Input
                   type="text"
-                  className={`${oaInp} mt-1.5 font-mono text-sm`}
+                  density={FORM_FIELD_DENSITY}
+                  className="font-mono text-sm"
                   value={manualTrigger.shortcut}
                   placeholder="Ctrl+Shift+P"
                   onChange={(e) => patch({ shortcut: e.target.value })}
                 />
-              </label>
+              </FormField>
               <p className="text-sm leading-relaxed text-slate-500">
                 Wyświetlany obok przycisku w podglądzie i w UI operatora.
               </p>

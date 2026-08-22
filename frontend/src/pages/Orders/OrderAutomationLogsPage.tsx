@@ -18,7 +18,7 @@ import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { useOrderAutomationStore } from "../../hooks/useOrderAutomationStore";
 import type { OrderAutomationLogEntry } from "../../types/orderAutomation";
 import { formatRuleDisplayId, formatRuleWorkflowTitle } from "../../utils/orderAutomationPreview";
-import { oaBtn, oaBtnDanger } from "../../components/orders/automation/orderAutomationUiTokens";
+import { DangerButton, SecondaryButton, secondaryButtonClassName } from "../../design-system";
 
 function fmtTime(iso: string) {
   try {
@@ -108,19 +108,19 @@ export default function OrderAutomationLogsPage() {
               <p className="text-sm text-slate-700">
                 Historia wykonań dla: <span className="font-semibold text-slate-900">{filterLabel}</span>
               </p>
-              <button type="button" className={`${oaBtn} h-8 gap-1.5 px-2.5 text-xs`} onClick={clearRuleFilter}>
+              <SecondaryButton type="button" density="compact" className="gap-1.5" onClick={clearRuleFilter}>
                 <X className="h-3.5 w-3.5" strokeWidth={2} />
                 Pokaż wszystkie
-              </button>
+              </SecondaryButton>
             </div>
           ) : (
             <p className="text-sm text-slate-500">Uruchomienia automatyczne i ręczne oraz testy (do 500 wpisów) · {filtered.length} wpisów</p>
           )}
         </div>
         {!ruleIdFilter ? (
-          <button
+          <DangerButton
             type="button"
-            className={`${oaBtnDanger} gap-2`}
+            className="gap-2"
             onClick={() => {
               if (!window.confirm("Wyczyścić całą historię wykonań dla tego magazynu?")) return;
               clearLogs();
@@ -128,7 +128,7 @@ export default function OrderAutomationLogsPage() {
           >
             <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden />
             Wyczyść dziennik
-          </button>
+          </DangerButton>
         ) : null}
       </div>
 
@@ -143,7 +143,7 @@ export default function OrderAutomationLogsPage() {
               : "Uruchom test z edytora — wpisy pojawią się tutaj."}
           </p>
           {ruleIdFilter ? (
-            <Link to="/orders/automation/logs" className={`${oaBtn} mt-4 inline-flex`}>
+            <Link to="/orders/automation/logs" className={secondaryButtonClassName("mt-4 inline-flex", "compact")}>
               Pokaż cały dziennik
             </Link>
           ) : null}

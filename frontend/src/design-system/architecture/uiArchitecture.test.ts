@@ -309,3 +309,73 @@ describe("UI architecture SSOT (Phase C form modules)", () => {
     expect(tab!.src).toMatch(/\bPrimaryButton\b/);
   });
 });
+
+/**
+ * Phase D1 — automation editor + admin forms (NOT list table; NOT WMS).
+ * WMS paths are intentionally excluded from Phase D guards.
+ */
+const PHASE_D1_AUTOMATION_GLOBS = [
+  "pages/Orders/OrderAutomationEditorPage.tsx",
+  "components/orders/automation/AutomationManualTriggerSection.tsx",
+  "components/orders/automation/AutomationExecutionSettingsSection.tsx",
+  "components/orders/automation/AutomationConditionConfigFields.tsx",
+  "components/orders/automation/effects/orderAutomationEffectEditorRenderers.tsx",
+  "components/orders/automation/AutomationModuleActivatorSettingsForm.tsx",
+  "components/orders/automation/AutomationIfThenSection.tsx",
+  "components/orders/automation/AutomationCategoryPickerModal.tsx",
+  "pages/Orders/OrderAutomationGroupsPage.tsx",
+  "pages/Orders/OrderAutomationLogsPage.tsx",
+  "pages/Orders/OrderCustomFieldsListPage.tsx",
+];
+
+function readPhaseD1Files(): { rel: string; src: string }[] {
+  return PHASE_D1_AUTOMATION_GLOBS.map((rel) => {
+    const full = path.join(SRC_ROOT, rel);
+    if (!fs.existsSync(full)) return null;
+    return { rel, src: fs.readFileSync(full, "utf8") };
+  }).filter((x): x is { rel: string; src: string } => x != null);
+}
+
+const FORBIDDEN_OA_FIELD_BTN = /\boaInp\b|\boaBtnPri\b|\boaBtnDanger\b|\boaBtn\b|\boaInpDense\b|\boaSearchInp\b|\boaLbl\b|\boaLblCaps\b/;
+
+describe("UI architecture SSOT (Phase D1 automation editor)", () => {
+  const files = readPhaseD1Files();
+
+  it("loads Phase D1 automation editor files", () => {
+    expect(files.length).toBe(PHASE_D1_AUTOMATION_GLOBS.length);
+  });
+
+  it("does not use forbidden oaInp / oaBtn* field tokens in Phase D1 files", () => {
+    const hits: string[] = [];
+    for (const { rel, src } of files) {
+      if (FORBIDDEN_OA_FIELD_BTN.test(src)) hits.push(rel);
+    }
+    expect(hits, `Forbidden oa* field/button tokens:\n${hits.join("\n")}`).toEqual([]);
+  });
+
+  it("editor page uses PrimaryButton + Input (Form SSOT)", () => {
+    const page = files.find((f) => f.rel.endsWith("OrderAutomationEditorPage.tsx"));
+    expect(page).toBeTruthy();
+    expect(page!.src).toMatch(/\bPrimaryButton\b/);
+    expect(page!.src).toMatch(/\bInput\b/);
+    expect(page!.src).toMatch(/\bFORM_FIELD_DENSITY\b/);
+    expect(page!.src).toMatch(/\boaEditorHeaderCardClass\b/);
+  });
+
+  it("If/Then section keeps workflow layout tokens and uses PrimaryButton for finish-edit", () => {
+    const section = files.find((f) => f.rel.endsWith("AutomationIfThenSection.tsx"));
+    expect(section).toBeTruthy();
+    expect(section!.src).toMatch(/\boaWorkflowLaneClass\b/);
+    expect(section!.src).toMatch(/\bPrimaryButton\b/);
+    expect(section!.src).not.toMatch(/\boaBtnPri\b/);
+  });
+
+  it("effect editor renderers use Select/Input without oaInp", () => {
+    const effects = files.find((f) => f.rel.endsWith("orderAutomationEffectEditorRenderers.tsx"));
+    expect(effects).toBeTruthy();
+    expect(effects!.src).toMatch(/\bSelect\b/);
+    expect(effects!.src).toMatch(/\bInput\b/);
+    expect(effects!.src).toMatch(/\boaWorkflowFieldRowClass\b/);
+    expect(effects!.src).not.toMatch(/\boaInp\b/);
+  });
+});
