@@ -379,3 +379,185 @@ describe("UI architecture SSOT (Phase D1 automation editor)", () => {
     expect(effects!.src).not.toMatch(/\boaInp\b/);
   });
 });
+
+/**
+ * Phase D2 — catalog/product/bundle forms + CreateOrderPage (NOT WMS).
+ * WMS paths are intentionally excluded from Phase D guards.
+ */
+const PHASE_D2_CATALOG_FORM_GLOBS = [
+  "components/catalog/CatalogEntityGallerySection.tsx",
+  "components/catalog/productLikeTokens.ts",
+  "pages/Assortment/BundleEditModal.tsx",
+  "pages/Assortment/BundleLabelTab.tsx",
+  "pages/Assortment/BundleProductSearch.tsx",
+  "pages/Assortment/components/EntityPricingPanel.tsx",
+  "pages/Assortment/components/BundleProductionPanel.tsx",
+  "pages/Products/ProductEditLabelTab.tsx",
+  "pages/Products/ProductEditSalesPackagingTab.tsx",
+  "pages/CartsComponents/BulkCartEditor.tsx",
+  "pages/CartsComponents/CartEditorMetaBar.tsx",
+  "pages/CartsComponents/CartBasketEditDrawer.tsx",
+  "pages/CartsComponents/CartRowAddToolbar.tsx",
+  "pages/WarehouseMaterials/PackagingMaterialDetailPage.tsx",
+  "pages/WarehouseMaterials/CartonDetailPage.tsx",
+  "pages/Assortment/productCustomFields/ProductCustomFieldsPage.tsx",
+  "pages/Orders/CreateOrderPage.tsx",
+];
+
+function readPhaseD2Files(): { rel: string; src: string }[] {
+  return PHASE_D2_CATALOG_FORM_GLOBS.map((rel) => {
+    const full = path.join(SRC_ROOT, rel);
+    if (!fs.existsSync(full)) return null;
+    return { rel, src: fs.readFileSync(full, "utf8") };
+  }).filter((x): x is { rel: string; src: string } => x != null);
+}
+
+const FORBIDDEN_PRODUCT_LIKE_FIELD = /\bproductLikeInputClass\b|\bproductLikeFieldLabelClass\b/;
+const LOCAL_SLATE_FORM_INPUT =
+  /className=["'`][^"'`]*rounded-md border border-slate-200[^"'`]*px-3 py-2[^"'`]*(?:focus:border-blue|focus:ring-blue)/;
+
+describe("UI architecture SSOT (Phase D2 catalog forms)", () => {
+  const files = readPhaseD2Files();
+
+  it("loads Phase D2 catalog form files", () => {
+    expect(files.length).toBe(PHASE_D2_CATALOG_FORM_GLOBS.length);
+  });
+
+  it("does not use deprecated productLikeInputClass / productLikeFieldLabelClass in migrated files", () => {
+    const hits: string[] = [];
+    for (const { rel, src } of files) {
+      if (rel.endsWith("productLikeTokens.ts")) continue;
+      if (FORBIDDEN_PRODUCT_LIKE_FIELD.test(src)) hits.push(rel);
+    }
+    expect(hits, `productLike field tokens still used:\n${hits.join("\n")}`).toEqual([]);
+  });
+
+  it("migrated catalog forms use FormField + Input/Select (Form SSOT)", () => {
+    const hits: string[] = [];
+    for (const { rel, src } of files) {
+      if (rel.endsWith("productLikeTokens.ts")) continue;
+      // List/admin chrome — buttons + search only (no field forms on this page).
+      if (rel.endsWith("ProductCustomFieldsPage.tsx")) continue;
+      if (!/\bFormField\b/.test(src) || !/\b(Input|Select|Textarea|SearchInput)\b/.test(src)) {
+        hits.push(rel);
+      }
+    }
+    expect(hits, `Missing FormField/Input SSOT:\n${hits.join("\n")}`).toEqual([]);
+  });
+
+  it("CreateOrderPage uses PrimaryButton without brandPrimaryButtonClass", () => {
+    const page = files.find((f) => f.rel.endsWith("CreateOrderPage.tsx"));
+    expect(page).toBeTruthy();
+    expect(page!.src).toMatch(/\bPrimaryButton\b/);
+    expect(page!.src).toMatch(/\bFORM_FIELD_DENSITY\b/);
+    expect(page!.src).not.toMatch(/\bbrandPrimaryButtonClass\b/);
+  });
+
+  it("ProductCustomFieldsPage does not use forbidden oaBtn* / oaSearchInp tokens", () => {
+    const page = files.find((f) => f.rel.endsWith("ProductCustomFieldsPage.tsx"));
+    expect(page).toBeTruthy();
+    expect(page!.src).not.toMatch(FORBIDDEN_OA_FIELD_BTN);
+    expect(page!.src).toMatch(/\bPrimaryButton\b/);
+    expect(page!.src).toMatch(/\bSearchInput\b/);
+  });
+
+  it("productLikeTokens deprecates field classes but keeps layout chrome exports", () => {
+    const tokens = files.find((f) => f.rel.endsWith("productLikeTokens.ts"));
+    expect(tokens).toBeTruthy();
+    expect(tokens!.src).toMatch(/@deprecated Phase D2/);
+    expect(tokens!.src).toMatch(/\bproductLikeStatCardClass\b/);
+    expect(tokens!.src).toMatch(/\binputClassName\b/);
+  });
+
+  it("does not reintroduce blue focus ring form recipes in Phase D2 files", () => {
+    const hits: string[] = [];
+    for (const { rel, src } of files) {
+      if (rel.endsWith("productLikeTokens.ts")) continue;
+      if (LOCAL_SLATE_FORM_INPUT.test(src) || /focus:ring-blue-500/.test(src)) hits.push(rel);
+    }
+    expect(hits, `Blue focus form recipes:\n${hits.join("\n")}`).toEqual([]);
+  });
+});
+
+/**
+ * Phase D3 — ERP Settings / configurators (NOT WMS).
+ * WMS paths are intentionally excluded from Phase D guards.
+ */
+const PHASE_D3_SETTINGS_GLOBS = [
+  "pages/Settings/OrderPanelUiStatusesSettingsPage.tsx",
+  "pages/Settings/OrderPanelSubgroupsManager.tsx",
+  "pages/Settings/ReturnPanelSubgroupsManager.tsx",
+  "pages/Settings/ComplaintPanelUiStatusesSettingsPage.tsx",
+  "pages/Settings/ExportEditorPage.tsx",
+  "pages/Settings/returnsSettingsOps.tsx",
+  "pages/Settings/ReturnsModuleSettingsPanel.tsx",
+  "pages/Settings/StickySaveBar.tsx",
+  "pages/Settings/ShippingMethodsSettingsPage.tsx",
+  "pages/Settings/returnsStatusesConfigurator/ReturnUiStatusModal.tsx",
+  "pages/Settings/returnsStatusesConfigurator/ReturnPanelSubgroupModal.tsx",
+  "pages/Settings/returnsStatusesConfigurator/ProductDecisionsTableSection.tsx",
+  "pages/Settings/returnsStatusesConfigurator/ProductDecisionsCardsSection.tsx",
+  "pages/Settings/returnsStatusesConfigurator/DamageCardsSection.tsx",
+  "pages/Settings/returnsStatusesConfigurator/RmzWorkflowProcessSection.tsx",
+  "pages/Settings/returnsStatusesConfigurator/AdvancedSettingsPanel.tsx",
+  "pages/Settings/returnsDictionariesConfigurator/DictionaryEntryModal.tsx",
+];
+
+function readPhaseD3Files(): { rel: string; src: string }[] {
+  return PHASE_D3_SETTINGS_GLOBS.map((rel) => {
+    const full = path.join(SRC_ROOT, rel);
+    if (!fs.existsSync(full)) return null;
+    return { rel, src: fs.readFileSync(full, "utf8") };
+  }).filter((x): x is { rel: string; src: string } => x != null);
+}
+
+const FORBIDDEN_SETTINGS_PRIMARY = /\bbrandPrimaryButtonClass\b/;
+const FORBIDDEN_LOCAL_INPUT_CONST =
+  /\b(?:const|let|var)\s+(?:inp|inputClass|stInput|lab)\b\s*=/;
+
+describe("UI architecture SSOT (Phase D3 settings configurators)", () => {
+  const files = readPhaseD3Files();
+
+  it("loads Phase D3 ERP settings files (WMS excluded)", () => {
+    expect(files.length).toBe(PHASE_D3_SETTINGS_GLOBS.length);
+    for (const { rel } of files) {
+      expect(rel.toLowerCase()).not.toMatch(/\/wms|wmssettings|wmsproduction|wmspacking|wmsreturns|wmsoperational/i);
+    }
+  });
+
+  it("does not use brandPrimaryButtonClass for primary CTAs in Phase D3 files", () => {
+    const hits = files.filter((f) => FORBIDDEN_SETTINGS_PRIMARY.test(f.src)).map((f) => f.rel);
+    expect(hits, `brandPrimaryButtonClass still used:\n${hits.join("\n")}`).toEqual([]);
+  });
+
+  it("does not use violet focus rings in Phase D3 settings files", () => {
+    const hits = files.filter((f) => LOCAL_VIOLET_FOCUS.test(f.src)).map((f) => f.rel);
+    expect(hits).toEqual([]);
+  });
+
+  it("does not declare obvious local inputClass / inp / stInput constants in Phase D3 files", () => {
+    const hits = files.filter((f) => FORBIDDEN_LOCAL_INPUT_CONST.test(f.src)).map((f) => f.rel);
+    expect(hits, `Local input recipe constants:\n${hits.join("\n")}`).toEqual([]);
+  });
+
+  it("order / complaint / export forms use FormField + PrimaryButton (Form SSOT)", () => {
+    const order = files.find((f) => f.rel.endsWith("OrderPanelUiStatusesSettingsPage.tsx"));
+    const complaint = files.find((f) => f.rel.endsWith("ComplaintPanelUiStatusesSettingsPage.tsx"));
+    const exportPage = files.find((f) => f.rel.endsWith("ExportEditorPage.tsx"));
+    for (const f of [order!, complaint!, exportPage!]) {
+      expect(f, f?.rel).toBeTruthy();
+      expect(f.src, f.rel).toMatch(/\bFormField\b/);
+      expect(f.src, f.rel).toMatch(/\bPrimaryButton\b/);
+      expect(f.src, f.rel).toMatch(/\bFORM_FIELD_DENSITY\b/);
+    }
+  });
+
+  it("return status modals use PrimaryButton + Input without brandPrimaryButtonClass", () => {
+    const modal = files.find((f) => f.rel.endsWith("ReturnUiStatusModal.tsx"));
+    expect(modal).toBeTruthy();
+    expect(modal!.src).toMatch(/\bPrimaryButton\b/);
+    expect(modal!.src).toMatch(/\bInput\b/);
+    expect(modal!.src).not.toMatch(FORBIDDEN_SETTINGS_PRIMARY);
+    expect(modal!.src).not.toMatch(/\bconst inp\b/);
+  });
+});

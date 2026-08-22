@@ -1,6 +1,6 @@
 import { AlertTriangle } from "lucide-react";
 
-import { productLikeFieldLabelClass, productLikeInputClass } from "../../../components/catalog";
+import { FORM_FIELD_DENSITY, FormField, Input } from "../../../design-system";
 import type { BundleOperationalMode } from "../../Production/bundleOperationalTypes";
 import { isStockProduction } from "../../Production/bundleOperationalTypes";
 import type { BundleComponentRow, ProductSummary } from "../bundleEditTypes";
@@ -34,9 +34,6 @@ export type EntityPricingPanelProps = {
   priceHistory: PriceHistoryEntry[];
   minMarginPercent?: number;
 };
-
-const fieldLabel = productLikeFieldLabelClass;
-const inputClass = productLikeInputClass;
 
 function parseNumericInput(raw: string): number | "" {
   const s = raw.trim().replace(",", ".");
@@ -102,12 +99,12 @@ export function EntityPricingPanel(props: EntityPricingPanelProps) {
               </button>
             </div>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <div>
-                <label className={fieldLabel}>
-                  {props.salePriceEntryMode === "gross" ? "Cena sprzedaży brutto" : "Cena sprzedaży netto"}
-                </label>
-                <input
+              <FormField
+                label={props.salePriceEntryMode === "gross" ? "Cena sprzedaży brutto" : "Cena sprzedaży netto"}
+              >
+                <Input
                   type="number"
+                  density={FORM_FIELD_DENSITY}
                   min={0}
                   step={0.01}
                   value={displaySaleValue === "" ? "" : displaySaleValue}
@@ -115,43 +112,39 @@ export function EntityPricingPanel(props: EntityPricingPanelProps) {
                     const parsed = parseNumericInput(e.target.value);
                     props.onSalePriceChange(salePriceFromInput(parsed, props.salePriceEntryMode, pricing.vatRate));
                   }}
-                  className={inputClass}
                 />
-              </div>
-              <div>
-                <label className={fieldLabel}>Koszty pakowania (netto)</label>
-                <input
+              </FormField>
+              <FormField label="Koszty pakowania (netto)">
+                <Input
                   type="number"
+                  density={FORM_FIELD_DENSITY}
                   min={0}
                   step={0.01}
                   value={props.packagingCostNet === "" ? "" : props.packagingCostNet}
                   onChange={(e) => props.onPackagingCostChange(parseNumericInput(e.target.value))}
-                  className={inputClass}
                 />
-              </div>
+              </FormField>
               {isStockProduction(props.operationalMode) ? (
-                <div>
-                  <label className={fieldLabel}>Koszt produkcji (netto)</label>
-                  <input
+                <FormField label="Koszt produkcji (netto)">
+                  <Input
                     type="number"
+                    density={FORM_FIELD_DENSITY}
                     min={0}
                     step={0.01}
                     value={props.productionCostNet === "" ? "" : props.productionCostNet}
                     onChange={(e) => props.onProductionCostChange(parseNumericInput(e.target.value))}
-                    className={inputClass}
                   />
-                </div>
+                </FormField>
               ) : null}
-              <div>
-                <label className={fieldLabel}>Stawka VAT (%)</label>
-                <input
+              <FormField label="Stawka VAT (%)">
+                <Input
                   type="text"
+                  density={FORM_FIELD_DENSITY}
                   value={props.vatRate}
                   onChange={(e) => props.onVatRateChange(e.target.value)}
                   placeholder="np. 23"
-                  className={inputClass}
                 />
-              </div>
+              </FormField>
             </div>
             <p className="text-xs text-slate-500">
               Koszt materiałów jest wyliczany automatycznie ze składników (ilość × koszt zakupu). Zmiany składników

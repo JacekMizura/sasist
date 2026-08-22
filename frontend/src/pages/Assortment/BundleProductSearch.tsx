@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import api from "../../api/axios";
-import { productLikeInputClass } from "../../components/catalog";
+import { FORM_FIELD_DENSITY, FormField, SearchInput } from "../../design-system";
 import type { CatalogProduct } from "./bundleEditTypes";
 import { parseProductsResponse } from "./bundleEditTypes";
 
@@ -64,19 +64,19 @@ export function BundleProductSearch({ tenantId, onPick, mergeProductIntoCache }:
 
   return (
     <div ref={wrapRef} className="relative">
-      <label className="mb-1 block text-sm font-medium text-slate-700">Dodaj produkt do zestawu</label>
-      <input
-        type="search"
-        autoComplete="off"
-        className={productLikeInputClass}
-        placeholder="Nazwa, SKU lub EAN…"
-        value={query}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setOpen(true);
-        }}
-        onFocus={() => setOpen(true)}
-      />
+      <FormField label="Dodaj produkt do zestawu">
+        <SearchInput
+          autoComplete="off"
+          density={FORM_FIELD_DENSITY}
+          placeholder="Nazwa, SKU lub EAN…"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+        />
+      </FormField>
       {loading ? <p className="mt-1 text-[11px] text-slate-500">Szukanie…</p> : null}
       {open && results.length > 0 ? (
         <ul className="absolute left-0 right-0 z-20 mt-1 max-h-80 overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg">

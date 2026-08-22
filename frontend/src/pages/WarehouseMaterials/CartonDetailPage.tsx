@@ -14,11 +14,7 @@ import api from "../../api/axios";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import { listManufacturers, type ManufacturerRead } from "../../api/manufacturersApi";
 import { getShippingMethods, type ShippingMethodDto } from "../../api/shippingMethodsApi";
-import {
-  productLikeFieldLabelClass,
-  productLikeInputClass,
-  type ProductLikeStatCard,
-} from "../../components/catalog";
+import { type ProductLikeStatCard } from "../../components/catalog";
 import type { MagazynInvRowDisplay } from "../../components/products/MagazynInventoryLine";
 import {
   ProductWarehouseStockPanel,
@@ -28,6 +24,7 @@ import {
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import { UI_STRINGS } from "../../constants/uiStrings";
 import { useWarehouse } from "../../context/WarehouseContext";
+import { Checkbox, FORM_FIELD_DENSITY, FormField, Input, Select } from "../../design-system";
 import { WmFormSectionCard } from "../../modules/warehouseMaterials/components/WmFormSectionCard";
 import { WarehouseMaterialEditLayout } from "../../modules/warehouseMaterials/components/WarehouseMaterialEditLayout";
 import { CARTON_EDIT_TABS, type CartonEditTabId } from "../../modules/warehouseMaterials/warehouseMaterialEditTabs";
@@ -540,9 +537,6 @@ export default function CartonDetailPage() {
     void handleSave();
   };
 
-  const fieldLabel = productLikeFieldLabelClass;
-  const inputClass = productLikeInputClass;
-
   const warehouseEditorSlot = (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <div>
@@ -634,29 +628,25 @@ export default function CartonDetailPage() {
           <div className="space-y-5">
             <WmFormSectionCard title="Dane podstawowe" description="Nazwa, identyfikatory i status kartonu.">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <label className={fieldLabel}>Nazwa</label>
-                  <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} />
-                </div>
-                <div>
-                  <label className={fieldLabel}>SKU</label>
-                  <input className={inputClass} value={sku} onChange={(e) => setSku(e.target.value)} placeholder="Symbol / SKU" />
-                </div>
-                <div>
-                  <label className={fieldLabel}>Kod kreskowy (EAN)</label>
-                  <input className={inputClass} value={eanStr} onChange={(e) => setEanStr(e.target.value)} placeholder="EAN" />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className={fieldLabel}>Rodzaj materiału (kategoria)</label>
-                  <input
-                    className={inputClass}
+                <FormField label="Nazwa" className="sm:col-span-2">
+                  <Input density={FORM_FIELD_DENSITY} value={name} onChange={(e) => setName(e.target.value)} />
+                </FormField>
+                <FormField label="SKU">
+                  <Input density={FORM_FIELD_DENSITY} value={sku} onChange={(e) => setSku(e.target.value)} placeholder="Symbol / SKU" />
+                </FormField>
+                <FormField label="Kod kreskowy (EAN)">
+                  <Input density={FORM_FIELD_DENSITY} value={eanStr} onChange={(e) => setEanStr(e.target.value)} placeholder="EAN" />
+                </FormField>
+                <FormField label="Rodzaj materiału (kategoria)" className="sm:col-span-2">
+                  <Input
+                    density={FORM_FIELD_DENSITY}
                     value={materialType}
                     onChange={(e) => setMaterialType(e.target.value)}
                     placeholder="np. tektura falista, karton 3w"
                   />
-                </div>
+                </FormField>
                 <label className="flex items-center gap-2 sm:col-span-2">
-                  <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
+                  <Checkbox checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
                   <span className="text-sm font-medium text-slate-800">Aktywny</span>
                 </label>
               </div>
@@ -664,18 +654,15 @@ export default function CartonDetailPage() {
             <WmFormSectionCard title="Parametry logistyczne" description="Wymiary zewnętrzne i użytkowe (fit engine używa wewnętrznych).">
               <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Wymiary zewnętrzne</p>
               <div className="grid gap-4 sm:grid-cols-3">
-                <label className="block">
-                  <span className={fieldLabel}>Długość (cm)</span>
-                  <input className={inputClass} value={l} onChange={(e) => setL(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Szerokość (cm)</span>
-                  <input className={inputClass} value={w} onChange={(e) => setW(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Wysokość (cm)</span>
-                  <input className={inputClass} value={h} onChange={(e) => setH(e.target.value)} inputMode="decimal" />
-                </label>
+                <FormField label="Długość (cm)">
+                  <Input density={FORM_FIELD_DENSITY} value={l} onChange={(e) => setL(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Szerokość (cm)">
+                  <Input density={FORM_FIELD_DENSITY} value={w} onChange={(e) => setW(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Wysokość (cm)">
+                  <Input density={FORM_FIELD_DENSITY} value={h} onChange={(e) => setH(e.target.value)} inputMode="decimal" />
+                </FormField>
               </div>
               <p className="mb-3 mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">Wymiary użytkowe / wewnętrzne</p>
               {!il.trim() || !iw.trim() || !ih.trim() ? (
@@ -684,28 +671,29 @@ export default function CartonDetailPage() {
                 </div>
               ) : null}
               <div className="grid gap-4 sm:grid-cols-3">
-                <label className="block">
-                  <span className={fieldLabel}>Wewn. długość (cm)</span>
-                  <input className={inputClass} value={il} onChange={(e) => setIl(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Wewn. szerokość (cm)</span>
-                  <input className={inputClass} value={iw} onChange={(e) => setIw(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Wewn. wysokość (cm)</span>
-                  <input className={inputClass} value={ih} onChange={(e) => setIh(e.target.value)} inputMode="decimal" />
-                </label>
+                <FormField label="Wewn. długość (cm)">
+                  <Input density={FORM_FIELD_DENSITY} value={il} onChange={(e) => setIl(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Wewn. szerokość (cm)">
+                  <Input density={FORM_FIELD_DENSITY} value={iw} onChange={(e) => setIw(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Wewn. wysokość (cm)">
+                  <Input density={FORM_FIELD_DENSITY} value={ih} onChange={(e) => setIh(e.target.value)} inputMode="decimal" />
+                </FormField>
               </div>
               <div className="mt-4 grid max-w-xl gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className={fieldLabel}>Waga własna / tara (kg)</span>
-                  <input className={inputClass} value={weight} onChange={(e) => setWeight(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Maks. waga ładunku (kg)</span>
-                  <input className={inputClass} value={maxPayload} onChange={(e) => setMaxPayload(e.target.value)} inputMode="decimal" placeholder="payload" />
-                </label>
+                <FormField label="Waga własna / tara (kg)">
+                  <Input density={FORM_FIELD_DENSITY} value={weight} onChange={(e) => setWeight(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Maks. waga ładunku (kg)">
+                  <Input
+                    density={FORM_FIELD_DENSITY}
+                    value={maxPayload}
+                    onChange={(e) => setMaxPayload(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="payload"
+                  />
+                </FormField>
               </div>
             </WmFormSectionCard>
           </div>
@@ -719,20 +707,18 @@ export default function CartonDetailPage() {
                 Brak dostawcy — materiał nie pojawi się w zamówieniach.
               </div>
             ) : null}
-            <label className="block">
-              <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Główny dostawca</span>
-              <select className={inputClass} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+            <FormField label="Główny dostawca">
+              <Select density={FORM_FIELD_DENSITY} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
                 <option value="">— brak —</option>
                 {suppliers.map((s) => (
                   <option key={s.id} value={String(s.id)}>
                     {s.name}
                   </option>
                 ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Producent / marka (opcjonalnie)</span>
-              <select className={inputClass} value={producerId} onChange={(e) => setProducerId(e.target.value)}>
+              </Select>
+            </FormField>
+            <FormField label="Producent / marka (opcjonalnie)">
+              <Select density={FORM_FIELD_DENSITY} value={producerId} onChange={(e) => setProducerId(e.target.value)}>
                 <option value="">— brak —</option>
                 {manufacturers.map((m) => (
                   <option key={m.id} value={String(m.id)}>
@@ -740,61 +726,54 @@ export default function CartonDetailPage() {
                     {!m.active ? " (nieaktywny)" : ""}
                   </option>
                 ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Nazwa u dostawcy (override)</span>
-              <input
-                className={inputClass}
+              </Select>
+            </FormField>
+            <FormField label="Nazwa u dostawcy (override)">
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={supplierNameOverride}
                 onChange={(e) => setSupplierNameOverride(e.target.value)}
                 placeholder="Opcjonalnie — inna nazwa na zamówieniu"
               />
-            </label>
-            <label className="block">
-              <span className="text-xs font-bold uppercase tracking-wide text-slate-600">SKU u dostawcy</span>
-              <input className={inputClass} value={supplierSku} onChange={(e) => setSupplierSku(e.target.value)} />
-            </label>
+            </FormField>
+            <FormField label="SKU u dostawcy">
+              <Input density={FORM_FIELD_DENSITY} value={supplierSku} onChange={(e) => setSupplierSku(e.target.value)} />
+            </FormField>
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block">
-                <span className="text-xs font-bold uppercase tracking-wide text-slate-600">MOQ</span>
-                <input className={inputClass} value={moqStr} onChange={(e) => setMoqStr(e.target.value)} inputMode="decimal" />
-              </label>
-              <label className="block">
-                <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Wielopak / karton zbiorczy</span>
-                <input
-                  className={inputClass}
+              <FormField label="MOQ">
+                <Input density={FORM_FIELD_DENSITY} value={moqStr} onChange={(e) => setMoqStr(e.target.value)} inputMode="decimal" />
+              </FormField>
+              <FormField label="Wielopak / karton zbiorczy">
+                <Input
+                  density={FORM_FIELD_DENSITY}
                   value={purchasePackQtyStr}
                   onChange={(e) => setPurchasePackQtyStr(e.target.value)}
                   onBlur={() => setPurchasePackQtyStr(normalizeWmMoneyInputString(purchasePackQtyStr))}
                   inputMode="decimal"
                 />
-              </label>
-              <label className="block sm:col-span-2">
-                <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Darmowa dostawa od kwoty (netto)</span>
-                <input
-                  className={inputClass}
+              </FormField>
+              <FormField label="Darmowa dostawa od kwoty (netto)" className="sm:col-span-2">
+                <Input
+                  density={FORM_FIELD_DENSITY}
                   value={freeShipNetStr}
                   onChange={(e) => setFreeShipNetStr(e.target.value)}
                   onBlur={() => setFreeShipNetStr(normalizeWmMoneyInputString(freeShipNetStr))}
                   inputMode="decimal"
                   placeholder="np. 500,00"
                 />
-              </label>
-              <label className="block">
-                <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Czas realizacji (dni)</span>
-                <input className={inputClass} value={leadTimeDays} onChange={(e) => setLeadTimeDays(e.target.value)} inputMode="numeric" />
-              </label>
-              <label className="block">
-                <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Ostatnia cena zakupu netto</span>
-                <input
-                  className={inputClass}
+              </FormField>
+              <FormField label="Czas realizacji (dni)">
+                <Input density={FORM_FIELD_DENSITY} value={leadTimeDays} onChange={(e) => setLeadTimeDays(e.target.value)} inputMode="numeric" />
+              </FormField>
+              <FormField label="Ostatnia cena zakupu netto">
+                <Input
+                  density={FORM_FIELD_DENSITY}
                   value={lastPurchaseNetStr}
                   onChange={(e) => setLastPurchaseNetStr(e.target.value)}
                   onBlur={() => setLastPurchaseNetStr(normalizeWmMoneyInputString(lastPurchaseNetStr))}
                   inputMode="decimal"
                 />
-              </label>
+              </FormField>
             </div>
             </div>
           </WmFormSectionCard>
@@ -814,28 +793,26 @@ export default function CartonDetailPage() {
         {activeTab === "costs" ? (
           <WmFormSectionCard title="Koszty" description="Ceny zakupu i koszt jednostkowy.">
             <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className={fieldLabel}>Cena zakupu (netto)</span>
-              <input
-                className={inputClass}
-                value={purchasePrice}
-                onChange={(e) => setPurchasePrice(e.target.value)}
-                onBlur={() => setPurchasePrice(normalizeWmMoneyInputString(purchasePrice))}
-                inputMode="decimal"
-                placeholder="np. 12,50"
-              />
-            </label>
-            <label className="block">
-                <span className={fieldLabel}>Koszt jednostkowy</span>
-              <input
-                className={inputClass}
-                value={unitCost}
-                onChange={(e) => setUnitCost(e.target.value)}
-                onBlur={() => setUnitCost(normalizeWmMoneyInputString(unitCost))}
-                inputMode="decimal"
-                placeholder="np. 2,10"
-              />
-            </label>
+              <FormField label="Cena zakupu (netto)">
+                <Input
+                  density={FORM_FIELD_DENSITY}
+                  value={purchasePrice}
+                  onChange={(e) => setPurchasePrice(e.target.value)}
+                  onBlur={() => setPurchasePrice(normalizeWmMoneyInputString(purchasePrice))}
+                  inputMode="decimal"
+                  placeholder="np. 12,50"
+                />
+              </FormField>
+              <FormField label="Koszt jednostkowy">
+                <Input
+                  density={FORM_FIELD_DENSITY}
+                  value={unitCost}
+                  onChange={(e) => setUnitCost(e.target.value)}
+                  onBlur={() => setUnitCost(normalizeWmMoneyInputString(unitCost))}
+                  inputMode="decimal"
+                  placeholder="np. 2,10"
+                />
+              </FormField>
             </div>
           </WmFormSectionCard>
         ) : null}
@@ -862,45 +839,39 @@ export default function CartonDetailPage() {
           <WmFormSectionCard title="BDO" description="Mapowanie mas opakowaniowych na jednostkę magazynową.">
           <div className="space-y-4">
             <label className="flex items-center gap-2 text-sm font-medium text-slate-800">
-              <input type="checkbox" checked={includeInBdo} onChange={(e) => setIncludeInBdo(e.target.checked)} className="h-4 w-4" />
+              <Checkbox checked={includeInBdo} onChange={(e) => setIncludeInBdo(e.target.checked)} />
               Uwzględniaj w module Magazyn → BDO
             </label>
-            <label className="block">
-              <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Typ opakowania</span>
-              <input
-                className={inputClass}
+            <FormField label="Typ opakowania">
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={packagingTypeBdo}
                 onChange={(e) => setPackagingTypeBdo(e.target.value)}
                 placeholder="np. karton"
               />
-            </label>
+            </FormField>
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block">
-                <span className="text-xs font-bold uppercase text-slate-600">Plastik kg / szt.</span>
-                <input className={inputClass} value={plasticKg} onChange={(e) => setPlasticKg(e.target.value)} inputMode="decimal" />
-              </label>
-              <label className="block">
-                <span className="text-xs font-bold uppercase text-slate-600">Papier kg / szt.</span>
-                <input
-                  className={inputClass}
+              <FormField label="Plastik kg / szt.">
+                <Input density={FORM_FIELD_DENSITY} value={plasticKg} onChange={(e) => setPlasticKg(e.target.value)} inputMode="decimal" />
+              </FormField>
+              <FormField label="Papier kg / szt.">
+                <Input
+                  density={FORM_FIELD_DENSITY}
                   value={paperKg}
                   onChange={(e) => setPaperKg(e.target.value)}
                   inputMode="decimal"
                   placeholder="puste = jak waga kartonu"
                 />
-              </label>
-              <label className="block">
-                <span className="text-xs font-bold uppercase text-slate-600">Drewno kg / szt.</span>
-                <input className={inputClass} value={woodKg} onChange={(e) => setWoodKg(e.target.value)} inputMode="decimal" />
-              </label>
-              <label className="block">
-                <span className="text-xs font-bold uppercase text-slate-600">Szkło kg / szt.</span>
-                <input className={inputClass} value={glassKg} onChange={(e) => setGlassKg(e.target.value)} inputMode="decimal" />
-              </label>
-              <label className="block sm:col-span-2">
-                <span className="text-xs font-bold uppercase text-slate-600">Metal kg / szt.</span>
-                <input className={inputClass} value={metalKg} onChange={(e) => setMetalKg(e.target.value)} inputMode="decimal" />
-              </label>
+              </FormField>
+              <FormField label="Drewno kg / szt.">
+                <Input density={FORM_FIELD_DENSITY} value={woodKg} onChange={(e) => setWoodKg(e.target.value)} inputMode="decimal" />
+              </FormField>
+              <FormField label="Szkło kg / szt.">
+                <Input density={FORM_FIELD_DENSITY} value={glassKg} onChange={(e) => setGlassKg(e.target.value)} inputMode="decimal" />
+              </FormField>
+              <FormField label="Metal kg / szt." className="sm:col-span-2">
+                <Input density={FORM_FIELD_DENSITY} value={metalKg} onChange={(e) => setMetalKg(e.target.value)} inputMode="decimal" />
+              </FormField>
             </div>
           </div>
           </WmFormSectionCard>
@@ -915,10 +886,9 @@ export default function CartonDetailPage() {
               <p className="text-sm text-slate-600">
                 Status: <span className="font-medium text-slate-900">{ppwrStatusLabel(ppwrStatus)}</span>
               </p>
-              <label className="block">
-                <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Funkcja PPWR</span>
-                <select
-                  className={inputClass}
+              <FormField label="Funkcja PPWR">
+                <Select
+                  density={FORM_FIELD_DENSITY}
                   value={ppwrFunction}
                   onChange={(e) => setPpwrFunction(e.target.value)}
                 >
@@ -927,43 +897,38 @@ export default function CartonDetailPage() {
                       {o.label}
                     </option>
                   ))}
-                </select>
-              </label>
-              <label className="block">
-                <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Format</span>
-                <input
-                  className={inputClass}
+                </Select>
+              </FormField>
+              <FormField label="Format">
+                <Input
+                  density={FORM_FIELD_DENSITY}
                   value={ppwrFormat}
                   onChange={(e) => setPpwrFormat(e.target.value)}
                   placeholder="np. shipper_box, mailer"
                 />
-              </label>
+              </FormField>
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block">
-                  <span className="text-xs font-bold uppercase text-slate-600">Recyklingowalność %</span>
-                  <input
-                    className={inputClass}
+                <FormField label="Recyklingowalność %">
+                  <Input
+                    density={FORM_FIELD_DENSITY}
                     value={recyclablePct}
                     onChange={(e) => setRecyclablePct(e.target.value)}
                     inputMode="decimal"
                   />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-bold uppercase text-slate-600">Recycled content %</span>
-                  <input
-                    className={inputClass}
+                </FormField>
+                <FormField label="Recycled content %">
+                  <Input
+                    density={FORM_FIELD_DENSITY}
                     value={recycledContentPct}
                     onChange={(e) => setRecycledContentPct(e.target.value)}
                     inputMode="decimal"
                   />
-                </label>
+                </FormField>
               </div>
               <label className="flex items-center gap-2 text-sm font-medium text-slate-800">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={isReusable}
                   onChange={(e) => setIsReusable(e.target.checked)}
-                  className="h-4 w-4"
                 />
                 Wielokrotnego użytku
               </label>
@@ -986,7 +951,7 @@ export default function CartonDetailPage() {
                     return (
                       <li key={sm.id}>
                         <label className="flex cursor-pointer items-center gap-3 px-3 py-3 hover:bg-slate-50 sm:px-4 sm:py-3.5">
-                          <input type="checkbox" checked={checked} onChange={() => toggleSm(sm.id)} className="h-4 w-4 shrink-0" />
+                          <Checkbox checked={checked} onChange={() => toggleSm(sm.id)} className="shrink-0" />
                           <ShippingMethodLogo logoUrl={sm.logo_url} methodName={sm.name} size="md" />
                           <span className="min-w-0 flex-1 font-semibold text-slate-900">{sm.name}</span>
                           <span className="font-mono text-xs text-slate-500">{sm.code}</span>

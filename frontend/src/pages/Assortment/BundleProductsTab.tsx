@@ -1,4 +1,5 @@
-import { ProductLikeSection, productLikeNumericInputNoSpinnerClass } from "../../components/catalog";
+import { productLikeNumericInputNoSpinnerClass, ProductLikeSection } from "../../components/catalog";
+import { FORM_FIELD_DENSITY, Input } from "../../design-system";
 import { BundleProductSearch } from "./BundleProductSearch";
 import type { BundleComponentRow, CatalogProduct, ProductSummary } from "./bundleEditTypes";
 
@@ -88,12 +89,13 @@ export function BundleProductsTab({
                       <td className="px-4 py-3.5 font-mono text-slate-800">{c?.sku || "—"}</td>
                       <td className="px-4 py-3.5 font-mono text-slate-800">{c?.ean || "—"}</td>
                       <td className="px-4 py-3.5 text-right">
-                        <input
+                        <Input
                           type="text"
+                          density="compact"
                           inputMode="numeric"
                           autoComplete="off"
                           aria-label="Ilość w zestawie"
-                          className={`h-8 w-16 rounded-md border border-slate-200 px-2 text-right text-[13px] tabular-nums focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 ${productLikeNumericInputNoSpinnerClass}`}
+                          className={`h-8 w-16 text-right text-[13px] tabular-nums ${productLikeNumericInputNoSpinnerClass}`}
                           value={row.quantity}
                           onChange={(e) => {
                             const digits = e.target.value.replace(/\D/g, "");

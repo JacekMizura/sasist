@@ -1,13 +1,9 @@
 import { X } from "lucide-react";
 
-import {
-  productLikeFieldLabelClass,
-  productLikeInputClass,
-} from "../../components/catalog/productLikeTokens";
 import { AppOverlayPortal } from "../../components/overlay";
+import { FORM_FIELD_DENSITY, FormField, Input, PrimaryButton } from "../../design-system";
 import type { BasketModel } from "./CartSectionGrid";
 import { basketVolume } from "./CartSectionGrid";
-import { PrimaryButton } from "../../design-system/PrimaryButton";
 
 type Props = {
   open: boolean;
@@ -76,16 +72,16 @@ export function CartBasketEditDrawer({
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5">
-          <div>
-            <label className={productLikeFieldLabelClass}>{sectionNameLabel}</label>
-            <input
-              className={`${productLikeInputClass} mt-1 uppercase ${!basket.name.trim() ? "border-red-300" : ""}`}
+          <FormField label={sectionNameLabel}>
+            <Input
+              density={FORM_FIELD_DENSITY}
+              className={`uppercase ${!basket.name.trim() ? "border-red-300" : ""}`}
               value={basket.name}
               onChange={(e) => onChange({ name: e.target.value })}
               placeholder={sectionNamePlaceholder}
               autoFocus
             />
-          </div>
+          </FormField>
 
           <div className="grid grid-cols-3 gap-3">
             {(
@@ -95,16 +91,16 @@ export function CartBasketEditDrawer({
                 ["height", heightLabel],
               ] as const
             ).map(([field, label]) => (
-              <div key={field}>
-                <label className={productLikeFieldLabelClass}>{label} (cm)</label>
-                <input
+              <FormField key={field} label={`${label} (cm)`}>
+                <Input
                   type="number"
+                  density={FORM_FIELD_DENSITY}
                   min={1}
-                  className={`${productLikeInputClass} mt-1 tabular-nums ${Number(basket[field]) <= 0 ? "border-red-300" : ""}`}
+                  className={`tabular-nums ${Number(basket[field]) <= 0 ? "border-red-300" : ""}`}
                   value={basket[field] || ""}
                   onChange={(e) => onChange({ [field]: Number(e.target.value) })}
                 />
-              </div>
+              </FormField>
             ))}
           </div>
 

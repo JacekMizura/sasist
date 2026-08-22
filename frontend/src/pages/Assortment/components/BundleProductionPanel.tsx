@@ -8,8 +8,8 @@ import {
   listProductionOrdersForProduct,
   type ProductionOrderSummaryRead,
 } from "../../../api/productionApi";
-import { ProductLikeSection, productLikeFieldLabelClass, productLikeInputClass } from "../../../components/catalog";
-import { PrimaryButton } from "../../../design-system/PrimaryButton";
+import { ProductLikeSection } from "../../../components/catalog";
+import { FORM_FIELD_DENSITY, FormField, Input, PrimaryButton } from "../../../design-system";
 import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "../../../hooks/useActiveWarehouseContext";
 import {
   formatProductionMoney,
@@ -43,9 +43,6 @@ export function BundleProductionPanel({
 }: Props) {
   const navigate = useNavigate();
   const { warehouseId, hasActiveWarehouse } = useActiveWarehouseContext();
-  const fieldLabel = productLikeFieldLabelClass;
-  const inputClass = productLikeInputClass;
-
   const [recipes, setRecipes] = useState<ProductCompositionRead[]>([]);
   const [history, setHistory] = useState<ProductionOrderSummaryRead[]>([]);
   const [loading, setLoading] = useState(false);
@@ -157,17 +154,16 @@ export function BundleProductionPanel({
               <strong>{activeRecipe.name}</strong> (v{activeRecipe.version}).
             </p>
             <div className="flex flex-wrap items-end gap-4">
-              <div className="w-36">
-                <label className={fieldLabel}>Planowana ilość</label>
-                <input
+              <FormField label="Planowana ilość" className="w-36">
+                <Input
                   type="number"
+                  density={FORM_FIELD_DENSITY}
                   min={0.001}
                   step="any"
-                  className={inputClass}
                   value={orderQty}
                   onChange={(e) => setOrderQty(Number(e.target.value) || 1)}
                 />
-              </div>
+              </FormField>
               <PrimaryButton
                 type="button"
                 disabled={orderBusy || !hasActiveWarehouse}

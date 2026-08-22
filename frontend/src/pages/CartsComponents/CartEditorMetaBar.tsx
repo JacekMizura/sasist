@@ -1,10 +1,7 @@
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 
-import {
-  productLikeFieldLabelClass,
-  productLikeInputClass,
-} from "../../components/catalog/productLikeTokens";
+import { FORM_FIELD_DENSITY, FormField, FormLabel, Input, Select } from "../../design-system";
 import { formatScanCodeLabel } from "../../modules/warehouse-structure/labels";
 import CartImageUrlField from "./ui/CartImageUrlField";
 
@@ -53,30 +50,26 @@ export function CartEditorMetaBar({
     <div className="border-b border-slate-200 bg-white px-4 py-4 sm:px-6 lg:px-8">
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)]">
-          <div>
-            <label className={productLikeFieldLabelClass} htmlFor="cart-meta-name">
-              {nameLabel}
-            </label>
-            <input
+          <FormField label={nameLabel} htmlFor="cart-meta-name">
+            <Input
               id="cart-meta-name"
-              className={`${productLikeInputClass} mt-1 text-base font-semibold ${!cartName.trim() ? "border-red-300" : ""}`}
+              density={FORM_FIELD_DENSITY}
+              className={`text-base font-semibold ${!cartName.trim() ? "border-red-300" : ""}`}
               value={cartName}
               onChange={(e) => onNameChange(e.target.value)}
               placeholder={namePlaceholder}
             />
-          </div>
-          <div>
-            <label className={productLikeFieldLabelClass} htmlFor="cart-meta-code">
-              Kod{cartId ? "" : " (opcjonalnie)"}
-            </label>
-            <input
+          </FormField>
+          <FormField label={`Kod${cartId ? "" : " (opcjonalnie)"}`} htmlFor="cart-meta-code">
+            <Input
               id="cart-meta-code"
-              className={`${productLikeInputClass} mt-1 font-mono`}
+              density={FORM_FIELD_DENSITY}
+              className="font-mono"
               value={cartCode}
               onChange={(e) => onCodeChange(e.target.value)}
               placeholder={cartId ? "" : "Puste = wygeneruj kod"}
             />
-          </div>
+          </FormField>
         </div>
 
         <div className="flex flex-wrap gap-2 text-[13px]">
@@ -104,20 +97,19 @@ export function CartEditorMetaBar({
           <div className="mt-3 grid gap-4 rounded-lg border border-slate-200/90 bg-white p-4 sm:grid-cols-2 lg:grid-cols-3">
             {cartId ? (
               <div>
-                <p className={productLikeFieldLabelClass}>Identyfikator</p>
+                <FormLabel>Identyfikator</FormLabel>
                 <p className="mt-1 font-mono text-sm tabular-nums text-slate-700">{cartId}</p>
               </div>
             ) : null}
             {cartScanCode ? (
               <div>
-                <p className={productLikeFieldLabelClass}>Kod terminala WMS</p>
+                <FormLabel>Kod terminala WMS</FormLabel>
                 <p className="mt-1 font-mono text-sm text-slate-700">{formatScanCodeLabel(cartScanCode)}</p>
               </div>
             ) : null}
-            <div>
-              <label className={productLikeFieldLabelClass}>Grupa wózków</label>
-              <select
-                className={`${productLikeInputClass} mt-1`}
+            <FormField label="Grupa wózków">
+              <Select
+                density={FORM_FIELD_DENSITY}
                 value={groupId === null ? "" : String(groupId)}
                 onChange={(e) => {
                   const v = e.target.value;
@@ -134,10 +126,10 @@ export function CartEditorMetaBar({
                     {g.name}
                   </option>
                 ))}
-              </select>
-            </div>
+              </Select>
+            </FormField>
             <div className="sm:col-span-2 lg:col-span-3">
-              <p className={productLikeFieldLabelClass}>Zdjęcie wózka</p>
+              <FormLabel>Zdjęcie wózka</FormLabel>
               <div className="mt-1 max-w-md">
                 <CartImageUrlField value={imageUrl} onChange={onImageChange} />
               </div>

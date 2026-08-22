@@ -17,14 +17,13 @@ import {
   CatalogEntityGallerySection,
   ProductLikePageLayout,
   ProductLikeSection,
-  productLikeFieldLabelClass,
-  productLikeInputClass,
   productLikeThreeColClass,
   productLikeSideColClass,
   useCatalogEntityGallery,
   type ProductLikeStatCard,
 } from "../../components/catalog";
 import { AppEmptyState } from "../../components/app-shell";
+import { Checkbox, FORM_FIELD_DENSITY, FormField, Input } from "../../design-system";
 import { ensureSingleMainImage, parseProductImages, pickMainImageUrl } from "../../utils/productLabelMetadata";
 import type { ProductImageEntry } from "../../types/productLabel";
 import { BundleLabelTab } from "./BundleLabelTab";
@@ -678,9 +677,6 @@ export function BundleEditModal({
     </>
   );
 
-  const fieldLabel = productLikeFieldLabelClass;
-  const inputClass = productLikeInputClass;
-
   return (
     <ProductLikePageLayout
       variant={isPage ? "page" : "modal"}
@@ -752,22 +748,25 @@ export function BundleEditModal({
           <div className={productLikeSideColClass}>
             <ProductLikeSection title="Informacje ogólne">
               <div className="space-y-5">
-                <div>
-                  <label className={fieldLabel}>Nazwa *</label>
-                  <input type="text" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} required />
-                </div>
+                <FormField label="Nazwa *">
+                  <Input
+                    type="text"
+                    density={FORM_FIELD_DENSITY}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                  />
+                </FormField>
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={fieldLabel}>Symbol / SKU</label>
-                    <input type="text" value={sku} onChange={(e) => setSku(e.target.value)} className={inputClass} />
-                  </div>
-                  <div>
-                    <label className={fieldLabel}>EAN</label>
-                    <input type="text" value={ean} onChange={(e) => setEan(e.target.value)} className={inputClass} />
-                  </div>
+                  <FormField label="Symbol / SKU">
+                    <Input type="text" density={FORM_FIELD_DENSITY} value={sku} onChange={(e) => setSku(e.target.value)} />
+                  </FormField>
+                  <FormField label="EAN">
+                    <Input type="text" density={FORM_FIELD_DENSITY} value={ean} onChange={(e) => setEan(e.target.value)} />
+                  </FormField>
                 </div>
                 <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-                  <input type="checkbox" className="rounded border-slate-300 text-blue-600" checked={active} onChange={(e) => setActive(e.target.checked)} />
+                  <Checkbox checked={active} onChange={(e) => setActive(e.target.checked)} />
                   Aktywny (widoczny przy tworzeniu zamówień)
                 </label>
               </div>
@@ -780,10 +779,10 @@ export function BundleEditModal({
                 Wymiary gotowego opakowania (kartonu) — nie składników. Używane w magazynie, pakowaniu i etykietach.
               </p>
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className={fieldLabel}>Długość (mm)</label>
-                  <input
+                <FormField label="Długość (mm)">
+                  <Input
                     type="number"
+                    density={FORM_FIELD_DENSITY}
                     min={0}
                     step={1}
                     value={lengthMm === "" ? "" : lengthMm}
@@ -795,13 +794,12 @@ export function BundleEditModal({
                         if (Number.isFinite(n)) setLengthMm(n);
                       }
                     }}
-                    className={inputClass}
                   />
-                </div>
-                <div>
-                  <label className={fieldLabel}>Szerokość (mm)</label>
-                  <input
+                </FormField>
+                <FormField label="Szerokość (mm)">
+                  <Input
                     type="number"
+                    density={FORM_FIELD_DENSITY}
                     min={0}
                     step={1}
                     value={widthMm === "" ? "" : widthMm}
@@ -813,13 +811,12 @@ export function BundleEditModal({
                         if (Number.isFinite(n)) setWidthMm(n);
                       }
                     }}
-                    className={inputClass}
                   />
-                </div>
-                <div>
-                  <label className={fieldLabel}>Wysokość (mm)</label>
-                  <input
+                </FormField>
+                <FormField label="Wysokość (mm)">
+                  <Input
                     type="number"
+                    density={FORM_FIELD_DENSITY}
                     min={0}
                     step={1}
                     value={heightMm === "" ? "" : heightMm}
@@ -831,13 +828,12 @@ export function BundleEditModal({
                         if (Number.isFinite(n)) setHeightMm(n);
                       }
                     }}
-                    className={inputClass}
                   />
-                </div>
-                <div>
-                  <label className={fieldLabel}>Waga (kg)</label>
-                  <input
+                </FormField>
+                <FormField label="Waga (kg)">
+                  <Input
                     type="number"
+                    density={FORM_FIELD_DENSITY}
                     min={0}
                     step={0.001}
                     value={weightKg === "" ? "" : weightKg}
@@ -849,9 +845,8 @@ export function BundleEditModal({
                         if (Number.isFinite(n)) setWeightKg(n);
                       }
                     }}
-                    className={inputClass}
                   />
-                </div>
+                </FormField>
               </div>
             </ProductLikeSection>
           </div>

@@ -1,10 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { ProductLikePageLayout } from "../../components/catalog/ProductLikePageLayout";
-import {
-  productLikeFieldLabelClass,
-  productLikeInputClass,
-} from "../../components/catalog/productLikeTokens";
+import { FORM_FIELD_DENSITY, FormField, FormLabel, Input, Select } from "../../design-system";
 import { CapacityStrategyFields } from "../../modules/warehouse-structure/CapacityStrategyFields";
 import {
   capacityStrategyLabel,
@@ -240,40 +237,42 @@ export default function BulkCartEditor({
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {cartId ? (
             <div>
-              <label className={productLikeFieldLabelClass}>ID</label>
+              <FormLabel>ID</FormLabel>
               <p className="mt-1 font-mono text-[14px] tabular-nums text-slate-700">{cartId}</p>
             </div>
           ) : null}
           <div className={cartId ? "" : "sm:col-span-2"}>
-            <label className={productLikeFieldLabelClass} htmlFor="bulk-cart-code">
-              Kod{cartId ? "" : " (opcjonalnie)"}
-            </label>
-            <input
-              id="bulk-cart-code"
-              className={`${productLikeInputClass} mt-1 font-mono text-[15px]`}
-              value={cartCode}
-              onChange={(e) => setCartCode(e.target.value)}
-              placeholder={cartId ? "" : "Puste = wygeneruj CART-0001"}
-            />
+            <FormField label={`Kod${cartId ? "" : " (opcjonalnie)"}`} htmlFor="bulk-cart-code">
+              <Input
+                id="bulk-cart-code"
+                density={FORM_FIELD_DENSITY}
+                className="font-mono text-[15px]"
+                value={cartCode}
+                onChange={(e) => setCartCode(e.target.value)}
+                placeholder={cartId ? "" : "Puste = wygeneruj CART-0001"}
+              />
+            </FormField>
           </div>
           <div className="sm:col-span-2">
-            <label className={productLikeFieldLabelClass}>{t.name}</label>
-            <input
-              className={`${productLikeInputClass} mt-1 text-[15px] font-semibold`}
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            />
+            <FormField label={t.name}>
+              <Input
+                density={FORM_FIELD_DENSITY}
+                className="text-[15px] font-semibold"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              />
+            </FormField>
           </div>
           {cartId && cartScanCode ? (
             <div className="sm:col-span-2 lg:col-span-4">
-              <label className={productLikeFieldLabelClass}>Kod terminala WMS</label>
+              <FormLabel>Kod terminala WMS</FormLabel>
               <p className="mt-1 font-mono text-[14px] text-slate-700">{formatScanCodeLabel(cartScanCode)}</p>
             </div>
           ) : null}
-          <div>
-            <label className={productLikeFieldLabelClass}>Grupa wózków</label>
-            <select
-              className={`${productLikeInputClass} mt-1 text-[15px]`}
+          <FormField label="Grupa wózków">
+            <Select
+              density={FORM_FIELD_DENSITY}
+              className="text-[15px]"
               value={groupId === null ? "" : String(groupId)}
               onChange={(e) => {
                 const v = e.target.value;
@@ -290,11 +289,11 @@ export default function BulkCartEditor({
                   {g.name}
                 </option>
               ))}
-            </select>
-          </div>
+            </Select>
+          </FormField>
           {cartId ? (
             <div>
-              <label className={productLikeFieldLabelClass}>Status</label>
+              <FormLabel>Status</FormLabel>
               <div className="mt-1">
                 <StatusPill status={status} />
               </div>
@@ -313,15 +312,15 @@ export default function BulkCartEditor({
               ["height", t.height],
             ] as const
           ).map(([field, label]) => (
-            <div key={field}>
-              <label className={productLikeFieldLabelClass}>{label}</label>
-              <input
+            <FormField key={field} label={label}>
+              <Input
                 type="number"
-                className={`${productLikeInputClass} mt-1 tabular-nums text-[15px]`}
+                density={FORM_FIELD_DENSITY}
+                className="tabular-nums text-[15px]"
                 value={formData[field] || ""}
                 onChange={(e) => setFormData({ ...formData, [field]: Number(e.target.value) })}
               />
-            </div>
+            </FormField>
           ))}
         </div>
         <p className="mt-2 text-[14px] text-slate-600">
@@ -342,20 +341,19 @@ export default function BulkCartEditor({
             namePrefix="bulkCapacityStrategy"
           />
           {showVolumeField ? (
-            <label className="block max-w-xs text-sm">
-              <span className={productLikeFieldLabelClass}>Limit objętości (dm³)</span>
-              <input
+            <FormField label="Limit objętości (dm³)" className="block max-w-xs text-sm">
+              <Input
                 type="number"
+                density={FORM_FIELD_DENSITY}
                 min={0}
                 step={0.1}
-                className={`${productLikeInputClass} mt-1`}
                 value={capacityVolume === "" ? "" : capacityVolume}
                 onChange={(e) =>
                   setCapacityVolume(e.target.value === "" ? "" : Number(e.target.value))
                 }
                 placeholder={computedVolume.toFixed(1)}
               />
-            </label>
+            </FormField>
           ) : null}
         </div>
       </section>

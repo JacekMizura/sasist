@@ -26,13 +26,10 @@ import { moduleAutomationShellClass } from "../../../components/layout/flatSecti
 import PageLayout from "../../../components/layout/PageLayout";
 import { ModuleListBreadcrumb, moduleListEmptyStateClass } from "../../../components/listPage/moduleList";
 import {
-  oaBtnDanger,
-  oaBtnPri,
-  oaSearchInp,
   oaWorkflowGroupHeaderClass,
   oaWorkflowGroupSectionClass,
 } from "../../../components/orders/automation/orderAutomationUiTokens";
-import { GhostButton } from "../../../design-system";
+import { DangerButton, GhostButton, PrimaryButton, SearchInput } from "../../../design-system";
 import { UI_STRINGS } from "../../../constants/uiStrings";
 import {
   ProductCustomFieldsTable,
@@ -445,10 +442,10 @@ export default function ProductCustomFieldsPage() {
               <Plus className="mr-1.5 h-4 w-4" strokeWidth={2} aria-hidden />
               Dodaj grupę
             </GhostButton>
-            <button type="button" onClick={() => navigate("/product-custom-fields/new")} className={oaBtnPri}>
+            <PrimaryButton type="button" onClick={() => navigate("/product-custom-fields/new")}>
               <Plus className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
               Dodaj pole
-            </button>
+            </PrimaryButton>
           </div>
         </div>
 
@@ -458,13 +455,13 @@ export default function ProductCustomFieldsPage() {
             strokeWidth={2}
             aria-hidden
           />
-          <input
+          <SearchInput
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Szukaj pola…"
-            className={oaSearchInp}
             type="search"
             aria-label="Szukaj pola"
+            className="pl-9"
           />
         </div>
 
@@ -481,9 +478,9 @@ export default function ProductCustomFieldsPage() {
             <span className="text-sm font-medium text-slate-800">
               Zaznaczono: <span className="tabular-nums">{selectedCount}</span>
             </span>
-            <button type="button" className={oaBtnDanger} disabled={bulkBusy} onClick={() => void onBulkDelete()}>
+            <DangerButton type="button" disabled={bulkBusy} onClick={() => void onBulkDelete()}>
               Usuń zaznaczone
-            </button>
+            </DangerButton>
           </div>
         ) : null}
 
@@ -495,14 +492,10 @@ export default function ProductCustomFieldsPage() {
               <ClipboardList className="h-7 w-7" strokeWidth={1.75} aria-hidden />
             </div>
             <p className="mt-5 text-base font-semibold text-slate-900">Brak dodatkowych pól</p>
-            <button
-              type="button"
-              className={`${oaBtnPri} mt-6`}
-              onClick={() => navigate("/product-custom-fields/new")}
-            >
+            <PrimaryButton type="button" className="mt-6" onClick={() => navigate("/product-custom-fields/new")}>
               <Plus className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
               Dodaj pierwsze pole
-            </button>
+            </PrimaryButton>
           </div>
         ) : displayRows.length === 0 && search.trim() ? (
           <div className="rounded-lg border border-dashed border-slate-200 px-6 py-12 text-center">

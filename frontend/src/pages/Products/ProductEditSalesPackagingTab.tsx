@@ -8,6 +8,15 @@ import {
   type ProductSalesPackagingDto,
 } from "../../api/productSalesPackagingApi";
 import { parseOptionalPct, ppwrStatusLabel } from "../../modules/warehouseMaterials/ppwrLabels";
+import {
+  Checkbox,
+  FORM_FIELD_DENSITY,
+  FormField,
+  Input,
+  PrimaryButton,
+  SecondaryButton,
+  Select,
+} from "../../design-system";
 
 type Props = {
   productId: number;
@@ -54,9 +63,6 @@ function draftFromRow(r: ProductSalesPackagingDto): Draft {
     sort_order: String(r.sort_order ?? 0),
   };
 }
-
-const inputClass =
-  "mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
 
 /**
  * Product card section — sales packaging specs (PPWR SALES).
@@ -180,9 +186,8 @@ export function ProductEditSalesPackagingTab({ productId, tenantId }: Props) {
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-base font-semibold text-slate-900">Opakowanie produktu</h3>
         {!formOpen ? (
-          <button
+          <PrimaryButton
             type="button"
-            className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
             disabled={busy}
             onClick={() => {
               setCreating(true);
@@ -191,7 +196,7 @@ export function ProductEditSalesPackagingTab({ productId, tenantId }: Props) {
             }}
           >
             Dodaj opakowanie
-          </button>
+          </PrimaryButton>
         ) : null}
       </div>
 
@@ -243,18 +248,16 @@ export function ProductEditSalesPackagingTab({ productId, tenantId }: Props) {
             {creating ? "Nowe opakowanie" : "Edycja opakowania"}
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block sm:col-span-2">
-              <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Nazwa</span>
-              <input
-                className={inputClass}
+            <FormField label="Nazwa" className="sm:col-span-2">
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={draft.name}
                 onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
               />
-            </label>
-            <label className="block">
-              <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Poziom</span>
-              <select
-                className={inputClass}
+            </FormField>
+            <FormField label="Poziom">
+              <Select
+                density={FORM_FIELD_DENSITY}
                 value={draft.level}
                 onChange={(e) =>
                   setDraft((d) => ({
@@ -265,66 +268,58 @@ export function ProductEditSalesPackagingTab({ productId, tenantId }: Props) {
               >
                 <option value="PRIMARY">PRIMARY</option>
                 <option value="SECONDARY">SECONDARY</option>
-              </select>
-            </label>
-            <label className="block">
-              <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Format PPWR</span>
-              <input
-                className={inputClass}
+              </Select>
+            </FormField>
+            <FormField label="Format PPWR">
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={draft.ppwr_format}
                 onChange={(e) => setDraft((d) => ({ ...d, ppwr_format: e.target.value }))}
                 placeholder="np. bottle, pouch, retail_box"
               />
-            </label>
-            <label className="block">
-              <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Materiał / kategoria</span>
-              <input
-                className={inputClass}
+            </FormField>
+            <FormField label="Materiał / kategoria">
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={draft.material_category}
                 onChange={(e) => setDraft((d) => ({ ...d, material_category: e.target.value }))}
                 placeholder="np. PET, papier, szkło"
               />
-            </label>
-            <label className="block">
-              <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Masa (g)</span>
-              <input
-                className={inputClass}
+            </FormField>
+            <FormField label="Masa (g)">
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={draft.mass_g}
                 onChange={(e) => setDraft((d) => ({ ...d, mass_g: e.target.value }))}
                 inputMode="decimal"
               />
-            </label>
-            <label className="block">
-              <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Recyklingowalność %</span>
-              <input
-                className={inputClass}
+            </FormField>
+            <FormField label="Recyklingowalność %">
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={draft.recyclable_pct}
                 onChange={(e) => setDraft((d) => ({ ...d, recyclable_pct: e.target.value }))}
                 inputMode="decimal"
               />
-            </label>
-            <label className="block">
-              <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Recycled content %</span>
-              <input
-                className={inputClass}
+            </FormField>
+            <FormField label="Recycled content %">
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={draft.recycled_content_pct}
                 onChange={(e) => setDraft((d) => ({ ...d, recycled_content_pct: e.target.value }))}
                 inputMode="decimal"
               />
-            </label>
-            <label className="block">
-              <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Kolejność</span>
-              <input
-                className={inputClass}
+            </FormField>
+            <FormField label="Kolejność">
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={draft.sort_order}
                 onChange={(e) => setDraft((d) => ({ ...d, sort_order: e.target.value }))}
                 inputMode="numeric"
               />
-            </label>
+            </FormField>
             <label className="flex items-center gap-2 pt-6 text-sm text-slate-800">
-              <input
-                type="checkbox"
-                className="h-4 w-4"
+              <Checkbox
                 checked={draft.is_reusable === true}
                 onChange={(e) =>
                   setDraft((d) => ({ ...d, is_reusable: e.target.checked ? true : null }))
@@ -333,9 +328,7 @@ export function ProductEditSalesPackagingTab({ productId, tenantId }: Props) {
               Wielokrotnego użytku
             </label>
             <label className="flex items-center gap-2 pt-6 text-sm text-slate-800">
-              <input
-                type="checkbox"
-                className="h-4 w-4"
+              <Checkbox
                 checked={draft.is_active}
                 onChange={(e) => setDraft((d) => ({ ...d, is_active: e.target.checked }))}
               />
@@ -343,17 +336,11 @@ export function ProductEditSalesPackagingTab({ productId, tenantId }: Props) {
             </label>
           </div>
           <div className="flex gap-2 pt-2">
-            <button
-              type="button"
-              className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-              disabled={busy}
-              onClick={() => void onSave()}
-            >
+            <PrimaryButton type="button" disabled={busy} onClick={() => void onSave()}>
               Zapisz
-            </button>
-            <button
+            </PrimaryButton>
+            <SecondaryButton
               type="button"
-              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
               disabled={busy}
               onClick={() => {
                 setCreating(false);
@@ -362,7 +349,7 @@ export function ProductEditSalesPackagingTab({ productId, tenantId }: Props) {
               }}
             >
               Anuluj
-            </button>
+            </SecondaryButton>
           </div>
         </div>
       ) : null}

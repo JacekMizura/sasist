@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 
 import api from "../../api/axios";
-import { productLikeFieldLabelClass, productLikeInputClass, ProductLikeSection } from "../../components/catalog";
-import { PrimaryButton } from "../../design-system/PrimaryButton";
+import { ProductLikeSection } from "../../components/catalog";
+import { FORM_FIELD_DENSITY, FormField, Input, PrimaryButton, Select } from "../../design-system";
 import { openPdfBlobInPrintViewer } from "../../utils/openPdfForBrowserPrint";
 
 type Props = {
@@ -73,12 +73,11 @@ export function BundleLabelTab({ bundleId, tenantId, isNew }: Props) {
     <div className="w-full xl:max-w-4xl space-y-8">
       <ProductLikeSection title="Szablon etykiety">
         <div className="space-y-5">
-          <div>
-            <label className={productLikeFieldLabelClass}>Szablon (typ produkt)</label>
-            <select
+          <FormField label="Szablon (typ produkt)">
+            <Select
+              density={FORM_FIELD_DENSITY}
               value={templateId ?? ""}
               onChange={(e) => setTemplateId(e.target.value === "" ? null : Number(e.target.value))}
-              className={productLikeInputClass}
             >
               <option value="">Wybierz szablon</option>
               {templates.map((t) => (
@@ -86,19 +85,18 @@ export function BundleLabelTab({ bundleId, tenantId, isNew }: Props) {
                   {t.name}
                 </option>
               ))}
-            </select>
-          </div>
-          <div>
-            <label className={productLikeFieldLabelClass}>Liczba kopii</label>
-            <input
+            </Select>
+          </FormField>
+          <FormField label="Liczba kopii">
+            <Input
               type="number"
+              density={FORM_FIELD_DENSITY}
               min={1}
               max={500}
               value={quantity}
               onChange={(e) => setQuantity(Math.max(1, Math.min(500, Number(e.target.value) || 1)))}
-              className={productLikeInputClass}
             />
-          </div>
+          </FormField>
           <div className="rounded border border-slate-200 bg-slate-50 p-5">
             <p className="mb-3 text-sm font-medium text-slate-700">Podgląd szablonu (SVG)</p>
             <div className="flex min-h-[100px] items-center justify-center rounded border border-dashed border-slate-300 bg-white p-2">

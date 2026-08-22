@@ -12,14 +12,11 @@ import {
 import type { PriceTierDto } from "../../api/cartonsApi";
 import { listSuppliers, type SupplierRead } from "../../api/inboundSuppliersApi";
 import { listManufacturers, type ManufacturerRead } from "../../api/manufacturersApi";
-import {
-  productLikeFieldLabelClass,
-  productLikeInputClass,
-  type ProductLikeStatCard,
-} from "../../components/catalog";
+import { type ProductLikeStatCard } from "../../components/catalog";
 import { DAMAGE_TENANT_ID } from "../../constants/panelTenant";
 import { UI_STRINGS } from "../../constants/uiStrings";
 import { useWarehouse } from "../../context/WarehouseContext";
+import { Checkbox, FORM_FIELD_DENSITY, FormField, FormLabel, Input, Select, Textarea } from "../../design-system";
 import { WmFormSectionCard } from "../../modules/warehouseMaterials/components/WmFormSectionCard";
 import { WarehouseMaterialEditLayout } from "../../modules/warehouseMaterials/components/WarehouseMaterialEditLayout";
 import {
@@ -472,9 +469,6 @@ export default function PackagingMaterialDetailPage() {
     void handleSave();
   };
 
-  const fieldLabel = productLikeFieldLabelClass;
-  const inputClass = productLikeInputClass;
-
   if (warehouseId == null) {
     return (
       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950">
@@ -513,40 +507,35 @@ export default function PackagingMaterialDetailPage() {
         {activeTab === "basic" ? (
           <WmFormSectionCard title="Dane podstawowe" description="Nazwa, SKU, typ materiału i jednostka magazynowa.">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <label className={fieldLabel}>Nazwa</label>
-                <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} />
-              </div>
-              <div>
-                <label className={fieldLabel}>SKU</label>
-                <input className={inputClass} value={sku} onChange={(e) => setSku(e.target.value)} />
-              </div>
-              <div>
-                <label className={fieldLabel}>Typ materiału</label>
-                <select className={inputClass} value={mtype} onChange={(e) => setMtype(e.target.value)}>
+              <FormField label="Nazwa" className="sm:col-span-2">
+                <Input density={FORM_FIELD_DENSITY} value={name} onChange={(e) => setName(e.target.value)} />
+              </FormField>
+              <FormField label="SKU">
+                <Input density={FORM_FIELD_DENSITY} value={sku} onChange={(e) => setSku(e.target.value)} />
+              </FormField>
+              <FormField label="Typ materiału">
+                <Select density={FORM_FIELD_DENSITY} value={mtype} onChange={(e) => setMtype(e.target.value)}>
                   {MATERIAL_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
                     </option>
                   ))}
-                </select>
-              </div>
-              <div>
-                <label className={fieldLabel}>Jednostka</label>
-                <select className={inputClass} value={unit} onChange={(e) => setUnit(e.target.value)}>
+                </Select>
+              </FormField>
+              <FormField label="Jednostka">
+                <Select density={FORM_FIELD_DENSITY} value={unit} onChange={(e) => setUnit(e.target.value)}>
                   <option value="roll">Rolka</option>
                   <option value="pcs">Sztuka</option>
                   <option value="kg">Kilogram</option>
-                </select>
-              </div>
+                </Select>
+              </FormField>
               <label className="flex items-center gap-2 sm:col-span-2">
-                <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
+                <Checkbox checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
                 <span className="text-sm font-medium text-slate-800">Aktywny w magazynie</span>
               </label>
-              <div className="sm:col-span-2">
-                <label className={fieldLabel}>Uwagi</label>
-                <textarea className={`${inputClass} min-h-[88px] py-2`} value={notes} onChange={(e) => setNotes(e.target.value)} />
-              </div>
+              <FormField label="Uwagi" className="sm:col-span-2">
+                <Textarea density={FORM_FIELD_DENSITY} className="min-h-[88px]" value={notes} onChange={(e) => setNotes(e.target.value)} />
+              </FormField>
             </div>
           </WmFormSectionCard>
         ) : null}
@@ -561,118 +550,93 @@ export default function PackagingMaterialDetailPage() {
             ) : null}
             {technicalFields.isStretch ? (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className={fieldLabel}>Szerokość (mm)</span>
-                  <input className={inputClass} value={widthMm} onChange={(e) => setWidthMm(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Grubość (µm)</span>
-                  <input className={inputClass} value={thick} onChange={(e) => setThick(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Waga folii netto (kg)</span>
-                  <input className={inputClass} value={netFoil} onChange={(e) => setNetFoil(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Waga tubusu / rdzenia (kg)</span>
-                  <input className={inputClass} value={tubeKg} onChange={(e) => setTubeKg(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Stretch (%)</span>
-                  <input className={inputClass} value={stretchPct} onChange={(e) => setStretchPct(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Średnica rdzenia (mm)</span>
-                  <input className={inputClass} value={tubeDia} onChange={(e) => setTubeDia(e.target.value)} inputMode="decimal" />
-                </label>
+                <FormField label="Szerokość (mm)">
+                  <Input density={FORM_FIELD_DENSITY} value={widthMm} onChange={(e) => setWidthMm(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Grubość (µm)">
+                  <Input density={FORM_FIELD_DENSITY} value={thick} onChange={(e) => setThick(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Waga folii netto (kg)">
+                  <Input density={FORM_FIELD_DENSITY} value={netFoil} onChange={(e) => setNetFoil(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Waga tubusu / rdzenia (kg)">
+                  <Input density={FORM_FIELD_DENSITY} value={tubeKg} onChange={(e) => setTubeKg(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Stretch (%)">
+                  <Input density={FORM_FIELD_DENSITY} value={stretchPct} onChange={(e) => setStretchPct(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Średnica rdzenia (mm)">
+                  <Input density={FORM_FIELD_DENSITY} value={tubeDia} onChange={(e) => setTubeDia(e.target.value)} inputMode="decimal" />
+                </FormField>
               </div>
             ) : null}
             {technicalFields.isTape ? (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className={fieldLabel}>Szerokość (mm)</span>
-                  <input className={inputClass} value={widthMm} onChange={(e) => setWidthMm(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Długość (m)</span>
-                  <input className={inputClass} value={lengthM} onChange={(e) => setLengthM(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Rodzaj kleju</span>
-                  <input className={inputClass} value={adhesive} onChange={(e) => setAdhesive(e.target.value)} />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Kolor</span>
-                  <input className={inputClass} value={color} onChange={(e) => setColor(e.target.value)} />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Waga rdzenia papierowego (kg)</span>
-                  <input className={inputClass} value={corePaper} onChange={(e) => setCorePaper(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Waga taśmy (kg, opcjonalnie)</span>
-                  <input className={inputClass} value={tapeW} onChange={(e) => setTapeW(e.target.value)} inputMode="decimal" />
-                </label>
+                <FormField label="Szerokość (mm)">
+                  <Input density={FORM_FIELD_DENSITY} value={widthMm} onChange={(e) => setWidthMm(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Długość (m)">
+                  <Input density={FORM_FIELD_DENSITY} value={lengthM} onChange={(e) => setLengthM(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Rodzaj kleju">
+                  <Input density={FORM_FIELD_DENSITY} value={adhesive} onChange={(e) => setAdhesive(e.target.value)} />
+                </FormField>
+                <FormField label="Kolor">
+                  <Input density={FORM_FIELD_DENSITY} value={color} onChange={(e) => setColor(e.target.value)} />
+                </FormField>
+                <FormField label="Waga rdzenia papierowego (kg)">
+                  <Input density={FORM_FIELD_DENSITY} value={corePaper} onChange={(e) => setCorePaper(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Waga taśmy (kg, opcjonalnie)">
+                  <Input density={FORM_FIELD_DENSITY} value={tapeW} onChange={(e) => setTapeW(e.target.value)} inputMode="decimal" />
+                </FormField>
               </div>
             ) : null}
             {technicalFields.isBubble ? (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className={fieldLabel}>Szerokość (cm)</span>
-                  <input className={inputClass} value={bubbleWcm} onChange={(e) => setBubbleWcm(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Długość (m)</span>
-                  <input className={inputClass} value={lengthM} onChange={(e) => setLengthM(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Średnica bąbla (mm)</span>
-                  <input className={inputClass} value={bubbleDia} onChange={(e) => setBubbleDia(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Grubość (µm)</span>
-                  <input className={inputClass} value={thick} onChange={(e) => setThick(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Tolerancja (%)</span>
-                  <input className={inputClass} value={tolerance} onChange={(e) => setTolerance(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Waga (kg, opcjonalnie)</span>
-                  <input className={inputClass} value={bubbleWt} onChange={(e) => setBubbleWt(e.target.value)} inputMode="decimal" />
-                </label>
+                <FormField label="Szerokość (cm)">
+                  <Input density={FORM_FIELD_DENSITY} value={bubbleWcm} onChange={(e) => setBubbleWcm(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Długość (m)">
+                  <Input density={FORM_FIELD_DENSITY} value={lengthM} onChange={(e) => setLengthM(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Średnica bąbla (mm)">
+                  <Input density={FORM_FIELD_DENSITY} value={bubbleDia} onChange={(e) => setBubbleDia(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Grubość (µm)">
+                  <Input density={FORM_FIELD_DENSITY} value={thick} onChange={(e) => setThick(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Tolerancja (%)">
+                  <Input density={FORM_FIELD_DENSITY} value={tolerance} onChange={(e) => setTolerance(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Waga (kg, opcjonalnie)">
+                  <Input density={FORM_FIELD_DENSITY} value={bubbleWt} onChange={(e) => setBubbleWt(e.target.value)} inputMode="decimal" />
+                </FormField>
               </div>
             ) : null}
             {technicalFields.isPaper ? (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className={fieldLabel}>Szerokość (mm)</span>
-                  <input className={inputClass} value={widthMm} onChange={(e) => setWidthMm(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Długość rolki (m)</span>
-                  <input className={inputClass} value={lengthM} onChange={(e) => setLengthM(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Gramatura (g/m²)</span>
-                  <input className={inputClass} value={grammage} onChange={(e) => setGrammage(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Waga rolki (kg)</span>
-                  <input className={inputClass} value={rollWt} onChange={(e) => setRollWt(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Średnica rolki (mm)</span>
-                  <input className={inputClass} value={rollDia} onChange={(e) => setRollDia(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Rodzaj papieru</span>
-                  <input className={inputClass} value={paperType} onChange={(e) => setPaperType(e.target.value)} />
-                </label>
-                <label className="block sm:col-span-2">
-                  <span className={fieldLabel}>Kolor</span>
-                  <input className={inputClass} value={color} onChange={(e) => setColor(e.target.value)} />
-                </label>
+                <FormField label="Szerokość (mm)">
+                  <Input density={FORM_FIELD_DENSITY} value={widthMm} onChange={(e) => setWidthMm(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Długość rolki (m)">
+                  <Input density={FORM_FIELD_DENSITY} value={lengthM} onChange={(e) => setLengthM(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Gramatura (g/m²)">
+                  <Input density={FORM_FIELD_DENSITY} value={grammage} onChange={(e) => setGrammage(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Waga rolki (kg)">
+                  <Input density={FORM_FIELD_DENSITY} value={rollWt} onChange={(e) => setRollWt(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Średnica rolki (mm)">
+                  <Input density={FORM_FIELD_DENSITY} value={rollDia} onChange={(e) => setRollDia(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Rodzaj papieru">
+                  <Input density={FORM_FIELD_DENSITY} value={paperType} onChange={(e) => setPaperType(e.target.value)} />
+                </FormField>
+                <FormField label="Kolor" className="sm:col-span-2">
+                  <Input density={FORM_FIELD_DENSITY} value={color} onChange={(e) => setColor(e.target.value)} />
+                </FormField>
               </div>
             ) : null}
           </WmFormSectionCard>
@@ -685,11 +649,11 @@ export default function PackagingMaterialDetailPage() {
           >
             <div className="mb-5 grid grid-cols-1 gap-3 rounded-lg border border-slate-100 bg-slate-50/80 p-4 sm:grid-cols-2">
               <div>
-                <p className={fieldLabel}>Podgląd netto / j.u.</p>
+                <FormLabel>Podgląd netto / j.u.</FormLabel>
                 <p className="font-mono text-sm font-semibold text-slate-900">{formatWmMoneyZloty(unitNetPreview)}</p>
               </div>
               <div>
-                <p className={fieldLabel}>Podgląd brutto / j.u.</p>
+                <FormLabel>Podgląd brutto / j.u.</FormLabel>
                 <p className="font-mono text-sm font-semibold text-slate-900">{formatWmMoneyZloty(unitGrossPreview)}</p>
               </div>
             </div>
@@ -717,20 +681,18 @@ export default function PackagingMaterialDetailPage() {
                   Brak dostawcy — materiał nie pojawi się w zamówieniach.
                 </div>
               ) : null}
-              <label className="block">
-                <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Główny dostawca</span>
-                <select className={inputClass} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+              <FormField label="Główny dostawca">
+                <Select density={FORM_FIELD_DENSITY} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
                   <option value="">— brak —</option>
                   {suppliers.map((s) => (
                     <option key={s.id} value={String(s.id)}>
                       {s.name}
                     </option>
                   ))}
-                </select>
-              </label>
-              <label className="block">
-                <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Producent / marka (opcjonalnie)</span>
-                <select className={inputClass} value={producerId} onChange={(e) => setProducerId(e.target.value)}>
+                </Select>
+              </FormField>
+              <FormField label="Producent / marka (opcjonalnie)">
+                <Select density={FORM_FIELD_DENSITY} value={producerId} onChange={(e) => setProducerId(e.target.value)}>
                   <option value="">— brak —</option>
                   {manufacturers.map((m) => (
                     <option key={m.id} value={String(m.id)}>
@@ -738,60 +700,53 @@ export default function PackagingMaterialDetailPage() {
                       {!m.active ? " (nieaktywny)" : ""}
                     </option>
                   ))}
-                </select>
-              </label>
-              <label className="block">
-                <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Nazwa u dostawcy (override)</span>
-                <input
-                  className={inputClass}
+                </Select>
+              </FormField>
+              <FormField label="Nazwa u dostawcy (override)">
+                <Input
+                  density={FORM_FIELD_DENSITY}
                   value={supplierNameOverride}
                   onChange={(e) => setSupplierNameOverride(e.target.value)}
                   placeholder="Opcjonalnie"
                 />
-              </label>
-              <label className="block">
-                <span className="text-xs font-bold uppercase tracking-wide text-slate-600">SKU u dostawcy</span>
-                <input className={inputClass} value={supplierSku} onChange={(e) => setSupplierSku(e.target.value)} />
-              </label>
+              </FormField>
+              <FormField label="SKU u dostawcy">
+                <Input density={FORM_FIELD_DENSITY} value={supplierSku} onChange={(e) => setSupplierSku(e.target.value)} />
+              </FormField>
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block">
-                  <span className="text-xs font-bold uppercase tracking-wide text-slate-600">MOQ</span>
-                  <input className={inputClass} value={moqStr} onChange={(e) => setMoqStr(e.target.value)} inputMode="decimal" />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Wielopak / zbiorcze</span>
-                  <input
-                    className={inputClass}
+                <FormField label="MOQ">
+                  <Input density={FORM_FIELD_DENSITY} value={moqStr} onChange={(e) => setMoqStr(e.target.value)} inputMode="decimal" />
+                </FormField>
+                <FormField label="Wielopak / zbiorcze">
+                  <Input
+                    density={FORM_FIELD_DENSITY}
                     value={purchasePackQtyStr}
                     onChange={(e) => setPurchasePackQtyStr(e.target.value)}
                     onBlur={() => setPurchasePackQtyStr(normalizeWmMoneyInputString(purchasePackQtyStr))}
                     inputMode="decimal"
                   />
-                </label>
-                <label className="block sm:col-span-2">
-                  <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Darmowa dostawa od kwoty (netto)</span>
-                  <input
-                    className={inputClass}
+                </FormField>
+                <FormField label="Darmowa dostawa od kwoty (netto)" className="sm:col-span-2">
+                  <Input
+                    density={FORM_FIELD_DENSITY}
                     value={freeShipNetStr}
                     onChange={(e) => setFreeShipNetStr(e.target.value)}
                     onBlur={() => setFreeShipNetStr(normalizeWmMoneyInputString(freeShipNetStr))}
                     inputMode="decimal"
                   />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Czas realizacji (dni)</span>
-                  <input className={inputClass} value={leadTimeDays} onChange={(e) => setLeadTimeDays(e.target.value)} inputMode="numeric" />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Ostatnia cena zakupu netto</span>
-                  <input
-                    className={inputClass}
+                </FormField>
+                <FormField label="Czas realizacji (dni)">
+                  <Input density={FORM_FIELD_DENSITY} value={leadTimeDays} onChange={(e) => setLeadTimeDays(e.target.value)} inputMode="numeric" />
+                </FormField>
+                <FormField label="Ostatnia cena zakupu netto">
+                  <Input
+                    density={FORM_FIELD_DENSITY}
                     value={lastPurchaseNetStr}
                     onChange={(e) => setLastPurchaseNetStr(e.target.value)}
                     onBlur={() => setLastPurchaseNetStr(normalizeWmMoneyInputString(lastPurchaseNetStr))}
                     inputMode="decimal"
                   />
-                </label>
+                </FormField>
               </div>
             </div>
           </WmFormSectionCard>
@@ -800,26 +755,21 @@ export default function PackagingMaterialDetailPage() {
         {activeTab === "warehouse" ? (
           <WmFormSectionCard title="Magazyn" description="Stan, rezerwacje, lokalizacja etykieta oraz progi alertów.">
             <div className="grid max-w-xl grid-cols-1 gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className={fieldLabel}>Stan</span>
-                <input className={inputClass} value={stock} onChange={(e) => setStock(e.target.value)} inputMode="decimal" />
-              </label>
-              <label className="block">
-                <span className={fieldLabel}>Zarezerwowano</span>
-                <input className={inputClass} value={reservedQty} onChange={(e) => setReservedQty(e.target.value)} inputMode="decimal" />
-              </label>
-              <label className="block sm:col-span-2">
-                <span className={fieldLabel}>Lokalizacja (etykieta)</span>
-                <input className={inputClass} value={locationLabel} onChange={(e) => setLocationLabel(e.target.value)} />
-              </label>
-              <label className="block">
-                <span className={fieldLabel}>Próg niskiego stanu</span>
-                <input className={inputClass} value={lowStockThr} onChange={(e) => setLowStockThr(e.target.value)} inputMode="decimal" />
-              </label>
-              <label className="block">
-                <span className={fieldLabel}>Sugerowane uzupełnienie</span>
-                <input className={inputClass} value={reorderQty} onChange={(e) => setReorderQty(e.target.value)} inputMode="decimal" />
-              </label>
+              <FormField label="Stan">
+                <Input density={FORM_FIELD_DENSITY} value={stock} onChange={(e) => setStock(e.target.value)} inputMode="decimal" />
+              </FormField>
+              <FormField label="Zarezerwowano">
+                <Input density={FORM_FIELD_DENSITY} value={reservedQty} onChange={(e) => setReservedQty(e.target.value)} inputMode="decimal" />
+              </FormField>
+              <FormField label="Lokalizacja (etykieta)" className="sm:col-span-2">
+                <Input density={FORM_FIELD_DENSITY} value={locationLabel} onChange={(e) => setLocationLabel(e.target.value)} />
+              </FormField>
+              <FormField label="Próg niskiego stanu">
+                <Input density={FORM_FIELD_DENSITY} value={lowStockThr} onChange={(e) => setLowStockThr(e.target.value)} inputMode="decimal" />
+              </FormField>
+              <FormField label="Sugerowane uzupełnienie">
+                <Input density={FORM_FIELD_DENSITY} value={reorderQty} onChange={(e) => setReorderQty(e.target.value)} inputMode="decimal" />
+              </FormField>
             </div>
           </WmFormSectionCard>
         ) : null}
@@ -827,34 +777,28 @@ export default function PackagingMaterialDetailPage() {
         {activeTab === "bdo" ? (
           <WmFormSectionCard title="Mapowanie BDO" description="Masy składowe na jednostkę magazynową — widoczne w Magazyn → BDO.">
             <label className="mb-4 flex items-center gap-2">
-              <input type="checkbox" checked={includeInBdo} onChange={(e) => setIncludeInBdo(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
+              <Checkbox checked={includeInBdo} onChange={(e) => setIncludeInBdo(e.target.checked)} />
               <span className="text-sm font-medium text-slate-800">Uwzględniaj w raportach BDO</span>
             </label>
-            <label className="mb-4 block max-w-md">
-              <span className={fieldLabel}>Typ opakowania (BDO)</span>
-              <input className={inputClass} value={packagingTypeBdo} onChange={(e) => setPackagingTypeBdo(e.target.value)} />
-            </label>
+            <FormField label="Typ opakowania (BDO)" className="mb-4 max-w-md">
+              <Input density={FORM_FIELD_DENSITY} value={packagingTypeBdo} onChange={(e) => setPackagingTypeBdo(e.target.value)} />
+            </FormField>
             <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className={fieldLabel}>Plastik (kg / j.u.)</span>
-                <input className={inputClass} value={plasticKg} onChange={(e) => setPlasticKg(e.target.value)} inputMode="decimal" />
-              </label>
-              <label className="block">
-                <span className={fieldLabel}>Papier (kg / j.u.)</span>
-                <input className={inputClass} value={paperKg} onChange={(e) => setPaperKg(e.target.value)} inputMode="decimal" />
-              </label>
-              <label className="block">
-                <span className={fieldLabel}>Drewno</span>
-                <input className={inputClass} value={woodKg} onChange={(e) => setWoodKg(e.target.value)} inputMode="decimal" />
-              </label>
-              <label className="block">
-                <span className={fieldLabel}>Szkło</span>
-                <input className={inputClass} value={glassKg} onChange={(e) => setGlassKg(e.target.value)} inputMode="decimal" />
-              </label>
-              <label className="block sm:col-span-2">
-                <span className={fieldLabel}>Metal</span>
-                <input className={inputClass} value={metalKg} onChange={(e) => setMetalKg(e.target.value)} inputMode="decimal" />
-              </label>
+              <FormField label="Plastik (kg / j.u.)">
+                <Input density={FORM_FIELD_DENSITY} value={plasticKg} onChange={(e) => setPlasticKg(e.target.value)} inputMode="decimal" />
+              </FormField>
+              <FormField label="Papier (kg / j.u.)">
+                <Input density={FORM_FIELD_DENSITY} value={paperKg} onChange={(e) => setPaperKg(e.target.value)} inputMode="decimal" />
+              </FormField>
+              <FormField label="Drewno">
+                <Input density={FORM_FIELD_DENSITY} value={woodKg} onChange={(e) => setWoodKg(e.target.value)} inputMode="decimal" />
+              </FormField>
+              <FormField label="Szkło">
+                <Input density={FORM_FIELD_DENSITY} value={glassKg} onChange={(e) => setGlassKg(e.target.value)} inputMode="decimal" />
+              </FormField>
+              <FormField label="Metal" className="sm:col-span-2">
+                <Input density={FORM_FIELD_DENSITY} value={metalKg} onChange={(e) => setMetalKg(e.target.value)} inputMode="decimal" />
+              </FormField>
             </div>
           </WmFormSectionCard>
         ) : null}
@@ -868,10 +812,9 @@ export default function PackagingMaterialDetailPage() {
               <p className="text-sm text-slate-600">
                 Status: <span className="font-medium text-slate-900">{ppwrStatusLabel(ppwrStatus)}</span>
               </p>
-              <label className="block max-w-md">
-                <span className={fieldLabel}>Funkcja PPWR</span>
-                <select
-                  className={inputClass}
+              <FormField label="Funkcja PPWR" className="max-w-md">
+                <Select
+                  density={FORM_FIELD_DENSITY}
                   value={ppwrFunction}
                   onChange={(e) => setPpwrFunction(e.target.value)}
                 >
@@ -880,43 +823,38 @@ export default function PackagingMaterialDetailPage() {
                       {o.label}
                     </option>
                   ))}
-                </select>
-              </label>
-              <label className="block max-w-md">
-                <span className={fieldLabel}>Format</span>
-                <input
-                  className={inputClass}
+                </Select>
+              </FormField>
+              <FormField label="Format" className="max-w-md">
+                <Input
+                  density={FORM_FIELD_DENSITY}
                   value={ppwrFormat}
                   onChange={(e) => setPpwrFormat(e.target.value)}
                   placeholder="np. stretch, tape, bubble_wrap"
                 />
-              </label>
+              </FormField>
               <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className={fieldLabel}>Recyklingowalność %</span>
-                  <input
-                    className={inputClass}
+                <FormField label="Recyklingowalność %">
+                  <Input
+                    density={FORM_FIELD_DENSITY}
                     value={recyclablePct}
                     onChange={(e) => setRecyclablePct(e.target.value)}
                     inputMode="decimal"
                   />
-                </label>
-                <label className="block">
-                  <span className={fieldLabel}>Recycled content %</span>
-                  <input
-                    className={inputClass}
+                </FormField>
+                <FormField label="Recycled content %">
+                  <Input
+                    density={FORM_FIELD_DENSITY}
                     value={recycledContentPct}
                     onChange={(e) => setRecycledContentPct(e.target.value)}
                     inputMode="decimal"
                   />
-                </label>
+                </FormField>
               </div>
               <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={isReusable}
                   onChange={(e) => setIsReusable(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300"
                 />
                 <span className="text-sm font-medium text-slate-800">Wielokrotnego użytku</span>
               </label>

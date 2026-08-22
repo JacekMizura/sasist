@@ -27,7 +27,16 @@ import { useActiveWarehouseContext, ACTIVE_WAREHOUSE_REQUIRED_MESSAGE } from "..
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../types/orderUiStatus";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import type { ComplaintExchangePrefillState } from "../Complaints/complaintExchangePrefill";
-import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+import {
+  Checkbox,
+  FORM_FIELD_DENSITY,
+  FormField,
+  Input,
+  PrimaryButton,
+  SearchInput,
+  Select,
+  Textarea,
+} from "../../design-system";
 import { AppOverlayPortal } from "../../components/overlay";
 
 const DEFAULT_TENANT_ID = 1;
@@ -734,10 +743,10 @@ export default function CreateOrderPage() {
           <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-sm">
             <label className="flex max-w-xl flex-col gap-1">
               <span className="text-xs font-semibold text-slate-500">Klient (opcjonalnie)</span>
-              <select
+              <Select
                 key={customerSelectKey}
                 disabled={customerSelectBusy}
-                className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                density={FORM_FIELD_DENSITY}
                 value={selectedCustomerId ?? ""}
                 onChange={(e) => void handleCustomerSelect(e.target.value)}
               >
@@ -748,7 +757,7 @@ export default function CreateOrderPage() {
                     {c.email?.trim() ? ` · ${c.email.trim()}` : ""}
                   </option>
                 ))}
-              </select>
+              </Select>
               <span className="text-xs text-slate-500">
                 Dane i adres wypełnią się z karty — przy ręcznych wpisach pojawi się potwierdzenie.{" "}
                 <Link to="/customers/new" className="font-medium text-blue-700 hover:underline">
@@ -759,8 +768,8 @@ export default function CreateOrderPage() {
             {customerShippingAddresses.length > 1 ? (
               <label className="mt-3 flex max-w-xl flex-col gap-1">
                 <span className="text-xs font-semibold text-slate-500">Adres dostawy z karty klienta</span>
-                <select
-                  className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                <Select
+                  density={FORM_FIELD_DENSITY}
                   value={selectedShippingAddressIndex}
                   onChange={onPickCustomerShippingAddress}
                 >
@@ -775,7 +784,7 @@ export default function CreateOrderPage() {
                       </option>
                     );
                   })}
-                </select>
+                </Select>
                 <span className="text-xs text-slate-500">
                   Adres rozliczeniowy bierze się z adresu domyślnego na karcie; tutaj wybierasz wysyłkę.
                 </span>
@@ -789,8 +798,8 @@ export default function CreateOrderPage() {
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <label className="block text-sm">
               <span className="text-slate-600">Login</span>
-              <input
-                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={login}
                 onChange={(e) => setLogin(e.target.value)}
                 autoComplete="off"
@@ -798,41 +807,41 @@ export default function CreateOrderPage() {
             </label>
             <label className="block text-sm">
               <span className="text-slate-600">Imię</span>
-              <input
-                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
               />
             </label>
             <label className="block text-sm">
               <span className="text-slate-600">Nazwisko</span>
-              <input
-                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
               />
             </label>
             <label className="block text-sm">
               <span className="text-slate-600">Telefon</span>
-              <input
-                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
               />
             </label>
             <label className="block text-sm sm:col-span-2">
               <span className="text-slate-600">E-mail</span>
-              <input
+              <Input
                 type="email"
-                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                density={FORM_FIELD_DENSITY}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
             </label>
             <label className="block text-sm sm:col-span-2">
               <span className="text-slate-600">Firma</span>
-              <input
-                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
                 autoComplete="organization"
@@ -840,8 +849,8 @@ export default function CreateOrderPage() {
             </label>
             <label className="block text-sm sm:col-span-2">
               <span className="text-slate-600">NIP</span>
-              <input
-                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={orderNip}
                 onChange={(e) => setOrderNip(e.target.value)}
                 autoComplete="off"
@@ -884,8 +893,8 @@ export default function CreateOrderPage() {
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <label className="block text-sm sm:col-span-2">
               <span className="text-slate-600">Ulica i numer</span>
-              <input
-                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={billing_street}
                 onChange={(e) => setBilling_street(e.target.value)}
                 autoComplete="street-address"
@@ -893,8 +902,8 @@ export default function CreateOrderPage() {
             </label>
             <label className="block text-sm">
               <span className="text-slate-600">Kod pocztowy</span>
-              <input
-                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={billing_postal_code}
                 onChange={(e) => setBilling_postal_code(e.target.value)}
                 autoComplete="postal-code"
@@ -902,8 +911,8 @@ export default function CreateOrderPage() {
             </label>
             <label className="block text-sm">
               <span className="text-slate-600">Miejscowość</span>
-              <input
-                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={billing_city}
                 onChange={(e) => setBilling_city(e.target.value)}
                 autoComplete="address-level2"
@@ -911,8 +920,8 @@ export default function CreateOrderPage() {
             </label>
             <label className="block text-sm sm:col-span-2">
               <span className="text-slate-600">Kraj (opcjonalnie)</span>
-              <input
-                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={billing_country}
                 onChange={(e) => setBilling_country(e.target.value)}
                 autoComplete="country-name"
@@ -921,9 +930,8 @@ export default function CreateOrderPage() {
           </div>
 
           <label className="mt-4 flex cursor-pointer items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="mt-1 rounded border-slate-300 text-blue-600"
+            <Checkbox
+              
               checked={shipSameAsBilling}
               onChange={(e) => {
                 const checked = e.target.checked;
@@ -945,8 +953,8 @@ export default function CreateOrderPage() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block text-sm sm:col-span-2">
                   <span className="text-slate-600">Ulica i numer</span>
-                  <input
-                    className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                  <Input
+                    density={FORM_FIELD_DENSITY}
                     value={shipping_street}
                     onChange={(e) => setShipping_street(e.target.value)}
                     autoComplete="shipping street-address"
@@ -954,8 +962,8 @@ export default function CreateOrderPage() {
                 </label>
                 <label className="block text-sm">
                   <span className="text-slate-600">Kod pocztowy</span>
-                  <input
-                    className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                  <Input
+                    density={FORM_FIELD_DENSITY}
                     value={shipping_postal_code}
                     onChange={(e) => setShipping_postal_code(e.target.value)}
                     autoComplete="shipping postal-code"
@@ -963,8 +971,8 @@ export default function CreateOrderPage() {
                 </label>
                 <label className="block text-sm">
                   <span className="text-slate-600">Miejscowość</span>
-                  <input
-                    className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                  <Input
+                    density={FORM_FIELD_DENSITY}
                     value={shipping_city}
                     onChange={(e) => setShipping_city(e.target.value)}
                     autoComplete="shipping address-level2"
@@ -972,8 +980,8 @@ export default function CreateOrderPage() {
                 </label>
                 <label className="block text-sm sm:col-span-2">
                   <span className="text-slate-600">Kraj (opcjonalnie)</span>
-                  <input
-                    className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                  <Input
+                    density={FORM_FIELD_DENSITY}
                     value={shipping_country}
                     onChange={(e) => setShipping_country(e.target.value)}
                     autoComplete="shipping country-name"
@@ -989,16 +997,16 @@ export default function CreateOrderPage() {
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <label className="block text-sm sm:col-span-2">
                   <span className="text-slate-600">Źródło</span>
-                  <input
-                    className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                  <Input
+                    density={FORM_FIELD_DENSITY}
                     value={source}
                     onChange={(e) => setSource(e.target.value)}
                   />
                 </label>
                 <label className="block text-sm sm:col-span-2">
                   <span className="text-slate-600">Numer dokumentu sprzedaży</span>
-                  <input
-                    className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                  <Input
+                    density={FORM_FIELD_DENSITY}
                     value={salesDocumentNumber}
                     onChange={(e) => setSalesDocumentNumber(e.target.value)}
                     placeholder="np. FS/2024/12/1"
@@ -1006,16 +1014,16 @@ export default function CreateOrderPage() {
                 </label>
                 <label className="block text-sm sm:col-span-2">
                   <span className="text-slate-600">Notatka</span>
-                  <input
-                    className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                  <Input
+                    density={FORM_FIELD_DENSITY}
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
                   />
                 </label>
                 <label className="block text-sm sm:col-span-2">
                   <span className="text-slate-600">Komentarz</span>
-                  <textarea
-                    className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                  <Textarea
+                    density={FORM_FIELD_DENSITY}
                     rows={2}
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
@@ -1052,10 +1060,10 @@ export default function CreateOrderPage() {
 
           <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(14rem,22rem)] lg:items-start">
             <div className="min-w-0">
-          <input
-            type="search"
+          <SearchInput
             placeholder="Szukaj po nazwie, SKU lub EAN…"
-            className="mb-2 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+            className="mb-2"
+            density={FORM_FIELD_DENSITY}
             value={searchQ}
             onChange={(e) => setSearchQ(e.target.value)}
             autoComplete="off"
@@ -1219,20 +1227,20 @@ export default function CreateOrderPage() {
               <h3 className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Wysyłka i płatność</h3>
               <label className="mt-3 flex flex-col gap-1 text-xs text-slate-600">
                 Typ dokumentu
-                <select
-                  className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900"
+                <Select
+                  density="compact"
                   value={documentType}
                   onChange={(e) => setDocumentType(e.target.value)}
                 >
                   <option value="">—</option>
                   <option value="PARAGON">Paragon</option>
                   <option value="INVOICE">Faktura</option>
-                </select>
+                </Select>
               </label>
               <label className="mt-3 flex flex-col gap-1 text-xs text-slate-600">
                 Metoda płatności
-                <select
-                  className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900"
+                <Select
+                  density="compact"
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value)}
                 >
@@ -1246,12 +1254,12 @@ export default function CreateOrderPage() {
                       {m}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
               <label className="mt-3 flex flex-col gap-1 text-xs text-slate-600">
                 Status płatności
-                <select
-                  className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900"
+                <Select
+                  density="compact"
                   value={paymentStatus}
                   onChange={(e) => setPaymentStatus(e.target.value)}
                 >
@@ -1265,12 +1273,12 @@ export default function CreateOrderPage() {
                       {m}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
               <label className="mt-3 flex flex-col gap-1 text-xs text-slate-600">
                 Metoda dostawy
-                <select
-                  className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900"
+                <Select
+                  density="compact"
                   value={shippingMethodId}
                   onChange={(e) => setShippingMethodId(e.target.value)}
                 >
@@ -1280,14 +1288,14 @@ export default function CreateOrderPage() {
                       {m.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
               <label className="mt-3 flex flex-col gap-1 text-xs text-slate-600">
                 Koszt wysyłki (zł)
-                <input
+                <Input
                   type="text"
                   inputMode="decimal"
-                  className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900"
+                  density="compact"
                   value={shippingCost}
                   onChange={(e) => setShippingCost(e.target.value)}
                 />
@@ -1310,9 +1318,8 @@ export default function CreateOrderPage() {
           <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-sm">
             <h3 className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Podsumowanie zamówienia</h3>
             <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                className="mt-1 rounded border-slate-300 text-blue-600"
+              <Checkbox
+                
                 checked={checkBundleStock}
                 onChange={(e) => setCheckBundleStock(e.target.checked)}
               />
@@ -1341,13 +1348,12 @@ export default function CreateOrderPage() {
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         <div className="flex gap-3">
-          <button
+          <PrimaryButton
             type="submit"
             disabled={submitting || lines.length === 0}
-            className={brandPrimaryButtonClass}
           >
             {submitting ? "Zapisywanie…" : "Utwórz zamówienie"}
-          </button>
+          </PrimaryButton>
           <Link
             to="/orders/list"
             className="rounded-lg border border-slate-200 px-6 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"

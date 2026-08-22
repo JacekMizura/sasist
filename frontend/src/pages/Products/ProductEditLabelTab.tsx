@@ -1,15 +1,17 @@
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 
 import {
-  productLikeFieldLabelClass,
-  productLikeInputClass,
-} from "../../components/catalog";
+  Checkbox,
+  FORM_FIELD_DENSITY,
+  FormField,
+  Input,
+  Select,
+  Textarea,
+} from "../../design-system";
 import { RetailLabel } from "../../components/products/RetailLabel";
 import { SUPPLIER_COUNTRIES } from "../../constants/supplierTaxonomy";
 import type { ProductLabelData } from "../../types/productLabel";
 
-const fieldLabel = productLikeFieldLabelClass;
-const inputClass = productLikeInputClass;
 
 /**
  * Polish field captions for „Podgląd szablonu”.
@@ -88,11 +90,11 @@ export function ProductEditLabelTab({
           <h2 className="mb-4 border-b border-gray-100 pb-2 text-lg font-bold text-gray-900">Wybór szablonu</h2>
           <div className="space-y-4">
             <div>
-              <label className={fieldLabel}>Szablon etykiety</label>
-              <select
+              <FormField label="Szablon etykiety">
+              <Select
                 value={labelTemplateId ?? ""}
                 onChange={(e) => setLabelTemplateId(e.target.value === "" ? null : Number(e.target.value))}
-                className={`${inputClass} appearance-none bg-white`}
+                density={FORM_FIELD_DENSITY} className="appearance-none bg-white"
               >
                 <option value="">Brak</option>
                 {productTemplates.map((t) => (
@@ -100,7 +102,8 @@ export function ProductEditLabelTab({
                     {t.name}
                   </option>
                 ))}
-              </select>
+              </Select>
+            </FormField>
             </div>
             <div>
               <p className="mb-2 text-sm font-medium text-gray-700">Podgląd szablonu</p>
@@ -131,14 +134,15 @@ export function ProductEditLabelTab({
         <section>
           <h2 className="mb-4 border-b border-gray-100 pb-2 text-lg font-bold text-gray-900">A. Podstawowe</h2>
           <div>
-            <label className={fieldLabel}>Nazwa produktu na etykiecie (PL)</label>
-            <input
-              type="text"
-              className={inputClass}
-              value={labelData.product_name_pl ?? ""}
-              onChange={(e) => setLabelData((d) => ({ ...d, product_name_pl: e.target.value }))}
-              placeholder={name.trim() || "jak nazwa produktu"}
-            />
+            <FormField label="Nazwa produktu na etykiecie (PL)">
+              <Input
+                type="text"
+                density={FORM_FIELD_DENSITY}
+                value={labelData.product_name_pl ?? ""}
+                onChange={(e) => setLabelData((d) => ({ ...d, product_name_pl: e.target.value }))}
+                placeholder={name.trim() || "jak nazwa produktu"}
+              />
+            </FormField>
           </div>
         </section>
 
@@ -156,52 +160,54 @@ export function ProductEditLabelTab({
                 </p>
               ) : null}
             </div>
-            <div>
-              <label className={fieldLabel}>Importer — nazwa</label>
-              <input
+            <FormField label="Importer — nazwa">
+              <Input
                 type="text"
-                className={inputClass}
+                density={FORM_FIELD_DENSITY}
                 value={labelData.importer_name ?? ""}
                 onChange={(e) => setLabelData((d) => ({ ...d, importer_name: e.target.value }))}
               />
-            </div>
-            <div>
-              <label className={fieldLabel}>Importer — adres</label>
-              <textarea
-                className={`${inputClass} min-h-[80px] resize-y`}
+            </FormField>
+            <FormField label="Importer — adres">
+              <Textarea
+                density={FORM_FIELD_DENSITY}
+                className="min-h-[80px] resize-y"
                 value={labelData.importer_address ?? ""}
                 onChange={(e) => setLabelData((d) => ({ ...d, importer_address: e.target.value }))}
               />
-            </div>
+            </FormField>
           </div>
         </section>
 
         <section>
           <h2 className="mb-4 border-b border-gray-100 pb-2 text-lg font-bold text-gray-900">C. Identyfikacja</h2>
           <div className="space-y-5">
-            <div>
-              <label className={fieldLabel}>EAN</label>
-              <input type="text" className={`${inputClass} cursor-not-allowed bg-gray-50`} value={ean} readOnly />
-            </div>
+            <FormField label="EAN">
+              <Input
+                type="text"
+                density={FORM_FIELD_DENSITY}
+                className="cursor-not-allowed bg-gray-50"
+                value={ean}
+                readOnly
+              />
+            </FormField>
             <div className="flex gap-4">
-              <div className="flex-1">
-                <label className={fieldLabel}>Numer partii</label>
-                <input
+              <FormField label="Numer partii" className="flex-1">
+                <Input
                   type="text"
-                  className={inputClass}
+                  density={FORM_FIELD_DENSITY}
                   value={labelData.batch_number ?? ""}
                   onChange={(e) => setLabelData((d) => ({ ...d, batch_number: e.target.value }))}
                 />
-              </div>
-              <div className="flex-1">
-                <label className={fieldLabel}>Numer serii</label>
-                <input
+              </FormField>
+              <FormField label="Numer serii" className="flex-1">
+                <Input
                   type="text"
-                  className={inputClass}
+                  density={FORM_FIELD_DENSITY}
                   value={labelData.series_number ?? ""}
                   onChange={(e) => setLabelData((d) => ({ ...d, series_number: e.target.value }))}
                 />
-              </div>
+              </FormField>
             </div>
           </div>
         </section>
@@ -210,18 +216,14 @@ export function ProductEditLabelTab({
           <h2 className="mb-4 border-b border-gray-100 pb-2 text-lg font-bold text-gray-900">D. Regulacje i Cechy</h2>
           <div className="space-y-3">
             <label className="group flex cursor-pointer items-center gap-3">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-gray-300 bg-white text-blue-600 focus:ring-blue-500"
+              <Checkbox
                 checked={Boolean(labelData.requires_ce_mark)}
                 onChange={(e) => setLabelData((d) => ({ ...d, requires_ce_mark: e.target.checked }))}
               />
               <span className="text-sm text-gray-700 group-hover:text-gray-900">Wymaga znaku CE na etykiecie</span>
             </label>
             <label className="group flex cursor-pointer items-center gap-3">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-gray-300 bg-white text-blue-600 focus:ring-blue-500"
+              <Checkbox
                 checked={Boolean(labelData.show_price_on_label)}
                 onChange={(e) => setLabelData((d) => ({ ...d, show_price_on_label: e.target.checked }))}
               />
@@ -233,41 +235,40 @@ export function ProductEditLabelTab({
         <section>
           <h2 className="mb-4 border-b border-gray-100 pb-2 text-lg font-bold text-gray-900">E. Branżowe (tekstylia)</h2>
           <div className="space-y-5">
-            <div>
-              <label className={fieldLabel}>Skład materiałowy</label>
-              <textarea
-                className={`${inputClass} min-h-[80px] resize-y`}
+            <FormField label="Skład materiałowy">
+              <Textarea
+                density={FORM_FIELD_DENSITY}
+                className="min-h-[80px] resize-y"
                 value={labelData.material_composition ?? ""}
                 onChange={(e) => setLabelData((d) => ({ ...d, material_composition: e.target.value }))}
                 placeholder="np. 100% bawełna"
               />
-            </div>
-            <div>
-              <label className={fieldLabel}>Instrukcja pielęgnacji</label>
-              <textarea
-                className={`${inputClass} min-h-[80px] resize-y`}
+            </FormField>
+            <FormField label="Instrukcja pielęgnacji">
+              <Textarea
+                density={FORM_FIELD_DENSITY}
+                className="min-h-[80px] resize-y"
                 value={labelData.care_instructions ?? ""}
                 onChange={(e) => setLabelData((d) => ({ ...d, care_instructions: e.target.value }))}
               />
-            </div>
-            <div>
-              <label className={fieldLabel}>Rozmiar / długość</label>
-              <input
+            </FormField>
+            <FormField label="Rozmiar / długość">
+              <Input
                 type="text"
-                className={inputClass}
+                density={FORM_FIELD_DENSITY}
                 value={labelData.size_or_length ?? ""}
                 onChange={(e) => setLabelData((d) => ({ ...d, size_or_length: e.target.value }))}
               />
-            </div>
+            </FormField>
           </div>
         </section>
 
         <section>
           <h2 className="mb-4 border-b border-gray-100 pb-2 text-lg font-bold text-gray-900">F. Pochodzenie</h2>
-          <div>
-            <label className={fieldLabel}>Kraj pochodzenia</label>
-            <select
-              className={`${inputClass} appearance-none bg-white`}
+          <FormField label="Kraj pochodzenia">
+            <Select
+              density={FORM_FIELD_DENSITY}
+              className="appearance-none bg-white"
               value={labelData.country_of_origin ?? ""}
               onChange={(e) => setLabelData((d) => ({ ...d, country_of_origin: e.target.value || undefined }))}
             >
@@ -277,8 +278,8 @@ export function ProductEditLabelTab({
                   {c.label}
                 </option>
               ))}
-            </select>
-          </div>
+            </Select>
+          </FormField>
         </section>
 
         <div className="pb-12" />
