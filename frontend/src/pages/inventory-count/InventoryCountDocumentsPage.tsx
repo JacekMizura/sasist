@@ -29,7 +29,12 @@ export default function InventoryCountDocumentsPage() {
     setLoading(true);
     setErr(null);
     try {
-      setRows(await listInventoryDocuments(tenantId, { warehouseId: warehouseId ?? undefined }));
+      setRows(
+        await listInventoryDocuments(tenantId, {
+          warehouseId: warehouseId ?? undefined,
+          limit: 200,
+        }),
+      );
     } catch {
       setErr("Nie udało się wczytać dokumentów.");
       setRows([]);

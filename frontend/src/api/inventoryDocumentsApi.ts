@@ -19,12 +19,13 @@ export async function fetchInventoryCountDashboard(
 
 export async function listInventoryDocuments(
   tenantId: number,
-  opts?: { warehouseId?: number | null; status?: string },
+  opts?: { warehouseId?: number | null; status?: string; limit?: number },
 ): Promise<InventoryDocumentRead[]> {
   const { data } = await api.get<InventoryDocumentRead[]>("/inventory-count/documents", {
     params: {
       ...tenantParams(tenantId, opts?.warehouseId),
       ...(opts?.status ? { status: opts.status } : {}),
+      ...(opts?.limit != null ? { limit: opts.limit } : {}),
     },
   });
   return data;

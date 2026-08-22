@@ -5,7 +5,7 @@ import PageLayout from "@/components/layout/PageLayout";
 import { TabsNav } from "@/components/layout/TabsNav";
 import { flatSectionDividerClass } from "@/components/layout/flatSectionTokens";
 import { ModuleListBreadcrumb } from "@/components/listPage/moduleList";
-import { filterToolbarBtnApply } from "@/components/filters/filterUiTokens";
+import { primaryButtonClassName } from "@/design-system";
 import { ERP_INVENTORY_COUNT_TABS } from "../../erpInventoryCountTabs";
 import { erpInventoryCountPaths } from "../../inventoryCountPaths";
 
@@ -25,8 +25,8 @@ export default function InventoryLayout() {
           className="min-w-0 flex-1 gap-8"
         />
         {!onWizard ? (
-          <Link to={erpInventoryCountPaths.wizard} className={`${filterToolbarBtnApply} shrink-0`}>
-            <Plus className="mr-1.5 inline h-4 w-4" strokeWidth={2} aria-hidden />
+          <Link to={erpInventoryCountPaths.wizard} className={primaryButtonClassName("shrink-0", "compact")}>
+            <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
             Nowa inwentaryzacja
           </Link>
         ) : null}

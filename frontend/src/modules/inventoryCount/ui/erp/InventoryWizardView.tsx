@@ -2,8 +2,8 @@ import { ArrowRight, CheckCircle2, ClipboardList, RefreshCw, ShieldCheck } from 
 import type { LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { filterToolbarBtnApply, filterToolbarBtnSecondary } from "@/components/filters/filterUiTokens";
 import { tabsNavItemClassName } from "@/components/layout/TabsNav";
+import { CardButton, PrimaryButton, secondaryButtonClassName } from "@/design-system";
 import { erpFieldInput, erpFieldLabel } from "./theme";
 
 type Props = {
@@ -47,25 +47,24 @@ function TypeOption({
   onSelect: () => void;
 }) {
   return (
-    <button
+    <CardButton
       type="button"
+      active={selected}
+      fullWidth
+      density="comfortable"
       onClick={onSelect}
-      className={`flex w-full cursor-pointer flex-col rounded-xl border p-4 text-left transition-all ${
-        selected
-          ? "border-amber-500 bg-amber-50/60 ring-1 ring-amber-500/30"
-          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80"
-      }`}
+      className="!h-auto !flex-col !items-stretch !justify-start !gap-0 !px-4 !py-4 text-left"
     >
       <div
         className={`mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl ${
-          selected ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"
+          selected ? "bg-orange-100 text-orange-700" : "bg-slate-100 text-slate-600"
         }`}
       >
         <Icon className="h-5 w-5" strokeWidth={2} aria-hidden />
       </div>
-      <h4 className={`mb-1 text-sm font-semibold ${selected ? "text-amber-950" : "text-slate-900"}`}>{title}</h4>
-      <p className={`text-xs leading-relaxed ${selected ? "text-amber-900/80" : "text-slate-500"}`}>{hint}</p>
-    </button>
+      <h4 className="mb-1 text-sm font-semibold text-slate-900">{title}</h4>
+      <p className={`text-xs leading-relaxed ${selected ? "text-slate-600" : "text-slate-500"}`}>{hint}</p>
+    </CardButton>
   );
 }
 
@@ -111,7 +110,7 @@ export default function InventoryWizardView({
       </nav>
 
       <div className="grid flex-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-6">
           {error ? <p className="mb-4 text-sm text-rose-600">{error}</p> : null}
 
           {step === 0 ? (
@@ -157,7 +156,7 @@ export default function InventoryWizardView({
         </div>
 
         <aside className="lg:sticky lg:top-6 lg:self-start">
-          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-5 shadow-sm">
+          <div className="rounded-xl border border-slate-200 bg-white p-5">
             <h3 className="text-sm font-semibold text-slate-900">Podsumowanie</h3>
             <p className="mt-1 text-xs text-slate-500">Bieżące ustawienia kreatora</p>
             <div className="mt-4">{summaryPanel ?? <p className="text-sm text-slate-500">Wybierz typ inwentaryzacji.</p>}</div>
@@ -166,17 +165,22 @@ export default function InventoryWizardView({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
-        <button type="button" disabled={step === 0 || busy} onClick={onBack} className={filterToolbarBtnSecondary}>
+        <button
+          type="button"
+          disabled={step === 0 || busy}
+          onClick={onBack}
+          className={secondaryButtonClassName("", "compact")}
+        >
           Wstecz
         </button>
         <div className="flex flex-wrap items-center gap-2">
-          <Link to={cancelPath} className={filterToolbarBtnSecondary}>
+          <Link to={cancelPath} className={secondaryButtonClassName("", "compact")}>
             Anuluj
           </Link>
-          <button type="button" disabled={busy} onClick={onNext} className={filterToolbarBtnApply}>
+          <PrimaryButton type="button" density="compact" disabled={busy} onClick={onNext}>
             {isLastStep ? "Uruchom inwentaryzację" : "Dalej"}
-            {!isLastStep ? <ArrowRight className="ml-1 inline h-4 w-4" aria-hidden /> : null}
-          </button>
+            {!isLastStep ? <ArrowRight className="h-4 w-4" aria-hidden /> : null}
+          </PrimaryButton>
         </div>
       </div>
     </div>

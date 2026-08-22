@@ -1,16 +1,18 @@
 import { Link } from "react-router-dom";
 import {
   Activity,
-  ArrowRight,
   CheckCircle2,
   ClipboardCheck,
   ClipboardList,
+  Eye,
   Percent,
   Users,
 } from "lucide-react";
 
 import type { InventoryDashboardPayload, InventoryDocumentRead } from "@/api/inventoryCountApi";
 import { AppEmptyState } from "@/components/app-shell";
+import { OperationalActionLink } from "@/components/operational";
+import { brandLinkTextClass, primaryButtonClassName } from "@/design-system";
 import { PurchasingKpiCard, PurchasingKpiGrid, PurchasingTableSection } from "@/modules/purchasing/ui";
 import { erpInventoryCountPaths } from "../../inventoryCountPaths";
 import { inventoryTypeLabel } from "../../inventoryCountUiLabels";
@@ -26,7 +28,7 @@ function DashboardDocRow({ doc }: { doc: InventoryDocumentRead }) {
       <td className="px-6 py-3">
         <Link
           to={erpInventoryCountPaths.document(doc.id)}
-          className="font-medium text-slate-900 hover:text-amber-700 hover:underline"
+          className="font-medium text-slate-900 hover:text-orange-600 hover:underline"
         >
           {doc.number}
         </Link>
@@ -42,13 +44,15 @@ function DashboardDocRow({ doc }: { doc: InventoryDocumentRead }) {
         </div>
       </td>
       <td className="px-6 py-3 text-right">
-        <Link
-          to={erpInventoryCountPaths.document(doc.id)}
-          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-amber-700 opacity-0 transition-all group-hover:opacity-100 hover:bg-amber-50"
-        >
-          Otwórz
-          <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-        </Link>
+        <div className="inline-flex justify-end opacity-0 transition-opacity group-hover:opacity-100">
+          <OperationalActionLink
+            to={erpInventoryCountPaths.document(doc.id)}
+            title="Otwórz"
+            aria-label={`Otwórz ${doc.number}`}
+          >
+            <Eye className="text-slate-600" strokeWidth={2} aria-hidden />
+          </OperationalActionLink>
+        </div>
       </td>
     </tr>
   );
@@ -155,7 +159,7 @@ export default function InventoryDashboardView({ data }: Props) {
           docs={data.active_inventories}
           emptyMessage="Brak aktywnych inwentaryzacji."
           action={
-            <Link to={erpInventoryCountPaths.documents} className="text-sm font-medium text-amber-700 hover:text-amber-800">
+            <Link to={erpInventoryCountPaths.documents} className={`${brandLinkTextClass} text-sm`}>
               Wszystkie dokumenty
             </Link>
           }
@@ -183,7 +187,7 @@ export default function InventoryDashboardView({ data }: Props) {
           title="Brak aktywności inwentaryzacyjnej"
           description="Utwórz nową inwentaryzację, aby rozpocząć liczenie stanów magazynowych."
           action={
-            <Link to={erpInventoryCountPaths.wizard} className="text-sm font-semibold text-amber-700 hover:underline">
+            <Link to={erpInventoryCountPaths.wizard} className={primaryButtonClassName("", "compact")}>
               + Nowa inwentaryzacja
             </Link>
           }

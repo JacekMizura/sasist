@@ -1,8 +1,9 @@
+import { StatusBadge } from "@/design-system";
 import {
-  inventoryDocumentStatusBadgeClass,
   inventoryDocumentStatusLabel,
-  inventoryReportStatusBadgeClass,
+  inventoryDocumentStatusTone,
   inventoryReportStatusLabel,
+  inventoryReportStatusTone,
 } from "../../inventoryCountUiLabels";
 
 type Props = {
@@ -12,12 +13,16 @@ type Props = {
   className?: string;
 };
 
-/** Status badge — unified operational semantics (system-wide). */
+/** Status badge — design-system StatusBadge + inventory tone mapping. */
 export default function InventoryStatusBadge({ status, variant = "document", className = "" }: Props) {
   const label =
     variant === "report" ? inventoryReportStatusLabel(status) : inventoryDocumentStatusLabel(status);
-  const badgeClass =
-    variant === "report" ? inventoryReportStatusBadgeClass(status) : inventoryDocumentStatusBadgeClass(status);
+  const tone =
+    variant === "report" ? inventoryReportStatusTone(status) : inventoryDocumentStatusTone(status);
 
-  return <span className={`${badgeClass} ${className}`.trim()}>{label}</span>;
+  return (
+    <StatusBadge tone={tone} density="default" className={className}>
+      {label}
+    </StatusBadge>
+  );
 }

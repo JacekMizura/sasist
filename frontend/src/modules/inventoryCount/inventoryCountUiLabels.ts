@@ -2,6 +2,7 @@
  * Inwentaryzacja — polskie etykiety UI (nigdy surowe enumy z backendu).
  */
 
+import type { ColorTone } from "@/design-system";
 import {
   operationalBadgeDangerClass,
   operationalBadgeInfoClass,
@@ -166,6 +167,25 @@ export function inventoryReportDescription(kind: unknown): string {
 
 export { inventoryAuditEventLabel as inventoryAuditActionLabel } from "./inventoryAuditEventLabels";
 
+/** Canonical StatusBadge tone — ERP document / report lists. */
+export function inventoryDocumentStatusTone(status: unknown): ColorTone {
+  const s = String(status ?? "").toLowerCase();
+  if (s === "in_progress" || s === "planned") return "info";
+  if (s === "awaiting_approval") return "warning";
+  if (s === "approved" || s === "posted") return "success";
+  if (s === "cancelled") return "danger";
+  return "neutral";
+}
+
+export function inventoryReportStatusTone(status: unknown): ColorTone {
+  const s = String(status ?? "").toLowerCase();
+  if (s === "ready") return "success";
+  if (s === "failed") return "danger";
+  if (s === "generating" || s === "pending") return "info";
+  return "neutral";
+}
+
+/** @deprecated Prefer {@link inventoryDocumentStatusTone} + StatusBadge. Kept for WMS compact chips. */
 export function inventoryDocumentStatusBadgeClass(status: unknown): string {
   const s = String(status ?? "").toLowerCase();
   if (s === "in_progress" || s === "planned") return operationalBadgeInfoClass;

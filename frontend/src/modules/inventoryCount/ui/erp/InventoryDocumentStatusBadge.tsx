@@ -1,6 +1,7 @@
+import { StatusBadge } from "@/design-system";
 import {
-  inventoryDocumentStatusBadgeClass,
   inventoryDocumentStatusLabel,
+  inventoryDocumentStatusTone,
 } from "../../inventoryCountUiLabels";
 
 type Props = {
@@ -8,10 +9,11 @@ type Props = {
   className?: string;
 };
 
+/** Document status — design-system StatusBadge (same geometry as other ERP lists). */
 export function InventoryDocumentStatusBadge({ status, className = "" }: Props) {
   return (
-    <span className={`${inventoryDocumentStatusBadgeClass(status)} ${className}`.trim()}>
+    <StatusBadge tone={inventoryDocumentStatusTone(status)} density="default" className={className}>
       {inventoryDocumentStatusLabel(status)}
-    </span>
+    </StatusBadge>
   );
 }

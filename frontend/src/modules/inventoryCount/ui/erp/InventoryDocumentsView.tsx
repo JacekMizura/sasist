@@ -1,31 +1,27 @@
-import { ChevronDown, Filter } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { InventoryDocumentRead } from "@/api/inventoryCountApi";
 import { AppEmptyState } from "@/components/app-shell";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import {
-  buildInventoryDocumentsListViewAdapter,
-  listViewActionsFromHook,
-  useListViewState,
-} from "@/preferences/listView";
-import {
-  productsListActionsCellClass,
-  productsListActionsInnerClass,
-  productsListActionsThClass,
-} from "@/components/products/productList/productsListTableTokens";
-import {
+  ModuleListPageToolbar,
   moduleListTableClass,
   moduleListTableScrollClass,
   moduleListTdClass,
   moduleListThClass,
   moduleListTheadClass,
   moduleTableCardClass,
+  moduleTablePaginationFooterClass,
 } from "@/components/listPage/moduleList";
+import { listSellasistInputClass } from "@/components/listPage/listSellasistTokens";
+import { DEFAULT_PAGE_SIZE_OPTIONS } from "@/components/table/DataTablePageSizeSelect";
+import { primaryButtonClassName } from "@/design-system";
 import {
-  listSellasistToolbarToggleBtn,
-} from "@/components/listPage/listSellasistTokens";
+  buildInventoryDocumentsListViewAdapter,
+  listViewActionsFromHook,
+  useListViewState,
+} from "@/preferences/listView";
 import {
   countActiveInventoryDocumentFilters,
   filterInventoryDocuments,
@@ -46,7 +42,13 @@ type Props = {
   onExport?: (doc: InventoryDocumentRead) => void;
 };
 
-/** Documents list — filtry + tabela modułowa. */
+function pageWindow(current: number, total: number): number[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const start = Math.max(1, Math.min(current - 2, total - 4));
+  return Array.from({ length: 5 }, (_, i) => start + i).filter((n) => n >= 1 && n <= total);
+}
+
+/** Documents list — ModuleList toolbar + tabela + paginacja (wzorzec list Sasist). */
 export default function InventoryDocumentsView({
   documents,
   loading,
@@ -67,8 +69,13 @@ export default function InventoryDocumentsView({
     clearFilters,
     filtersExpanded,
     toggleFiltersPanel,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
   } = listView;
 
+  const openFilterFieldsRef = useRef<(() => void) | null>(null);
   const [confirmDoc, setConfirmDoc] = useState<InventoryDocumentRead | null>(null);
 
   const filtered = useMemo(() => {
@@ -78,6 +85,21 @@ export default function InventoryDocumentsView({
     return filterInventoryDocuments(sorted, appliedFilters);
   }, [documents, appliedFilters]);
 
+  const totalCount = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize) || 1);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages, setPage]);
+
+  const pageRows = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
+
+  const startRow = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
+  const endRow = Math.min(page * pageSize, totalCount);
+  const pageNumbers = pageWindow(page, totalPages);
   const activeFilterCount = countActiveInventoryDocumentFilters(appliedFilters);
 
   const handleConfirmDelete = async () => {
@@ -85,8 +107,6 @@ export default function InventoryDocumentsView({
     await onDeleteDraft(confirmDoc);
     setConfirmDoc(null);
   };
-
-  const toggleFilters = toggleFiltersPanel;
 
   return (
     <div className="space-y-4">
@@ -114,47 +134,39 @@ export default function InventoryDocumentsView({
         />
       ) : null}
 
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">
-            Dokumenty inwentaryzacji
-            {!loading ? (
-              <span className="ml-2 text-base font-normal text-slate-400">{filtered.length} wyników</span>
-            ) : null}
-          </h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Wybrany filtr:{" "}
-            <span className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2.5 py-0.5 text-sm font-medium text-slate-800">
-              {inventoryDocumentListFilterLabel(appliedFilters)}
-            </span>
-            {activeFilterCount > 0 ? (
-              <span className="ml-2 text-xs text-amber-700">({activeFilterCount} aktywne)</span>
-            ) : null}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={toggleFilters}
-          className={`${listSellasistToolbarToggleBtn} inline-flex !h-10 items-center gap-2`}
-          aria-expanded={filtersExpanded}
-        >
-          <Filter className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-          {filtersExpanded ? "Ukryj filtry" : "Filtry"}
-          <ChevronDown
-            className={`h-4 w-4 shrink-0 transition-transform ${filtersExpanded ? "rotate-180" : ""}`}
-            aria-hidden
-          />
-        </button>
-      </div>
+      <ModuleListPageToolbar
+        title="Dokumenty inwentaryzacji"
+        resultCount={loading ? undefined : filtered.length}
+        loading={loading}
+        activeFilterLabel={
+          activeFilterCount > 0
+            ? `${inventoryDocumentListFilterLabel(appliedFilters)} (${activeFilterCount})`
+            : inventoryDocumentListFilterLabel(appliedFilters)
+        }
+        filtersExpanded={filtersExpanded}
+        onToggleFilters={toggleFiltersPanel}
+        openFilterFieldsRef={openFilterFieldsRef}
+        showFilterFieldsButton={false}
+        columnsDisabled
+        filtersToggleLabelCollapsed="Filtry"
+        filtersToggleLabelExpanded="Ukryj filtry"
+      />
 
       <InventoryDocumentsFiltersPanel
         expanded={filtersExpanded}
         draft={draftFilters}
         onChange={setDraftFilters}
-        onApply={applyFilters}
-        onClear={clearFilters}
+        onApply={() => {
+          applyFilters();
+          setPage(1);
+        }}
+        onClear={() => {
+          clearFilters();
+          setPage(1);
+        }}
         listView={listViewActions}
       />
+
       {loading ? (
         <p className="text-sm text-slate-500">Wczytywanie…</p>
       ) : filtered.length === 0 ? (
@@ -167,7 +179,7 @@ export default function InventoryDocumentsView({
           }
           action={
             documents.length === 0 ? (
-              <Link to={erpInventoryCountPaths.wizard} className="text-sm font-semibold text-amber-700 hover:underline">
+              <Link to={erpInventoryCountPaths.wizard} className={primaryButtonClassName("", "compact")}>
                 + Nowa inwentaryzacja
               </Link>
             ) : undefined
@@ -184,16 +196,16 @@ export default function InventoryDocumentsView({
                   <th className={moduleListThClass}>Status</th>
                   <th className={`${moduleListThClass} text-right`}>Pokrycie</th>
                   <th className={`${moduleListThClass} text-right`}>Różnice</th>
-                  <th className={productsListActionsThClass}>Akcje</th>
+                  <th className={`${moduleListThClass} text-center`}>Akcje</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((doc) => (
+                {pageRows.map((doc) => (
                   <tr key={doc.id} className="group border-b border-slate-100 transition-colors hover:bg-slate-50/70">
                     <td className={moduleListTdClass}>
                       <Link
                         to={erpInventoryCountPaths.document(doc.id)}
-                        className="font-medium text-slate-900 hover:text-amber-700 hover:underline"
+                        className="font-medium text-slate-900 hover:text-orange-600 hover:underline"
                       >
                         {doc.number}
                       </Link>
@@ -209,21 +221,73 @@ export default function InventoryDocumentsView({
                     <td className={`${moduleListTdClass} text-right font-medium tabular-nums`}>
                       {doc.difference_lines}
                     </td>
-                    <td className={productsListActionsCellClass} onClick={(e) => e.stopPropagation()}>
-                      <div className={productsListActionsInnerClass}>
-                        <InventoryDocumentRowActions
-                          doc={doc}
-                          deleteBusy={deleteBusyId === doc.id}
-                          onDelete={onDeleteDraft ? (d) => setConfirmDoc(d) : undefined}
-                          onDuplicate={onDuplicate}
-                          onExport={onExport}
-                        />
-                      </div>
+                    <td className={`${moduleListTdClass} text-center`} onClick={(e) => e.stopPropagation()}>
+                      <InventoryDocumentRowActions
+                        doc={doc}
+                        deleteBusy={deleteBusyId === doc.id}
+                        onDelete={onDeleteDraft ? (d) => setConfirmDoc(d) : undefined}
+                        onDuplicate={onDuplicate}
+                        onExport={onExport}
+                      />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className={`${moduleTablePaginationFooterClass} px-4`}>
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-sm font-medium tabular-nums text-slate-600">
+                {startRow}–{endRow} z {totalCount}
+              </span>
+              <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                Na stronę
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  className={`${listSellasistInputClass} !h-8 w-auto min-w-[4rem] py-0 pr-7 text-sm`}
+                >
+                  {DEFAULT_PAGE_SIZE_OPTIONS.filter((n) => n <= 100).map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-1">
+              <button
+                type="button"
+                disabled={page <= 1}
+                onClick={() => setPage(Math.max(1, page - 1))}
+                className="rounded-md border border-transparent px-2 py-1 text-sm font-medium text-slate-600 hover:bg-slate-200/60 disabled:opacity-40"
+              >
+                Poprzednia
+              </button>
+              {pageNumbers.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setPage(n)}
+                  className={`min-w-[2rem] rounded-md px-1.5 py-1 text-sm font-semibold tabular-nums ${
+                    n === page ? "bg-slate-800 text-white" : "text-slate-600 hover:bg-slate-200/60"
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+              <button
+                type="button"
+                disabled={page >= totalPages}
+                onClick={() => setPage(Math.min(totalPages, page + 1))}
+                className="rounded-md border border-transparent px-2 py-1 text-sm font-medium text-slate-600 hover:bg-slate-200/60 disabled:opacity-40"
+              >
+                Następna
+              </button>
+            </div>
           </div>
         </div>
       )}

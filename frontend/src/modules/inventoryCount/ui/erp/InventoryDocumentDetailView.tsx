@@ -1,5 +1,5 @@
 import { Download, FileSpreadsheet, Loader2, Pencil, ShieldCheck } from "lucide-react";
-import { brandPrimaryButtonClass } from "../../../../design-system/brandUi";
+import { PrimaryButton, SecondaryButton, SuccessButton, secondaryButtonClassName } from "@/design-system";
 
 import { downloadInventoryAuditPackageBlob, downloadInventoryReportBlob } from "@/api/inventoryCountApi";
 import { filterInputClass } from "@/components/filters";
@@ -140,18 +140,13 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
                 placeholder="Opis / notatka…"
               />
               <div className="flex gap-2">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void saveTitle()}
-                  className={brandPrimaryButtonClass}
-                >
+                <PrimaryButton type="button" density="compact" disabled={busy} onClick={() => void saveTitle()}>
                   Zapisz
-                </button>
+                </PrimaryButton>
                 <button
                   type="button"
                   onClick={() => setEditingTitle(false)}
-                  className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                  className={secondaryButtonClassName("", "compact")}
                 >
                   Anuluj
                 </button>
@@ -187,45 +182,40 @@ export default function InventoryDocumentDetailView({ state, warehouseName }: Pr
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           {doc.status === "in_progress" ? (
-            <button
+            <PrimaryButton
               type="button"
+              density="compact"
               disabled={busy || !submitReady}
               title={submitHint}
               onClick={() => void openApprovalModal("submit")}
-              className="rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
             >
               Zatwierdź
-            </button>
+            </PrimaryButton>
           ) : null}
           {doc.status === "awaiting_approval" ? (
             <>
-              <button
+              <SuccessButton
                 type="button"
+                density="compact"
                 disabled={busy}
                 onClick={() => void openApprovalModal("approve")}
-                className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
               >
                 Zatwierdź
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void actionReject()}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
-              >
+              </SuccessButton>
+              <SecondaryButton type="button" density="compact" disabled={busy} onClick={() => void actionReject()}>
                 Odrzuć
-              </button>
+              </SecondaryButton>
             </>
           ) : null}
           {doc.status === "approved" ? (
-            <button
+            <PrimaryButton
               type="button"
+              density="compact"
               disabled={busy}
               onClick={() => void openApprovalModal("post")}
-              className={brandPrimaryButtonClass}
             >
               {updatesStock ? "Księguj RW/PW" : "Zakończ bez korekt stanów"}
-            </button>
+            </PrimaryButton>
           ) : null}
         </div>
       </div>

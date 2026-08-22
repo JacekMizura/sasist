@@ -37,20 +37,21 @@ export const erpTr = "transition-colors hover:bg-slate-50/60";
 
 export const erpTbody = "divide-y divide-slate-100/90";
 
-export const erpDocLink = "font-medium text-slate-900 underline-offset-2 transition-colors hover:text-indigo-700 hover:underline";
+export const erpDocLink =
+  "font-medium text-slate-900 underline-offset-2 transition-colors hover:text-orange-600 hover:underline";
 
 export const erpSelectCard = (selected: boolean) =>
   `cursor-pointer rounded-lg border p-3 transition-all ${
     selected
-      ? "border-indigo-500/80 bg-indigo-50/40 ring-1 ring-indigo-500/30"
+      ? "border-orange-500/80 bg-orange-50/40 ring-1 ring-orange-500/30"
       : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50"
   }`;
 
 export const erpSelectCardTitle = (selected: boolean) =>
-  `mb-0.5 text-sm font-semibold ${selected ? "text-indigo-900" : "text-slate-900"}`;
+  `mb-0.5 text-sm font-semibold ${selected ? "text-orange-900" : "text-slate-900"}`;
 
 export const erpSelectCardHint = (selected: boolean) =>
-  `text-xs ${selected ? "text-indigo-700/80" : "text-slate-500"}`;
+  `text-xs ${selected ? "text-orange-800/80" : "text-slate-500"}`;
 
 export const erpFieldLabel = "mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-500";
 
@@ -68,8 +69,8 @@ export const erpWizardFooter = "mt-8 flex items-center justify-between border-t 
 
 export const erpBtnPrimary = brandPrimaryButtonClass;
 
-export const erpBtnGhost =
-  "rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300";
+/** @deprecated Prefer GhostButton / secondaryButtonClassName from design-system. */
+export { ghostButtonClass as erpBtnGhost } from "../../../../design-system";
 
 export const erpScopeBox = "rounded-lg border border-slate-200/90 bg-slate-50/50 p-3";
 
