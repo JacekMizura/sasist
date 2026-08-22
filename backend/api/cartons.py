@@ -302,7 +302,7 @@ def list_cartons(
                 func.lower(func.coalesce(Carton.sku, "")).like(like),
             )
         )
-    return [_carton_to_read(x) for x in query.all()]
+    return [_carton_to_read(db, x) for x in query.all()]
 
 
 @router.get("/{carton_id}/", response_model=CartonRead)
