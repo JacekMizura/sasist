@@ -1,14 +1,18 @@
 /**
- * Tokeny tabeli listy klientów — nagłówki jak Products; akcje jak Orders/Zwroty (`OperationalActionButton`).
+ * Tokeny tabeli listy klientów — nagłówek z moduleList SSOT; akcje jak Orders/Zwroty.
  */
 import {
   listSellasistRowActionBtn,
   listSellasistRowActionBtnDanger,
 } from "../../listPage/listSellasistTokens";
+import {
+  moduleListStickyActionsThBase,
+  moduleListStickyCheckboxThClass,
+  moduleListStickyThClass,
+} from "../../listPage/moduleList/moduleListTableTokens";
 
 export const customersListTableClass = "w-full min-w-[1080px] table-fixed text-left text-sm";
-export const customersListThClass =
-  "sticky top-0 z-10 whitespace-nowrap bg-white px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 shadow-[inset_0_-1px_0_0_rgb(226,232,240)]";
+export const customersListThClass = moduleListStickyThClass;
 export const customersListTdClass = "px-4 py-0 align-middle text-sm leading-snug text-slate-800";
 export const customersListRowClass =
   "group border-b border-slate-100 transition-colors hover:bg-slate-50/60 last:border-b-0 even:bg-slate-50/20";
@@ -23,8 +27,7 @@ export const customersListCheckboxInnerClass =
 export const customersListCheckboxInputClass =
   "h-4 w-4 shrink-0 rounded border-slate-300 accent-emerald-600";
 
-export const customersListCheckboxThClass =
-  "sticky top-0 z-10 box-border w-[56px] min-w-[56px] max-w-[56px] bg-white px-0 py-0 align-middle text-center shadow-[inset_0_-1px_0_0_rgb(226,232,240)]";
+export const customersListCheckboxThClass = moduleListStickyCheckboxThClass;
 
 /** Dwa przyciski 40×40 — jak Products list (`88px`). */
 export const customersListActionsColWidth = "88px";
@@ -32,6 +35,8 @@ export const customersListActionsCellClass =
   "box-border w-[88px] min-w-[88px] max-w-[88px] shrink-0 px-1 py-0 align-middle";
 export const customersListActionsInnerClass =
   "flex min-h-[3.5rem] flex-row flex-nowrap items-center justify-center gap-1";
+
+export const customersListActionsThClass = `${moduleListStickyActionsThBase} w-[88px] min-w-[88px] max-w-[88px]`;
 
 /** @deprecated Prefer `OperationalActionLink` / `OperationalActionButton`. */
 export const customersListRowActionBtn = listSellasistRowActionBtn;

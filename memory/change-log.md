@@ -1,3 +1,92 @@
+## 2026-08-22 — ERP global sidebar scale-up (uncommitted)
+
+- `erpSidebarStyles.ts`: rail 80→104px, expanded 200→252px, icons 20→24px, labels 9→11px, WMS chrome tokens.
+- `brandUi.ts`: expanded rail nav item min-h/py/text bump.
+- Architecture guard + vitest/tsc/build PASS; WMS module untouched.
+
+## 2026-08-22 — ERP table header SSOT (uncommitted)
+
+- `moduleListTableTokens.ts`: gray THEAD (`bg-slate-50`) + sticky header tokens (`moduleListStickyTh*`).
+- All `*ListTableTokens.ts` migrated from local white sticky TH to moduleList SSOT.
+- `AdminDataTable`, `CustomerPurchaseHistoryTopProducts` → `moduleListTheadClass`.
+- Architecture guard: `UI architecture SSOT (ERP table header)` in `uiArchitecture.test.ts`.
+- vitest/tsc/build PASS; WMS touched=0.
+
+## 2026-08-22 — UI SSOT Phase D3: ERP Settings configurators
+
+- Migrated Form SSOT primitives on Order/Return/Complaint panel status settings, returnsStatusesConfigurator modals, DictionaryEntryModal, ExportEditorPage, StickySaveBar, ReturnsModuleSettingsPanel, ShippingMethodsSettingsPage, returnsSettingsOps
+- Kept dense DnD/matrix/tree layout specialized; only swapped controls
+- WMS settings panels skipped entirely (no opens/edits)
+- uiArchitecture +6 Phase D3 (41 PASS); tsc PASS; WMS touched=0
+
+## 2026-08-22 — WM carton/packaging Form SSOT remigration (JSX-safe)
+
+- Remigrated only `CartonDetailPage.tsx` + `PackagingMaterialDetailPage.tsx` → FormField + Input/Select/Textarea/Checkbox + FORM_FIELD_DENSITY
+- Removed `productLikeInputClass` / `productLikeFieldLabelClass` from both; layout/tabs/API unchanged
+- Carton warehouse editor slot kept on `productWarehouse*` (ProductWarehouseStockPanel contract)
+- Sanity: FormField 33/33 and 54/54 balanced; tsc PASS; vite build PASS; WMS touched=0
+
+## 2026-08-22 — UI SSOT Phase D1: Automation editor Form SSOT
+
+- Migrated A primitives → Input/Select/Textarea/FormField/FormLabel + Primary/Secondary/Danger/IconButton
+- Files: OrderAutomationEditorPage, ManualTrigger, ExecutionSettings, ConditionConfigFields, effect renderers, ModuleActivatorSettings, IfThen (oaBtnPri only), CategoryPickerModal, Groups, Logs, OrderCustomFieldsListPage
+- Kept C: oaWorkflow*, oaLaunchTile*, oaEditorHeaderCardClass, chips/group chrome
+- Tokens: A marked @deprecated (exports kept for Customers/ProductCustomFields leftovers)
+- uiArchitecture +5 Phase D1 guards (28 PASS); tsc PASS; WMS untouched
+
+## 2026-08-22 — UI SSOT Phase C Wave 3: Admin/settings forms FINISHED
+
+- MessageTemplatesModule editor: `fieldInputClass` → FormField + Input/Select + `inputClassName` (ref fields) + FORM_FIELD_DENSITY; TipTap/vars/list untouched
+- DocumentTemplateCreatePage: FormSection/FormField + Input/Select + PrimaryButton + GhostButton utilities; no `brandPrimaryButtonClass`
+- CompanyFormField → thin FormField shim; `companyInputClass` deprecated export kept
+- CompanyProfileTab + WarehouseDrawers + TenantDrawers → Input/Select/Checkbox + FORM_FIELD_DENSITY; PrimaryButton save
+- AdministratorEditPage: `sidebarInputCls`/`labelCls` removed; FormField + Input/Select/Textarea/Checkbox; LoginCodeLabelControls internalized DS; floating bar PrimaryButton/GhostButton
+- uiArchitecture Wave 3 guards (+4 tests); vitest 23 PASS
+
+## 2026-08-22 — UI SSOT Phase C Wave 2: Document series forms FINISHED
+
+- DocumentSeriesEditPage: ALL `inpSm` removed (HEAD still had it); FormSection/FormField/Input/Select/Textarea/Checkbox + FORM_FIELD_DENSITY; FormActions sticky; FormError
+- FormSections: Podstawowe, Typ dokumentu, Zachowanie, Walidacja klienta, VAT, Koszty/waluta, Numeracja, Statusy, JSON, Notatki, Adres, Bank
+- DocumentSeriesQuickCreateModal: Dialog + FormField + Ghost/Primary + FormError
+- WarehouseDocumentDetailInfo: Input FORM_FIELD_DENSITY (!h-7 header overrides); dropped unused `warehouseDocFinancialInputClass`
+- Architecture test: series files in PHASE_C_FORM_GLOBS + inpSm guard; vitest PASS
+- List pages / line drawers / API untouched
+
+## 2026-08-22 — UI SSOT Phase C Wave 2: Purchasing forms DONE (verify + polish)
+
+- PurchaseOrderEditPage / SupplierEditPage / ManufacturerEditPage already on FormField + Input/Select/Textarea/Checkbox + FORM_FIELD_DENSITY
+- Polish: killed remaining decorative violet (scope chips, Top badge, bulk panel, links) → brand orange / brandLink* / brandSoftRowHover
+- Architecture PHASE_C_FORM_GLOBS + purchasing edit pages; uiArchitecture PASS
+- Modals are thin re-exports of edit pages; PurchaseOrderNewPage is redirect-only (no form)
+- Out of scope leftover: `components/purchasing/PurchaseSalesBlockLinePanel.tsx` still has local amber inputClass
+
+## 2026-08-22 — UI SSOT Phase C Wave 1: Categories forms (finish)
+
+- CategoryFormModal + CategoryEdit{Basic,Numbering,Attributes,Marketplace,Products,History}Tab
+- Replaced pimPanel/pimFieldLabel/pimHint → FormSection / FormField / FormHelperText + FORM_FIELD_DENSITY
+- pimStatTileClass retained for numbering previews; PrimaryButton/Checkbox unchanged; no API/state edits
+
+## 2026-08-22 — UI SSOT Phase C Wave 1: Families + Categories forms
+
+- pimUi: deprecate pimPanelClass / pimFieldLabelClass → FormSection / FormLabel SSOT aliases
+- Families edit chrome → FormSection + FormField + FORM_FIELD_DENSITY
+- Categories FormModal + Edit*Tab → same; Dialog footer unchanged; tree list untouched
+- tsc PASS; no API/validation changes
+
+## 2026-08-22 — UI SSOT Phase C Wave 1: Inventory wizard forms
+
+- InventoryWizardView → Stepper, FormField/Input FORM_FIELD_DENSITY, FormSection/Card, FormActions + Secondary/Primary
+- InventoryCountWizardSteps → FormLabel, Input/SearchInput, CardButton OptionCard, Checkbox; logic untouched
+- theme.ts: deprecate erpField*, erpSelectCard*, erpWizardStep*/Footer (kept for legacy refs)
+- WMS inventory terminal untouched
+
+## 2026-08-22 — UI SSOT Phase B: Order automation LIST only
+
+- AutomationRulesTable → moduleList* / moduleTableCardClass / OperationalAction* / StatusBadge
+- OrderAutomationListPage → PrimaryButton + primaryButtonClassName; listSellasistInputClass; keep oaWorkflowGroup*
+- orderAutomationUiTokens: deprecation/notes on list-only oa*; editor tokens untouched
+- Editor / IfThen / ManualTrigger not modified
+
 ## 2026-08-22 — UI SSOT Phase B (lists/tables)
 
 1. Documents + templates: emoji/text actions → OperationalAction*; documentsBadges → StatusBadge; moduleList* + pagination footer

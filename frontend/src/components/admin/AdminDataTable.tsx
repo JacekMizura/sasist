@@ -4,6 +4,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ChevronDown, ChevronUp, GripVertical, Pencil, Trash2 } from "lucide-react";
 
+import { moduleListTheadClass } from "../listPage/moduleList/moduleListTableTokens";
 import {
   adminListActionsCellClass,
   adminListActionsColWidth,
@@ -270,8 +271,8 @@ export function AdminDataTable<T>({
             ))}
             <col style={{ width: adminListActionsColWidth }} />
           </colgroup>
-          <thead>
-            <tr className="border-b border-slate-200 bg-white">
+          <thead className={moduleListTheadClass}>
+            <tr>
               <th className={adminListThClass} aria-label="Kolejność" />
               <th className={adminListThClass}>
                 <label className="inline-flex h-9 w-9 cursor-pointer items-center justify-center">

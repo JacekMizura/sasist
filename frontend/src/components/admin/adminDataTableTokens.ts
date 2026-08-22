@@ -1,12 +1,11 @@
 /**
- * Shared admin list table tokens — single visual language for admin modules
- * (order/product custom fields, and future admin lists).
+ * Shared admin list table tokens — nagłówek z moduleList SSOT (Dokumenty).
  */
+import { moduleListThClass } from "../listPage/moduleList/moduleListTableTokens";
 
 export const adminListTableClass = "w-full min-w-[960px] table-fixed text-left text-sm";
-export const adminListThClass =
-  "whitespace-nowrap px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500";
-export const adminListThSortClass = `${adminListThClass} cursor-pointer select-none hover:text-slate-800`;
+export const adminListThClass = moduleListThClass;
+export const adminListThSortClass = `${moduleListThClass} cursor-pointer select-none hover:text-slate-800`;
 export const adminListTdClass = "px-4 py-0 align-middle text-sm leading-snug text-slate-800";
 export const adminListRowClass =
   "group border-b border-slate-100 transition-colors hover:bg-slate-50/60 last:border-b-0 even:bg-slate-50/20";
@@ -16,8 +15,7 @@ export const adminListActionsColWidth = "5rem";
 export const adminListActionsCellClass = "w-[5rem] px-2 py-0 align-middle text-right";
 export const adminListActionsInnerClass =
   "flex min-h-[3.5rem] w-full flex-row items-center justify-end gap-1.5";
-export const adminListActionsThClass =
-  "w-[5rem] whitespace-nowrap px-2 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500";
+export const adminListActionsThClass = `${moduleListThClass} w-[5rem] px-2 text-right`;
 export const adminListRowActionBtn =
   "inline-flex h-8 w-8 min-h-8 min-w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-900";
 export const adminListRowActionBtnDanger =

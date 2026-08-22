@@ -613,3 +613,181 @@ describe("UI architecture SSOT (Phase D legacy cleanup)", () => {
     expect(src).toMatch(/\bPrimaryButton\b/);
   });
 });
+
+/**
+ * ERP table header SSOT — canonical moduleList* primitives (NOT WMS, NOT matrices/designers).
+ */
+const WMS_PATH_RE =
+  /(?:^|\/)(?:pages\/wms|components\/wms|modules\/wms|modules\/inventoryCount\/ui\/wms|layout\/Wms|pages\/damage\/Wms|modules\/wmsSettings)/i;
+
+const ERP_TABLE_HEADER_SPECIALIZED_ALLOWLIST = new Set([
+  "components/settings/statusActionsMatrix/StatusActionsMatrix.tsx",
+  "components/admin/UserPanelStatusMatrix.tsx",
+  "pages/Settings/WmsOperationalOrderStatusMatrix.tsx",
+  "pages/Settings/WorkforceStatusMatrixPage.tsx",
+  "pages/Settings/ThreeDMatchingHistoryTable.tsx",
+  "pages/Settings/SmartMatchingHistoryEventsTable.tsx",
+  "components/products/ProductLocationDispositionMatrix.tsx",
+  "pages/Assortment/components/EntityPricingPanel.tsx",
+  "pages/Assortment/PurchaseOrderEditPage.tsx",
+  "pages/Orders/CreateOrderPage.tsx",
+  "pages/documents/WarehouseDocumentLinesSection.tsx",
+  "pages/documents/WarehouseZPzDocumentDetail.tsx",
+  "pages/LabelSystem/csvMapping/CsvMappingModal.tsx",
+  "components/warehouse/carriers/CarrierItemsTable.tsx",
+  "pages/Assortment/BundleProductsTab.tsx",
+  "pages/Production/components/AssemblyComponentsTable.tsx",
+  "pages/Settings/returnsStatusesConfigurator/ProductDecisionsCardsSection.tsx",
+  "pages/Settings/returnsStatusesConfigurator/ProductDecisionsTableSection.tsx",
+  "pages/Complaints/ComplaintDetailPage.tsx",
+  "pages/Import/ImportPage.tsx",
+  "components/orders/OrderSummaryProductsList.tsx",
+  "pages/Products/ProductEditPricesTab.tsx",
+  "pages/Products/ProductSalesOffersSection.tsx",
+  "pages/Assortment/settings/AssortmentInventorySettingsPanel.tsx",
+  "pages/Production/ProductManufacturingPanel.tsx",
+  "pages/Production/ProductionOrderDetailPage.tsx",
+  "pages/Orders/ReturnsReportPage.tsx",
+  "pages/Import/ImportHistoryPage.tsx",
+  "pages/zarzadzanie/KolejnoscDostawPage.tsx",
+  "components/activityLog/ActivityLogTable.tsx",
+  "pages/Settings/ExportsPage.tsx",
+  "pages/Settings/WorkforceActivityPage.tsx",
+  "pages/Settings/AdministratorEditPage.tsx",
+  "pages/Assortment/SupplierEditPage.tsx",
+  "pages/Assortment/ManufacturerEditPage.tsx",
+  "pages/Assortment/categories/CategoryEditProductsTab.tsx",
+  "pages/Assortment/families/FamilyEditMembersCard.tsx",
+  "pages/Assortment/components/BundleProductionPanel.tsx",
+  "pages/Production/ProductionShortagesPage.tsx",
+  "pages/Production/components/DocumentMaterialReservationsPanel.tsx",
+  "pages/Production/MaterialReservationsPage.tsx",
+  "pages/Production/MaterialAnalysisPage.tsx",
+  "pages/Production/components/ProductionDemandPlanningPanel.tsx",
+  "pages/Products/ProductWarehouseMovementsPanel.tsx",
+  "pages/Settings/EmployeeCostsOverviewPage.tsx",
+  "pages/Settings/WorkforceDashboardPage.tsx",
+  "pages/Orders/ReturnStatusesPage.tsx",
+  "pages/Settings/WorkforceUserGroupsPage.tsx",
+  "pages/Settings/AdministratorsAuditPage.tsx",
+  "components/orders/automation/orderAutomationUiTokens.ts",
+  "components/panelList/panelListDenseTableTokens.ts",
+  "modules/purchasing/ui/purchasingTableTokens.ts",
+  "components/listPage/listSellasistTokens.ts",
+]);
+
+const LOCAL_STICKY_ERP_TABLE_HEADER_RE =
+  /<th[^>]*className=["'`][^"'`]*sticky\s+top-0[^"'`]*\bbg-white\b/;
+
+const LOCAL_STICKY_HEADER_TOKEN_RE =
+  /export const \w+Th\w*\s*=\s*["'`][^"'`]*sticky\s+top-0[^"'`]*\bbg-white\b/;
+
+const LOCAL_THEAD_WHITE_RE = /<thead[^>]*className=["'`][^"'`]*\bbg-white\b/;
+
+function walkErpSourceFiles(): string[] {
+  const hits: string[] = [];
+  const skipDirs = new Set(["node_modules", "dist", "__pycache__", ".git"]);
+  function walk(dir: string) {
+    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (skipDirs.has(ent.name)) continue;
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      if (!/\.(ts|tsx)$/.test(ent.name)) continue;
+      const rel = path.relative(SRC_ROOT, full).replace(/\\/g, "/");
+      if (WMS_PATH_RE.test(rel)) continue;
+      if (rel.includes("LabelSystem/") && !rel.includes("templatesList")) continue;
+      hits.push(rel);
+    }
+  }
+  walk(SRC_ROOT);
+  return hits;
+}
+
+function readListTableTokenFiles(): string[] {
+  const hits: string[] = [];
+  const skipDirs = new Set(["node_modules", "dist", "__pycache__", ".git"]);
+  function walk(dir: string) {
+    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (skipDirs.has(ent.name)) continue;
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      if (!ent.name.endsWith("ListTableTokens.ts")) continue;
+      hits.push(path.relative(SRC_ROOT, full).replace(/\\/g, "/"));
+    }
+  }
+  walk(SRC_ROOT);
+  return hits;
+}
+
+describe("UI architecture SSOT (ERP table header)", () => {
+  it("moduleListTheadClass uses slate-50 header chrome like Documents", () => {
+    const tokensPath = path.join(SRC_ROOT, "components/listPage/moduleList/moduleListTableTokens.ts");
+    const src = fs.readFileSync(tokensPath, "utf8");
+    expect(src).toMatch(/moduleListTheadClass\s*=\s*["'`][^"'`]*bg-slate-50/);
+    expect(src).toMatch(/moduleListStickyThClass[\s\S]*bg-slate-50/);
+    expect(src).not.toMatch(/moduleListTheadClass\s*=\s*["'`][^"'`]*bg-white/);
+  });
+
+  it("ListTableTokens files import sticky header geometry from moduleList SSOT", () => {
+    const hits: string[] = [];
+    for (const rel of readListTableTokenFiles()) {
+      if (rel.endsWith("moduleList/moduleListTableTokens.ts")) continue;
+      if (rel.endsWith("packagingList/packagingListTableTokens.ts")) continue;
+      const src = fs.readFileSync(path.join(SRC_ROOT, rel), "utf8");
+      if (!/ListThClass|ThClass/.test(src)) continue;
+      if (!src.includes("moduleListTableTokens") && !src.includes("moduleListSticky")) {
+        hits.push(rel);
+      }
+      if (LOCAL_STICKY_HEADER_TOKEN_RE.test(src)) {
+        hits.push(`${rel} (local sticky bg-white header)`);
+      }
+    }
+    expect(hits, `ListTableTokens not on moduleList SSOT:\n${hits.join("\n")}`).toEqual([]);
+  });
+
+  it("ERP list tables do not duplicate white sticky header recipes outside allowlist", () => {
+    const hits: string[] = [];
+    for (const rel of walkErpSourceFiles()) {
+      if (ERP_TABLE_HEADER_SPECIALIZED_ALLOWLIST.has(rel)) continue;
+      const src = fs.readFileSync(path.join(SRC_ROOT, rel), "utf8");
+      if (LOCAL_THEAD_WHITE_RE.test(src)) {
+        hits.push(`${rel}: thead bg-white`);
+      }
+      if (LOCAL_STICKY_ERP_TABLE_HEADER_RE.test(src)) {
+        hits.push(`${rel}: sticky header bg-white`);
+      }
+    }
+    expect(hits, `Local ERP table headers:\n${hits.join("\n")}`).toEqual([]);
+  });
+
+  it("AdminDataTable uses moduleListTheadClass", () => {
+    const src = fs.readFileSync(path.join(SRC_ROOT, "components/admin/AdminDataTable.tsx"), "utf8");
+    expect(src).toMatch(/\bmoduleListTheadClass\b/);
+    expect(src).not.toMatch(/<tr className="border-b border-slate-200 bg-white"/);
+  });
+});
+
+describe("UI architecture SSOT (ERP global sidebar)", () => {
+  it("erpSidebarStyles defines widened icon-rail geometry", () => {
+    const filePath = path.join(SRC_ROOT, "layout/erpSidebarStyles.ts");
+    const src = fs.readFileSync(filePath, "utf8");
+    expect(src).toMatch(/ERP_SIDEBAR_COLLAPSED_WIDTH_PX\s*=\s*104/);
+    expect(src).toMatch(/ERP_SIDEBAR_WIDTH_PX\s*=\s*252/);
+    expect(src).toMatch(/h-6 w-6/);
+    expect(src).toMatch(/text-\[11px\]/);
+    expect(src).not.toMatch(/ERP_SIDEBAR_COLLAPSED_WIDTH_PX\s*=\s*80/);
+  });
+
+  it("ErpSidebar consumes erpSidebarStyles tokens (no local WMS button geometry)", () => {
+    const src = fs.readFileSync(path.join(SRC_ROOT, "layout/ErpSidebar.tsx"), "utf8");
+    expect(src).toMatch(/\berpSidebarWmsCollapsedClassName\b/);
+    expect(src).toMatch(/\bERP_SIDEBAR_WMS_EXPANDED_CLASS\b/);
+    expect(src).not.toMatch(/max-w-\[4\.25rem\]/);
+  });
+});

@@ -22,6 +22,9 @@ import {
   ERP_SIDEBAR_NAV_SCROLL,
   ERP_SIDEBAR_SECTION_LABEL,
   ERP_SIDEBAR_SURFACE,
+  ERP_SIDEBAR_WMS_EXPANDED_CLASS,
+  ERP_SIDEBAR_WMS_ICON_CLASS,
+  erpSidebarWmsCollapsedClassName,
   ERP_SIDEBAR_WIDTH_CLASS,
   ERP_SIDEBAR_WIDTH_PX,
   erpSidebarIconRailItemClassName,
@@ -155,7 +158,7 @@ function SectionBlock({
   return (
     <div>
       {!collapsed ? <p className={ERP_SIDEBAR_SECTION_LABEL}>{section.label}</p> : null}
-      <div className={collapsed ? "flex flex-col gap-1 px-1.5" : "flex flex-col gap-1 px-2"}>
+      <div className={collapsed ? "flex flex-col gap-1.5 px-2" : "flex flex-col gap-1.5 px-2.5"}>
         {items.map((cat) => {
           const directPath = cat.directPath?.trim();
           if (directPath) {
@@ -241,9 +244,9 @@ function WmsCtaButton({ collapsed }: { collapsed: boolean }) {
         to={WMS_SIDEBAR_DIRECT.path}
         title={label}
         aria-label={label}
-        className="mx-auto flex w-full max-w-[4.25rem] flex-col items-center gap-0.5 rounded-lg border border-slate-200 bg-white px-1 py-2 text-slate-700 transition-colors duration-150 ease-out hover:bg-slate-50 hover:text-slate-900"
+        className={erpSidebarWmsCollapsedClassName()}
       >
-        <WmsIcon className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+        <WmsIcon className={ERP_SIDEBAR_WMS_ICON_CLASS} strokeWidth={1.75} aria-hidden />
         <span className={ERP_SIDEBAR_ICON_RAIL_LABEL_CLASS}>{label}</span>
       </Link>
     );
@@ -251,9 +254,9 @@ function WmsCtaButton({ collapsed }: { collapsed: boolean }) {
   return (
     <Link
       to={WMS_SIDEBAR_DIRECT.path}
-      className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 transition-colors duration-150 ease-out hover:bg-slate-50 hover:text-slate-900"
+      className={ERP_SIDEBAR_WMS_EXPANDED_CLASS}
     >
-      <WmsIcon className="h-5 w-5 shrink-0 text-slate-600" strokeWidth={1.75} aria-hidden />
+      <WmsIcon className={`${ERP_SIDEBAR_WMS_ICON_CLASS} shrink-0 text-slate-600`} strokeWidth={1.75} aria-hidden />
       {label}
     </Link>
   );
@@ -300,7 +303,7 @@ export default function ErpSidebar() {
       >
         <div className={`flex h-full min-h-0 flex-col ${ERP_SIDEBAR_SURFACE}`}>
           <nav className={`min-h-0 flex-1 ${ERP_SIDEBAR_NAV_SCROLL}`} aria-label="Menu główne">
-            <div className={collapsed ? "flex flex-col gap-2 py-2" : "flex flex-col py-2"}>
+            <div className={collapsed ? "flex flex-col gap-2.5 py-3" : "flex flex-col py-3"}>
               {NAV_SIDEBAR_SECTIONS.map((section) => (
                 <SectionBlock
                   key={section.id}
@@ -321,7 +324,7 @@ export default function ErpSidebar() {
           <div
             className={[
               "mt-auto shrink-0 border-t border-slate-200 bg-inherit pt-3",
-              collapsed ? "px-1.5 pb-3" : "px-2 pb-3",
+              collapsed ? "px-2 pb-3" : "px-2.5 pb-3",
             ].join(" ")}
           >
             <WmsCtaButton collapsed={collapsed} />
