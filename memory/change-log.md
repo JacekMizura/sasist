@@ -1,3 +1,18 @@
+## 2026-08-22 — Assortment: remove Size tables + Families UI alignment
+
+- Deleted SizeTablesPage + `/size-tables` route/nav/`sizeTables` string (placeholder only; no BE/DB)
+- Families: no PIM developer blurb; `Card` listTile + `IconButton` edit/delete; standard `PrimaryButton`
+- Categories header: drop Product Management tagline
+- Tests: product_family_value_key PASS; tsc + build PASS
+
+## 2026-08-22 — Inventory ERP UI design-system alignment
+
+- Primary CTAs: `filterToolbarBtnApply` (amber) → `PrimaryButton` / `primaryButtonClassName`
+- Status: `StatusBadge` + tone helpers; documents list → `ModuleListPageToolbar` + pagination footer
+- Row actions: `OperationalActionLink/Button` (open/edit/delete); overflow for duplicate/export
+- API: no contract change; FE loads `limit=200`, client page/pageSize via `useListViewState` (Bundles pattern)
+- Tests: inventoryScanRouting 13 PASS; inventory_dashboard/schema 5 PASS; tsc + npm build PASS
+
 ## 2026-08-22 — Message templates editor UI polish (FE only)
 
 - Grid: Nazwa + Typ (240px); Temat full; sections Dane/Treść/Załączniki

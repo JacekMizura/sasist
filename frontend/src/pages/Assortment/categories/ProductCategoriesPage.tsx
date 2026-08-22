@@ -11,7 +11,6 @@ import { UI_STRINGS } from "../../../constants/uiStrings";
 import { useCategoryTree } from "../../../modules/productCategories/useCategoryTree";
 import { CategoryFormModal } from "./CategoryFormModal";
 import { CategoryTree } from "./CategoryTree";
-import { PIM_ASSORTMENT_TAGLINE } from "../pimUi";
 
 /**
  * Asortyment → Kategorie — hierarchical explorer; edit opens full category card.
@@ -63,7 +62,7 @@ export default function ProductCategoriesPage() {
     <PageLayout>
       <ListPageHeader
         title="Kategorie"
-        description={`${PIM_ASSORTMENT_TAGLINE}. Eksplorator drzewa — pełna konfiguracja na karcie kategorii.`}
+        description="Eksplorator drzewa — pełna konfiguracja na karcie kategorii."
         breadcrumbs={[
           { label: UI_STRINGS.navigation.assortment },
           { label: UI_STRINGS.navigation.categories },

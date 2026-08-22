@@ -1,4 +1,14 @@
-﻿**Message templates editor UI polish — PASS local (no commit yet).**
+﻿**Assortment: remove Size tables + Families UI SSOT — PASS local (no commit yet).**
+- Size tables: FE placeholder only (no BE/DB) — removed nav/route/page/string
+- Families: drop PIM tagline; Card listTile + IconButton edit/delete; Primary comfortable
+- Categories: drop Product Management tagline prefix
+
+**Inventory ERP UI SSOT alignment — PASS local (no commit yet).**
+- Root cause: `filterToolbarBtnApply` (amber-600) used as Primary; custom operational badges; overflow-only row actions; ad-hoc list toolbar without pagination
+- Switched to PrimaryButton/StatusBadge/ModuleListPageToolbar/OperationalAction*/listView pageSize
+- API unchanged (client pagination like Bundles; limit=200 load)
+
+**Message templates editor UI polish — shipped `2ee94ef6`.**
 - Layout: editor flex + vars 340–360px sticky; name|type grid; section labels
 - TipTap: rounded border + taller body; vars panel refined (no insert icons)
 - Attachments: compact rows; human labels (Pliki), not raw FILES

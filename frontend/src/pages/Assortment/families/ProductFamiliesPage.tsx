@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Network, Plus } from "lucide-react";
+import { Network, Pencil, Plus, Trash2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
@@ -12,9 +12,15 @@ import {
 import { extractApiErrorMessage } from "../../../api/authApi";
 import { ListPageHeader } from "../../../components/listPage/ListPageHeader";
 import PageLayout from "../../../components/layout/PageLayout";
-import { EmptyState, GhostButton, PrimaryButton, SearchInput } from "../../../design-system";
+import {
+  Card,
+  EmptyState,
+  IconButton,
+  PrimaryButton,
+  SearchInput,
+  typography,
+} from "../../../design-system";
 import { UI_STRINGS } from "../../../constants/uiStrings";
-import { pimCardHoverClass, pimIconBadgeMutedClass, PIM_ASSORTMENT_TAGLINE } from "../pimUi";
 
 /**
  * Asortyment → Rodziny — opcjonalne grupowanie pełnych produktów + cechy rodziny.
@@ -54,6 +60,11 @@ export default function ProductFamiliesPage() {
     return rows.filter((r) => r.name.toLowerCase().includes(q));
   }, [rows, query]);
 
+  const totalProducts = useMemo(
+    () => rows.reduce((s, r) => s + (r.product_count || 0), 0),
+    [rows],
+  );
+
   const onDelete = async (row: ProductFamilyListItem) => {
     if (tenantId == null) return;
     if (!window.confirm(`Usunąć rodzinę „${row.name}”? Produkty pozostaną bez rodziny.`)) return;
@@ -72,21 +83,20 @@ export default function ProductFamiliesPage() {
     <PageLayout>
       <ListPageHeader
         title="Rodziny produktów"
-        description={`${PIM_ASSORTMENT_TAGLINE}. Opcjonalne grupy pełnych produktów — cechy służą do opisu i kreatora, bez dziedziczenia po utworzeniu.`}
         breadcrumbs={[
           { label: UI_STRINGS.navigation.assortment },
           { label: UI_STRINGS.navigation.productFamilies },
         ]}
         actions={
-          <PrimaryButton type="button" density="compact" onClick={() => navigate("/product-families/new")}>
-            <Plus className="mr-1.5 h-4 w-4" strokeWidth={2.5} aria-hidden />
+          <PrimaryButton type="button" onClick={() => navigate("/product-families/new")}>
+            <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
             Nowa rodzina
           </PrimaryButton>
         }
       />
 
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <div className="min-w-[220px] max-w-md flex-1">
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <div className="min-w-[240px] max-w-md flex-1">
           <SearchInput
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -94,16 +104,14 @@ export default function ProductFamiliesPage() {
             aria-label="Szukaj rodziny"
           />
         </div>
-        <span className="text-sm text-slate-500">
+        <p className={typography.bodyMuted}>
           {filtered.length} {filtered.length === 1 ? "rodzina" : "rodzin"}
-          {!loading && rows.length > 0
-            ? ` · ${rows.reduce((s, r) => s + (r.product_count || 0), 0)} produktów`
-            : ""}
-        </span>
+          {!loading && rows.length > 0 ? ` · ${totalProducts} produktów` : ""}
+        </p>
       </div>
 
       {loading ? (
-        <p className="mt-8 text-sm text-slate-500">Ładowanie…</p>
+        <p className={`mt-8 ${typography.bodyMuted}`}>Ładowanie…</p>
       ) : empty ? (
         <div className="mt-8">
           <EmptyState
@@ -111,12 +119,12 @@ export default function ProductFamiliesPage() {
             description={
               query.trim()
                 ? "Zmień frazę wyszukiwania."
-                : "Rodzina jest opcjonalna. Utwórz ją, gdy chcesz pogrupować produkty (np. Sznurowadła CAT) i zdefiniować cechy."
+                : "Utwórz rodzinę, gdy chcesz pogrupować produkty i zdefiniować cechy."
             }
             action={
               !query.trim() ? (
-                <PrimaryButton type="button" density="compact" onClick={() => navigate("/product-families/new")}>
-                  <Plus className="mr-1.5 h-4 w-4" strokeWidth={2.5} aria-hidden />
+                <PrimaryButton type="button" onClick={() => navigate("/product-families/new")}>
+                  <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
                   Utwórz pierwszą rodzinę
                 </PrimaryButton>
               ) : undefined
@@ -124,45 +132,53 @@ export default function ProductFamiliesPage() {
           />
         </div>
       ) : (
-        <ul className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <ul className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((row) => (
             <li key={row.id}>
-              <article className={pimCardHoverClass}>
+              <Card variant="listTile" density="comfortable" className="flex h-full flex-col">
                 <div className="flex items-start gap-3">
-                  <span className={pimIconBadgeMutedClass}>
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
                     <Network className="h-5 w-5" strokeWidth={2} aria-hidden />
                   </span>
                   <div className="min-w-0 flex-1">
                     <Link
                       to={`/product-families/${row.id}/edit`}
-                      className="block truncate text-base font-semibold text-slate-900 hover:text-blue-700"
+                      className={`block truncate ${typography.h2} hover:text-orange-600`}
                     >
                       {row.name}
                     </Link>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {row.attribute_count} {row.attribute_count === 1 ? "cecha" : "cech"} · {row.value_count} wartości ·{" "}
-                      {row.combination_count} kombinacji
+                    <p className={`mt-1.5 ${typography.caption}`}>
+                      {row.attribute_count} {row.attribute_count === 1 ? "cecha" : "cech"} · {row.value_count}{" "}
+                      wartości · {row.combination_count} kombinacji
                     </p>
-                    <p className="mt-0.5 text-xs text-slate-400">
+                    <p className={`mt-1 ${typography.bodyMuted}`}>
                       {row.product_count} {row.product_count === 1 ? "produkt" : "produktów"}
                       {!row.is_active ? " · nieaktywna" : ""}
                     </p>
                   </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <IconButton
+                      type="button"
+                      density="default"
+                      title="Edytuj"
+                      aria-label={`Edytuj ${row.name}`}
+                      onClick={() => navigate(`/product-families/${row.id}/edit`)}
+                    >
+                      <Pencil className="h-4 w-4" strokeWidth={2} aria-hidden />
+                    </IconButton>
+                    <IconButton
+                      type="button"
+                      density="default"
+                      tone="danger"
+                      title="Usuń"
+                      aria-label={`Usuń ${row.name}`}
+                      onClick={() => void onDelete(row)}
+                    >
+                      <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden />
+                    </IconButton>
+                  </div>
                 </div>
-                <div className="mt-4 flex gap-2 border-t border-slate-100 pt-3">
-                  <PrimaryButton
-                    type="button"
-                    density="compact"
-                    className="flex-1"
-                    onClick={() => navigate(`/product-families/${row.id}/edit`)}
-                  >
-                    Edytuj
-                  </PrimaryButton>
-                  <GhostButton type="button" density="compact" onClick={() => void onDelete(row)}>
-                    Usuń
-                  </GhostButton>
-                </div>
-              </article>
+              </Card>
             </li>
           ))}
         </ul>
