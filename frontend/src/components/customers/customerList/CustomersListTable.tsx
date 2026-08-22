@@ -5,6 +5,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import type { CustomerListRow } from "../../../api/customersApi";
 import { countryLabel } from "../../../constants/countryCodes";
 import { customerTypeLabel, salesChannelLabel } from "../../../modules/customers/customerProfile";
+import { OperationalActionButton, OperationalActionLink } from "../../operational";
 import {
   CUSTOMER_LIST_COLUMN_WIDTH,
   customerListColumnLabel,
@@ -19,13 +20,12 @@ import {
   customersListActionsCellClass,
   customersListActionsColWidth,
   customersListActionsInnerClass,
+  customersListBadgeBaseClass,
   customersListCheckboxCellClass,
   customersListCheckboxColWidth,
   customersListCheckboxInnerClass,
   customersListCheckboxInputClass,
   customersListCheckboxThClass,
-  customersListRowActionBtn,
-  customersListRowActionBtnDanger,
   customersListRowClass,
   customersListRowInnerClass,
   customersListTableClass,
@@ -76,21 +76,21 @@ function RowCheckbox({
 function CustomerTypeBadges({ row }: { row: CustomerListRow }) {
   return (
     <div className="flex flex-wrap items-center gap-1">
-      <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700">
+      <span className={`${customersListBadgeBaseClass} border-slate-200 bg-slate-50 text-slate-700`}>
         {customerTypeLabel(row.customer_type)}
       </span>
       {row.flags?.vip ? (
-        <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900">
+        <span className={`${customersListBadgeBaseClass} border-amber-200 bg-amber-50 text-amber-900`}>
           VIP
         </span>
       ) : null}
       {row.flags?.marketplace ? (
-        <span className="rounded border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[11px] font-semibold text-indigo-900">
+        <span className={`${customersListBadgeBaseClass} border-indigo-200 bg-indigo-50 text-indigo-900`}>
           MP
         </span>
       ) : null}
       {row.customer_status === "blocked" ? (
-        <span className="rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-[11px] font-semibold text-red-800">
+        <span className={`${customersListBadgeBaseClass} border-red-200 bg-red-50 text-red-800`}>
           Blokada
         </span>
       ) : null}
@@ -113,18 +113,18 @@ function CustomerListDataCell({
     case "id":
       return (
         <div className={customersListRowInnerClass}>
-          <span className="font-mono text-sm font-semibold tabular-nums text-slate-600">{row.id}</span>
+          <span className="font-mono text-sm font-medium tabular-nums text-slate-600">{row.id}</span>
         </div>
       );
     case "client":
       return (
         <div className={`${customersListRowInnerClass} min-w-0`}>
           {missingName ? (
-            <span className="block max-w-full truncate text-base font-semibold text-slate-400">{clientName}</span>
+            <span className="block max-w-full truncate text-sm font-medium text-slate-400">{clientName}</span>
           ) : (
             <Link
               to={`/customers/${row.id}`}
-              className="block max-w-full truncate text-base font-semibold text-slate-900 hover:underline"
+              className="block max-w-full truncate text-sm font-medium text-slate-900 hover:underline"
               title={clientName}
             >
               {clientName}
@@ -215,11 +215,11 @@ function MobileCustomerRow({
       </div>
       <div className="min-h-[3.5rem] min-w-0 flex-1 py-3">
         {missingName ? (
-          <span className="block truncate text-base font-semibold text-slate-400">{clientName}</span>
+          <span className="block truncate text-sm font-medium text-slate-400">{clientName}</span>
         ) : (
           <Link
             to={`/customers/${row.id}`}
-            className="block truncate text-base font-semibold text-slate-900 hover:underline"
+            className="block truncate text-sm font-medium text-slate-900 hover:underline"
             title={clientName}
           >
             {clientName}
@@ -227,24 +227,22 @@ function MobileCustomerRow({
         )}
       </div>
       <div className="flex shrink-0 items-center gap-1 pr-2">
-        <Link
+        <OperationalActionLink
           to={`/customers/${row.id}`}
-          className={customersListRowActionBtn}
-          title="Edytuj"
-          aria-label="Edytuj"
+          title="Edytuj klienta"
+          aria-label="Edytuj klienta"
         >
-          <Pencil className="h-4 w-4 shrink-0" strokeWidth={2} />
-        </Link>
-        <button
-          type="button"
-          className={customersListRowActionBtnDanger}
-          title="Usuń"
-          aria-label="Usuń"
+          <Pencil strokeWidth={2} aria-hidden />
+        </OperationalActionLink>
+        <OperationalActionButton
+          variant="danger"
+          title="Usuń klienta"
+          aria-label="Usuń klienta"
           disabled={deleteBusy}
           onClick={() => onDelete(row.id)}
         >
-          <Trash2 className="h-4 w-4 shrink-0" strokeWidth={2} />
-        </button>
+          <Trash2 strokeWidth={2} aria-hidden />
+        </OperationalActionButton>
       </div>
     </article>
   );
@@ -288,26 +286,24 @@ const CustomerTableRow = memo(function CustomerTableRow({
           <CustomerListDataCell row={row} columnId={colId} />
         </td>
       ))}
-      <td className={customersListActionsCellClass} style={{ width: customersListActionsColWidth }}>
+      <td className={customersListActionsCellClass}>
         <div className={customersListActionsInnerClass}>
-          <Link
+          <OperationalActionLink
             to={`/customers/${row.id}`}
-            className={customersListRowActionBtn}
-            title="Edytuj"
-            aria-label="Edytuj"
+            title="Edytuj klienta"
+            aria-label="Edytuj klienta"
           >
-            <Pencil className="h-4 w-4 shrink-0" strokeWidth={2} />
-          </Link>
-          <button
-            type="button"
-            className={customersListRowActionBtnDanger}
-            title="Usuń"
-            aria-label="Usuń"
+            <Pencil strokeWidth={2} aria-hidden />
+          </OperationalActionLink>
+          <OperationalActionButton
+            variant="danger"
+            title="Usuń klienta"
+            aria-label="Usuń klienta"
             disabled={deleteBusy}
             onClick={() => onDelete(row.id)}
           >
-            <Trash2 className="h-4 w-4 shrink-0" strokeWidth={2} />
-          </button>
+            <Trash2 strokeWidth={2} aria-hidden />
+          </OperationalActionButton>
         </div>
       </td>
     </tr>

@@ -1,4 +1,11 @@
-/** Tokeny tabeli listy klientów — spójne z Polami dodatkowymi / automatyzacją. */
+/**
+ * Tokeny tabeli listy klientów — nagłówki jak Products; akcje jak Orders/Zwroty (`OperationalActionButton`).
+ */
+import {
+  listSellasistRowActionBtn,
+  listSellasistRowActionBtnDanger,
+} from "../../listPage/listSellasistTokens";
+
 export const customersListTableClass = "w-full min-w-[1080px] table-fixed text-left text-sm";
 export const customersListThClass =
   "sticky top-0 z-10 whitespace-nowrap bg-white px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 shadow-[inset_0_-1px_0_0_rgb(226,232,240)]";
@@ -19,11 +26,18 @@ export const customersListCheckboxInputClass =
 export const customersListCheckboxThClass =
   "sticky top-0 z-10 box-border w-[56px] min-w-[56px] max-w-[56px] bg-white px-0 py-0 align-middle text-center shadow-[inset_0_-1px_0_0_rgb(226,232,240)]";
 
-export const customersListActionsColWidth = "6.5rem";
-export const customersListActionsCellClass = "px-4 py-0 align-middle";
+/** Dwa przyciski 40×40 — jak Products list (`88px`). */
+export const customersListActionsColWidth = "88px";
+export const customersListActionsCellClass =
+  "box-border w-[88px] min-w-[88px] max-w-[88px] shrink-0 px-1 py-0 align-middle";
 export const customersListActionsInnerClass =
-  "flex min-h-[3.5rem] flex-row items-center justify-end gap-2";
-export const customersListRowActionBtn =
-  "inline-flex h-9 w-9 min-h-9 min-w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-900";
-export const customersListRowActionBtnDanger =
-  `${customersListRowActionBtn} text-red-600 hover:border-red-200 hover:text-red-700`;
+  "flex min-h-[3.5rem] flex-row flex-nowrap items-center justify-center gap-1";
+
+/** @deprecated Prefer `OperationalActionLink` / `OperationalActionButton`. */
+export const customersListRowActionBtn = listSellasistRowActionBtn;
+/** @deprecated Prefer `OperationalActionButton variant="danger"`. */
+export const customersListRowActionBtnDanger = listSellasistRowActionBtnDanger;
+
+/** Badge typ klienta / VIP — `text-xs font-medium` jak moduleList channel badges. */
+export const customersListBadgeBaseClass =
+  "inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium";

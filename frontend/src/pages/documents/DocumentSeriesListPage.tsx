@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Layers, Plus } from "lucide-react";
+import { Layers, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   bulkDeleteDocumentSeries,
   deleteDocumentSeries,
@@ -21,6 +21,7 @@ import {
 } from "./documentSeriesUiLabels";
 import DocumentsEmptyState from "./DocumentsEmptyState";
 import { DocumentsSectionShell } from "./DocumentsSectionShell";
+import { OperationalActionButton, OperationalActionLink } from "../../components/operational";
 import {
   DocumentsFiltersToolbar,
   DocumentsKpiRow,
@@ -226,7 +227,7 @@ export default function DocumentSeriesListPage() {
                 <th className="p-3">Efekt mag.</th>
                 <th className="p-3">Numeracja</th>
                 <th className="p-3">Usuwanie</th>
-                <th className="w-28 p-3" />
+                <th className="w-24 p-3 text-right">Akcje</th>
               </tr>
             </thead>
             <tbody>
@@ -276,16 +277,23 @@ export default function DocumentSeriesListPage() {
                     <td className="p-3 text-xs text-slate-800">{numberingSummaryForListRow(r)}</td>
                     <td className="p-3 text-xs">{deleteModeLabelPl(r.delete_mode)}</td>
                     <td className="p-3">
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/documents/series/${r.id}`)}
-                        className="mr-2 text-blue-700 hover:underline"
-                      >
-                        Edytuj
-                      </button>
-                      <button type="button" onClick={() => void onDeleteOne(r.id)} className="text-red-700 hover:underline">
-                        Usuń
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <OperationalActionLink
+                          to={`/documents/series/${r.id}`}
+                          title="Edytuj serię"
+                          aria-label="Edytuj serię"
+                        >
+                          <Pencil strokeWidth={2} aria-hidden />
+                        </OperationalActionLink>
+                        <OperationalActionButton
+                          variant="danger"
+                          title="Usuń serię"
+                          aria-label="Usuń serię"
+                          onClick={() => void onDeleteOne(r.id)}
+                        >
+                          <Trash2 strokeWidth={2} aria-hidden />
+                        </OperationalActionButton>
+                      </div>
                     </td>
                   </tr>
                 ))
