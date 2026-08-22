@@ -15,6 +15,8 @@ describe("settings flyout IA", () => {
     expect(labels[3]).toBe("Klucze API");
     expect(labels[4]).toBe("Import");
     expect(labels[5]).toBe("Metody dostawy");
+    expect(labels[6]).toBe("Ustawienia WMS");
+    expect(labels).not.toContain("Konfiguracja WMS");
     expect(labels).not.toContain("Pule stanów");
     expect(labels).not.toContain("System");
     expect(labels).not.toContain("Słownik aplikacji");
@@ -28,17 +30,17 @@ describe("settings flyout IA", () => {
     expect(labels).not.toContain("System Etykiet");
   });
 
-  it("highlights WMS config under Magazyn (not Ogólne Ustawienia)", () => {
+  it("highlights WMS config under Ustawienia (not Magazyn)", () => {
     const cats = buildNavFlyoutCategories();
     const settings = cats.find((c) => c.id === "settings")!;
     const warehouse = cats.find((c) => c.id === "warehouse")!;
     const wsPath = "/settings/wms/workstations";
     const wsDetail = "/settings/wms/workstations/12";
 
-    expect(isCategoryActive(settings, wsPath)).toBe(false);
-    expect(isCategoryActive(settings, wsDetail)).toBe(false);
-    expect(isCategoryActive(warehouse, wsPath)).toBe(true);
-    expect(isCategoryActive(warehouse, wsDetail)).toBe(true);
+    expect(isCategoryActive(settings, wsPath)).toBe(true);
+    expect(isCategoryActive(settings, wsDetail)).toBe(true);
+    expect(isCategoryActive(warehouse, wsPath)).toBe(false);
+    expect(isCategoryActive(warehouse, wsDetail)).toBe(false);
 
     expect(isNavPathActive("/settings/wms", "/settings/wms")).toBe(true);
     expect(isNavPathActive(wsPath, "/settings/wms")).toBe(true);

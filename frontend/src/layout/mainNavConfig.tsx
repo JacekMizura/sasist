@@ -304,7 +304,6 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
           { path: "/carts/racks", label: "Strefa sortująca", Icon: Layers },
           { path: "/carts/carriers", label: "Nośniki", Icon: Package },
           { path: "/inventory-count/dashboard", label: "Inwentaryzacja", Icon: ClipboardList },
-          { path: "/settings/wms", label: "Konfiguracja WMS", Icon: Settings2 },
           { path: "/carts/optimizer", label: "Planer floty", Icon: Route },
           { path: "/warehouse/bdo", label: "BDO", Icon: Recycle },
           { path: "/office/damages", label: "Szkody", Icon: TriangleAlert },
@@ -449,6 +448,11 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
             Icon: Truck,
             permissionsAny: ["settings.users", "settings.company"],
           },
+          {
+            path: "/settings/wms",
+            label: UI_STRINGS.navigation.wmsSettings,
+            Icon: Settings2,
+          },
         ],
       },
     ],
@@ -475,7 +479,6 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
     if (pathname.startsWith("/warehouse/bdo")) return true;
     if (pathname.startsWith("/office/damages") || pathname.startsWith("/office/damage-reports")) return true;
     if (pathname === "/inventory-count" || pathname.startsWith("/inventory-count/")) return true;
-    if (pathname === "/settings/wms" || pathname.startsWith("/settings/wms/")) return true;
     return navGroupHasActivePath(pathname, categoryFlyoutPaths(category));
   }
   if (category.id === "orders") {
@@ -491,8 +494,6 @@ export function isCategoryActive(category: NavCategoryConfig, pathname: string):
     if (pathname === "/assortment" || pathname.startsWith("/assortment/")) return true;
   }
   if (category.id === "settings") {
-    // Konfiguracja WMS należy do Magazynu — nie podświetlaj Ogólnych.
-    if (pathname === "/settings/wms" || pathname.startsWith("/settings/wms/")) return false;
     // Templates category owns exports / document templates / message templates.
     if (pathname.startsWith("/templates")) return false;
     if (pathname.startsWith("/settings")) return true;

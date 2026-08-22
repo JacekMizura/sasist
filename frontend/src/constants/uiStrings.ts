@@ -59,7 +59,7 @@ const UI_STRINGS_DEFAULTS = {
     /** Sidebar category + fly-out root (Polish). */
     settingsCategory: "Ustawienia",
     administratorsNav: "Administratorzy",
-    wmsSettings: "Konfiguracja WMS",
+    wmsSettings: "Ustawienia WMS",
     /** Panel triage labels for returns list (not WMS workflow statuses). */
     returnPanelStatuses: "Zwroty — statusy panelu",
     /** Panel triage labels for orders list (not system `Order.status`). */

@@ -30,16 +30,26 @@ describe("Zarządzanie / Magazyn IA — flyouts SASIST", () => {
       "Strefa sortująca",
       "Nośniki",
       "Inwentaryzacja",
-      "Konfiguracja WMS",
       "Planer floty",
       "BDO",
       "Szkody",
       "Protokoły szkód",
     ]);
     expect(labels).not.toContain("Szablony etykiet");
+    expect(labels).not.toContain("Ustawienia WMS");
+    expect(labels).not.toContain("Konfiguracja WMS");
     expect(isCategoryActive(warehouse!, "/designer")).toBe(true);
     expect(isCategoryActive(warehouse!, "/inventory-count/dashboard")).toBe(true);
-    expect(isCategoryActive(warehouse!, "/settings/wms")).toBe(true);
+    expect(isCategoryActive(warehouse!, "/settings/wms")).toBe(false);
+  });
+
+  it("exposes Ustawienia WMS at the bottom of settings flyout", () => {
+    const settings = buildNavFlyoutCategories().find((c) => c.id === "settings");
+    expect(settings).toBeTruthy();
+    const labels = settings!.flyoutSections.flatMap((s) => s.items.map((i) => i.label));
+    expect(labels[labels.length - 1]).toBe("Ustawienia WMS");
+    expect(isCategoryActive(settings!, "/settings/wms")).toBe(true);
+    expect(isCategoryActive(settings!, "/settings/wms/workstations")).toBe(true);
   });
 
   it("keeps LabelSystem only under Szablony", () => {
