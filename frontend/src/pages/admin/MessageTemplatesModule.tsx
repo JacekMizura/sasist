@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 
 import PageLayout from "../../components/layout/PageLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
+import { ModuleListBreadcrumb } from "../../components/listPage/moduleList";
 import { PrimaryButton } from "../../design-system";
 import { useAuth } from "../../context/AuthContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
@@ -25,12 +26,31 @@ function MessageTemplatesShell({
   subtitle,
   actions,
   children,
+  embedded = false,
 }: {
   title: string;
   subtitle?: string;
   actions?: ReactNode;
   children: ReactNode;
+  embedded?: boolean;
 }) {
+  if (embedded) {
+    return (
+      <div className="space-y-4">
+        <ModuleListBreadcrumb
+          items={[{ label: "Poczta", to: "/poczta/korespondencja" }, { label: "Szablony" }]}
+        />
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-lg font-semibold text-slate-900">{title}</h1>
+            {subtitle ? <p className="text-sm text-slate-500">{subtitle}</p> : null}
+          </div>
+          {actions ? <div className="shrink-0">{actions}</div> : null}
+        </div>
+        <div className="max-w-4xl space-y-4">{children}</div>
+      </div>
+    );
+  }
   return (
     <PageLayout>
       <PageHeader title={title} subtitle={subtitle} actions={actions} />
@@ -39,7 +59,7 @@ function MessageTemplatesShell({
   );
 }
 
-function MessageTemplatesListPage() {
+function MessageTemplatesListPage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
   const [rows, setRows] = useState<MessageTemplateDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +86,7 @@ function MessageTemplatesListPage() {
 
   return (
     <MessageTemplatesShell
+      embedded={embedded}
       title="Szablony wiadomości"
       subtitle="Szablony e-mail używane przez automatyzacje (ORDER / RETURN / COMPLAINT)."
       actions={
@@ -207,10 +228,10 @@ function TemplateForm({
   );
 }
 
-function MessageTemplatesNewPage() {
+function MessageTemplatesNewPage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
   return (
-    <MessageTemplatesShell title="Nowy szablon wiadomości" subtitle="Szablon e-mail dla automatyzacji.">
+    <MessageTemplatesShell embedded={embedded} title="Nowy szablon wiadomości" subtitle="Szablon e-mail dla automatyzacji.">
       <Link to={BASE} className="text-sm font-medium text-slate-600 hover:text-slate-900">
         ← Wróć do listy
       </Link>
@@ -229,7 +250,7 @@ function MessageTemplatesNewPage() {
   );
 }
 
-function MessageTemplatesEditPage() {
+function MessageTemplatesEditPage({ embedded = false }: { embedded?: boolean }) {
   const { id } = useParams<{ id: string }>();
   const [row, setRow] = useState<MessageTemplateDto | null>(null);
 
@@ -242,7 +263,7 @@ function MessageTemplatesEditPage() {
   }, [id]);
 
   return (
-    <MessageTemplatesShell title="Edycja szablonu wiadomości" subtitle="Zmiany nie wpływają na już zlecone wiadomości w outboxie.">
+    <MessageTemplatesShell embedded={embedded} title="Edycja szablonu wiadomości" subtitle="Zmiany nie wpływają na już zlecone wiadomości w outboxie.">
       <Link to={BASE} className="text-sm font-medium text-slate-600 hover:text-slate-900">
         ← Wróć do listy
       </Link>
@@ -266,14 +287,14 @@ function MessageTemplatesEditPage() {
   );
 }
 
-/** Trasy: `/templates/messages` (+ legacy aliases). */
-export default function MessageTemplatesModule() {
+/** Trasy: `/poczta/szablony` (+ legacy `/templates/messages`). */
+export default function MessageTemplatesModule({ embedded = false }: { embedded?: boolean }) {
   useAuth();
   return (
     <Routes>
-      <Route index element={<MessageTemplatesListPage />} />
-      <Route path="new" element={<MessageTemplatesNewPage />} />
-      <Route path=":id/edit" element={<MessageTemplatesEditPage />} />
+      <Route index element={<MessageTemplatesListPage embedded={embedded} />} />
+      <Route path="new" element={<MessageTemplatesNewPage embedded={embedded} />} />
+      <Route path=":id/edit" element={<MessageTemplatesEditPage embedded={embedded} />} />
     </Routes>
   );
 }

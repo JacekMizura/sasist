@@ -1977,6 +1977,13 @@ def _upgrade_schema_background() -> None:
                 logging.getLogger(__name__).info(
                     "migrated legacy WMS module modes → permissions for %s profiles", n
                 )
+            from .services.mail.permission_backfill import backfill_mail_permissions_for_full_access_users
+
+            mail_perm_n = backfill_mail_permissions_for_full_access_users(_seed_db)
+            if mail_perm_n:
+                logging.getLogger(__name__).info(
+                    "backfilled mail module permissions for %s users", mail_perm_n
+                )
         finally:
             _seed_db.close()
     except Exception:

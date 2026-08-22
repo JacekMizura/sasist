@@ -13,7 +13,7 @@ describe("Poczta module Phase 1 UI", () => {
   it("defines canonical top tabs", () => {
     const tabs = read("modules/poczta/pocztaTabs.ts");
     expect(tabs).toContain("/poczta/korespondencja");
-    expect(tabs).toContain("/poczta/nadawcza");
+    expect(tabs).not.toContain("/poczta/nadawcza");
     expect(tabs).toContain("/poczta/konta");
     expect(tabs).toContain("/poczta/szablony");
   });

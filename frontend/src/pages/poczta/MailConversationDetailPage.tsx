@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 
 import { MessageTemplatePicker } from "../../components/messaging/MessageTemplatePicker";
+import { ModuleListBreadcrumb } from "../../components/listPage/moduleList";
 import { listSellasistInputClass } from "../../components/listPage/listSellasistTokens";
 import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { useAuth } from "../../context/AuthContext";
@@ -168,9 +169,13 @@ export default function MailConversationDetailPage() {
   if (!detail) {
     return (
       <div className="space-y-3">
-        <button type="button" className="inline-flex items-center gap-1 text-sm text-slate-600" onClick={() => navigate(-1)}>
-          <ArrowLeft className="h-4 w-4" /> Wróć
-        </button>
+        <ModuleListBreadcrumb
+          items={[
+            { label: "Poczta", to: "/poczta/korespondencja" },
+            { label: "Korespondencja", to: `/poczta/korespondencja?tenant_id=${tenantId}` },
+            { label: "Nie znaleziono" },
+          ]}
+        />
         <p className="text-sm text-red-600">{err || "Rozmowa nie istnieje."}</p>
       </div>
     );
@@ -179,15 +184,15 @@ export default function MailConversationDetailPage() {
   return (
     <div className="flex flex-col gap-4 lg:flex-row">
       <div className="min-w-0 flex-1 space-y-4">
-        <div className="flex flex-wrap items-start gap-3">
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 text-xs"
-            onClick={() => navigate(`/poczta/korespondencja?tenant_id=${tenantId}`)}
-          >
-            <ArrowLeft className="h-3.5 w-3.5" /> Wróć
-          </button>
-          <div className="min-w-0 flex-1">
+        <ModuleListBreadcrumb
+          items={[
+            { label: "Poczta", to: "/poczta/korespondencja" },
+            { label: "Korespondencja", to: `/poczta/korespondencja?tenant_id=${tenantId}` },
+            { label: detail.subject || `#${detail.conversation_id}` },
+          ]}
+        />
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
             <h1 className="text-lg font-semibold text-slate-900">{detail.subject}</h1>
             <p className="text-xs text-slate-500">
               {detail.customer.display_name || detail.customer.email || "—"}

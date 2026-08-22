@@ -8,6 +8,7 @@ import {
   moduleListThClass,
   moduleListTdClass,
   moduleTableCardClass,
+  ModuleListBreadcrumb,
 } from "../../components/listPage/moduleList";
 import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { useAuth } from "../../context/AuthContext";
@@ -102,6 +103,9 @@ export default function MailAccountsPage() {
 
   return (
     <div className="space-y-4">
+      <ModuleListBreadcrumb
+        items={[{ label: "Poczta", to: "/poczta/korespondencja" }, { label: "Konta pocztowe" }]}
+      />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold text-slate-900">Konta pocztowe</h1>

@@ -85,6 +85,10 @@ export type NavCategoryConfig = {
    * When set, click navigates here; hover does not open a panel.
    */
   directPath?: string;
+  /**
+   * When set, primary click on the sidebar category navigates here while hover still opens fly-out.
+   */
+  primaryClickPath?: string;
 };
 
 /** WMS entry CTA at bottom of sidebar (not a menu row). */
@@ -112,7 +116,7 @@ export const NAV_SIDEBAR_SECTIONS: NavSidebarSectionConfig[] = [
   {
     id: "sales",
     label: "Sprzedaż",
-    categoryIds: ["orders", "customers", "assortment", "documents"],
+    categoryIds: ["orders", "customers", "assortment", "documents", "poczta"],
   },
   {
     id: "operations",
@@ -187,13 +191,24 @@ export function buildNavFlyoutCategories(): NavCategoryConfig[] {
     label: "Poczta",
     Icon: Mail,
     activePathPrefix: "/poczta",
+    primaryClickPath: "/poczta/korespondencja",
     flyoutSections: [
       {
+        title: "POCZTA",
         items: [
           { path: "/poczta/korespondencja", label: "Korespondencja", Icon: Mail, permission: "mail.view" },
-          { path: "/poczta/nadawcza", label: "Skrzynka nadawcza", Icon: Mail, permission: "mail.view" },
-          { path: "/poczta/konta", label: "Konta pocztowe", Icon: Mail, permission: "mail.manage_accounts" },
-          { path: "/poczta/szablony", label: "Szablony", Icon: MessageSquare, permission: "mail.manage_templates" },
+          {
+            path: "/poczta/konta",
+            label: "Konta pocztowe",
+            Icon: Mail,
+            permissionsAny: ["mail.manage_accounts", "mail.view"],
+          },
+          {
+            path: "/poczta/szablony",
+            label: "Szablony",
+            Icon: MessageSquare,
+            permissionsAny: ["mail.manage_templates", "mail.view"],
+          },
         ],
       },
     ],

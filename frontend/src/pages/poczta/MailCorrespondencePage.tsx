@@ -6,6 +6,7 @@ import { AppEmptyState } from "../../components/app-shell";
 import { MailCorrespondenceSidebar } from "../../components/poczta/MailCorrespondenceSidebar";
 import { OperationalActionLink } from "../../components/operational";
 import {
+  ModuleListBreadcrumb,
   ModuleStatusSidebarShell,
   ModuleTableCard,
   moduleListContentColumnClass,
@@ -188,6 +189,9 @@ export default function MailCorrespondencePage() {
         onStatusDrawerOpenChange={setStatusDrawerOpen}
       />
       <div className={moduleListContentColumnClass}>
+        <ModuleListBreadcrumb
+          items={[{ label: "Poczta", to: "/poczta/korespondencja" }, { label: "Korespondencja" }]}
+        />
         <div className="mb-3 flex flex-wrap items-end gap-2">
           <label className="flex min-w-[12rem] flex-1 flex-col gap-1 text-xs text-slate-600">
             Szukaj

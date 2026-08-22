@@ -1,6 +1,6 @@
 import { useEffect, type LucideIcon } from "react";
 import { ChevronRight } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import {
   buildNavFlyoutCategories,
@@ -10,6 +10,8 @@ import {
   type NavCategoryConfig,
   type NavSidebarSectionConfig,
 } from "./mainNavConfig";
+import { categoryHasVisibleFlyoutItems, userCanSeePocztaNav } from "./navFlyoutAccess";
+import { useAuth } from "../context/AuthContext";
 import {
   ERP_SIDEBAR_ACTIVE_BAR,
   ERP_SIDEBAR_COLLAPSED_WIDTH_CLASS,
@@ -123,6 +125,7 @@ function SectionBlock({
   onTriggerEnter,
   onTriggerLeave,
   onTriggerClick,
+  onPrimaryNavigate,
 }: {
   section: NavSidebarSectionConfig;
   categories: NavCategoryConfig[];
@@ -132,10 +135,20 @@ function SectionBlock({
   onTriggerEnter: (id: string, el: HTMLElement) => void;
   onTriggerLeave: () => void;
   onTriggerClick: (id: string, el: HTMLElement) => void;
+  onPrimaryNavigate: (path: string) => void;
 }) {
+  const { hasPermission, user } = useAuth();
+  const role = user?.role;
   const items = section.categoryIds
     .map((id) => categoryById(id, categories))
-    .filter((c): c is NavCategoryConfig => c != null);
+    .filter((c): c is NavCategoryConfig => c != null)
+    .filter((cat) => {
+      if (cat.id === "poczta" && !userCanSeePocztaNav(hasPermission, role)) return false;
+      if (cat.flyoutSections.length > 0 && !categoryHasVisibleFlyoutItems(cat, hasPermission, role)) {
+        return false;
+      }
+      return true;
+    });
 
   if (items.length === 0) return null;
 
@@ -203,7 +216,14 @@ function SectionBlock({
               flyoutOpen={flyoutOpen}
               onMouseEnter={(e) => onTriggerEnter(cat.id, e.currentTarget)}
               onMouseLeave={onTriggerLeave}
-              onClick={(e) => onTriggerClick(cat.id, e.currentTarget)}
+              onClick={(e) => {
+                const primary = cat.primaryClickPath?.trim();
+                if (primary) {
+                  onPrimaryNavigate(primary);
+                  return;
+                }
+                onTriggerClick(cat.id, e.currentTarget);
+              }}
             />
           );
         })}
@@ -245,6 +265,7 @@ function WmsCtaButton({ collapsed }: { collapsed: boolean }) {
  */
 export default function ErpSidebar() {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   useLabels();
   const navCategories = buildNavFlyoutCategories();
   const { collapsed } = useErpSidebarUi();
@@ -291,6 +312,7 @@ export default function ErpSidebar() {
                   onTriggerEnter={(id, el) => onTriggerEnter(id, el)}
                   onTriggerLeave={onTriggerLeave}
                   onTriggerClick={(id, el) => onTriggerClick(id, el)}
+                  onPrimaryNavigate={(path) => navigate(path)}
                 />
               ))}
             </div>
