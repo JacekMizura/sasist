@@ -8,17 +8,18 @@ import {
   reorderOrderPanelSubgroups,
   updateOrderPanelSubgroup,
 } from "../../api/orderUiStatusApi";
+import { stCard, stCardBody, stCardHead } from "../../components/settings/panelUiStatusSettingsStyles";
 import {
-  stBtnDanger,
-  stBtnPrimary,
-  stCard,
-  stCardBody,
-  stCardHead,
-  stFieldLabel,
-  stIconBtn,
-  stInput,
-  stSelect,
-} from "../../components/settings/panelUiStatusSettingsStyles";
+  DangerButton,
+  FORM_FIELD_DENSITY,
+  FormField,
+  GhostButton,
+  IconButton,
+  Input,
+  PrimaryButton,
+  SecondaryButton,
+  Select,
+} from "@/design-system";
 import type { OrderUiMainGroup, OrderUiPanelSubgroupRead } from "../../types/orderUiStatus";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 
@@ -142,23 +143,30 @@ export function OrderPanelSubgroupsManager({ warehouseId, onChanged }: Props) {
           <p className="mt-0.5 text-xs text-slate-500">Nazwy wybierzesz potem na liście statusów zamiast wpisywać ręcznie.</p>
         </div>
         <div className={`${stCardBody} flex flex-wrap items-end gap-3`}>
-          <label className="min-w-[10rem]">
-            <span className={stFieldLabel}>Grupa główna</span>
-            <select value={newMg} onChange={(e) => setNewMg(e.target.value as OrderUiMainGroup)} className={stSelect}>
+          <FormField label="Grupa główna" className="min-w-[10rem]">
+            <Select
+              density={FORM_FIELD_DENSITY}
+              value={newMg}
+              onChange={(e) => setNewMg(e.target.value as OrderUiMainGroup)}
+            >
               {GROUP_ORDER.map((g) => (
                 <option key={g} value={g}>
                   {GROUP_LABELS[g]}
                 </option>
               ))}
-            </select>
-          </label>
-          <label className="min-w-[12rem] flex-1">
-            <span className={stFieldLabel}>Nazwa podgrupy</span>
-            <input value={newName} onChange={(e) => setNewName(e.target.value)} className={stInput} placeholder="np. Zbieranie WMS" />
-          </label>
-          <button type="button" className={stBtnPrimary} onClick={() => void onAdd()}>
+            </Select>
+          </FormField>
+          <FormField label="Nazwa podgrupy" className="min-w-[12rem] flex-1">
+            <Input
+              density={FORM_FIELD_DENSITY}
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="np. Zbieranie WMS"
+            />
+          </FormField>
+          <PrimaryButton type="button" onClick={() => void onAdd()}>
             Dodaj
-          </button>
+          </PrimaryButton>
         </div>
       </div>
 
@@ -178,54 +186,53 @@ export function OrderPanelSubgroupsManager({ warehouseId, onChanged }: Props) {
                   <li key={r.id} className="flex flex-wrap items-center gap-2 py-2 first:pt-0 last:pb-0">
                     {editingId === r.id ? (
                       <>
-                        <input className={`${stInput} max-w-xs`} value={editName} onChange={(e) => setEditName(e.target.value)} />
-                        <button type="button" className={stBtnPrimary} onClick={() => void onSaveEdit(r.id)}>
+                        <Input
+                          density={FORM_FIELD_DENSITY}
+                          className="max-w-xs"
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                        />
+                        <PrimaryButton type="button" onClick={() => void onSaveEdit(r.id)}>
                           Zapisz
-                        </button>
-                        <button
-                          type="button"
-                          className="text-sm text-slate-600 hover:text-slate-900"
-                          onClick={() => setEditingId(null)}
-                        >
+                        </PrimaryButton>
+                        <GhostButton type="button" onClick={() => setEditingId(null)}>
                           Anuluj
-                        </button>
+                        </GhostButton>
                       </>
                     ) : (
                       <>
                         <span className="min-w-0 flex-1 font-medium text-slate-800">{r.name}</span>
                         <div className="flex items-center gap-0.5">
-                          <button
+                          <IconButton
                             type="button"
-                            className={stIconBtn}
                             disabled={idx === 0}
                             title="Wyżej"
                             onClick={() => void move(mg, r.id, "up")}
                           >
                             <ChevronUp className="h-4 w-4" />
-                          </button>
-                          <button
+                          </IconButton>
+                          <IconButton
                             type="button"
-                            className={stIconBtn}
                             disabled={idx >= byGroup[mg].length - 1}
                             title="Niżej"
                             onClick={() => void move(mg, r.id, "down")}
                           >
                             <ChevronDown className="h-4 w-4" />
-                          </button>
+                          </IconButton>
                         </div>
-                        <button
+                        <SecondaryButton
                           type="button"
-                          className="rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          density="compact"
                           onClick={() => {
                             setEditingId(r.id);
                             setEditName(r.name);
                           }}
                         >
                           Zmień nazwę
-                        </button>
-                        <button type="button" className={stBtnDanger} onClick={() => void onDelete(r.id)}>
+                        </SecondaryButton>
+                        <DangerButton type="button" density="compact" onClick={() => void onDelete(r.id)}>
                           Usuń
-                        </button>
+                        </DangerButton>
                       </>
                     )}
                   </li>

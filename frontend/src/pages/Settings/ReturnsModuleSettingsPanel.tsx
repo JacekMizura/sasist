@@ -8,7 +8,7 @@ import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { ReturnDetailLayoutEditor } from "./ReturnDetailLayoutEditor";
 import { ReturnsDictionariesConfigurator } from "./returnsDictionariesConfigurator/ReturnsDictionariesConfigurator";
 import { ReturnsStatusesConfigurator } from "./returnsStatusesConfigurator/ReturnsStatusesConfigurator";
-import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+import { PrimaryButton } from "@/design-system";
 
 export type ReturnsModuleSettingsTabId = "statusy" | "slowniki" | "konfigurator";
 
@@ -80,14 +80,13 @@ export default function ReturnsModuleSettingsPanel({ warehouseId, activeTab }: P
     ) : (
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-5">
         <p className="text-sm text-slate-500">{dirty ? "Masz niezapisane zmiany." : "Zsynchronizowano z serwerem."}</p>
-        <button
+        <PrimaryButton
           type="button"
           disabled={!dirty || saving || loading || draft == null}
-          className={brandPrimaryButtonClass}
           onClick={() => void saveCfg()}
         >
           {saving ? "Zapisywanie…" : "Zapisz konfigurację zwrotów"}
-        </button>
+        </PrimaryButton>
       </div>
     );
 

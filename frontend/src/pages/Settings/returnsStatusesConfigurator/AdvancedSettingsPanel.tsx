@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { FORM_FIELD_DENSITY, FormField, Input } from "@/design-system";
 
 type Props = {
   children: ReactNode;
@@ -20,9 +21,6 @@ export function IntegrationsApiPanel({ children, title = "⋯ Opcje techniczne" 
 /** @deprecated */
 export const AdvancedSettingsPanel = IntegrationsApiPanel;
 
-const lab = "block text-xs font-medium text-slate-600";
-const inp = "mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-slate-800";
-
 export function IntegrationsCodeField({
   label,
   value,
@@ -35,11 +33,15 @@ export function IntegrationsCodeField({
   hint?: string;
 }) {
   return (
-    <label className={lab}>
-      {label}
-      <input className={inp} value={value} spellCheck={false} onChange={(e) => onChange(e.target.value)} />
-      {hint ? <p className="mt-1 text-[11px] leading-snug text-slate-500">{hint}</p> : null}
-    </label>
+    <FormField label={label} helperText={hint}>
+      <Input
+        density={FORM_FIELD_DENSITY}
+        className="font-mono text-xs"
+        value={value}
+        spellCheck={false}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </FormField>
   );
 }
 

@@ -4,7 +4,7 @@ import api from "../../api/axios";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { ShippingMethodLogo } from "../../components/shipping/ShippingMethodLogo";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
-import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+import { GhostButton, PrimaryButton } from "@/design-system";
 import { AppOverlayPortal } from "../../components/overlay";
 import {
   mergeShippingMethodsRows,
@@ -369,22 +369,12 @@ export default function ShippingMethodsSettingsPage() {
               </label>
             </div>
             <div className="mt-6 flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4">
-              <button
-                type="button"
-                onClick={closeModal}
-                disabled={saving}
-                className="border-2 border-slate-400 bg-white px-4 py-2 text-sm font-bold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
-              >
+              <GhostButton type="button" onClick={closeModal} disabled={saving}>
                 Anuluj
-              </button>
-              <button
-                type="button"
-                onClick={() => void save()}
-                disabled={saving}
-                className={brandPrimaryButtonClass}
-              >
+              </GhostButton>
+              <PrimaryButton type="button" onClick={() => void save()} disabled={saving}>
                 {saving ? "Zapisywanie…" : "Zapisz"}
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>

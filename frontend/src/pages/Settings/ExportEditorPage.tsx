@@ -12,7 +12,16 @@ import { csvFieldLabelPl, entityTypeLabelPl } from "../../utils/exportImportLabe
 import { EXPORT_FIELD_SECTIONS } from "../../utils/exportFieldSections";
 import PageLayout from "../../components/layout/PageLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
-import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+import {
+  Checkbox,
+  FORM_FIELD_DENSITY,
+  FormField,
+  Input,
+  PrimaryButton,
+  SearchInput,
+  SecondaryButton,
+  Select,
+} from "@/design-system";
 
 const TENANT_ID = 1;
 
@@ -190,20 +199,18 @@ export default function ExportEditorPage() {
       {err && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{err}</div>}
 
       <div className="mt-4 space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <label className="block text-sm">
-          <span className="font-medium text-slate-700">Nazwa szablonu</span>
-          <input
-            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+        <FormField label="Nazwa szablonu">
+          <Input
+            density={FORM_FIELD_DENSITY}
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="np. Produkty — pełny"
           />
-        </label>
+        </FormField>
 
-        <label className="block text-sm">
-          <span className="font-medium text-slate-700">Typ encji</span>
-          <select
-            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+        <FormField label="Typ encji">
+          <Select
+            density={FORM_FIELD_DENSITY}
             value={entityType}
             onChange={(e) => {
               const nt = e.target.value as ExportEntityType;
@@ -221,8 +228,8 @@ export default function ExportEditorPage() {
                 {entityTypeLabelPl(t)}
               </option>
             ))}
-          </select>
-        </label>
+          </Select>
+        </FormField>
 
         {entityType === "label_templates" ? (
           <fieldset className="space-y-2 border-t border-slate-100 pt-4">
@@ -244,9 +251,8 @@ export default function ExportEditorPage() {
                         key={r.id}
                         className="flex cursor-pointer items-start gap-3 rounded-md px-2 py-2 text-sm hover:bg-white"
                       >
-                        <input
-                          type="checkbox"
-                          className="mt-0.5 rounded border-slate-300"
+                        <Checkbox
+                          className="mt-0.5"
                           checked={fields.includes(sid)}
                           onChange={() => toggleField(sid)}
                         />
@@ -266,28 +272,18 @@ export default function ExportEditorPage() {
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <legend className="text-sm font-semibold text-slate-800">Pola w pliku CSV</legend>
               <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                  onClick={selectAllVisible}
-                >
+                <SecondaryButton type="button" density="compact" onClick={selectAllVisible}>
                   Zaznacz widoczne
-                </button>
-                <button
-                  type="button"
-                  className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                  onClick={clearVisible}
-                >
+                </SecondaryButton>
+                <SecondaryButton type="button" density="compact" onClick={clearVisible}>
                   Wyczyść widoczne
-                </button>
+                </SecondaryButton>
               </div>
             </div>
-            <input
-              type="search"
+            <SearchInput
               value={fieldSearch}
               onChange={(e) => setFieldSearch(e.target.value)}
               placeholder="Szukaj pola…"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
             />
             <div className="space-y-4">
               {fieldSections.length === 0 ? (
@@ -302,9 +298,8 @@ export default function ExportEditorPage() {
                           key={f}
                           className="flex cursor-pointer items-start gap-3 rounded-md border border-transparent px-2 py-1.5 hover:border-slate-200 hover:bg-white"
                         >
-                          <input
-                            type="checkbox"
-                            className="mt-0.5 rounded border-slate-300"
+                          <Checkbox
+                            className="mt-0.5"
                             checked={fields.includes(f)}
                             onChange={() => toggleField(f)}
                           />
@@ -320,7 +315,7 @@ export default function ExportEditorPage() {
         )}
 
         <label className="flex items-center gap-2 border-t border-slate-100 pt-4 text-sm text-slate-700">
-          <input type="checkbox" className="rounded border-slate-300" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+          <Checkbox checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
           Aktywny (dostępny na listach i w modalu eksportu)
         </label>
 
@@ -328,14 +323,9 @@ export default function ExportEditorPage() {
           <Link to="/templates/exports" className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium hover:bg-slate-50">
             Anuluj
           </Link>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={save}
-            className={brandPrimaryButtonClass}
-          >
+          <PrimaryButton type="button" disabled={saving} onClick={save}>
             {saving ? "Zapisywanie…" : isNew ? "Utwórz" : "Zapisz"}
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </PageLayout>

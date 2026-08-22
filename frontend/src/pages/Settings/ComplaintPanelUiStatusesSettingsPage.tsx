@@ -24,6 +24,16 @@ import { DocumentTemplateScopeSection } from "../Settings/document-templates/com
 import { COMPLAINTS_SCOPE_KINDS } from "../Settings/document-templates/documentTemplateScopeKinds";
 import { StatusActionsPanel } from "../../components/settings/StatusActionsPanel";
 import { STATUS_ACTION_EDIT_QUERY } from "../../utils/statusActionDeepLink";
+import {
+  DangerButton,
+  FORM_FIELD_DENSITY,
+  FormField,
+  FormLabel,
+  Input,
+  PrimaryButton,
+  SecondaryButton,
+  Select,
+} from "@/design-system";
 
 const GROUP_ORDER: ComplaintUiMainGroup[] = ["NEW", "IN_PROGRESS", "DONE"];
 
@@ -219,44 +229,36 @@ export default function ComplaintPanelUiStatusesSettingsPage() {
       <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <h2 className="text-sm font-semibold text-gray-900">Nowy podstatus</h2>
         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-          <label className="block w-full min-w-[10rem] sm:w-44 text-sm">
-            <span className="text-gray-600">Grupa główna</span>
-            <select
+          <FormField label="Grupa główna" className="w-full min-w-[10rem] sm:w-44">
+            <Select
+              density={FORM_FIELD_DENSITY}
               value={newMainGroup}
               onChange={(e) => setNewMainGroup(e.target.value as ComplaintUiMainGroup)}
-              className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
             >
               {GROUP_ORDER.map((g) => (
                 <option key={g} value={g}>
                   {GROUP_LABELS[g]}
                 </option>
               ))}
-            </select>
-          </label>
-          <label className="block min-w-[12rem] flex-1 text-sm">
-            <span className="text-gray-600">Nazwa</span>
-            <input
-              type="text"
+            </Select>
+          </FormField>
+          <FormField label="Nazwa" className="min-w-[12rem] flex-1">
+            <Input
+              density={FORM_FIELD_DENSITY}
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
               placeholder="np. Eskalacja"
             />
-          </label>
+          </FormField>
           <div className="block w-full min-w-[12rem] sm:w-auto text-sm">
-            <span className="text-gray-600">Kolor (#RRGGBB)</span>
+            <FormLabel>Kolor (#RRGGBB)</FormLabel>
             <div className="mt-1">
               <HexColorField value={newColor} onChange={setNewColor} id="new-complaint-ui-color" />
             </div>
           </div>
-          <button
-            type="button"
-            disabled={creating || !newName.trim()}
-            onClick={() => void onCreate()}
-            className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50"
-          >
+          <PrimaryButton type="button" disabled={creating || !newName.trim()} onClick={() => void onCreate()}>
             Dodaj
-          </button>
+          </PrimaryButton>
         </div>
         <div className="mt-6 border-t border-gray-100 pt-4">
           <PanelStatusConfiguratorAside
@@ -315,7 +317,9 @@ export default function ComplaintPanelUiStatusesSettingsPage() {
                               {isEdit ? (
                                 <>
                                   <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                                    <select
+                                    <Select
+                                      density="compact"
+                                      className="w-full max-w-xs"
                                       value={editDraft.main_group ?? r.main_group}
                                       onChange={(e) =>
                                         setEditDraft((d) => ({
@@ -323,31 +327,31 @@ export default function ComplaintPanelUiStatusesSettingsPage() {
                                           main_group: e.target.value as ComplaintUiMainGroup,
                                         }))
                                       }
-                                      className="w-full max-w-xs rounded border border-gray-200 px-2 py-1 text-sm"
                                     >
                                       {GROUP_ORDER.map((og) => (
                                         <option key={og} value={og}>
                                           {GROUP_LABELS[og]}
                                         </option>
                                       ))}
-                                    </select>
-                                    <input
-                                      type="text"
+                                    </Select>
+                                    <Input
+                                      density="compact"
+                                      className="w-full max-w-xs"
                                       value={editDraft.name ?? ""}
                                       onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))}
-                                      className="w-full max-w-xs rounded border border-gray-200 px-2 py-1 text-sm"
                                     />
                                     <HexColorField
                                       value={editDraft.color ?? r.color}
                                       onChange={(hex) => setEditDraft((d) => ({ ...d, color: hex }))}
                                     />
-                                    <input
+                                    <Input
                                       type="number"
+                                      density="compact"
+                                      className="w-24"
                                       value={editDraft.sort_order ?? 0}
                                       onChange={(e) =>
                                         setEditDraft((d) => ({ ...d, sort_order: Number(e.target.value) }))
                                       }
-                                      className="w-24 rounded border border-gray-200 px-2 py-1 text-sm"
                                       title="Kolejność sortowania"
                                     />
                                   </div>
@@ -401,37 +405,21 @@ export default function ComplaintPanelUiStatusesSettingsPage() {
                             <div className="flex shrink-0 gap-2">
                               {isEdit ? (
                                 <>
-                                  <button
-                                    type="button"
-                                    className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
-                                    onClick={cancelEdit}
-                                  >
+                                  <SecondaryButton type="button" density="compact" onClick={cancelEdit}>
                                     Anuluj
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-semibold text-white hover:bg-gray-800"
-                                    onClick={() => void saveEdit(r.id)}
-                                  >
+                                  </SecondaryButton>
+                                  <PrimaryButton type="button" density="compact" onClick={() => void saveEdit(r.id)}>
                                     Zapisz
-                                  </button>
+                                  </PrimaryButton>
                                 </>
                               ) : (
                                 <>
-                                  <button
-                                    type="button"
-                                    className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
-                                    onClick={() => startEdit(r)}
-                                  >
+                                  <SecondaryButton type="button" density="compact" onClick={() => startEdit(r)}>
                                     Edytuj
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-800 hover:bg-red-50"
-                                    onClick={() => void onDelete(r.id)}
-                                  >
+                                  </SecondaryButton>
+                                  <DangerButton type="button" density="compact" onClick={() => void onDelete(r.id)}>
                                     Usuń
-                                  </button>
+                                  </DangerButton>
                                 </>
                               )}
                             </div>

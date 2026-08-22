@@ -1,5 +1,14 @@
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
-import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
+import {
+  Checkbox,
+  DangerButton,
+  FORM_FIELD_DENSITY,
+  FormField,
+  GhostButton,
+  Input,
+  PrimaryButton,
+  Select,
+} from "@/design-system";
 import { Pencil, Plus } from "lucide-react";
 
 import type {
@@ -288,35 +297,33 @@ function DamageClassModal({
       footer={
         <>
           {mode === "edit" && onDelete ? (
-            <button type="button" className="mr-auto rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50" onClick={onDelete}>
+            <DangerButton type="button" density="compact" className="mr-auto" onClick={onDelete}>
               Usuń grupę
-            </button>
+            </DangerButton>
           ) : null}
-          <button type="button" className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100" onClick={onClose}>
+          <GhostButton type="button" onClick={onClose}>
             Anuluj
-          </button>
-          <button
+          </GhostButton>
+          <PrimaryButton
             type="button"
             disabled={!draft.label.trim()}
-            className={brandPrimaryButtonClass}
             onClick={() => onSave({ ...draft, label: draft.label.trim() }, mode, row)}
           >
             Zapisz
-          </button>
+          </PrimaryButton>
         </>
       }
     >
       <div className="space-y-4">
-        <label className="block text-xs font-medium text-slate-600">
-          Nazwa grupy
-          <input
-            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+        <FormField label="Nazwa grupy">
+          <Input
+            density={FORM_FIELD_DENSITY}
             value={draft.label}
             placeholder="np. Lekkie uszkodzenia, Towar pełnowartościowy"
             onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))}
             autoFocus
           />
-        </label>
+        </FormField>
         <label className="block text-xs font-medium text-slate-600">
           Kolor
           <input
@@ -327,18 +334,18 @@ function DamageClassModal({
           />
         </label>
         <label className="flex items-center gap-2 text-sm text-slate-700">
-          <input type="checkbox" checked={draft.is_active} onChange={(e) => setDraft((d) => ({ ...d, is_active: e.target.checked }))} />
+          <Checkbox checked={draft.is_active} onChange={(e) => setDraft((d) => ({ ...d, is_active: e.target.checked }))} />
           Aktywna
         </label>
 
         <IntegrationsApiPanel>
           <IntegrationsCodeField label="Kod grupy (class_code)" value={draft.code} onChange={(v) => setDraft((d) => ({ ...d, code: v.trim() }))} />
           <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input type="checkbox" checked={draft.visible_wms} onChange={(e) => setDraft((d) => ({ ...d, visible_wms: e.target.checked }))} />
+            <Checkbox checked={draft.visible_wms} onChange={(e) => setDraft((d) => ({ ...d, visible_wms: e.target.checked }))} />
             {WMS_VISIBILITY_LABEL}
           </label>
           <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input type="checkbox" checked={draft.resale_allowed} onChange={(e) => setDraft((d) => ({ ...d, resale_allowed: e.target.checked }))} />
+            <Checkbox checked={draft.resale_allowed} onChange={(e) => setDraft((d) => ({ ...d, resale_allowed: e.target.checked }))} />
             Produkt może wrócić do sprzedaży
           </label>
         </IntegrationsApiPanel>
@@ -385,39 +392,36 @@ function DamageReasonModal({
       footer={
         <>
           {mode === "edit" && onDelete ? (
-            <button type="button" className="mr-auto rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50" onClick={onDelete}>
+            <DangerButton type="button" density="compact" className="mr-auto" onClick={onDelete}>
               Usuń
-            </button>
+            </DangerButton>
           ) : null}
-          <button type="button" className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100" onClick={onClose}>
+          <GhostButton type="button" onClick={onClose}>
             Anuluj
-          </button>
-          <button
+          </GhostButton>
+          <PrimaryButton
             type="button"
             disabled={!draft.label.trim()}
-            className={brandPrimaryButtonClass}
             onClick={() => onSave({ ...draft, label: draft.label.trim() }, mode, row)}
           >
             Zapisz
-          </button>
+          </PrimaryButton>
         </>
       }
     >
       <div className="space-y-4">
-        <label className="block text-xs font-medium text-slate-600">
-          Nazwa
-          <input
-            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+        <FormField label="Nazwa">
+          <Input
+            density={FORM_FIELD_DENSITY}
             value={draft.label}
             placeholder="np. Rysy, Brak metki"
             onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))}
             autoFocus
           />
-        </label>
-        <label className="block text-xs font-medium text-slate-600">
-          Grupa
-          <select
-            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+        </FormField>
+        <FormField label="Grupa">
+          <Select
+            density={FORM_FIELD_DENSITY}
             value={draft.class_code}
             onChange={(e) => setDraft((d) => ({ ...d, class_code: e.target.value }))}
           >
@@ -426,8 +430,8 @@ function DamageReasonModal({
                 {c.label || c.code}
               </option>
             ))}
-          </select>
-        </label>
+          </Select>
+        </FormField>
         {mode === "create" ? (
           <p className="text-xs text-slate-500">Aktywność i widoczność ustawisz na kafelku po zapisaniu.</p>
         ) : null}

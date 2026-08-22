@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
-
 import { CompactLabelColorPicker } from "../../../components/label/CompactLabelColorPicker";
 import { PanelStatusConfiguratorAside } from "../../../components/settings/PanelStatusConfiguratorAside";
 import { DEFAULT_PANEL_STATUS_HEX } from "../../../components/panel/HexColorField";
@@ -18,9 +16,16 @@ import { RETURN_MAIN_GROUP_LABELS, RETURN_MAIN_GROUP_ORDER } from "./constants";
 import { ReturnsConfiguratorModalShell } from "./ReturnsConfiguratorModalShell";
 import { IntegrationsApiPanel } from "./AdvancedSettingsPanel";
 import { StatusActionsPanel } from "../../../components/settings/StatusActionsPanel";
-
-const inp = "mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300";
-const lab = "block text-xs font-medium text-slate-600";
+import {
+  Checkbox,
+  FORM_FIELD_DENSITY,
+  FormField,
+  FormLabel,
+  GhostButton,
+  Input,
+  PrimaryButton,
+  Select,
+} from "@/design-system";
 
 type Props = {
   open: boolean;
@@ -197,25 +202,19 @@ export function ReturnUiStatusModal({
       aside={previewAside}
       footer={
         <>
-          <button type="button" disabled={busy} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100" onClick={onClose}>
+          <GhostButton type="button" disabled={busy} onClick={onClose}>
             Anuluj
-          </button>
-          <button
-            type="button"
-            disabled={busy || !name.trim()}
-            className={brandPrimaryButtonClass}
-            onClick={() => void handleSave()}
-          >
+          </GhostButton>
+          <PrimaryButton type="button" disabled={busy || !name.trim()} onClick={() => void handleSave()}>
             {busy ? "Zapisywanie…" : "Zapisz"}
-          </button>
+          </PrimaryButton>
         </>
       }
     >
       <div className="space-y-4">
-        <label className={lab}>
-          Nazwa statusu
-          <input
-            className={inp}
+        <FormField label="Nazwa statusu">
+          <Input
+            density={FORM_FIELD_DENSITY}
             value={name}
             onChange={(e) =>
               mode === "create"
@@ -223,12 +222,11 @@ export function ReturnUiStatusModal({
                 : setEditDraft((d) => ({ ...d, name: e.target.value }))
             }
           />
-        </label>
+        </FormField>
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className={lab}>
-            Grupa główna
-            <select
-              className={inp}
+          <FormField label="Grupa główna">
+            <Select
+              density={FORM_FIELD_DENSITY}
               value={mg}
               onChange={(e) => {
                 const next = e.target.value as ReturnUiMainGroup;
@@ -241,12 +239,11 @@ export function ReturnUiStatusModal({
                   {RETURN_MAIN_GROUP_LABELS[g]}
                 </option>
               ))}
-            </select>
-          </label>
-          <label className={lab}>
-            Podgrupa
-            <select
-              className={inp}
+            </Select>
+          </FormField>
+          <FormField label="Podgrupa">
+            <Select
+              density={FORM_FIELD_DENSITY}
               value={subVal}
               onChange={(e) => {
                 const v = e.target.value.trim() || null;
@@ -260,11 +257,11 @@ export function ReturnUiStatusModal({
                   {sg.name}
                 </option>
               ))}
-            </select>
-          </label>
+            </Select>
+          </FormField>
         </div>
         <div>
-          <span className={lab}>Kolory</span>
+          <FormLabel>Kolory</FormLabel>
           <div className="mt-2 flex flex-wrap gap-4">
             <CompactLabelColorPicker
               label="Pasek"
@@ -293,9 +290,7 @@ export function ReturnUiStatusModal({
         </div>
         <div className="flex flex-wrap items-center gap-6">
           <label className="inline-flex items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              className="rounded border-slate-300"
+            <Checkbox
               checked={mode === "create" ? createDraft.is_active !== false : editDraft.is_active !== false}
               onChange={(e) =>
                 mode === "create"
@@ -307,11 +302,11 @@ export function ReturnUiStatusModal({
           </label>
         </div>
         <IntegrationsApiPanel>
-          <label className={lab}>
-            Kolejność na liście
-            <input
+          <FormField label="Kolejność na liście">
+            <Input
               type="number"
-              className={`${inp} max-w-[8rem]`}
+              density={FORM_FIELD_DENSITY}
+              className="max-w-[8rem]"
               value={mode === "create" ? createDraft.sort_status ?? 0 : editDraft.sort_status ?? editDraft.sort_order ?? 0}
               onChange={(e) => {
                 const n = Number(e.target.value);
@@ -319,11 +314,11 @@ export function ReturnUiStatusModal({
                 else setEditDraft((d) => ({ ...d, sort_status: n, sort_order: n }));
               }}
             />
-          </label>
+          </FormField>
         </IntegrationsApiPanel>
         {mode === "edit" && status && onUploadImage ? (
           <div>
-            <span className={lab}>Logo (opcjonalnie)</span>
+            <FormLabel>Logo (opcjonalnie)</FormLabel>
             <div className="mt-2 flex flex-wrap items-center gap-3">
               {imageUrl ? <img src={imageUrl} alt="" className="h-10 w-10 rounded object-contain" /> : null}
               <label className="cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">

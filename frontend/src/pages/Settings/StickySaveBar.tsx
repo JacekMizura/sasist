@@ -1,4 +1,4 @@
-import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+import { GhostButton, PrimaryButton } from "@/design-system";
 
 type StickySaveBarProps = {
   saving?: boolean;
@@ -34,22 +34,12 @@ export default function StickySaveBar({
           <div className="flex min-h-[64px] flex-wrap items-center justify-between gap-3 px-6 py-3">
             <div className="min-w-0 text-sm font-medium text-amber-700">Masz niezapisane zmiany</div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
-              <button
-                type="button"
-                className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-                disabled={saving}
-                onClick={onCancel}
-              >
+              <GhostButton type="button" disabled={saving} onClick={onCancel}>
                 Anuluj
-              </button>
-              <button
-                type="button"
-                className={brandPrimaryButtonClass}
-                disabled={saving}
-                onClick={onSave}
-              >
+              </GhostButton>
+              <PrimaryButton type="button" disabled={saving} onClick={onSave}>
                 {saving ? "Zapisywanie…" : "Zapisz"}
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>

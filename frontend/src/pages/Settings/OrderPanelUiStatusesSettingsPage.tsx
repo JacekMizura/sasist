@@ -18,15 +18,6 @@ import { PanelStatusConfiguratorAside } from "../../components/settings/PanelSta
 import { StatusActionsPanel } from "../../components/settings/StatusActionsPanel";
 import { OrderUiStatusConfigRowPresent } from "../../components/orders/orderList/OrderUiStatusConfigRowPresent";
 import { usePanelStatusCounterColor } from "../../hooks/usePanelStatusCounterColor";
-import {
-  stBtnDanger,
-  stBtnGhost,
-  stBtnPrimary,
-  stFieldLabel,
-  stIconBtn,
-  stInput,
-  stSelect,
-} from "../../components/settings/panelUiStatusSettingsStyles";
 import { useWarehouse } from "../../context/WarehouseContext";
 import { DEFAULT_PANEL_STATUS_HEX, isValidPanelStatusHex } from "../../components/panel/HexColorField";
 import type { OrderUiMainGroup, OrderUiStatusRead, OrderUiStatusUpdatePayload, OrderUiStatusWithCount } from "../../types/orderUiStatus";
@@ -34,7 +25,18 @@ import PageLayout from "../../components/layout/PageLayout";
 import { OrderPanelSubgroupsManager } from "./OrderPanelSubgroupsManager";
 import { partitionStatusesBySubgroupForSettings, subgroupSectionTitle } from "../../utils/panelUiStatusSettingsTree";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
-import { PrimaryButton } from "../../design-system/PrimaryButton";
+import {
+  Checkbox,
+  DangerButton,
+  FORM_FIELD_DENSITY,
+  FormField,
+  FormLabel,
+  IconButton,
+  Input,
+  PrimaryButton,
+  SecondaryButton,
+  Select,
+} from "@/design-system";
 
 const GROUP_ORDER: OrderUiMainGroup[] = ["NEW", "IN_PROGRESS", "DONE"];
 
@@ -358,9 +360,9 @@ export default function OrderPanelUiStatusesSettingsPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <div className="space-y-4 col-span-2">
               <div className="grid grid-cols-2 gap-4">
-                <label className="space-y-1.5 min-w-0">
-                  <span className={stFieldLabel}>Grupa główna</span>
-                  <select
+                <FormField label="Grupa główna">
+                  <Select
+                    density={FORM_FIELD_DENSITY}
                     disabled={isSystem}
                     value={mgEdit}
                     onChange={(e) => {
@@ -373,24 +375,25 @@ export default function OrderPanelUiStatusesSettingsPage() {
                         return { ...d, main_group: nextMg, subgroup_name: nextSub };
                       });
                     }}
-                    className={stSelect}
                   >
                     {GROUP_ORDER.map((og) => (
                       <option key={og} value={og}>
                         {GROUP_LABELS[og]}
                       </option>
                     ))}
-                  </select>
-                </label>
-                <label className="space-y-1.5 min-w-0">
-                  <span className={stFieldLabel}>Podgrupa</span>
-                  <select
+                  </Select>
+                </FormField>
+                <FormField
+                  label="Podgrupa"
+                  helperText={subOpts.length === 0 ? "Brak podgrup — dodaj w kolumnie obok." : undefined}
+                >
+                  <Select
+                    density={FORM_FIELD_DENSITY}
                     value={subVal}
                     onChange={(e) => {
                       const v = e.target.value.trim();
                       setEditDraft((d) => ({ ...d, subgroup_name: v || null }));
                     }}
-                    className={stSelect}
                   >
                     <option value="">Bez przypisania</option>
                     {subOpts.map((sg) => (
@@ -401,23 +404,21 @@ export default function OrderPanelUiStatusesSettingsPage() {
                     {subVal && !subOpts.some((sg) => sg.name === subVal) ? (
                       <option value={subVal}>{subVal} (spoza słownika)</option>
                     ) : null}
-                  </select>
-                  {subOpts.length === 0 ? <p className="mt-1 text-[10px] text-slate-500">Brak podgrup — dodaj w kolumnie obok.</p> : null}
-                </label>
+                  </Select>
+                </FormField>
               </div>
 
-              <label className="space-y-1.5 min-w-0 block">
-                <span className={stFieldLabel}>Nazwa statusu</span>
-                <input
+              <FormField label="Nazwa statusu">
+                <Input
+                  density={FORM_FIELD_DENSITY}
                   value={editDraft.name ?? ""}
                   onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))}
-                  className={stInput}
                   placeholder="np. Pilne"
                 />
-              </label>
+              </FormField>
 
               <div>
-                <span className={stFieldLabel}>Logo</span>
+                <FormLabel>Logo</FormLabel>
                 <div className="mt-2 flex flex-wrap items-end gap-3">
                   {previewImg ? (
                     <div className="flex flex-col items-start gap-1.5 rounded-md border border-slate-200 bg-white p-2">
@@ -432,9 +433,9 @@ export default function OrderPanelUiStatusesSettingsPage() {
                             onChange={(e) => void onUploadImage(r.id, e.target.files?.[0] ?? null)}
                           />
                         </label>
-                        <button type="button" className={stBtnDanger} onClick={() => void onClearStatusImage(r.id)}>
+                        <DangerButton type="button" density="compact" onClick={() => void onClearStatusImage(r.id)}>
                           Usuń
-                        </button>
+                        </DangerButton>
                       </div>
                     </div>
                   ) : (
@@ -454,12 +455,11 @@ export default function OrderPanelUiStatusesSettingsPage() {
             </div>
 
             <div className="space-y-4">
-              <label className="space-y-1.5 block">
-                <span className={stFieldLabel}>Kolejność</span>
-                <input
+              <FormField label="Kolejność">
+                <Input
                   type="number"
+                  density={FORM_FIELD_DENSITY}
                   disabled={isSystem}
-                  className={stInput}
                   value={editDraft.sort_status ?? editDraft.sort_order ?? 0}
                   onChange={(e) =>
                     setEditDraft((d) => ({
@@ -469,16 +469,14 @@ export default function OrderPanelUiStatusesSettingsPage() {
                     }))
                   }
                 />
-              </label>
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+              </FormField>
+              <label className="flex items-center gap-2 pt-2 text-sm font-medium text-slate-700">
+                <Checkbox
                   checked={editDraft.is_active !== false}
                   onChange={(e) => setEditDraft((d) => ({ ...d, is_active: e.target.checked }))}
                 />
-                <span className="text-sm font-medium text-slate-700 cursor-pointer">Aktywny (widoczny)</span>
-              </div>
+                Aktywny (widoczny)
+              </label>
             </div>
           </div>
 
@@ -486,7 +484,7 @@ export default function OrderPanelUiStatusesSettingsPage() {
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
             <div className="space-y-4">
-              <span className={stFieldLabel}>Konfiguracja Kolorów</span>
+              <FormLabel>Konfiguracja Kolorów</FormLabel>
               <div className="flex flex-wrap gap-4 mt-2">
                 <label className="inline-flex flex-col gap-1">
                   <span className="text-[10px] font-medium text-slate-500">Pasek</span>
@@ -556,9 +554,9 @@ export default function OrderPanelUiStatusesSettingsPage() {
         </div>
         
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
-          <button type="button" className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors" onClick={cancelEdit}>
+          <SecondaryButton type="button" onClick={cancelEdit}>
             Anuluj
-          </button>
+          </SecondaryButton>
           <PrimaryButton type="button" onClick={() => void saveEdit(r.id)}>
             Zapisz zmiany
           </PrimaryButton>
@@ -582,36 +580,36 @@ export default function OrderPanelUiStatusesSettingsPage() {
             <OrderUiStatusConfigRowPresent status={r} count={r.count} className="ml-1" />
           </div>
           <div className="ml-4 flex shrink-0 items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
+            <IconButton
               type="button"
               disabled={!canReorder || idxInCustom <= 0}
-              className={`${stIconBtn} disabled:opacity-30`}
+              className="disabled:opacity-30"
               title="Wyżej"
               onClick={() => void moveSubstatus(mg, r, "up")}
             >
               <ChevronUp className="h-4 w-4" />
-            </button>
-            <button
+            </IconButton>
+            <IconButton
               type="button"
               disabled={!canReorder || idxInCustom < 0 || idxInCustom >= customs.length - 1}
-              className={`${stIconBtn} disabled:opacity-30`}
+              className="disabled:opacity-30"
               title="Niżej"
               onClick={() => void moveSubstatus(mg, r, "down")}
             >
               <ChevronDown className="h-4 w-4" />
-            </button>
-            <button type="button" className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded" title="Edytuj" onClick={() => startEdit(r)}>
+            </IconButton>
+            <IconButton type="button" title="Edytuj" onClick={() => startEdit(r)}>
               <Edit2 className="h-4 w-4" />
-            </button>
-            <button
+            </IconButton>
+            <IconButton
               type="button"
+              tone="danger"
               disabled={isSystem}
-              className={`p-1.5 rounded ${isSystem ? 'text-slate-300' : 'text-slate-400 hover:text-red-600 hover:bg-red-50'}`}
               title={isSystem ? "Status systemowy" : "Usuń"}
               onClick={() => void onDelete(r.id)}
             >
               <Trash2 className="h-4 w-4" />
-            </button>
+            </IconButton>
           </div>
         </div>
       </li>
@@ -661,22 +659,31 @@ export default function OrderPanelUiStatusesSettingsPage() {
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
                 <div className="space-y-4 xl:col-span-2">
                   <div className="grid grid-cols-2 gap-4">
-                    <label className="space-y-1.5 min-w-0">
-                      <span className={stFieldLabel}>Grupa główna</span>
-                      <select value={newMainGroup} onChange={(e) => setNewMainGroup(e.target.value as OrderUiMainGroup)} className={stSelect}>
+                    <FormField label="Grupa główna">
+                      <Select
+                        density={FORM_FIELD_DENSITY}
+                        value={newMainGroup}
+                        onChange={(e) => setNewMainGroup(e.target.value as OrderUiMainGroup)}
+                      >
                         {GROUP_ORDER.map((g) => (
                           <option key={g} value={g}>
                             {GROUP_LABELS[g]}
                           </option>
                         ))}
-                      </select>
-                    </label>
-                    <label className="space-y-1.5 min-w-0">
-                      <span className={stFieldLabel}>Podgrupa</span>
-                      <select
+                      </Select>
+                    </FormField>
+                    <FormField
+                      label="Podgrupa"
+                      helperText={
+                        subgroupOptionsFor(newMainGroup).length === 0
+                          ? "Brak podgrup — dodaj w kolumnie obok."
+                          : undefined
+                      }
+                    >
+                      <Select
+                        density={FORM_FIELD_DENSITY}
                         value={newSubgroupName}
                         onChange={(e) => setNewSubgroupName(e.target.value)}
-                        className={stSelect}
                       >
                         <option value="">Bez przypisania</option>
                         {subgroupOptionsFor(newMainGroup).map((sg) => (
@@ -684,28 +691,33 @@ export default function OrderPanelUiStatusesSettingsPage() {
                             {sg.name}
                           </option>
                         ))}
-                      </select>
-                      {subgroupOptionsFor(newMainGroup).length === 0 ? (
-                        <p className="mt-1 text-[10px] text-slate-500">Brak podgrup — dodaj w kolumnie obok.</p>
-                      ) : null}
-                    </label>
+                      </Select>
+                    </FormField>
                   </div>
 
-                  <label className="space-y-1.5 min-w-0 block">
-                    <span className={stFieldLabel}>Nazwa statusu</span>
-                    <input value={newName} onChange={(e) => setNewName(e.target.value)} className={stInput} placeholder="np. Spakowane" />
-                  </label>
+                  <FormField label="Nazwa statusu">
+                    <Input
+                      density={FORM_FIELD_DENSITY}
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      placeholder="np. Spakowane"
+                    />
+                  </FormField>
                 </div>
 
                 <div className="space-y-4">
-                  <label className="space-y-1.5 block">
-                    <span className={stFieldLabel}>Kolejność</span>
-                    <input type="number" className={stInput} value={newSort} onChange={(e) => setNewSort(Number(e.target.value))} />
+                  <FormField label="Kolejność">
+                    <Input
+                      type="number"
+                      density={FORM_FIELD_DENSITY}
+                      value={newSort}
+                      onChange={(e) => setNewSort(Number(e.target.value))}
+                    />
+                  </FormField>
+                  <label className="flex items-center gap-2 pt-2 text-sm font-medium text-slate-700">
+                    <Checkbox checked={newActive} onChange={(e) => setNewActive(e.target.checked)} />
+                    Aktywny (widoczny)
                   </label>
-                  <div className="flex items-center gap-2 pt-2">
-                    <input type="checkbox" className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500" checked={newActive} onChange={(e) => setNewActive(e.target.checked)} />
-                    <span className="text-sm font-medium text-slate-700 cursor-pointer">Aktywny (widoczny)</span>
-                  </div>
                 </div>
               </div>
 
@@ -713,7 +725,7 @@ export default function OrderPanelUiStatusesSettingsPage() {
 
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
                 <div className="space-y-4">
-                  <span className={stFieldLabel}>Konfiguracja Kolorów</span>
+                  <FormLabel>Konfiguracja Kolorów</FormLabel>
                   <div className="flex flex-wrap gap-4 mt-2">
                     <label className="inline-flex flex-col gap-1">
                       <span className="text-[10px] font-medium text-slate-500">Pasek</span>

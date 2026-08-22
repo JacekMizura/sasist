@@ -1,7 +1,16 @@
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 
-import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
+import {
+  Checkbox,
+  DangerButton,
+  FORM_FIELD_DENSITY,
+  FormField,
+  GhostButton,
+  Input,
+  PrimaryButton,
+  Select,
+} from "@/design-system";
 import { IconButton } from "../../../design-system";
 import type { ReturnModuleConfigDto, ReturnProductDecisionDto } from "../../../types/returnModuleConfig";
 import { decisionReturnsToStock } from "./businessLabels";
@@ -260,46 +269,42 @@ function ProductDecisionModal({
       footer={
         <>
           {mode === "edit" && onDelete ? (
-            <button type="button" className="mr-auto rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50" onClick={onDelete}>
+            <DangerButton type="button" density="compact" className="mr-auto" onClick={onDelete}>
               Usuń
-            </button>
+            </DangerButton>
           ) : null}
-          <button type="button" className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100" onClick={onClose}>
+          <GhostButton type="button" onClick={onClose}>
             Anuluj
-          </button>
-          <button type="button" disabled={!draft.label.trim()} className={brandPrimaryButtonClass} onClick={handleSave}>
+          </GhostButton>
+          <PrimaryButton type="button" disabled={!draft.label.trim()} onClick={handleSave}>
             Zapisz
-          </button>
+          </PrimaryButton>
         </>
       }
     >
       <div className="space-y-4">
-        <label className="block text-xs font-medium text-slate-600">
-          Nazwa
-          <input
-            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+        <FormField label="Nazwa">
+          <Input
+            density={FORM_FIELD_DENSITY}
             value={draft.label}
             onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))}
             autoFocus
           />
-        </label>
+        </FormField>
 
-        <label className="block text-xs font-medium text-slate-600">
-          Kategoria
-          <select
-            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+        <FormField label="Kategoria">
+          <Select
+            density={FORM_FIELD_DENSITY}
             value={draft.category}
             onChange={(e) => setDraft((d) => ({ ...d, category: e.target.value as "ACCEPTED" | "REJECTED" }))}
           >
             <option value="ACCEPTED">Przyjęcie</option>
             <option value="REJECTED">Odrzucenie</option>
-          </select>
-        </label>
+          </Select>
+        </FormField>
 
         <label className="flex items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            className="rounded border-slate-300"
+          <Checkbox
             checked={draft.is_active}
             onChange={(e) => setDraft((d) => ({ ...d, is_active: e.target.checked }))}
           />
@@ -307,9 +312,8 @@ function ProductDecisionModal({
         </label>
 
         <label className="flex items-start gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            className="mt-0.5 rounded border-slate-300"
+          <Checkbox
+            className="mt-0.5"
             checked={decisionReturnsToStock(draft)}
             onChange={(e) => setDraft((d) => ({ ...d, creates_stock_document: e.target.checked }))}
           />

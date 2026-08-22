@@ -1,5 +1,15 @@
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
-import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
+import {
+  Checkbox,
+  FORM_FIELD_DENSITY,
+  FormField,
+  GhostButton,
+  IconButton,
+  Input,
+  PrimaryButton,
+  SecondaryButton,
+  Select,
+} from "@/design-system";
 import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
 
 import type { ReturnModuleConfigDto, ReturnProductDecisionDto } from "../../../types/returnModuleConfig";
@@ -35,14 +45,10 @@ export function ProductDecisionsTableSection({ cfg, setDraft }: Props) {
             <h3 className="text-lg font-semibold tracking-tight text-slate-900">Decyzje produktowe</h3>
             <p className="mt-1 text-sm text-slate-500">Etykiety decyzji na pozycji zwrotu — WMS i panel biurowy.</p>
           </div>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-            onClick={() => setModal({ mode: "create" })}
-          >
+          <SecondaryButton type="button" onClick={() => setModal({ mode: "create" })}>
             <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
             Dodaj decyzję
-          </button>
+          </SecondaryButton>
         </header>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
@@ -73,22 +79,12 @@ export function ProductDecisionsTableSection({ cfg, setDraft }: Props) {
                   <td className="px-3 py-3 text-slate-600">{row.creates_stock_document ? "Z-PZ" : "—"}</td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-1">
-                      <button
-                        type="button"
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                        title="Edytuj"
-                        onClick={() => setModal({ mode: "edit", row })}
-                      >
+                      <IconButton type="button" title="Edytuj" onClick={() => setModal({ mode: "edit", row })}>
                         <Pencil className="h-4 w-4" strokeWidth={2} />
-                      </button>
-                      <button
-                        type="button"
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-white text-red-600 hover:bg-red-50"
-                        title="Usuń"
-                        onClick={() => removeRow(row)}
-                      >
+                      </IconButton>
+                      <IconButton type="button" tone="danger" title="Usuń" onClick={() => removeRow(row)}>
                         <Trash2 className="h-4 w-4" strokeWidth={2} />
-                      </button>
+                      </IconButton>
                     </div>
                   </td>
                 </tr>
@@ -173,53 +169,49 @@ function ProductDecisionModal({
       onClose={onClose}
       footer={
         <>
-          <button type="button" className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100" onClick={onClose}>
+          <GhostButton type="button" onClick={onClose}>
             Anuluj
-          </button>
-          <button
+          </GhostButton>
+          <PrimaryButton
             type="button"
             disabled={!draft.label.trim()}
-            className={brandPrimaryButtonClass}
             onClick={() => onSave({ ...draft, label: draft.label.trim() })}
           >
             Zapisz
-          </button>
+          </PrimaryButton>
         </>
       }
     >
       <div className="space-y-4">
-        <label className="block text-xs font-medium text-slate-600">
-          Nazwa decyzji
-          <input
-            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+        <FormField label="Nazwa decyzji">
+          <Input
+            density={FORM_FIELD_DENSITY}
             value={draft.label}
             onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))}
           />
-        </label>
-        <label className="block text-xs font-medium text-slate-600">
-          Kategoria
-          <select
-            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+        </FormField>
+        <FormField label="Kategoria">
+          <Select
+            density={FORM_FIELD_DENSITY}
             value={draft.category}
             onChange={(e) => setDraft((d) => ({ ...d, category: e.target.value as "ACCEPTED" | "REJECTED" }))}
           >
             <option value="ACCEPTED">Przyjęcie / zamiana</option>
             <option value="REJECTED">Odrzucenie</option>
-          </select>
-        </label>
+          </Select>
+        </FormField>
         <div className="flex flex-wrap gap-4">
           <label className="inline-flex items-center gap-2 text-sm text-slate-700">
-            <input type="checkbox" checked={draft.visible_wms} onChange={(e) => setDraft((d) => ({ ...d, visible_wms: e.target.checked }))} />
+            <Checkbox checked={draft.visible_wms} onChange={(e) => setDraft((d) => ({ ...d, visible_wms: e.target.checked }))} />
             Widoczny w WMS
           </label>
           <label className="inline-flex items-center gap-2 text-sm text-slate-700">
-            <input type="checkbox" checked={draft.is_active} onChange={(e) => setDraft((d) => ({ ...d, is_active: e.target.checked }))} />
+            <Checkbox checked={draft.is_active} onChange={(e) => setDraft((d) => ({ ...d, is_active: e.target.checked }))} />
             Aktywny
           </label>
           {draft.category === "REJECTED" ? (
             <label className="inline-flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={draft.creates_stock_document === true}
                 onChange={(e) => setDraft((d) => ({ ...d, creates_stock_document: e.target.checked }))}
               />

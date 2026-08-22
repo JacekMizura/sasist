@@ -1,5 +1,5 @@
 import { useMemo, type Dispatch, type SetStateAction, type ReactNode } from "react";
-import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+import { Checkbox, Input, primaryButtonClass } from "@/design-system";
 import { Link } from "react-router-dom";
 import {
   DndContext,
@@ -63,10 +63,11 @@ function TechKeyDetails({
       </summary>
       <div className="border-t border-slate-100 px-2 py-2">
         <label className="block text-[10px] font-medium uppercase text-slate-400">Identyfikator</label>
-        <input
+        <Input
+          density="compact"
           value={code}
           onChange={(e) => onChange(e.target.value)}
-          className="mt-1 w-full rounded border border-slate-200 bg-white px-2 py-1 font-mono text-[11px]"
+          className="mt-1 font-mono text-[11px]"
           spellCheck={false}
         />
         <p className="mt-1.5 text-[11px] leading-snug text-slate-500">
@@ -134,7 +135,7 @@ export function ReturnsPanelStatusesOverview({
           Aktywnych etykiet: <span className="font-semibold tabular-nums text-slate-900">{count}</span>
         </p>
         <Link
-          className={`${brandPrimaryButtonClass} shrink-0`}
+          className={`${primaryButtonClass} shrink-0`}
           to="/orders/returns/panel-statuses"
         >
           Edytuj statusy i kolory
@@ -239,30 +240,27 @@ export function ProductDecisionsEditor({
   const renderDecision = (row: ReturnProductDecisionDto, cat: "ACCEPTED" | "REJECTED") => (
     <GripSortRow id={cat === "ACCEPTED" ? `pd:A:${row.code}` : `pd:R:${row.code}`} key={`${cat}-${row.code}`}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <input
+        <Input
           value={row.label}
           onChange={(e) => updateRow(row, { label: e.target.value })}
-          className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1.5 text-sm font-medium text-slate-900"
+          className="min-w-0 flex-1" density="compact"
           placeholder="Nazwa dla operatorów"
         />
         <div className="flex shrink-0 flex-wrap items-center gap-4">
           <label className="flex items-center gap-1.5 text-xs text-slate-600">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={row.visible_wms}
               onChange={(e) => updateRow(row, { visible_wms: e.target.checked })}
             />
             WMS
           </label>
           <label className="flex items-center gap-1.5 text-xs text-slate-600">
-            <input type="checkbox" checked={row.is_active} onChange={(e) => updateRow(row, { is_active: e.target.checked })} />
+            <Checkbox checked={row.is_active} onChange={(e) => updateRow(row, { is_active: e.target.checked })} />
             Aktywny
           </label>
           {cat === "REJECTED" ? (
             <label className="flex max-w-[200px] items-start gap-1.5 text-xs leading-snug text-slate-600">
-              <input
-                type="checkbox"
-                className="mt-0.5"
+              <Checkbox
                 checked={row.creates_stock_document === true}
                 onChange={(e) => updateRow(row, { creates_stock_document: e.target.checked })}
               />
@@ -398,25 +396,24 @@ export function DamageClassesEditor({
                     value={row.color_hex?.startsWith("#") ? row.color_hex : "#64748b"}
                     onChange={(e) => update(row, { color_hex: e.target.value })}
                   />
-                  <input
+                  <Input
                     value={row.label}
                     onChange={(e) => update(row, { label: e.target.value })}
-                    className="min-w-[160px] flex-1 rounded-md border border-slate-200 px-2 py-1.5 text-sm font-medium"
+                    className="min-w-[160px] flex-1" density="compact"
                   />
                   <label className="flex items-center gap-1 text-xs text-slate-600">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={row.resale_allowed}
                       onChange={(e) => update(row, { resale_allowed: e.target.checked })}
                     />
                     Odsprzedaż
                   </label>
                   <label className="flex items-center gap-1 text-xs text-slate-600">
-                    <input type="checkbox" checked={row.visible_wms} onChange={(e) => update(row, { visible_wms: e.target.checked })} />
+                    <Checkbox checked={row.visible_wms} onChange={(e) => update(row, { visible_wms: e.target.checked })} />
                     WMS
                   </label>
                   <label className="flex items-center gap-1 text-xs text-slate-600">
-                    <input type="checkbox" checked={row.is_active} onChange={(e) => update(row, { is_active: e.target.checked })} />
+                    <Checkbox checked={row.is_active} onChange={(e) => update(row, { is_active: e.target.checked })} />
                     Aktywny
                   </label>
                 </div>
@@ -547,16 +544,14 @@ export function DamageReasonsEditor({
                             />
                           </span>
                           <label className="flex items-center gap-1 text-[11px] text-slate-600">
-                            <input
-                              type="checkbox"
+                            <Checkbox
                               checked={row.visible_wms}
                               onChange={(e) => updateReason(row, { visible_wms: e.target.checked })}
                             />
                             WMS
                           </label>
                           <label className="flex items-center gap-1 text-[11px] text-slate-600">
-                            <input
-                              type="checkbox"
+                            <Checkbox
                               checked={row.is_active}
                               onChange={(e) => updateReason(row, { is_active: e.target.checked })}
                             />
@@ -642,13 +637,13 @@ export function CustomerReturnTypesEditor({
             {sorted.map((row) => (
               <GripSortRow key={row.code} id={`crt:${row.code}`}>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <input
+                  <Input
                     value={row.label}
                     onChange={(e) => update(row, { label: e.target.value })}
-                    className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1.5 text-sm font-medium"
+                    className="min-w-0 flex-1" density="compact"
                   />
                   <label className="flex shrink-0 items-center gap-2 text-xs text-slate-600">
-                    <input type="checkbox" checked={row.is_active} onChange={(e) => update(row, { is_active: e.target.checked })} />
+                    <Checkbox checked={row.is_active} onChange={(e) => update(row, { is_active: e.target.checked })} />
                     Aktywny
                   </label>
                 </div>
@@ -721,14 +716,14 @@ export function OrderSourcesEditor({
             {sorted.map((row) => (
               <GripSortRow key={row.code} id={`os:${row.code}`}>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <input
+                  <Input
                     value={row.label}
                     onChange={(e) => update(row, { label: e.target.value })}
-                    className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1.5 text-sm font-medium"
+                    className="min-w-0 flex-1" density="compact"
                     placeholder="Np. Allegro"
                   />
                   <label className="flex shrink-0 items-center gap-2 text-xs text-slate-600">
-                    <input type="checkbox" checked={row.is_active} onChange={(e) => update(row, { is_active: e.target.checked })} />
+                    <Checkbox checked={row.is_active} onChange={(e) => update(row, { is_active: e.target.checked })} />
                     Aktywny
                   </label>
                 </div>

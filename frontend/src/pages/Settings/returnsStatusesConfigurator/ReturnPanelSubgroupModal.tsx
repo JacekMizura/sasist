@@ -1,14 +1,17 @@
 import { useEffect, useState } from "react";
-import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
-
 import { createReturnPanelSubgroup } from "../../../api/returnUiStatusApi";
 import type { ReturnUiMainGroup } from "../../../types/wmsReturn";
 import { DAMAGE_TENANT_ID } from "../../damage/damageShared";
 import { RETURN_MAIN_GROUP_LABELS, RETURN_MAIN_GROUP_ORDER } from "./constants";
 import { ReturnsConfiguratorModalShell } from "./ReturnsConfiguratorModalShell";
-
-const inp = "mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300";
-const lab = "block text-xs font-medium text-slate-600";
+import {
+  FORM_FIELD_DENSITY,
+  FormField,
+  GhostButton,
+  Input,
+  PrimaryButton,
+  Select,
+} from "@/design-system";
 
 type Props = {
   open: boolean;
@@ -57,35 +60,37 @@ export function ReturnPanelSubgroupModal({ open, initialMainGroup = "NEW", wareh
       onClose={onClose}
       footer={
         <>
-          <button type="button" disabled={busy} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100" onClick={onClose}>
+          <GhostButton type="button" disabled={busy} onClick={onClose}>
             Anuluj
-          </button>
-          <button
-            type="button"
-            disabled={busy || !name.trim()}
-            className={brandPrimaryButtonClass}
-            onClick={() => void onSubmit()}
-          >
+          </GhostButton>
+          <PrimaryButton type="button" disabled={busy || !name.trim()} onClick={() => void onSubmit()}>
             {busy ? "Dodawanie…" : "Dodaj podgrupę"}
-          </button>
+          </PrimaryButton>
         </>
       }
     >
       {err ? <p className="mb-3 text-sm text-red-700">{err}</p> : null}
-      <label className={lab}>
-        Grupa główna
-        <select className={inp} value={mainGroup} onChange={(e) => setMainGroup(e.target.value as ReturnUiMainGroup)}>
+      <FormField label="Grupa główna">
+        <Select
+          density={FORM_FIELD_DENSITY}
+          value={mainGroup}
+          onChange={(e) => setMainGroup(e.target.value as ReturnUiMainGroup)}
+        >
           {RETURN_MAIN_GROUP_ORDER.map((g) => (
             <option key={g} value={g}>
               {RETURN_MAIN_GROUP_LABELS[g]}
             </option>
           ))}
-        </select>
-      </label>
-      <label className={`${lab} mt-4`}>
-        Nazwa podgrupy
-        <input className={inp} value={name} placeholder="Np. Sklep, Magazyn…" onChange={(e) => setName(e.target.value)} />
-      </label>
+        </Select>
+      </FormField>
+      <FormField label="Nazwa podgrupy" className="mt-4">
+        <Input
+          density={FORM_FIELD_DENSITY}
+          value={name}
+          placeholder="Np. Sklep, Magazyn…"
+          onChange={(e) => setName(e.target.value)}
+        />
+      </FormField>
     </ReturnsConfiguratorModalShell>
   );
 }

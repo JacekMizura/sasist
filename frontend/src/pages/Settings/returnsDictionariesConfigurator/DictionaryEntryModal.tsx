@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
+import {
+  FORM_FIELD_DENSITY,
+  FormField,
+  GhostButton,
+  Input,
+  PrimaryButton,
+} from "@/design-system";
 import toast from "react-hot-toast";
 
 import { uploadReturnOrderSourceLogo } from "../../../api/returnModuleConfigApi";
@@ -10,10 +16,6 @@ import {
   ORDER_SOURCE_LOGO_ACCEPT,
   validateOrderSourceLogoFile,
 } from "./orderSourceUtils";
-
-const inp =
-  "mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300";
-const lab = "block text-xs font-medium text-slate-600";
 
 type ReturnTypeModalProps = {
   open: boolean;
@@ -38,24 +40,22 @@ export function ReturnTypeEntryModal({ open, mode, row, onClose, onSave }: Retur
       onClose={onClose}
       footer={
         <>
-          <button type="button" className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100" onClick={onClose}>
+          <GhostButton type="button" onClick={onClose}>
             Anuluj
-          </button>
-          <button
+          </GhostButton>
+          <PrimaryButton
             type="button"
             disabled={!label.trim()}
-            className={brandPrimaryButtonClass}
             onClick={() => row && onSave({ ...row, label: label.trim() })}
           >
             Zapisz
-          </button>
+          </PrimaryButton>
         </>
       }
     >
-      <label className={lab}>
-        Nazwa
-        <input className={inp} value={label} onChange={(e) => setLabel(e.target.value)} autoFocus />
-      </label>
+      <FormField label="Nazwa">
+        <Input density={FORM_FIELD_DENSITY} value={label} onChange={(e) => setLabel(e.target.value)} autoFocus />
+      </FormField>
     </ReturnsConfiguratorModalShell>
   );
 }
@@ -147,34 +147,32 @@ export function OrderSourceEntryModal({
       onClose={onClose}
       footer={
         <>
-          <button type="button" className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100" onClick={onClose}>
+          <GhostButton type="button" onClick={onClose}>
             Anuluj
-          </button>
-          <button
+          </GhostButton>
+          <PrimaryButton
             type="button"
             disabled={!draft.label.trim() || uploading}
-            className={brandPrimaryButtonClass}
             onClick={() => void handleSave()}
           >
             {uploading ? "Zapisywanie…" : "Zapisz"}
-          </button>
+          </PrimaryButton>
         </>
       }
     >
       <div className="space-y-5">
-        <label className={lab}>
-          Nazwa źródła
-          <input
-            className={inp}
+        <FormField label="Nazwa źródła">
+          <Input
+            density={FORM_FIELD_DENSITY}
             value={draft.label}
             onChange={(e) => setDraft((d) => (d ? { ...d, label: e.target.value } : d))}
             autoFocus
             placeholder="np. Sklep internetowy, Allegro, B2B"
           />
-        </label>
+        </FormField>
 
         <div>
-          <p className={lab}>Logo (opcjonalne)</p>
+          <p className="mb-1.5 block text-xs font-medium text-slate-600">Logo (opcjonalne)</p>
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <OrderSourceLogo label={draft.label} logoUrl={draft.logo_url} previewUrl={previewUrl} />
             <div className="flex flex-wrap gap-2">
