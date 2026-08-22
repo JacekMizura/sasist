@@ -1,18 +1,19 @@
-import { appFieldLabelClass, appInputClass } from "../../../components/app-shell";
+import { FormField, type FormFieldProps } from "@/design-system";
 
-type Props = {
+type Props = Omit<FormFieldProps, "label"> & {
   label: string;
-  children: React.ReactNode;
-  className?: string;
 };
 
-export function CompanyFormField({ label, children, className = "" }: Props) {
+/** Thin shim — prefer FormField from @/design-system in new code. */
+export function CompanyFormField({ label, children, className = "", ...rest }: Props) {
   return (
-    <label className={`block min-w-0 ${className}`.trim()}>
-      <span className={appFieldLabelClass}>{label}</span>
+    <FormField label={label} className={className} {...rest}>
       {children}
-    </label>
+    </FormField>
   );
 }
 
-export { appInputClass as companyInputClass };
+/**
+ * @deprecated Use Input with density={FORM_FIELD_DENSITY} from @/design-system.
+ */
+export { appInputClass as companyInputClass } from "../../../components/app-shell";

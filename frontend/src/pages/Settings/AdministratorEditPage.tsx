@@ -22,8 +22,16 @@ import AvatarUploadField from "../../components/admin/AvatarUploadField";
 import { builtinPresetLabel } from "../../components/admin/permissionPresetLabels";
 import LoginCodeLabelControls from "./administrators/LoginCodeLabelControls";
 import { tabsNavItemClassName } from "../../components/layout/TabsNav";
-import { brandPrimaryButtonClass } from "../../design-system/brandUi";
-import { PrimaryButton } from "../../design-system/PrimaryButton";
+import {
+  Checkbox,
+  FORM_FIELD_DENSITY,
+  FormField,
+  GhostButton,
+  Input,
+  PrimaryButton,
+  Select,
+  Textarea,
+} from "@/design-system";
 import {
   createCustomPermissionPreset,
   createUser,
@@ -105,9 +113,6 @@ function employmentToContractType(employmentLabel: string): string {
 }
 
 const cardCls = "rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden";
-const sidebarInputCls =
-  "block w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 transition focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-300";
-const labelCls = "block text-xs font-medium text-slate-500 mb-1";
 
 export default function AdministratorEditPage() {
   const params = useParams<{ id?: string }>();
@@ -703,31 +708,39 @@ export default function AdministratorEditPage() {
                 </div>
 
                 <div className="space-y-3">
-                  <div>
-                    <label className={labelCls}>Login</label>
-                    <input className={sidebarInputCls} value={login} onChange={(e) => setLogin(e.target.value)} readOnly={!isNew} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>E-mail</label>
+                  <FormField label="Login">
+                    <Input
+                      density={FORM_FIELD_DENSITY}
+                      value={login}
+                      onChange={(e) => setLogin(e.target.value)}
+                      readOnly={!isNew}
+                    />
+                  </FormField>
+                  <FormField label="E-mail">
                     <div className="relative">
-                      <Mail className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-                      <input className={`${sidebarInputCls} pl-9`} value={email} onChange={(e) => setEmail(e.target.value)} />
+                      <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <Input
+                        density={FORM_FIELD_DENSITY}
+                        className="pl-9"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                      />
                     </div>
-                  </div>
-                  <div>
-                    <label className={labelCls}>{isNew ? "Hasło" : "Nowe hasło"}</label>
+                  </FormField>
+                  <FormField label={isNew ? "Hasło" : "Nowe hasło"}>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-                      <input
+                      <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <Input
                         type="password"
-                        className={`${sidebarInputCls} pl-9`}
+                        density={FORM_FIELD_DENSITY}
+                        className="pl-9"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder={isNew ? "Min. 6 znaków" : "Pozostaw puste, aby nie zmieniać"}
                         autoComplete="new-password"
                       />
                     </div>
-                  </div>
+                  </FormField>
                 </div>
               </div>
             </div>
@@ -738,22 +751,24 @@ export default function AdministratorEditPage() {
               </div>
               <div className="space-y-3 p-5">
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelCls}>Imię</label>
-                    <input className={sidebarInputCls} value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Nazwisko</label>
-                    <input className={sidebarInputCls} value={lastName} onChange={(e) => setLastName(e.target.value)} />
-                  </div>
+                  <FormField label="Imię">
+                    <Input density={FORM_FIELD_DENSITY} value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                  </FormField>
+                  <FormField label="Nazwisko">
+                    <Input density={FORM_FIELD_DENSITY} value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                  </FormField>
                 </div>
-                <div>
-                  <label className={labelCls}>Telefon</label>
+                <FormField label="Telefon">
                   <div className="relative">
-                    <Phone className="absolute left-3 top-3 h-4 w-4 text-rose-400" />
-                    <input className={`${sidebarInputCls} pl-9`} value={phone} onChange={(e) => setPhone(e.target.value)} />
+                    <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-rose-400" />
+                    <Input
+                      density={FORM_FIELD_DENSITY}
+                      className="pl-9"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                    />
                   </div>
-                </div>
+                </FormField>
               </div>
             </div>
           </aside>
@@ -855,23 +870,18 @@ export default function AdministratorEditPage() {
                           onCodeChange={setBarcodeLoginCode}
                           templateId={loginCodeTemplateId}
                           onTemplateIdChange={setLoginCodeTemplateId}
-                          inputClassName={sidebarInputCls}
-                          labelClassName={labelCls}
                         />
                         <div className="grid gap-6 lg:grid-cols-2">
                           <div className="space-y-4">
-                            <div>
-                              <label className={labelCls}>Język WMS</label>
-                              <input className={sidebarInputCls} value={wmsLanguage} onChange={(e) => setWmsLanguage(e.target.value)} />
-                            </div>
-                            <div>
-                              <label className={labelCls}>Strefa czasowa</label>
-                              <input className={sidebarInputCls} value={timezone} onChange={(e) => setTimezone(e.target.value)} />
-                            </div>
-                            <div>
-                              <label className={labelCls}>Domyślny magazyn</label>
-                              <select
-                                className={sidebarInputCls}
+                            <FormField label="Język WMS">
+                              <Input density={FORM_FIELD_DENSITY} value={wmsLanguage} onChange={(e) => setWmsLanguage(e.target.value)} />
+                            </FormField>
+                            <FormField label="Strefa czasowa">
+                              <Input density={FORM_FIELD_DENSITY} value={timezone} onChange={(e) => setTimezone(e.target.value)} />
+                            </FormField>
+                            <FormField label="Domyślny magazyn">
+                              <Select
+                                density={FORM_FIELD_DENSITY}
                                 value={defaultWarehouseId === "" ? "" : String(defaultWarehouseId)}
                                 onChange={(e) => setDefaultWarehouseId(e.target.value ? Number(e.target.value) : "")}
                               >
@@ -881,22 +891,26 @@ export default function AdministratorEditPage() {
                                     {w.name}
                                   </option>
                                 ))}
-                              </select>
-                            </div>
+                              </Select>
+                            </FormField>
                           </div>
                           <div className="space-y-4">
                             <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                              <input type="checkbox" className="h-5 w-5 accent-orange-500" checked={requireScan} onChange={(e) => setRequireScan(e.target.checked)} />
+                              <Checkbox checked={requireScan} onChange={(e) => setRequireScan(e.target.checked)} />
                               <span className="text-sm font-bold text-slate-700">Wymagaj skanowania każdego produktu</span>
                             </div>
                             <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                              <input type="checkbox" className="h-5 w-5 accent-orange-500" checked={canEditPreview} onChange={(e) => setCanEditPreview(e.target.checked)} />
+                              <Checkbox checked={canEditPreview} onChange={(e) => setCanEditPreview(e.target.checked)} />
                               <span className="text-sm font-bold text-slate-700">Może edytować podgląd produktów</span>
                             </div>
-                            <div>
-                              <label className={labelCls}>Kolor zbieracza (etykieta)</label>
-                              <input className={sidebarInputCls} value={pickerColor} onChange={(e) => setPickerColor(e.target.value)} placeholder="#RRGGBB lub nazwa" />
-                            </div>
+                            <FormField label="Kolor zbieracza (etykieta)">
+                              <Input
+                                density={FORM_FIELD_DENSITY}
+                                value={pickerColor}
+                                onChange={(e) => setPickerColor(e.target.value)}
+                                placeholder="#RRGGBB lub nazwa"
+                              />
+                            </FormField>
                           </div>
                         </div>
 
@@ -959,9 +973,7 @@ export default function AdministratorEditPage() {
                                     key={s.id}
                                     className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"
                                   >
-                                    <input
-                                      type="checkbox"
-                                      className="h-5 w-5 accent-orange-500"
+                                    <Checkbox
                                       checked={on}
                                       onChange={() =>
                                         setWorkstationIds((prev) =>
@@ -1014,9 +1026,7 @@ export default function AdministratorEditPage() {
                             Uprawnienia pakowania
                           </h3>
                           <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                            <input
-                              type="checkbox"
-                              className="h-5 w-5 accent-orange-500"
+                            <Checkbox
                               checked={packingPermissions.includes("kierownik")}
                               onChange={(e) => {
                                 const on = e.target.checked;
@@ -1037,10 +1047,9 @@ export default function AdministratorEditPage() {
                         </div>
 
                         <div className="grid gap-6 lg:grid-cols-2">
-                          <div>
-                            <label className={labelCls}>Przełożony</label>
-                            <select
-                              className={sidebarInputCls}
+                          <FormField label="Przełożony">
+                            <Select
+                              density={FORM_FIELD_DENSITY}
                               value={supervisorUserId === "" ? "" : String(supervisorUserId)}
                               onChange={(e) => setSupervisorUserId(e.target.value ? Number(e.target.value) : "")}
                             >
@@ -1052,17 +1061,16 @@ export default function AdministratorEditPage() {
                                     {rosterName(u)} ({u.login})
                                   </option>
                                 ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className={labelCls}>ID stref magazynowych (CSV)</label>
-                            <input
-                              className={sidebarInputCls}
+                            </Select>
+                          </FormField>
+                          <FormField label="ID stref magazynowych (CSV)">
+                            <Input
+                              density={FORM_FIELD_DENSITY}
                               value={warehouseZonesText}
                               onChange={(e) => setWarehouseZonesText(e.target.value)}
                               placeholder="np. 1, 2, 5"
                             />
-                          </div>
+                          </FormField>
                         </div>
                       </div>
                     )}
@@ -1092,10 +1100,9 @@ export default function AdministratorEditPage() {
                           <h2 className="text-2xl font-black text-slate-900">Praca i organizacja</h2>
                         </div>
                         <div className="grid gap-6 lg:grid-cols-2">
-                          <div>
-                            <label className={labelCls}>Grupa operacyjna</label>
-                            <select
-                              className={sidebarInputCls}
+                          <FormField label="Grupa operacyjna">
+                            <Select
+                              density={FORM_FIELD_DENSITY}
                               value={primaryWorkforceGroupId === "" ? "" : String(primaryWorkforceGroupId)}
                               onChange={(e) => setPrimaryWorkforceGroupId(e.target.value ? Number(e.target.value) : "")}
                             >
@@ -1105,38 +1112,39 @@ export default function AdministratorEditPage() {
                                   {g.name}
                                 </option>
                               ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className={labelCls}>Tag koloru</label>
-                            <input className={sidebarInputCls} value={workforceColorTag} onChange={(e) => setWorkforceColorTag(e.target.value)} placeholder="np. team-blue" />
-                          </div>
-                          <div>
-                            <label className={labelCls}>Forma zatrudnienia</label>
-                            <select className={sidebarInputCls} value={employmentType} onChange={(e) => setEmploymentType(e.target.value)}>
+                            </Select>
+                          </FormField>
+                          <FormField label="Tag koloru">
+                            <Input
+                              density={FORM_FIELD_DENSITY}
+                              value={workforceColorTag}
+                              onChange={(e) => setWorkforceColorTag(e.target.value)}
+                              placeholder="np. team-blue"
+                            />
+                          </FormField>
+                          <FormField label="Forma zatrudnienia">
+                            <Select density={FORM_FIELD_DENSITY} value={employmentType} onChange={(e) => setEmploymentType(e.target.value)}>
                               <option value="">— Wybierz —</option>
                               {EMPLOYMENT_OPTIONS.map((o) => (
                                 <option key={o} value={o}>
                                   {o}
                                 </option>
                               ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className={labelCls}>Zmiana / grafik</label>
-                            <select className={sidebarInputCls} value={shiftType} onChange={(e) => setShiftType(e.target.value)}>
+                            </Select>
+                          </FormField>
+                          <FormField label="Zmiana / grafik">
+                            <Select density={FORM_FIELD_DENSITY} value={shiftType} onChange={(e) => setShiftType(e.target.value)}>
                               <option value="">— Wybierz —</option>
                               {SHIFT_OPTIONS.map((o) => (
                                 <option key={o} value={o}>
                                   {o}
                                 </option>
                               ))}
-                            </select>
-                          </div>
-                          <div className="lg:col-span-2">
-                            <label className={labelCls}>Stanowisko / rola operacyjna</label>
-                            <input
-                              className={sidebarInputCls}
+                            </Select>
+                          </FormField>
+                          <FormField label="Stanowisko / rola operacyjna" className="lg:col-span-2">
+                            <Input
+                              density={FORM_FIELD_DENSITY}
                               list="admin-job-position-options"
                               value={jobPosition}
                               onChange={(e) => setJobPosition(e.target.value)}
@@ -1147,7 +1155,7 @@ export default function AdministratorEditPage() {
                                 <option key={o} value={o} />
                               ))}
                             </datalist>
-                          </div>
+                          </FormField>
                         </div>
 
                         {!isNew && canManageUsers && (
@@ -1155,35 +1163,34 @@ export default function AdministratorEditPage() {
                             <h3 className="text-sm font-black uppercase tracking-wider text-slate-500">Profil kosztu</h3>
                             <p className="text-xs text-slate-500">{OPERATIONAL_COST_DISCLAIMER_PL}</p>
                             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                              <div>
-                                <label className={labelCls}>Netto miesięcznie (PLN)</label>
-                                <input className={sidebarInputCls} inputMode="decimal" value={costNet} onChange={(e) => setCostNet(e.target.value)} />
-                              </div>
-                              <div>
-                                <label className={labelCls}>Brutto miesięcznie (PLN)</label>
-                                <input className={sidebarInputCls} inputMode="decimal" value={costGross} onChange={(e) => setCostGross(e.target.value)} />
-                              </div>
-                              <div>
-                                <label className={labelCls}>Koszt pracodawcy (override)</label>
-                                <input className={sidebarInputCls} inputMode="decimal" value={costEmployerTotal} onChange={(e) => setCostEmployerTotal(e.target.value)} />
-                              </div>
-                              <div>
-                                <label className={labelCls}>Godziny w miesiącu</label>
-                                <input className={sidebarInputCls} inputMode="numeric" value={costHoursMonth} onChange={(e) => setCostHoursMonth(e.target.value)} />
-                              </div>
-                              <div>
-                                <label className={labelCls}>Override stawki pracodawcy (0–1)</label>
-                                <input className={sidebarInputCls} inputMode="decimal" value={costEmployerRateOverride} onChange={(e) => setCostEmployerRateOverride(e.target.value)} />
-                              </div>
+                              <FormField label="Netto miesięcznie (PLN)">
+                                <Input inputMode="decimal" density={FORM_FIELD_DENSITY} value={costNet} onChange={(e) => setCostNet(e.target.value)} />
+                              </FormField>
+                              <FormField label="Brutto miesięcznie (PLN)">
+                                <Input inputMode="decimal" density={FORM_FIELD_DENSITY} value={costGross} onChange={(e) => setCostGross(e.target.value)} />
+                              </FormField>
+                              <FormField label="Koszt pracodawcy (override)">
+                                <Input inputMode="decimal" density={FORM_FIELD_DENSITY} value={costEmployerTotal} onChange={(e) => setCostEmployerTotal(e.target.value)} />
+                              </FormField>
+                              <FormField label="Godziny w miesiącu">
+                                <Input inputMode="numeric" density={FORM_FIELD_DENSITY} value={costHoursMonth} onChange={(e) => setCostHoursMonth(e.target.value)} />
+                              </FormField>
+                              <FormField label="Override stawki pracodawcy (0–1)">
+                                <Input inputMode="decimal" density={FORM_FIELD_DENSITY} value={costEmployerRateOverride} onChange={(e) => setCostEmployerRateOverride(e.target.value)} />
+                              </FormField>
                               <div className="flex items-center gap-3 pt-6">
-                                <input type="checkbox" className="h-5 w-5 accent-indigo-600" checked={costPpk} onChange={(e) => setCostPpk(e.target.checked)} />
+                                <Checkbox checked={costPpk} onChange={(e) => setCostPpk(e.target.checked)} />
                                 <span className="text-sm font-bold text-slate-700">PPK (składka pracodawcy w modelu)</span>
                               </div>
                             </div>
-                            <div>
-                              <label className={labelCls}>Notatki</label>
-                              <textarea className={`${sidebarInputCls} min-h-[88px]`} value={costNotes} onChange={(e) => setCostNotes(e.target.value)} />
-                            </div>
+                            <FormField label="Notatki">
+                              <Textarea
+                                density={FORM_FIELD_DENSITY}
+                                className="min-h-[88px]"
+                                value={costNotes}
+                                onChange={(e) => setCostNotes(e.target.value)}
+                              />
+                            </FormField>
                             {costOperational && (
                               <div className="rounded-2xl border border-indigo-100 bg-white p-4 text-sm text-slate-700">
                                 <p className="font-bold text-indigo-800">Podgląd operacyjny</p>
@@ -1288,28 +1295,26 @@ export default function AdministratorEditPage() {
                             <div className="rounded-3xl border border-slate-100 bg-slate-50/40 p-6">
                               <h3 className="text-sm font-black uppercase tracking-wider text-slate-500">Nowy preset (z bieżących uprawnień)</h3>
                               <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                                <div className="sm:col-span-2">
-                                  <label className={labelCls}>Nazwa</label>
-                                  <input className={sidebarInputCls} value={presetName} onChange={(e) => setPresetName(e.target.value)} />
-                                </div>
-                                <div className="sm:col-span-2">
-                                  <label className={labelCls}>Opis</label>
-                                  <input className={sidebarInputCls} value={presetDescription} onChange={(e) => setPresetDescription(e.target.value)} />
-                                </div>
-                                <div>
-                                  <label className={labelCls}>Widoczność</label>
-                                  <select
-                                    className={sidebarInputCls}
+                                <FormField label="Nazwa" className="sm:col-span-2">
+                                  <Input density={FORM_FIELD_DENSITY} value={presetName} onChange={(e) => setPresetName(e.target.value)} />
+                                </FormField>
+                                <FormField label="Opis" className="sm:col-span-2">
+                                  <Input density={FORM_FIELD_DENSITY} value={presetDescription} onChange={(e) => setPresetDescription(e.target.value)} />
+                                </FormField>
+                                <FormField label="Widoczność">
+                                  <Select
+                                    density={FORM_FIELD_DENSITY}
                                     value={presetVisibility}
                                     onChange={(e) => setPresetVisibility(e.target.value as "personal" | "organization")}
                                   >
                                     <option value="personal">Osobisty</option>
                                     <option value="organization">Organizacja</option>
-                                  </select>
-                                </div>
+                                  </Select>
+                                </FormField>
                                 <div className="flex items-end">
-                                  <button
+                                  <PrimaryButton
                                     type="button"
+                                    className="w-full"
                                     disabled={!presetName.trim() || isSuperRole(role)}
                                     onClick={() => {
                                       void (async () => {
@@ -1329,10 +1334,9 @@ export default function AdministratorEditPage() {
                                         }
                                       })();
                                     }}
-                                    className={`${brandPrimaryButtonClass} w-full`}
                                   >
                                     + Utwórz
-                                  </button>
+                                  </PrimaryButton>
                                 </div>
                               </div>
                             </div>
@@ -1435,22 +1439,17 @@ export default function AdministratorEditPage() {
             <span className="text-sm font-semibold text-slate-900 whitespace-nowrap">Masz niezapisane zmiany</span>
           </div>
           <div className="flex items-center gap-3">
-            <button type="button" onClick={onCancelEdit} className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
+            <GhostButton type="button" onClick={onCancelEdit}>
               Anuluj
-            </button>
-            <button
-              type="button"
-              onClick={() => void onSave()}
-              disabled={saving}
-              className={brandPrimaryButtonClass}
-            >
+            </GhostButton>
+            <PrimaryButton type="button" onClick={() => void onSave()} disabled={saving}>
               {saving ? (
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
               ) : (
                 <Save className="h-4 w-4" aria-hidden />
               )}
               Zapisz zmiany
-            </button>
+            </PrimaryButton>
           </div>
         </div>
       </div>

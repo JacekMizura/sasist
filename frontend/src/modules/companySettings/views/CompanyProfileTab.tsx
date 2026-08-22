@@ -1,10 +1,10 @@
 import { FileText, Landmark, Loader2 } from "lucide-react";
 
-import { CompanyFormField, companyInputClass } from "../components/CompanyFormField";
+import { FORM_FIELD_DENSITY, Input, PrimaryButton } from "@/design-system";
+import { CompanyFormField } from "../components/CompanyFormField";
 import { useCompanySettings } from "../context/CompanySettingsContext";
 import { DocumentTemplateScopeSection } from "../../../pages/Settings/document-templates/components/DocumentTemplateScopeSection";
 import { COMPANY_SCOPE_KINDS } from "../../../pages/Settings/document-templates/documentTemplateScopeKinds";
-import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 import {
   companyCardClass,
   companySectionTitleClass,
@@ -36,46 +36,46 @@ export default function CompanyProfileTab() {
             Dane rejestrowe
           </h2>
           <CompanyFormField label="Nazwa firmy">
-            <input
-              className={companyInputClass}
+            <Input
+              density={FORM_FIELD_DENSITY}
               value={form.company_name}
               onChange={(e) => setForm({ ...form, company_name: e.target.value })}
             />
           </CompanyFormField>
           <div className="grid gap-4 sm:grid-cols-2">
             <CompanyFormField label="NIP">
-              <input
-                className={companyInputClass}
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={form.nip}
                 onChange={(e) => setForm({ ...form, nip: e.target.value })}
               />
             </CompanyFormField>
             <CompanyFormField label="REGON">
-              <input
-                className={companyInputClass}
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={form.regon}
                 onChange={(e) => setForm({ ...form, regon: e.target.value })}
               />
             </CompanyFormField>
           </div>
           <CompanyFormField label="Ulica">
-            <input
-              className={companyInputClass}
+            <Input
+              density={FORM_FIELD_DENSITY}
               value={form.street}
               onChange={(e) => setForm({ ...form, street: e.target.value })}
             />
           </CompanyFormField>
           <div className="grid gap-4 sm:grid-cols-2">
             <CompanyFormField label="Nr domu">
-              <input
-                className={companyInputClass}
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={form.building_number}
                 onChange={(e) => setForm({ ...form, building_number: e.target.value })}
               />
             </CompanyFormField>
             <CompanyFormField label="Nr lokalu">
-              <input
-                className={companyInputClass}
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={form.apartment_number}
                 onChange={(e) => setForm({ ...form, apartment_number: e.target.value })}
               />
@@ -83,23 +83,23 @@ export default function CompanyProfileTab() {
           </div>
           <div className="grid gap-4 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,0.85fr)]">
             <CompanyFormField label="Miasto">
-              <input
-                className={companyInputClass}
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={form.city}
                 onChange={(e) => setForm({ ...form, city: e.target.value })}
               />
             </CompanyFormField>
             <CompanyFormField label="Kod pocztowy">
-              <input
-                className={companyInputClass}
+              <Input
+                density={FORM_FIELD_DENSITY}
                 value={form.postal_code}
                 onChange={(e) => setForm({ ...form, postal_code: e.target.value })}
               />
             </CompanyFormField>
           </div>
           <CompanyFormField label="Kraj">
-            <input
-              className={companyInputClass}
+            <Input
+              density={FORM_FIELD_DENSITY}
               value={form.country}
               onChange={(e) => setForm({ ...form, country: e.target.value })}
               placeholder="np. Polska"
@@ -113,45 +113,45 @@ export default function CompanyProfileTab() {
             Bank i kontakt
           </h2>
           <CompanyFormField label="Bank">
-            <input
-              className={companyInputClass}
+            <Input
+              density={FORM_FIELD_DENSITY}
               value={form.bank_name}
               onChange={(e) => setForm({ ...form, bank_name: e.target.value })}
             />
           </CompanyFormField>
           <CompanyFormField label="IBAN">
-            <input
-              className={companyInputClass}
+            <Input
+              density={FORM_FIELD_DENSITY}
               value={form.iban}
               onChange={(e) => setForm({ ...form, iban: e.target.value })}
               placeholder="PL…"
             />
           </CompanyFormField>
           <CompanyFormField label="SWIFT">
-            <input
-              className={companyInputClass}
+            <Input
+              density={FORM_FIELD_DENSITY}
               value={form.bic_swift}
               onChange={(e) => setForm({ ...form, bic_swift: e.target.value })}
             />
           </CompanyFormField>
           <CompanyFormField label="Telefon">
-            <input
-              className={companyInputClass}
+            <Input
+              density={FORM_FIELD_DENSITY}
               value={form.company_phone}
               onChange={(e) => setForm({ ...form, company_phone: e.target.value })}
             />
           </CompanyFormField>
           <CompanyFormField label="E-mail">
-            <input
+            <Input
               type="email"
-              className={companyInputClass}
+              density={FORM_FIELD_DENSITY}
               value={form.document_email}
               onChange={(e) => setForm({ ...form, document_email: e.target.value })}
             />
           </CompanyFormField>
           <CompanyFormField label="WWW">
-            <input
-              className={companyInputClass}
+            <Input
+              density={FORM_FIELD_DENSITY}
               value={form.website_url}
               onChange={(e) => setForm({ ...form, website_url: e.target.value })}
               placeholder="https://…"
@@ -174,14 +174,9 @@ export default function CompanyProfileTab() {
       </section>
 
       <div className="flex justify-end pb-2">
-        <button
-          type="button"
-          className={brandPrimaryButtonClass}
-          disabled={!profileDirty || profileSaving}
-          onClick={() => void saveProfile()}
-        >
+        <PrimaryButton type="button" disabled={!profileDirty || profileSaving} onClick={() => void saveProfile()}>
           {profileSaving ? "Zapisywanie…" : "Zapisz zmiany"}
-        </button>
+        </PrimaryButton>
       </div>
     </div>
   );

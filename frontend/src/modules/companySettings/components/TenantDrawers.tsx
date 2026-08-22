@@ -6,10 +6,10 @@ import { AppOverlayPortal } from "../../../components/overlay";
 import {
   PurchasingTableHeader,
   purchasingBtnSecondary,
-  purchasingSelectClass,
   purchasingTableTdClass,
 } from "../../purchasing/ui";
-import { companyInputClass, CompanyFormField } from "./CompanyFormField";
+import { Checkbox, FORM_FIELD_DENSITY, Input, Select } from "@/design-system";
+import { CompanyFormField } from "./CompanyFormField";
 import { useCompanySettings } from "../context/CompanySettingsContext";
 import { fmtDateTime, roleLabel } from "../companySettingsUtils";
 import type { TenantDto } from "../../../services/warehouseService";
@@ -132,8 +132,8 @@ export function TenantDetailDrawer({ tenant, onClose }: Props) {
             </p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <CompanyFormField label="Magazyn">
-                <select
-                  className={purchasingSelectClass}
+                <Select
+                  density={FORM_FIELD_DENSITY}
                   value={assignWarehouseId === "" ? "" : String(assignWarehouseId)}
                   onChange={(e) => setAssignWarehouseId(e.target.value ? Number(e.target.value) : "")}
                 >
@@ -143,18 +143,18 @@ export function TenantDetailDrawer({ tenant, onClose }: Props) {
                       {w.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </CompanyFormField>
               <CompanyFormField label="Rola">
-                <select className={purchasingSelectClass} value={assignRole} onChange={(e) => setAssignRole(e.target.value)}>
+                <Select density={FORM_FIELD_DENSITY} value={assignRole} onChange={(e) => setAssignRole(e.target.value)}>
                   <option value="owner">Właściciel</option>
                   <option value="client">Klient</option>
                   <option value="operator">Operator</option>
-                </select>
+                </Select>
               </CompanyFormField>
             </div>
             <label className="mt-3 flex items-center gap-2">
-              <input type="checkbox" className="h-4 w-4 rounded border-slate-300" checked={assignIsDefault} onChange={(e) => setAssignIsDefault(e.target.checked)} />
+              <Checkbox checked={assignIsDefault} onChange={(e) => setAssignIsDefault(e.target.checked)} />
               <span className="text-sm text-slate-700">Domyślny magazyn dla tej firmy</span>
             </label>
             <AppButton
@@ -197,7 +197,12 @@ export function TenantCreateDrawer({ open, onClose }: CreateTenantDrawerProps) {
         </div>
         <div className="p-4">
           <CompanyFormField label="Nazwa firmy">
-            <input className={companyInputClass} value={name} onChange={(e) => setName(e.target.value)} placeholder="np. Nazwa spółki" />
+            <Input
+              density={FORM_FIELD_DENSITY}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="np. Nazwa spółki"
+            />
           </CompanyFormField>
         </div>
         <div className="mt-auto flex justify-end gap-2 border-t border-slate-200 px-4 py-3">

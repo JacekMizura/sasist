@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
@@ -12,7 +12,15 @@ import {
 } from "../../../api/documentTemplatesApi";
 import { extractApiErrorMessage } from "../../../api/apiErrorMessage";
 import { DEFAULT_TENANT_ID, LIST_BASE } from "./constants";
-import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
+import {
+  FORM_FIELD_DENSITY,
+  FormField,
+  FormSection,
+  GhostButton,
+  Input,
+  PrimaryButton,
+  Select,
+} from "@/design-system";
 
 export function DocumentTemplateCreatePage() {
   const navigate = useNavigate();
@@ -82,47 +90,56 @@ export function DocumentTemplateCreatePage() {
     <div className="mx-auto max-w-xl rounded-xl border border-slate-200/90 bg-white p-6 shadow-sm">
       <h2 className="text-lg font-semibold text-slate-900">Nowy szablon wydruku</h2>
       <p className="mt-1 text-sm text-slate-500">Utwórz szablon ze startera systemowego.</p>
-      <div className="mt-6 space-y-4">
-        <Field label="Rodzina">
-          <select
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+      <FormSection className="mt-6 space-y-4">
+        <FormField label="Rodzina">
+          <Select
+            density={FORM_FIELD_DENSITY}
             value={familyCode}
-            onChange={(e) => { setFamilyCode(e.target.value); setKindCode(""); }}
+            onChange={(e) => {
+              setFamilyCode(e.target.value);
+              setKindCode("");
+            }}
           >
             <option value="">— wybierz —</option>
             {families.map((f) => (
-              <option key={f.code} value={f.code}>{f.name_pl}</option>
+              <option key={f.code} value={f.code}>
+                {f.name_pl}
+              </option>
             ))}
-          </select>
-        </Field>
-        <Field label="Typ dokumentu">
-          <select
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          </Select>
+        </FormField>
+        <FormField label="Typ dokumentu">
+          <Select
+            density={FORM_FIELD_DENSITY}
             value={kindCode}
             onChange={(e) => setKindCode(e.target.value)}
           >
             <option value="">— wybierz —</option>
             {kinds.map((k) => (
-              <option key={k.code} value={k.code}>{k.name_pl}</option>
+              <option key={k.code} value={k.code}>
+                {k.name_pl}
+              </option>
             ))}
-          </select>
-        </Field>
-        <Field label="Starter">
-          <select
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          </Select>
+        </FormField>
+        <FormField label="Starter">
+          <Select
+            density={FORM_FIELD_DENSITY}
             value={starterCode}
             onChange={(e) => setStarterCode(e.target.value)}
             disabled={!kindCode || starters.length === 0}
           >
             {starters.map((s) => (
-              <option key={s.id} value={s.code}>{s.name_pl}</option>
+              <option key={s.id} value={s.code}>
+                {s.name_pl}
+              </option>
             ))}
-          </select>
+          </Select>
           {starters.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-2">
-              <button
+              <GhostButton
                 type="button"
-                className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50"
+                density="compact"
                 onClick={async () => {
                   const s = starters.find((x) => x.code === starterCode);
                   if (!s) return;
@@ -137,10 +154,10 @@ export function DocumentTemplateCreatePage() {
                 }}
               >
                 Eksport startera
-              </button>
-              <button
+              </GhostButton>
+              <GhostButton
                 type="button"
-                className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50"
+                density="compact"
                 onClick={async () => {
                   const s = starters.find((x) => x.code === starterCode);
                   if (!s) return;
@@ -154,8 +171,8 @@ export function DocumentTemplateCreatePage() {
                 }}
               >
                 Klonuj starter
-              </button>
-              <label className="cursor-pointer rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50">
+              </GhostButton>
+              <label className="inline-flex cursor-pointer items-center rounded-lg border border-transparent px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">
                 Import startera
                 <input
                   type="file"
@@ -171,17 +188,17 @@ export function DocumentTemplateCreatePage() {
                       toast.success("Zaimportowano starter.");
                       setStarters(await fetchDocumentStarters(kindCode));
                     } catch (err) {
-                      toast.error(extractApiErrorMessage(err, "Import nie powiódł się."));
+                      toast.error(extractApiErrorMessage(err, "Import nie powiodł się."));
                     }
                   }}
                 />
               </label>
             </div>
           )}
-        </Field>
-        <Field label="Wariant">
-          <select
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+        </FormField>
+        <FormField label="Wariant">
+          <Select
+            density={FORM_FIELD_DENSITY}
             value={variantCode}
             onChange={(e) => setVariantCode(e.target.value)}
           >
@@ -190,34 +207,20 @@ export function DocumentTemplateCreatePage() {
             <option value="pharma">pharma</option>
             <option value="export">export</option>
             <option value="internal">internal</option>
-          </select>
-        </Field>
-        <Field label="Nazwa szablonu">
-          <input
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          </Select>
+        </FormField>
+        <FormField label="Nazwa szablonu">
+          <Input
+            density={FORM_FIELD_DENSITY}
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="np. Karta produkcyjna — standard"
           />
-        </Field>
-        <button
-          type="button"
-          disabled={creating}
-          onClick={handleCreate}
-          className={brandPrimaryButtonClass}
-        >
+        </FormField>
+        <PrimaryButton type="button" disabled={creating} onClick={handleCreate}>
           Utwórz i otwórz edytor
-        </button>
-      </div>
+        </PrimaryButton>
+      </FormSection>
     </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="block text-xs font-medium text-slate-600">
-      {label}
-      <div className="mt-1">{children}</div>
-    </label>
   );
 }

@@ -23,7 +23,18 @@ import {
   OperationalActionColumn,
   OperationalActionLink,
 } from "@/components/operational";
-import { Dialog, PrimaryButton, SecondaryButton, StatusBadge, typography } from "../../design-system";
+import {
+  Dialog,
+  FORM_FIELD_DENSITY,
+  FormField,
+  Input,
+  PrimaryButton,
+  SecondaryButton,
+  Select,
+  StatusBadge,
+  inputClassName,
+  typography,
+} from "../../design-system";
 import { useAuth } from "../../context/AuthContext";
 import { useActiveWarehouseContext } from "../../hooks/useActiveWarehouseContext";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
@@ -52,9 +63,6 @@ import {
 import { MessageVariablesPanel } from "../../components/messaging/MessageVariablesPanel";
 
 const BASE = TEMPLATES_MESSAGES_BASE;
-
-const fieldInputClass =
-  "mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-200";
 
 function attachmentSourceKindLabel(fieldType?: string | null): string {
   const t = String(fieldType || "").toUpperCase();
@@ -399,35 +407,32 @@ function TemplateEditorPage({ mode }: { mode: "new" | "edit" }) {
             <h2 className={typography.section}>Dane szablonu</h2>
 
             <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_240px] sm:items-end">
-              <label className="block min-w-0">
-                <span className={typography.label}>Nazwa</span>
-                <input
-                  className={fieldInputClass}
+              <FormField label="Nazwa" className="min-w-0">
+                <Input
+                  density={FORM_FIELD_DENSITY}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
                 />
-              </label>
-              <label className="block w-full sm:w-[240px]">
-                <span className={typography.label}>Typ wiadomości</span>
-                <select
-                  className={fieldInputClass}
+              </FormField>
+              <FormField label="Typ wiadomości" className="w-full sm:w-[240px]">
+                <Select
+                  density={FORM_FIELD_DENSITY}
                   value={channel}
                   onChange={(e) => setChannel(e.target.value as MessageTemplateChannel)}
                 >
                   <option value="email">E-mail</option>
                   <option value="sms">SMS</option>
                   <option value="note">Notatka</option>
-                </select>
-              </label>
+                </Select>
+              </FormField>
             </div>
 
             {isEmail ? (
-              <label className="block">
-                <span className={typography.label}>Temat wiadomości</span>
+              <FormField label="Temat wiadomości">
                 <input
                   ref={subjectRef}
-                  className={`${fieldInputClass} font-mono`}
+                  className={`${inputClassName(FORM_FIELD_DENSITY)} font-mono`}
                   value={subject}
                   onFocus={() => {
                     focusTarget.current = "subject";
@@ -435,7 +440,7 @@ function TemplateEditorPage({ mode }: { mode: "new" | "edit" }) {
                   onChange={(e) => setSubject(e.target.value)}
                   placeholder="np. Zamówienie {order_id} zostało wysłane"
                 />
-              </label>
+              </FormField>
             ) : null}
           </section>
 
@@ -446,7 +451,7 @@ function TemplateEditorPage({ mode }: { mode: "new" | "edit" }) {
               {isPlain ? (
                 <textarea
                   ref={bodyTextRef}
-                  className={`${fieldInputClass} min-h-[280px] font-mono leading-relaxed`}
+                  className={`${inputClassName(FORM_FIELD_DENSITY)} min-h-[280px] font-mono leading-relaxed`}
                   value={bodyText}
                   onFocus={() => {
                     focusTarget.current = "body";

@@ -4,6 +4,13 @@ import { Printer, RefreshCw } from "lucide-react";
 
 import api from "../../../api/axios";
 import { brandSoftButtonClass } from "../../../design-system/brandUi";
+import {
+  FORM_FIELD_DENSITY,
+  FormField,
+  FormHelperText,
+  Input,
+  Select,
+} from "@/design-system";
 import { DAMAGE_TENANT_ID } from "../../../constants/panelTenant";
 import {
   downloadPdfBlob,
@@ -23,8 +30,6 @@ type Props = {
   onCodeChange: (v: string) => void;
   templateId: number | "";
   onTemplateIdChange: (v: number | "") => void;
-  inputClassName: string;
-  labelClassName: string;
 };
 
 export default function LoginCodeLabelControls({
@@ -34,8 +39,6 @@ export default function LoginCodeLabelControls({
   onCodeChange,
   templateId,
   onTemplateIdChange,
-  inputClassName,
-  labelClassName,
 }: Props) {
   const [templates, setTemplates] = useState<LabelTpl[]>([]);
   const [busy, setBusy] = useState(false);
@@ -100,11 +103,11 @@ export default function LoginCodeLabelControls({
 
   return (
     <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/40 p-4">
-      <div>
-        <label className={labelClassName}>Kod logowania</label>
-        <div className="mt-1 flex gap-2">
-          <input
-            className={`${inputClassName} flex-1`}
+      <FormField label="Kod logowania">
+        <div className="flex gap-2">
+          <Input
+            density={FORM_FIELD_DENSITY}
+            className="flex-1"
             value={code}
             onChange={(e) => onCodeChange(e.target.value.toUpperCase())}
             placeholder="np. MAG123"
@@ -120,15 +123,12 @@ export default function LoginCodeLabelControls({
             Generuj
           </button>
         </div>
-        <p className="mt-1 text-[11px] text-slate-500">
-          Identyfikator operatora (nie hasło). Musi być unikalny w systemie.
-        </p>
-      </div>
+        <FormHelperText>Identyfikator operatora (nie hasło). Musi być unikalny w systemie.</FormHelperText>
+      </FormField>
 
-      <div>
-        <label className={labelClassName}>Szablon etykiety kodu logowania</label>
-        <select
-          className={`${inputClassName} mt-1`}
+      <FormField label="Szablon etykiety kodu logowania">
+        <Select
+          density={FORM_FIELD_DENSITY}
           value={templateId === "" ? "" : String(templateId)}
           onChange={(e) => onTemplateIdChange(e.target.value ? Number(e.target.value) : "")}
         >
@@ -138,14 +138,14 @@ export default function LoginCodeLabelControls({
               {t.name}
             </option>
           ))}
-        </select>
+        </Select>
         {templates.length === 0 ? (
-          <p className="mt-1 text-[11px] text-amber-700">
+          <FormHelperText className="text-amber-700">
             Brak szablonów typu „Kod logowania użytkownika”. Dodaj szablon w Szablonach etykiet i użyj zmiennej
             „Kod logowania”.
-          </p>
+          </FormHelperText>
         ) : null}
-      </div>
+      </FormField>
 
       <div className="flex flex-wrap gap-2">
         <button

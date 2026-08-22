@@ -180,6 +180,14 @@ const PHASE_C_FORM_GLOBS = [
   "pages/documents/DocumentSeriesEditPage.tsx",
   "components/orders/DocumentSeriesQuickCreateModal.tsx",
   "pages/documents/WarehouseDocumentDetailInfo.tsx",
+  "pages/admin/MessageTemplatesModule.tsx",
+  "pages/Settings/document-templates/DocumentTemplateCreatePage.tsx",
+  "modules/companySettings/components/CompanyFormField.tsx",
+  "modules/companySettings/views/CompanyProfileTab.tsx",
+  "modules/companySettings/components/WarehouseDrawers.tsx",
+  "modules/companySettings/components/TenantDrawers.tsx",
+  "pages/Settings/AdministratorEditPage.tsx",
+  "pages/Settings/administrators/LoginCodeLabelControls.tsx",
 ];
 
 function readPhaseCFiles(): { rel: string; src: string }[] {
@@ -265,5 +273,39 @@ describe("UI architecture SSOT (Phase C form modules)", () => {
     expect(edit!.src).toMatch(/\bFormSection\b/);
     expect(edit!.src).toMatch(/\bFormActions\b/);
     expect(edit!.src).toMatch(/\bPrimaryButton\b/);
+  });
+
+  it("Wave 3 message templates editor does not use fieldInputClass", () => {
+    const editor = files.find((f) => f.rel.endsWith("MessageTemplatesModule.tsx"));
+    expect(editor).toBeTruthy();
+    expect(editor!.src).not.toMatch(/\bfieldInputClass\b/);
+    expect(editor!.src).toMatch(/\bFormField\b/);
+    expect(editor!.src).toMatch(/\bFORM_FIELD_DENSITY\b/);
+  });
+
+  it("Wave 3 document template create does not use brandPrimaryButtonClass or local Field", () => {
+    const page = files.find((f) => f.rel.endsWith("DocumentTemplateCreatePage.tsx"));
+    expect(page).toBeTruthy();
+    expect(page!.src).not.toMatch(/\bbrandPrimaryButtonClass\b/);
+    expect(page!.src).not.toMatch(/function Field\(/);
+    expect(page!.src).toMatch(/\bFormField\b/);
+    expect(page!.src).toMatch(/\bPrimaryButton\b/);
+  });
+
+  it("Wave 3 administrator edit does not use sidebarInputCls or labelCls", () => {
+    const page = files.find((f) => f.rel.endsWith("AdministratorEditPage.tsx"));
+    expect(page).toBeTruthy();
+    expect(page!.src).not.toMatch(/\bsidebarInputCls\b/);
+    expect(page!.src).not.toMatch(/\blabelCls\b/);
+    expect(page!.src).toMatch(/\bFormField\b/);
+    expect(page!.src).toMatch(/\bFORM_FIELD_DENSITY\b/);
+  });
+
+  it("Wave 3 company profile uses FormField shim and FORM_FIELD_DENSITY inputs", () => {
+    const tab = files.find((f) => f.rel.endsWith("CompanyProfileTab.tsx"));
+    expect(tab).toBeTruthy();
+    expect(tab!.src).not.toMatch(/\bcompanyInputClass\b/);
+    expect(tab!.src).toMatch(/\bFORM_FIELD_DENSITY\b/);
+    expect(tab!.src).toMatch(/\bPrimaryButton\b/);
   });
 });

@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 
 import { AppButton } from "../../../components/app-shell";
 import { AppOverlayPortal } from "../../../components/overlay";
-import { companyInputClass, CompanyFormField } from "./CompanyFormField";
+import { Checkbox, FORM_FIELD_DENSITY, Input } from "@/design-system";
+import { CompanyFormField } from "./CompanyFormField";
 import { purchasingBtnSecondary } from "../../purchasing/ui";
 import type { Warehouse } from "../../../services/warehouseService";
 import { useCompanySettings } from "../context/CompanySettingsContext";
@@ -76,13 +77,13 @@ export function WarehouseEditDrawer({ warehouse, onClose }: Props) {
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-4 text-sm">
           <CompanyFormField label="Nazwa">
-            <input className={companyInputClass} value={name} onChange={(e) => setName(e.target.value)} />
+            <Input density={FORM_FIELD_DENSITY} value={name} onChange={(e) => setName(e.target.value)} />
           </CompanyFormField>
 
           <div className="mt-6 border-t border-slate-100 pt-4">
             <p className="text-xs font-semibold uppercase text-slate-500">Profil przyjęć</p>
             <label className="mt-3 flex cursor-pointer items-start gap-3">
-              <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-slate-300" checked={requiresPutaway} onChange={(e) => setRequiresPutaway(e.target.checked)} />
+              <Checkbox className="mt-0.5" checked={requiresPutaway} onChange={(e) => setRequiresPutaway(e.target.checked)} />
               <span className="min-w-0 text-sm text-slate-700">
                 Wymaga rozlokowania (WMS) — towar trafia na DOCK-IN i wymaga putaway przed sprzedażą.
               </span>
@@ -98,15 +99,21 @@ export function WarehouseEditDrawer({ warehouse, onClose }: Props) {
             ) : (
               <div className="mt-3 space-y-3">
                 <label className="flex items-start gap-3">
-                  <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-slate-300" checked={participatesNetwork} onChange={(e) => setParticipatesNetwork(e.target.checked)} />
+                  <Checkbox className="mt-0.5" checked={participatesNetwork} onChange={(e) => setParticipatesNetwork(e.target.checked)} />
                   <span className="text-sm text-slate-700">Uwzględniaj w stanie sieciowym</span>
                 </label>
                 <label className="flex items-start gap-3">
-                  <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-slate-300" checked={fulfillmentEligible} onChange={(e) => setFulfillmentEligible(e.target.checked)} />
+                  <Checkbox className="mt-0.5" checked={fulfillmentEligible} onChange={(e) => setFulfillmentEligible(e.target.checked)} />
                   <span className="text-sm text-slate-700">Magazyn może realizować zamówienia</span>
                 </label>
                 <CompanyFormField label="Priorytet realizacji">
-                  <input type="number" min={1} className={companyInputClass} value={fulfillmentPriority} onChange={(e) => setFulfillmentPriority(Number(e.target.value) || 1)} />
+                  <Input
+                    type="number"
+                    min={1}
+                    density={FORM_FIELD_DENSITY}
+                    value={fulfillmentPriority}
+                    onChange={(e) => setFulfillmentPriority(Number(e.target.value) || 1)}
+                  />
                 </CompanyFormField>
               </div>
             )}
@@ -166,7 +173,12 @@ export function WarehouseCreateDrawer({ open, onClose }: CreateProps) {
         </div>
         <div className="p-4">
           <CompanyFormField label="Nazwa magazynu">
-            <input className={companyInputClass} value={name} onChange={(e) => setName(e.target.value)} placeholder="np. Magazyn centralny" />
+            <Input
+              density={FORM_FIELD_DENSITY}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="np. Magazyn centralny"
+            />
           </CompanyFormField>
           <p className="mt-2 text-xs text-slate-500">Po utworzeniu przypisz magazyn do firmy w zakładce „Firmy i przypisania”.</p>
         </div>
