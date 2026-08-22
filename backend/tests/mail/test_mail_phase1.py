@@ -413,7 +413,7 @@ def test_connection_send_only(monkeypatch, db):
 
 
 def test_mail_permissions_exist():
-    for key in ("mail.view", "mail.reply", "mail.manage_accounts", "mail.manage_templates"):
+    for key in ("mail.view", "mail.reply", "mail.manage_conversations", "mail.manage_accounts", "mail.manage_templates"):
         assert key in PERMISSION_KEYS
 
 

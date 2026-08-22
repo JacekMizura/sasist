@@ -10643,6 +10643,8 @@ def ensure_mail_module_tables(engine: Engine) -> None:
         MailConversation,
         MailConversationRelation,
         MailMessage,
+        MailConversationReadState,
+        MailConversationAuditEvent,
     )
 
     for model in (
@@ -10650,6 +10652,8 @@ def ensure_mail_module_tables(engine: Engine) -> None:
         MailConversation,
         MailConversationRelation,
         MailMessage,
+        MailConversationReadState,
+        MailConversationAuditEvent,
     ):
         ensure_model_table_from_orm(engine, model, log_prefix="schema.mail")
         sync_model_schema(engine, model, log_prefix="schema.mail")

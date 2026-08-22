@@ -316,6 +316,7 @@ PERMISSION_TREE: list[dict[str, Any]] = [
                 [
                     _leaf("mail.view", "Podgląd korespondencji"),
                     _leaf("mail.reply", "Odpowiedzi i wysyłka"),
+                    _leaf("mail.manage_conversations", "Zarządzanie rozmowami"),
                     _leaf("mail.manage_accounts", "Konta pocztowe"),
                     _leaf("mail.manage_templates", "Szablony wiadomości"),
                 ],

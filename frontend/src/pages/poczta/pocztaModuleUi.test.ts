@@ -41,3 +41,32 @@ describe("Poczta module Phase 1 UI", () => {
     expect(paths).toContain('"/poczta/szablony"');
   });
 });
+
+describe("Poczta module Phase 2 UI", () => {
+  it("correspondence list uses sidebar and OperationalActionLink", () => {
+    const page = read("pages/poczta/MailCorrespondencePage.tsx");
+    expect(page).toContain("MailCorrespondenceSidebar");
+    expect(page).toContain("OperationalActionLink");
+    expect(page).toContain("listMailConversations");
+  });
+
+  it("detail page has reply composer and MessageTemplatePicker", () => {
+    const page = read("pages/poczta/MailConversationDetailPage.tsx");
+    expect(page).toContain("MessageTemplatePicker");
+    expect(page).toContain("replyMailConversation");
+    expect(page).toContain("ExternalLink");
+  });
+
+  it("detail route registered in App", () => {
+    const app = read("App.tsx");
+    expect(app).toContain("korespondencja/:conversationId");
+    expect(app).toContain("MailConversationDetailPage");
+  });
+
+  it("mail API exposes conversation endpoints", () => {
+    const api = read("modules/poczta/services/mailApi.ts");
+    expect(api).toContain("/mail/conversations");
+    expect(api).toContain("sidebar-counts");
+    expect(api).toContain("mark-read");
+  });
+});

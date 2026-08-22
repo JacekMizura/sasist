@@ -226,6 +226,7 @@ import SuppliersLayout from "./pages/Assortment/SuppliersLayout"
 import PurchasingLayout from "./pages/purchasing/PurchasingLayout"
 import PocztaLayout from "./pages/poczta/PocztaLayout"
 import MailCorrespondencePage from "./pages/poczta/MailCorrespondencePage"
+import MailConversationDetailPage from "./pages/poczta/MailConversationDetailPage"
 import MailOutboxPlaceholderPage from "./pages/poczta/MailOutboxPlaceholderPage"
 import MailAccountsPage from "./pages/poczta/MailAccountsPage"
 import PurchasingPoDetailPage from "./pages/purchasing/PurchasingPoDetailPage"
@@ -1093,6 +1094,7 @@ export const router = createBrowserRouter(
                 <Route path="poczta" element={<PocztaLayout />}>
                   <Route index element={<Navigate to="/poczta/korespondencja" replace />} />
                   <Route path="korespondencja" element={<MailCorrespondencePage />} />
+                  <Route path="korespondencja/:conversationId" element={<MailConversationDetailPage />} />
                   <Route path="nadawcza" element={<MailOutboxPlaceholderPage />} />
                   <Route path="konta" element={<MailAccountsPage />} />
                   <Route path="szablony/*" element={<MessageTemplatesModule />} />

@@ -28,6 +28,9 @@ class EmailSendRequest:
     body_text: str
     idempotency_key: str
     from_address: Optional[str] = None
+    message_id: Optional[str] = None
+    in_reply_to: Optional[str] = None
+    references: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -118,6 +121,12 @@ class SmtpEmailProvider:
         msg["Subject"] = request.subject
         msg["From"] = request.from_address or self.from_address
         msg["To"] = request.to_address
+        if request.message_id:
+            msg["Message-ID"] = request.message_id
+        if request.in_reply_to:
+            msg["In-Reply-To"] = request.in_reply_to
+        if request.references:
+            msg["References"] = request.references
         # Best-effort provider-facing idempotency (not all relays honor it).
         msg["X-Sasist-Idempotency-Key"] = request.idempotency_key
         msg.set_content(request.body_text or "")

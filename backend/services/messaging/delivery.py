@@ -89,12 +89,24 @@ def deliver_one_outbound_email(db: Session, row: OutboundEmailMessage) -> dict[s
         }
 
     try:
+        from_addr: str | None = None
+        if row.mail_account_id:
+            from ...models.mail import MailAccount
+
+            mail_account = db.query(MailAccount).filter(MailAccount.id == int(row.mail_account_id)).first()
+            if mail_account is not None:
+                from_addr = mail_account.email_address
+
         result = provider.send(
             EmailSendRequest(
                 to_address=str(row.recipient_email),
                 subject=str(row.subject or ""),
                 body_text=str(row.body or ""),
                 idempotency_key=str(row.idempotency_key),
+                from_address=from_addr,
+                message_id=str(row.message_id_header) if row.message_id_header else None,
+                in_reply_to=str(row.in_reply_to) if row.in_reply_to else None,
+                references=str(row.references_header) if row.references_header else None,
             )
         )
     except EmailProviderError as exc:

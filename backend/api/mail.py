@@ -7,6 +7,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from .mail_conversations import router as conversations_router
+
 from ..auth.deps import get_current_user, require_permission
 from ..database import get_db
 from ..models.app_user import AppUser
@@ -24,6 +26,7 @@ from ..services.mail.account_service import (
 from ..services.mail.connection_test import probe_account_connection
 
 router = APIRouter(prefix="/mail", tags=["Mail"])
+router.include_router(conversations_router)
 
 _view_perm = require_permission("mail.view")
 _manage_accounts_perm = require_permission("mail.manage_accounts")

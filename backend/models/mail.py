@@ -36,6 +36,10 @@ CONV_PRIORITY_URGENT = "URGENT"
 MSG_DIRECTION_INBOUND = "INBOUND"
 MSG_DIRECTION_OUTBOUND = "OUTBOUND"
 
+OUTBOUND_SOURCE_MANUAL = "MANUAL"
+OUTBOUND_SOURCE_AUTOMATION = "AUTOMATION"
+ENTITY_MAIL_CONVERSATION = "MAIL_CONVERSATION"
+
 RELATION_ORDER = "ORDER"
 RELATION_RETURN = "RETURN"
 RELATION_COMPLAINT = "COMPLAINT"
@@ -182,3 +186,47 @@ class MailMessage(Base):
         nullable=True,
         index=True,
     )
+    sent_by_user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True, index=True)
+
+
+class MailConversationReadState(Base):
+    """Per-user read cursor — global unread_count on conversation is not SSOT for operators."""
+
+    __tablename__ = "mail_conversation_read_states"
+    __table_args__ = (
+        UniqueConstraint("conversation_id", "user_id", name="uq_mail_conv_read_user"),
+        Index("ix_mail_conv_read_user", "user_id", "conversation_id"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    conversation_id = Column(
+        Integer,
+        ForeignKey("mail_conversations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = Column(Integer, ForeignKey("app_users.id", ondelete="CASCADE"), nullable=False, index=True)
+    last_read_message_id = Column(Integer, ForeignKey("mail_messages.id", ondelete="SET NULL"), nullable=True)
+    last_read_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class MailConversationAuditEvent(Base):
+    """Lightweight conversation audit trail (not email body)."""
+
+    __tablename__ = "mail_conversation_audit_events"
+    __table_args__ = (Index("ix_mail_conv_audit_conv_created", "conversation_id", "created_at"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    conversation_id = Column(
+        Integer,
+        ForeignKey("mail_conversations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    event_type = Column(String(64), nullable=False)
+    user_id = Column(Integer, ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True)
+    payload_json = Column(Text, nullable=False, default="{}")
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

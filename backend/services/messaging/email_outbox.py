@@ -108,3 +108,79 @@ def enqueue_or_get_outbound_email(
         return existing, False
 
     return row, True
+
+
+def enqueue_manual_reply_email(
+    db: Session,
+    *,
+    tenant_id: int,
+    conversation_id: int,
+    mail_account_id: int,
+    mail_message_id: int,
+    entity_type: str,
+    entity_id: int,
+    recipient_email: str,
+    subject: str,
+    body: str,
+    sent_by_user_id: int,
+    message_id_header: str,
+    in_reply_to: str | None,
+    references_header: str | None,
+    idempotency_key: str,
+) -> tuple[OutboundEmailMessage, bool]:
+    """Manual operator reply — idempotent via client-provided key."""
+    existing = (
+        db.query(OutboundEmailMessage)
+        .filter(OutboundEmailMessage.idempotency_key == str(idempotency_key))
+        .first()
+    )
+    if existing is not None:
+        if str(existing.status or "").upper() == "QUEUED":
+            existing.status = EMAIL_PENDING
+            db.add(existing)
+            db.flush()
+        return existing, False
+
+    row = OutboundEmailMessage(
+        tenant_id=int(tenant_id),
+        warehouse_id=None,
+        entity_type=str(entity_type).upper(),
+        entity_id=int(entity_id),
+        template_id=None,
+        recipient_email=str(recipient_email).strip(),
+        recipient_type="CUSTOMER",
+        subject=str(subject or ""),
+        body=str(body or ""),
+        context_json="{}",
+        status=EMAIL_PENDING,
+        provider=None,
+        provider_message_id=None,
+        attempt_count=0,
+        idempotency_key=str(idempotency_key),
+        automation_execution_id=None,
+        automation_effect_id=None,
+        conversation_id=int(conversation_id),
+        mail_account_id=int(mail_account_id),
+        mail_message_id=int(mail_message_id),
+        source="MANUAL",
+        sent_by_user_id=int(sent_by_user_id),
+        message_id_header=message_id_header,
+        in_reply_to=in_reply_to,
+        references_header=references_header,
+        created_at=datetime.utcnow(),
+    )
+    try:
+        with db.begin_nested():
+            db.add(row)
+            db.flush()
+    except IntegrityError:
+        existing = (
+            db.query(OutboundEmailMessage)
+            .filter(OutboundEmailMessage.idempotency_key == str(idempotency_key))
+            .first()
+        )
+        if existing is None:
+            raise
+        return existing, False
+
+    return row, True

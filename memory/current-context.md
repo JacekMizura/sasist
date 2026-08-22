@@ -1,4 +1,39 @@
-﻿**Return statuses configurator UX + STATUS_ACTION sync — PASS (pending commit).**
+﻿**Poczta Phase 2 — correspondence workflow (local, pending commit).**
+- BE: conversation list/sidebar-counts/detail/messages/reply/mark-read/history API; per-user `MailConversationReadState`; audit events; manual reply → `OutboundEmailMessage` + RFC headers; `mail.manage_conversations`
+- FE: list + sidebar buckets, filters, pagination, detail `/poczta/korespondencja/:id`, composer + MessageTemplatePicker
+- Tests: 27 mail + automation email regression PASS; FE pocztaModuleUi 9 PASS; build PASS
+
+- Tab `/orders/returns/report` — live table 1 row = RMZLine
+- API GET `/api/returns/report` (+ summary in response) + `/export` CSV/XLSX
+- KPI: returns, pieces, line value, accepted warehouse, rejected
+- Value = commercial_qty × OrderItem.unit_price; purchase = live Product.purchase_price
+- Kurs / historical cost / list-views: DEFERRED/MISSING
+
+**Correction economic ledger — PASS `13054826`.**
+- `SaleDocumentItem.source_sale_document_item_id` FK ledger
+- new_delta = target − already (per RETURN); false→true → shipping-only KOR2
+- Scope reduction blocked; no auto-reversal; legacy null FK → LEGACY_CORRECTION_SCOPE_AMBIGUOUS
+- `SHIPPING_ALREADY_CORRECTED` removed (superseded by ledger + CORRECTION_OVER_SOURCE)
+
+**RETURN correction include_shipping_cost — PASS `86fc9f0b` (gap fixed above).**
+- Domain: `issue_sale_correction_for_return(..., include_shipping_cost=False)`
+- Shipping SSOT: source SaleDocumentItem line_kind=SHIPPING only (no live Order)
+
+**PRIMARY SaleDocument shipping snapshot — PASS `b36d3de0`.**
+- `SaleDocumentItem.line_kind` PRODUCT|SHIPPING
+- Resolver: `resolve_sale_document_shipping_snapshot` (count_shipping_cost_always + vat_calc_shipping)
+- Create-only snapshot; no legacy Order backfill
+
+**generate_sale_correction automation — PASS `0ef1e0c6`.**
+- Effect `generate_sale_correction` → thin adapter → `issue_sale_correction_for_return`
+- RETURN only; STATUS_ACTION managed key + matrix column Korekta
+- Ordering: warehouse_commit before correction when both enabled
+- Domain readiness/idempotency unchanged (SSOT)
+
+**Sale correction domain pipeline — PASS `865cbd8c`.**
+- Domain SSOT: issue_sale_correction / issue_sale_correction_for_return
+
+**Return statuses configurator UX + STATUS_ACTION sync — PASS `f842acf9`.**
 - Root cause: optimistic clear raced with overview; overview GET errors wiped map to {}; PUT used bare refresh without effects
 - Fix: patch from PUT response → then overview reconcile; never wipe overview on error; re-query effects after PUT
 - UX: group + headers, icon-only edit, Magazyn Tooltip, counter in Status cell, decisions matrices with inline Aktywna/Powrót
@@ -956,4 +991,6 @@
 - API: `product_signature`, `unit_price_display` on packing lines
 - Mockup layout: fixed grid 20Ă—19.5rem; list full-width rows; EAN badge; done = translucent green whole-card + faded image/data
 - Settings preview (`ProductDisplayModePreview`): fixed card widths, includes Done sample
+
+
 
