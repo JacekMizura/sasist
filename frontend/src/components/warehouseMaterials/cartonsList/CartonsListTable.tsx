@@ -5,6 +5,7 @@ import type { CartonDto } from "../../../api/cartonsApi";
 import { formatWmMoneyZloty } from "../../../modules/warehouseMaterials/warehouseMaterialsMoney";
 import { ShippingMethodBadgeRow } from "../../wms/packing/PackingCartonHints";
 import { PROPORTIONAL_TABLE_SYSTEM_WIDTHS } from "../../listPage/proportionalTableColumns";
+import { moduleListStickyCheckboxHeaderInnerClass } from "../../listPage/moduleList";
 import { useProportionalTableColumns } from "../../listPage/useProportionalTableColumns";
 import { ProductListPhotoCell } from "../../products/ProductListPhotoCell";
 import { cartonsListColumnLabel } from "./cartonsListColumnCatalog";
@@ -169,7 +170,7 @@ export function CartonsListTable({
         <thead>
           <tr>
             <th className={cartonsListCheckboxThClass}>
-              <div className={cartonsListCheckboxInnerClass}>
+              <div className={moduleListStickyCheckboxHeaderInnerClass}>
                 <input
                   ref={headerSelectAllRef}
                   type="checkbox"

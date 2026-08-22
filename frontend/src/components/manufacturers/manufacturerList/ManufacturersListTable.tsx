@@ -3,6 +3,7 @@ import { Pencil, Trash2 } from "lucide-react";
 
 import type { ManufacturerRead } from "../../../api/manufacturersApi";
 import { OperationalActionButton } from "../../operational";
+import { moduleListStickyCheckboxHeaderInnerClass } from "../../listPage/moduleList";
 import { useProportionalTableColumns } from "../../listPage/useProportionalTableColumns";
 import { ManufacturerLogo } from "./ManufacturerLogo";
 import { manufacturerListColumnLabel } from "./manufacturerListColumnCatalog";
@@ -51,15 +52,17 @@ function RowCheckbox({
   onChange,
   ariaLabel,
   inputRef,
+  innerClassName = manufacturersListCheckboxInnerClass,
 }: {
   checked: boolean;
   disabled?: boolean;
   onChange: () => void;
   ariaLabel: string;
   inputRef?: RefObject<HTMLInputElement | null>;
+  innerClassName?: string;
 }) {
   return (
-    <label className={manufacturersListCheckboxInnerClass}>
+    <label className={innerClassName}>
       <input
         ref={inputRef}
         type="checkbox"
@@ -226,6 +229,7 @@ export function ManufacturersListTable({
             <th className={manufacturersListCheckboxThClass}>
               <RowCheckbox
                 inputRef={headerSelectAllRef}
+                innerClassName={moduleListStickyCheckboxHeaderInnerClass}
                 checked={allPageSelected}
                 disabled={deleteBusy != null || rows.length === 0}
                 onChange={onToggleAllPage}

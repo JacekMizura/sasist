@@ -21,6 +21,8 @@ export const productsListRowInnerClass = "flex min-h-[5rem] items-center";
 export const productsListCheckboxCellClass =
   "sticky left-0 z-[2] box-border w-[56px] min-w-[56px] max-w-[56px] bg-inherit px-0 py-0 align-middle text-center";
 export const productsListCheckboxInnerClass = "flex h-20 min-h-[5rem] w-full items-center justify-center";
+export const productsListPrimaryMonoValueClass =
+  "block truncate font-mono text-sm text-slate-800";
 export const productsListCheckboxInputClass = "h-4 w-4 shrink-0 rounded border-slate-300 accent-emerald-600";
 export const productsListCheckboxThClass = moduleListStickyCheckboxThClass;
 

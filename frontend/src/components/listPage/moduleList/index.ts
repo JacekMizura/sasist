@@ -16,6 +16,7 @@ export {
   moduleListRowSelectedClass,
   moduleListSortableThHoverClass,
   moduleListStickyActionsThBase,
+  moduleListStickyCheckboxHeaderInnerClass,
   moduleListStickyCheckboxThClass,
   moduleListStickyNameThClass,
   moduleListStickyPhotoThClass,

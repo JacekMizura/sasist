@@ -4,6 +4,7 @@ import { Copy, Pencil, Trash2 } from "lucide-react";
 import type { PackagingMaterialDto } from "../../../api/packagingMaterialsApi";
 import { formatWmMoneyZloty } from "../../../modules/warehouseMaterials/warehouseMaterialsMoney";
 import { PROPORTIONAL_TABLE_SYSTEM_WIDTHS } from "../../listPage/proportionalTableColumns";
+import { moduleListStickyCheckboxHeaderInnerClass } from "../../listPage/moduleList";
 import { useProportionalTableColumns } from "../../listPage/useProportionalTableColumns";
 import { ProductListPhotoCell } from "../../products/ProductListPhotoCell";
 import { packagingListColumnLabel } from "./packagingListColumnCatalog";
@@ -162,7 +163,7 @@ export function PackagingListTable({
         <thead>
           <tr>
             <th className={packagingListCheckboxThClass}>
-              <div className={packagingListCheckboxInnerClass}>
+              <div className={moduleListStickyCheckboxHeaderInnerClass}>
                 <input
                   ref={headerSelectAllRef}
                   type="checkbox"

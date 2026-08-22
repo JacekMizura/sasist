@@ -7,7 +7,7 @@ export const moduleListTableClass = "w-full min-w-[960px] text-left text-sm whit
 /** Cały wiersz nagłówka — jasnoszare tło, wyraźna granica z body. */
 export const moduleListTheadClass = "border-b border-slate-200 bg-slate-50";
 
-export const moduleListThClass = "px-4 py-3 text-left text-xs font-medium text-slate-400";
+export const moduleListThClass = "px-4 py-2 align-middle text-left text-xs font-medium text-slate-400";
 
 export const moduleListThSortClass = `${moduleListThClass} cursor-pointer select-none hover:text-slate-600`;
 
@@ -36,7 +36,7 @@ export const moduleListStickyThTypography =
   "text-[11px] font-semibold uppercase tracking-wide text-slate-500";
 
 export const moduleListStickyThClass = [
-  "sticky top-0 z-10 whitespace-nowrap bg-slate-50 px-4 py-3 text-left",
+  "sticky top-0 z-10 whitespace-nowrap bg-slate-50 px-4 py-2 align-middle text-left",
   moduleListStickyThTypography,
   moduleListStickyThInsetShadow,
 ].join(" ");
@@ -49,23 +49,27 @@ export const moduleListStickyCheckboxThClass = [
 ].join(" ");
 
 export const moduleListStickyPhotoThClass = [
-  "sticky top-0 z-10 box-border w-[80px] min-w-[80px] max-w-[80px] shrink-0 bg-slate-50 px-2 py-3 text-center",
+  "sticky top-0 z-10 box-border w-[80px] min-w-[80px] max-w-[80px] shrink-0 bg-slate-50 px-2 py-2 align-middle text-center",
   moduleListStickyThTypography,
   moduleListStickyThInsetShadow,
 ].join(" ");
 
 export const moduleListStickyNameThClass = [
-  "sticky top-0 z-10 min-w-0 bg-slate-50 px-4 py-3 text-left",
+  "sticky top-0 z-10 min-w-0 bg-slate-50 px-4 py-2 align-middle text-left",
   moduleListStickyThTypography,
   moduleListStickyThInsetShadow,
 ].join(" ");
 
 /** Sticky actions column — dodaj szerokość w module (np. w-[88px] min-w-[88px] max-w-[88px]). */
 export const moduleListStickyActionsThBase = [
-  "sticky right-0 top-0 z-[3] box-border shrink-0 bg-slate-50 px-1 py-3 text-center",
+  "sticky right-0 top-0 z-[3] box-border shrink-0 bg-slate-50 px-1 py-2 align-middle text-center",
   moduleListStickyThTypography,
   moduleListStickyThInsetShadow,
 ].join(" ");
+
+/** Nagłówek checkbox — kompaktowy; wiersze używają własnego inner z min-height. */
+export const moduleListStickyCheckboxHeaderInnerClass =
+  "flex w-full items-center justify-center py-2";
 
 export const moduleListSortableThHoverClass =
   "cursor-pointer select-none hover:bg-slate-100/80 transition-colors";

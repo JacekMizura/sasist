@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 
 import type { BundleRead } from "../../../api/bundlesApi";
 import { PROPORTIONAL_TABLE_SYSTEM_WIDTHS } from "../../listPage/proportionalTableColumns";
+import { moduleListStickyCheckboxHeaderInnerClass } from "../../listPage/moduleList";
 import { useProportionalTableColumns } from "../../listPage/useProportionalTableColumns";
 import {
   OperationalActionButton,
@@ -118,7 +119,7 @@ export function BundlesListTable({
         <thead>
           <tr>
             <th className={bundlesListCheckboxThClass}>
-              <div className={bundlesListCheckboxInnerClass}>
+              <div className={moduleListStickyCheckboxHeaderInnerClass}>
                 <input
                   ref={headerSelectAllRef}
                   type="checkbox"

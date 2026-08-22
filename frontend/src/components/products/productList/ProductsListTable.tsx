@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { fmtStockQty } from "../../../api/multiWarehouseUiApi";
 import type { FilterFieldCatalogItem } from "../../filters";
 import { PROPORTIONAL_TABLE_SYSTEM_WIDTHS } from "../../listPage/proportionalTableColumns";
+import { moduleListStickyCheckboxHeaderInnerClass } from "../../listPage/moduleList";
 import { useProportionalTableColumns } from "../../listPage/useProportionalTableColumns";
 import { OperationalActionButton, OperationalActionColumn } from "../../operational";
 import type { ProductListRow } from "../../../types/productListRow";
@@ -38,6 +39,7 @@ import {
   productsListActionsCellClass,
   productsListCheckboxCellClass,
   productsListCheckboxInnerClass,
+  productsListPrimaryMonoValueClass,
   productsListCheckboxInputClass,
   productsListCheckboxThClass,
   productsListNameCellClass,
@@ -165,13 +167,13 @@ function DynamicCell({
     case "sku":
       return (
         <div className={inner}>
-          <span className="block truncate font-mono text-xs text-slate-700">{row.symbol?.trim() || "—"}</span>
+          <span className={productsListPrimaryMonoValueClass}>{row.symbol?.trim() || "—"}</span>
         </div>
       );
     case "ean":
       return (
         <div className={inner}>
-          <span className="block truncate font-mono text-xs text-slate-700">{row.ean?.trim() || "—"}</span>
+          <span className={productsListPrimaryMonoValueClass}>{row.ean?.trim() || "—"}</span>
         </div>
       );
     case "manufacturer": {
@@ -225,18 +227,19 @@ function DynamicCell({
     case "dimensions":
       return <div className={`${inner} tabular-nums text-slate-800`}>{formatProductDimensionsCm(row)}</div>;
     case "stock":
-      return (
-        <div className={`${inner} min-w-0 flex-col !items-end gap-0.5`}>
-          {row.disposition_stock ? (
+      if (row.disposition_stock) {
+        return (
+          <div className={`${inner} min-w-0 flex-col !items-end justify-center gap-0.5`}>
             <ProductDispositionStockSummary
               variant="list"
               disposition={row.disposition_stock}
               reservedQuantity={row.reserved_quantity}
             />
-          ) : (
-            <span className="tabular-nums text-slate-800">{row.stock_quantity ?? 0}</span>
-          )}
-        </div>
+          </div>
+        );
+      }
+      return (
+        <div className={`${inner} justify-end tabular-nums text-slate-800`}>{row.stock_quantity ?? 0}</div>
       );
     case PRODUCT_NETWORK_STOCK_COLUMN_ID:
       return (
@@ -491,7 +494,7 @@ export function ProductsListTable({
         <thead>
           <tr>
             <th className={productsListCheckboxThClass}>
-              <div className={productsListCheckboxInnerClass}>
+              <div className={moduleListStickyCheckboxHeaderInnerClass}>
                 <input
                   ref={headerSelectAllRef}
                   type="checkbox"

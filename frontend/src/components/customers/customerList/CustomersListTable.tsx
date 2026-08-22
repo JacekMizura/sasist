@@ -6,6 +6,7 @@ import type { CustomerListRow } from "../../../api/customersApi";
 import { countryLabel } from "../../../constants/countryCodes";
 import { customerTypeLabel, salesChannelLabel } from "../../../modules/customers/customerProfile";
 import { OperationalActionButton, OperationalActionLink } from "../../operational";
+import { moduleListStickyCheckboxHeaderInnerClass } from "../../listPage/moduleList";
 import {
   CUSTOMER_LIST_COLUMN_WIDTH,
   customerListColumnLabel,
@@ -51,15 +52,17 @@ function RowCheckbox({
   onChange,
   ariaLabel,
   inputRef,
+  innerClassName = customersListCheckboxInnerClass,
 }: {
   checked: boolean;
   disabled?: boolean;
   onChange: () => void;
   ariaLabel: string;
   inputRef?: RefObject<HTMLInputElement | null>;
+  innerClassName?: string;
 }) {
   return (
-    <label className={customersListCheckboxInnerClass}>
+    <label className={innerClassName}>
       <input
         ref={inputRef}
         type="checkbox"
@@ -337,6 +340,7 @@ export function CustomersListTable({
               <th className={customersListCheckboxThClass}>
                 <RowCheckbox
                   inputRef={headerSelectAllRef}
+                  innerClassName={moduleListStickyCheckboxHeaderInnerClass}
                   checked={allPageSelected}
                   disabled={deleteBusy || rows.length === 0}
                   onChange={onToggleAllPage}

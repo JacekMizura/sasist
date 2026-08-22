@@ -4,6 +4,7 @@ import { Pencil, ShoppingBag, Trash2 } from "lucide-react";
 import type { SupplierRead } from "../../../api/inboundSuppliersApi";
 import { StatusBadge } from "../../../design-system";
 import { OperationalActionButton } from "../../operational";
+import { moduleListStickyCheckboxHeaderInnerClass } from "../../listPage/moduleList";
 import { useProportionalTableColumns } from "../../listPage/useProportionalTableColumns";
 import { supplierListColumnLabel } from "./supplierListColumnCatalog";
 import { supplierListCellOrDash, supplierNameLines } from "./supplierListCellPresentation";
@@ -48,15 +49,17 @@ function RowCheckbox({
   onChange,
   ariaLabel,
   inputRef,
+  innerClassName = suppliersListCheckboxInnerClass,
 }: {
   checked: boolean;
   disabled?: boolean;
   onChange: () => void;
   ariaLabel: string;
   inputRef?: RefObject<HTMLInputElement | null>;
+  innerClassName?: string;
 }) {
   return (
-    <label className={suppliersListCheckboxInnerClass}>
+    <label className={innerClassName}>
       <input
         ref={inputRef}
         type="checkbox"
@@ -274,6 +277,7 @@ export function SuppliersListTable({
             <th className={suppliersListCheckboxThClass}>
               <RowCheckbox
                 inputRef={headerSelectAllRef}
+                innerClassName={moduleListStickyCheckboxHeaderInnerClass}
                 checked={allPageSelected}
                 disabled={deleteBusy != null || rows.length === 0}
                 onChange={onToggleAllPage}
