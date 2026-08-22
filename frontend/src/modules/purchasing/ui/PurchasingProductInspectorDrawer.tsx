@@ -1,13 +1,13 @@
 import { memo, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { X } from "lucide-react";
+import { ExternalLink, X } from "lucide-react";
 
 import type { ProductForecastDetail } from "../../../api/purchasingForecastApi";
 import { PurchasingProductThumbnail } from "./PurchasingProductThumbnail";
-import { PurchasingProductMetaCard } from "./PurchasingProductMetaCard";
 import { PurchasingRightDrawer } from "./PurchasingRightDrawer";
 import {
   fetchProductDisplayMeta,
+  formatProductEanSkuMeta,
   type ProductDisplayMeta,
 } from "./purchasingProductDisplayMeta";
 import { getProductImage } from "./getProductImage";
@@ -71,6 +71,7 @@ function PurchasingProductInspectorDrawerInner({
   const imageUrl = productMeta?.imageUrl ?? getProductImage(pr) ?? getProductImage(detail);
   const ean = productMeta?.ean ?? pr?.ean ?? null;
   const sku = productMeta?.sku ?? pr?.sku ?? null;
+  const productMetaLine = metaLoading ? null : formatProductEanSkuMeta(ean, sku);
 
   return (
     <PurchasingRightDrawer
@@ -96,9 +97,9 @@ function PurchasingProductInspectorDrawerInner({
           <p className="text-slate-500">Wczytywanie…</p>
         ) : detail && pr ? (
           <div className="space-y-4">
-            <PurchasingProductMetaCard>
+            <div className="flex gap-3">
               <PurchasingProductThumbnail
-                size="lg"
+                size="md"
                 imageUrl={imageUrl}
                 name={displayName}
                 sku={sku}
@@ -109,24 +110,27 @@ function PurchasingProductInspectorDrawerInner({
                 className="shrink-0"
               />
               <div className="min-w-0 flex-1">
-                <p className="font-semibold text-slate-900">{displayName}</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  SKU: {sku?.trim() ? sku : "—"}
-                  <br />
-                  EAN: {metaLoading ? "…" : ean?.trim() ? ean : "—"}
-                </p>
-                <Link
-                  to={getProductDetailsPath(pr.id)}
-                  state={productDetailsNavState({
-                    tenantId,
-                    returnTo: `${location.pathname}${location.search}`,
-                  })}
-                  className="mt-2 inline-block text-xs font-medium text-blue-600 hover:underline"
-                >
-                  Karta produktu →
-                </Link>
+                <h3 className="text-sm font-medium text-slate-900">
+                  <Link
+                    to={getProductDetailsPath(pr.id)}
+                    state={productDetailsNavState({
+                      tenantId,
+                      returnTo: `${location.pathname}${location.search}`,
+                    })}
+                    className="inline-flex max-w-full items-center gap-1 hover:text-slate-700"
+                    title="Otwórz kartę produktu"
+                  >
+                    <span className="truncate">{displayName}</span>
+                    <ExternalLink size={13} className="shrink-0 text-slate-400" aria-hidden />
+                  </Link>
+                </h3>
+                {metaLoading ? (
+                  <p className="mt-1 text-xs text-slate-400">…</p>
+                ) : productMetaLine ? (
+                  <p className="mt-1 text-xs text-slate-500">{productMetaLine}</p>
+                ) : null}
               </div>
-            </PurchasingProductMetaCard>
+            </div>
             <dl className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs">
               <dt className="text-slate-500">Dostawca</dt>
               <dd className="truncate text-right">{detail.supplier_name ?? "—"}</dd>

@@ -518,7 +518,7 @@ export default function PurchasingAlertsPage({ variant = "page" }: { variant?: "
               <PurchasingKpiCard
                 title="Szkice do sprawdzenia"
                 value={draftsWaiting}
-                subtitle="Zamówienia zakupowe"
+                subtitle="Szkice zamówień do dostawców"
                 tone="purple"
                 icon={<FileText aria-hidden />}
                 to={ordersHref}

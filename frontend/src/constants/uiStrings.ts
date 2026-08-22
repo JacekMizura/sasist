@@ -31,7 +31,7 @@ const UI_STRINGS_DEFAULTS = {
     purchaseOrders: "Zamówienia do dostawców",
     /** Sidebar category: purchasing & replenishment module. */
     purchasingCategory: "Zakupy i planowanie",
-    purchasingDashboard: "Pulpit zakupów",
+    purchasingDashboard: "Pulpit",
     purchasingReplenishment: "Generator zakupów",
     /** Zakupy: analityka relacji z dostawcami (wcześniej „scorecard”). */
     purchasingSupplierAnalytics: "Ocena dostawców",

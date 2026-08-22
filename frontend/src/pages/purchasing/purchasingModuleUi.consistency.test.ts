@@ -70,4 +70,34 @@ describe("Purchasing module UI consistency", () => {
     expect(cell).toContain("formatProductEanSkuMeta");
     expect(cell).toContain("text-sm font-medium text-slate-900");
   });
+
+  it("InspectorDrawer uses ExternalLink pattern without Karta produktu text", () => {
+    const drawer = read("modules/purchasing/ui/PurchasingProductInspectorDrawer.tsx");
+    expect(drawer).toContain("ExternalLink");
+    expect(drawer).toContain('title="Otwórz kartę produktu"');
+    expect(drawer).toContain("formatProductEanSkuMeta");
+    expect(drawer).not.toContain("Karta produktu");
+    expect(drawer).not.toContain("SKU: —");
+    expect(drawer).not.toMatch(/SKU:\s*\{/);
+  });
+
+  it("Alerts page has no Zamówienia zakupowe", () => {
+    const alerts = read("pages/purchasing/PurchasingAlertsPage.tsx");
+    expect(alerts).not.toContain("Zamówienia zakupowe");
+    expect(alerts).toContain("Szkice zamówień do dostawców");
+  });
+
+  it("Cooperation history page has no Zamówienia zakupowe", () => {
+    const hist = read("pages/purchasing/PurchasingCooperationHistoryPage.tsx");
+    expect(hist).not.toContain("Zamówienia zakupowe");
+    expect(hist).toContain("Zamówienia do dostawców w okresie");
+  });
+
+  it("uiStrings purchasingDashboard matches top nav label", () => {
+    const strings = read("constants/uiStrings.ts");
+    const tabs = read("modules/purchasing/purchasingTabs.ts");
+    expect(strings).toContain('purchasingDashboard: "Pulpit"');
+    expect(strings).not.toContain("Pulpit zakupów");
+    expect(tabs).toContain('label: "Pulpit"');
+  });
 });

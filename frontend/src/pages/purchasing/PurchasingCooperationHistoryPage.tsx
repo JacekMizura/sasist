@@ -129,7 +129,7 @@ export default function PurchasingCooperationHistoryPage() {
             <PurchasingKpiCard
               title="Liczba PO"
               value={summary?.total_orders ?? "—"}
-              subtitle="Zamówienia zakupowe w okresie"
+              subtitle="Zamówienia do dostawców w okresie"
               tone="blue"
               icon={<ShoppingCart aria-hidden />}
             />
