@@ -17,30 +17,10 @@ from ...models.messaging import (
     OutboundEmailMessage,
 )
 from .email_outbox import normalize_outbound_status
-from .providers import EmailProviderError, EmailSendRequest, get_email_provider
+from .provider_routing import resolve_outbound_email_provider
+from .providers import EmailProviderError, EmailSendRequest
 
 logger = logging.getLogger(__name__)
-
-_GMAIL_OAUTH_REQUIRED_MSG = (
-    "Adresy Gmail wymagają połączenia konta przez Google OAuth / Gmail API."
-)
-_GMAIL_DOMAINS = frozenset({"gmail.com", "googlemail.com"})
-
-
-def _sender_domain(email_address: str | None) -> str | None:
-    raw = (email_address or "").strip()
-    if "<" in raw and ">" in raw:
-        start = raw.rfind("<") + 1
-        end = raw.rfind(">")
-        raw = raw[start:end].strip()
-    if "@" not in raw:
-        return None
-    return raw.rsplit("@", 1)[-1].strip().lower()
-
-
-def is_gmail_sender_address(email_address: str | None) -> bool:
-    domain = _sender_domain(email_address)
-    return domain in _GMAIL_DOMAINS if domain else False
 
 
 def _max_attempts() -> int:
@@ -95,7 +75,7 @@ def deliver_one_outbound_email(db: Session, row: OutboundEmailMessage) -> dict[s
     db.add(row)
     db.flush()
 
-    provider = get_email_provider()
+    provider, mail_account, from_addr = resolve_outbound_email_provider(db, row)
     if not provider.is_configured():
         _set_error(row, "configuration_error: Email provider is not configured")
         row.status = EMAIL_FAILED
@@ -110,20 +90,8 @@ def deliver_one_outbound_email(db: Session, row: OutboundEmailMessage) -> dict[s
         }
 
     try:
-        from_addr: str | None = None
-        if row.mail_account_id:
-            from ...models.mail import MailAccount
-
-            mail_account = db.query(MailAccount).filter(MailAccount.id == int(row.mail_account_id)).first()
-            if mail_account is not None:
-                from_addr = mail_account.email_address
-
-        if row.mail_account_id and from_addr and is_gmail_sender_address(from_addr):
-            raise EmailProviderError(
-                _GMAIL_OAUTH_REQUIRED_MSG,
-                code="gmail_oauth_required",
-                transient=False,
-            )
+        if from_addr is None and mail_account is not None:
+            from_addr = mail_account.email_address
 
         result = provider.send(
             EmailSendRequest(

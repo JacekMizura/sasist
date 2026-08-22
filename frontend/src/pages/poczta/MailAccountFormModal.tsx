@@ -15,13 +15,14 @@ import { MailConnectionTestResults } from "./MailConnectionTestResults";
 type Props = {
   tenantId: number;
   initial: MailAccountDto | null;
+  googleNameOnly?: boolean;
   onClose: () => void;
   onSaved: () => void;
 };
 
 const inputClass = listSellasistInputClass;
 
-export function MailAccountFormModal({ tenantId, initial, onClose, onSaved }: Props) {
+export function MailAccountFormModal({ tenantId, initial, googleNameOnly = false, onClose, onSaved }: Props) {
   const [name, setName] = useState(initial?.name ?? "");
   const [emailAddress, setEmailAddress] = useState(initial?.email_address ?? "");
   const [isSendOnly, setIsSendOnly] = useState(initial?.is_send_only ?? false);
@@ -83,6 +84,11 @@ export function MailAccountFormModal({ tenantId, initial, onClose, onSaved }: Pr
     setBusy(true);
     setErr(null);
     try {
+      if (googleNameOnly && initial) {
+        await updateMailAccount(initial.id, tenantId, { name: name.trim() });
+        onSaved();
+        return;
+      }
       const payload = buildPayload();
       if (initial) {
         const patch: Partial<MailAccountPayload> = { ...payload };
@@ -103,13 +109,21 @@ export function MailAccountFormModal({ tenantId, initial, onClose, onSaved }: Pr
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" role="dialog" aria-modal="true">
       <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-200 bg-white p-5 shadow-xl">
-        <h2 className="text-lg font-semibold text-slate-900">{initial ? "Edytuj konto" : "Dodaj konto pocztowe"}</h2>
+        <h2 className="text-lg font-semibold text-slate-900">
+          {googleNameOnly ? "Edytuj nazwę konta Google" : initial ? "Edytuj konto" : "Dodaj konto pocztowe"}
+        </h2>
 
         <div className="mt-4 space-y-3 text-sm">
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-slate-600">Nazwa</span>
             <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} />
           </label>
+          {googleNameOnly ? (
+            <p className="text-xs text-slate-500">
+              Konto Google: {initial?.email_address}. Połączenie OAuth zarządzane przez „Połącz z Google” / „Rozłącz”.
+            </p>
+          ) : (
+            <>
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-slate-600">Adres e-mail</span>
             <input className={inputClass} type="email" value={emailAddress} onChange={(e) => setEmailAddress(e.target.value)} />
@@ -164,18 +178,22 @@ export function MailAccountFormModal({ tenantId, initial, onClose, onSaved }: Pr
               autoComplete="new-password"
             />
           </fieldset>
+            </>
+          )}
         </div>
 
-        {testResult ? <MailConnectionTestResults result={testResult} isSendOnly={isSendOnly} /> : null}
+        {!googleNameOnly && testResult ? <MailConnectionTestResults result={testResult} isSendOnly={isSendOnly} /> : null}
         {err ? <p className="mt-3 text-sm text-red-700">{err}</p> : null}
 
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <button type="button" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" onClick={onClose} disabled={busy}>
             Anuluj
           </button>
-          <button type="button" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" onClick={() => void handleTest()} disabled={busy}>
-            Sprawdź połączenie
-          </button>
+          {!googleNameOnly ? (
+            <button type="button" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" onClick={() => void handleTest()} disabled={busy}>
+              Sprawdź połączenie
+            </button>
+          ) : null}
           <button type="button" className={brandPrimaryButtonClass} onClick={() => void handleSave()} disabled={busy}>
             Zapisz
           </button>

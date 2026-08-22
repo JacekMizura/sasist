@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 from ...models.mail import (
     IMAP_SECURITY_SSL,
     MailAccount,
+    PROVIDER_GOOGLE_OAUTH,
+    PROVIDER_MANUAL,
     SMTP_SECURITY_TLS,
 )
 from ..secrets.credential_cipher import decrypt_secret, encrypt_secret
@@ -20,21 +22,29 @@ def _has_secret(ciphertext: str | None) -> bool:
 
 
 def account_to_dict(row: MailAccount, *, include_sync: bool = True) -> dict[str, Any]:
+    is_google = row.provider_type == PROVIDER_GOOGLE_OAUTH
+    oauth_connected = is_google and _has_secret(row.google_refresh_token_ciphertext)
     out: dict[str, Any] = {
         "id": row.id,
         "tenant_id": row.tenant_id,
         "name": row.name,
         "email_address": row.email_address,
-        "imap_host": row.imap_host,
-        "imap_port": row.imap_port,
-        "imap_security": row.imap_security,
-        "imap_username": row.imap_username,
-        "has_imap_password": _has_secret(row.imap_password_ciphertext),
-        "smtp_host": row.smtp_host,
-        "smtp_port": row.smtp_port,
-        "smtp_security": row.smtp_security,
-        "smtp_username": row.smtp_username,
-        "has_smtp_password": _has_secret(row.smtp_password_ciphertext),
+        "provider_type": row.provider_type or PROVIDER_MANUAL,
+        "google_connected": oauth_connected,
+        "google_email": row.google_email,
+        "oauth_connected_at": row.oauth_connected_at.isoformat() if row.oauth_connected_at else None,
+        "oauth_last_error": row.oauth_last_error,
+        "google_granted_scopes": row.google_granted_scopes,
+        "imap_host": None if is_google else row.imap_host,
+        "imap_port": None if is_google else row.imap_port,
+        "imap_security": None if is_google else row.imap_security,
+        "imap_username": None if is_google else row.imap_username,
+        "has_imap_password": False if is_google else _has_secret(row.imap_password_ciphertext),
+        "smtp_host": None if is_google else row.smtp_host,
+        "smtp_port": None if is_google else row.smtp_port,
+        "smtp_security": None if is_google else row.smtp_security,
+        "smtp_username": None if is_google else row.smtp_username,
+        "has_smtp_password": False if is_google else _has_secret(row.smtp_password_ciphertext),
         "is_send_only": bool(row.is_send_only),
         "is_active": bool(row.is_active),
         "created_at": row.created_at.isoformat() if row.created_at else None,
@@ -90,6 +100,7 @@ def create_account(
         tenant_id=int(tenant_id),
         name=str(name).strip(),
         email_address=str(email_address).strip(),
+        provider_type=PROVIDER_MANUAL,
         imap_host=(imap_host or "").strip() or None,
         imap_port=int(imap_port) if imap_port is not None else None,
         imap_security=(imap_security or IMAP_SECURITY_SSL).strip().upper(),
@@ -192,6 +203,12 @@ def validate_account_config(row: MailAccount) -> tuple[bool, str | None]:
         return False, "name_required"
     if not row.email_address.strip() or "@" not in row.email_address:
         return False, "email_invalid"
+    if row.provider_type == PROVIDER_GOOGLE_OAUTH:
+        if not _has_secret(row.google_refresh_token_ciphertext) and not _has_secret(
+            row.google_access_token_ciphertext
+        ):
+            return False, "google_not_connected"
+        return True, None
     if not row.smtp_host or not row.smtp_port:
         return False, "smtp_required"
     if not row.smtp_username:

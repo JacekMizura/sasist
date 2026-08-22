@@ -70,3 +70,26 @@ describe("Poczta module Phase 2 UI", () => {
     expect(api).toContain("mark-read");
   });
 });
+
+describe("Poczta Google OAuth UI", () => {
+  it("accounts page exposes connect with Google", () => {
+    const page = read("pages/poczta/MailAccountsPage.tsx");
+    expect(page).toContain("Połącz z Google");
+    expect(page).toContain("startGoogleMailConnect");
+    expect(page).toContain('"connected"');
+    expect(page).toContain("Konto Google zostało połączone.");
+  });
+
+  it("mail API exposes google connect and disconnect", () => {
+    const api = read("modules/poczta/services/mailApi.ts");
+    expect(api).toContain("/mail/google/connect");
+    expect(api).toContain("google/disconnect");
+    expect(api).toContain("provider_type");
+  });
+
+  it("google account form hides imap smtp fields", () => {
+    const modal = read("pages/poczta/MailAccountFormModal.tsx");
+    expect(modal).toContain("googleNameOnly");
+    expect(modal).toContain("Konto Google:");
+  });
+});

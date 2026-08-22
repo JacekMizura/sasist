@@ -155,7 +155,7 @@ def test_c_d_e_f_g_provider_failure_and_attempts(db, monkeypatch):
         def send(self, request):
             raise EmailProviderError("timeout", code="smtp_transient", transient=True)
 
-    monkeypatch.setattr(delivery_mod, "get_email_provider", lambda: Boom())
+    monkeypatch.setattr(delivery_mod, "resolve_outbound_email_provider", lambda db, row: (Boom(), None, None))
     rule = _rule(db)
     db.commit()
     run_rule_on_entity(db, rule=rule, entity_type=ENTITY_ORDER, entity_id=100, dry_run=False)

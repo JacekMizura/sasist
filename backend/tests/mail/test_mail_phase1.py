@@ -33,6 +33,7 @@ from backend.services.mail.account_service import (
 )
 from backend.services.mail.connection_test import ConnectionTestResult, ProtocolProbeResult, probe_account_connection
 from backend.services.mail.connection_errors import ProbeStatus
+from backend.services.mail.inbound.connector_factory import ImapInboundAdapter
 from backend.services.mail.inbound.imap_connector import InMemoryImapConnector
 from backend.services.mail.inbound.message_parser import parse_inbound_email
 from backend.services.mail.inbound.sync_service import ingest_inbound_message, sync_account_inbound
@@ -312,13 +313,14 @@ def test_same_customer_unrelated_subjects_create_new_conversations(db):
 
 def test_sync_cursor_advances(db):
     account = _seed_account(db)
-    connector = InMemoryImapConnector()
-    connector.add_message(1, _make_raw_email(
+    imap = InMemoryImapConnector()
+    imap.add_message(1, _make_raw_email(
         subject="One", from_addr="a@b.pl", to_addr="in@shop.pl", body="1", message_id="<m1@x>"
     ))
-    connector.add_message(2, _make_raw_email(
+    imap.add_message(2, _make_raw_email(
         subject="Two", from_addr="a@b.pl", to_addr="in@shop.pl", body="2", message_id="<m2@x>"
     ))
+    connector = ImapInboundAdapter(account, imap)
     sync_account_inbound(db, account, connector, batch_size=50)
     db.commit()
     assert account.last_sync_uid == 2
@@ -338,7 +340,7 @@ def test_inactive_account_not_synced(db, monkeypatch):
         raise AssertionError("should not build connector for inactive")
 
     monkeypatch.setattr(
-        "backend.workers.mail_inbound_sync_worker.build_imap_connector_for_account",
+        "backend.workers.mail_inbound_sync_worker.build_inbound_connector_for_account",
         _fail_build,
     )
     # Worker still queries account but inactive is filtered out
@@ -360,7 +362,7 @@ def test_worker_failure_on_one_account_does_not_block_other(db, monkeypatch):
     a1 = _seed_account(db, name="Bad")
     a2 = _seed_account(db, name="Good", email="good@shop.pl")
 
-    def _build(row):
+    def _build(db, row):
         if row.id == a1.id:
             raise RuntimeError("imap down")
         c = InMemoryImapConnector()
@@ -368,10 +370,10 @@ def test_worker_failure_on_one_account_does_not_block_other(db, monkeypatch):
             subject="Ok", from_addr="jan@example.com", to_addr="good@shop.pl",
             body="hi", message_id="<ok@client>",
         ))
-        return c
+        return ImapInboundAdapter(row, c)
 
     monkeypatch.setattr(
-        "backend.workers.mail_inbound_sync_worker.build_imap_connector_for_account",
+        "backend.workers.mail_inbound_sync_worker.build_inbound_connector_for_account",
         _build,
     )
     result = run_mail_inbound_sync_worker(db, limit_accounts=5)

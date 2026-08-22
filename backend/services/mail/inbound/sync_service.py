@@ -12,12 +12,14 @@ from sqlalchemy.orm import Session
 from ....models.mail import (
     CONV_STATUS_OPEN,
     MSG_DIRECTION_INBOUND,
+    PROVIDER_GOOGLE_OAUTH,
     MailAccount,
     MailConversation,
     MailMessage,
 )
+from .base_connector import FetchedInboundMessage, InboundMailConnector
 from .customer_match import find_customer_id_by_email
-from .imap_connector import FetchedImapMessage, ImapConnector
+from .imap_connector import ImapConnector  # noqa: F401 — legacy type hint compat
 from .message_parser import addresses_to_json, normalize_message_id, parse_inbound_email
 from .threading import find_conversation_by_rfc_headers
 
@@ -30,7 +32,19 @@ def _message_exists(
     account_id: int,
     imap_uid: int | None,
     message_id_header: str | None,
+    gmail_message_id: str | None = None,
 ) -> bool:
+    if gmail_message_id:
+        hit = (
+            db.query(MailMessage.id)
+            .filter(
+                MailMessage.account_id == int(account_id),
+                MailMessage.gmail_message_id == str(gmail_message_id),
+            )
+            .first()
+        )
+        if hit is not None:
+            return True
     if imap_uid is not None:
         hit = (
             db.query(MailMessage.id)
@@ -88,12 +102,20 @@ def ingest_inbound_message(
     account: MailAccount,
     parsed,
     imap_uid: int | None,
+    gmail_message_id: str | None = None,
+    gmail_thread_id: str | None = None,
 ) -> tuple[MailMessage | None, bool]:
     """
     Returns (message, created). None + False when duplicate ignored.
     """
     message_id = normalize_message_id(parsed.message_id_header)
-    if _message_exists(db, account_id=account.id, imap_uid=imap_uid, message_id_header=message_id):
+    if _message_exists(
+        db,
+        account_id=account.id,
+        imap_uid=imap_uid,
+        message_id_header=message_id,
+        gmail_message_id=gmail_message_id,
+    ):
         return None, False
 
     conv = find_conversation_by_rfc_headers(
@@ -131,6 +153,8 @@ def ingest_inbound_message(
         in_reply_to=parsed.in_reply_to,
         references_header=parsed.references_header,
         imap_uid=int(imap_uid) if imap_uid is not None else None,
+        gmail_message_id=str(gmail_message_id) if gmail_message_id else None,
+        gmail_thread_id=str(gmail_thread_id) if gmail_thread_id else None,
         received_at=parsed.received_at,
         created_at=datetime.utcnow(),
     )
@@ -146,31 +170,41 @@ def ingest_inbound_message(
 def sync_account_inbound(
     db: Session,
     account: MailAccount,
-    connector: ImapConnector,
+    connector: InboundMailConnector,
     *,
     batch_size: int = 50,
 ) -> dict[str, Any]:
     if not account.is_active or account.is_send_only:
         return {"skipped": True, "reason": "inactive_or_send_only"}
 
-    fetched = connector.fetch_since_uid(int(account.last_sync_uid or 0), batch_size)
+    fetched = connector.fetch_batch(batch_size)
     created = 0
     duplicates = 0
     max_uid = int(account.last_sync_uid or 0)
 
     for item in fetched:
-        max_uid = max(max_uid, int(item.uid))
+        if item.imap_uid is not None:
+            max_uid = max(max_uid, int(item.imap_uid))
         try:
             parsed = parse_inbound_email(item.raw_bytes)
-            msg, was_created = ingest_inbound_message(db, account=account, parsed=parsed, imap_uid=item.uid)
+            msg, was_created = ingest_inbound_message(
+                db,
+                account=account,
+                parsed=parsed,
+                imap_uid=item.imap_uid,
+                gmail_message_id=item.gmail_message_id,
+                gmail_thread_id=item.gmail_thread_id,
+            )
             if was_created:
                 created += 1
             else:
                 duplicates += 1
         except Exception:
-            logger.exception("mail_sync parse failed account_id=%s uid=%s", account.id, item.uid)
+            uid_label = item.gmail_message_id or item.imap_uid
+            logger.exception("mail_sync parse failed account_id=%s msg=%s", account.id, uid_label)
 
-    account.last_sync_uid = max_uid
+    if account.provider_type != PROVIDER_GOOGLE_OAUTH:
+        account.last_sync_uid = max_uid
     account.last_sync_at = datetime.utcnow()
     account.last_sync_error = None
     db.add(account)
@@ -182,13 +216,14 @@ def sync_account_inbound(
         "created": created,
         "duplicates": duplicates,
         "last_sync_uid": max_uid,
+        "gmail_history_id": account.gmail_history_id,
     }
 
 
 def sync_account_inbound_safe(
     db: Session,
     account: MailAccount,
-    connector: ImapConnector,
+    connector: InboundMailConnector,
     *,
     batch_size: int = 50,
 ) -> dict[str, Any]:

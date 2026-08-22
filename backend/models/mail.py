@@ -53,19 +53,24 @@ SMTP_SECURITY_SSL = "SSL"
 SMTP_SECURITY_TLS = "TLS"
 SMTP_SECURITY_NONE = "NONE"
 
+PROVIDER_MANUAL = "MANUAL"
+PROVIDER_GOOGLE_OAUTH = "GOOGLE_OAUTH"
+
 
 class MailAccount(Base):
-    """Tenant-owned mailbox account (IMAP inbound + SMTP outbound per account)."""
+    """Tenant-owned mailbox account (manual IMAP/SMTP or Google OAuth + Gmail API)."""
 
     __tablename__ = "mail_accounts"
     __table_args__ = (
         Index("ix_mail_accounts_tenant_active", "tenant_id", "is_active"),
+        Index("ix_mail_accounts_tenant_provider", "tenant_id", "provider_type"),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String(255), nullable=False)
     email_address = Column(String(320), nullable=False)
+    provider_type = Column(String(32), nullable=False, default=PROVIDER_MANUAL)
 
     imap_host = Column(String(255), nullable=True)
     imap_port = Column(Integer, nullable=True)
@@ -78,6 +83,16 @@ class MailAccount(Base):
     smtp_security = Column(String(16), nullable=True, default=SMTP_SECURITY_TLS)
     smtp_username = Column(String(255), nullable=True)
     smtp_password_ciphertext = Column(Text, nullable=True)
+
+    google_email = Column(String(320), nullable=True)
+    google_subject = Column(String(128), nullable=True)
+    google_refresh_token_ciphertext = Column(Text, nullable=True)
+    google_access_token_ciphertext = Column(Text, nullable=True)
+    google_access_token_expires_at = Column(DateTime, nullable=True)
+    google_granted_scopes = Column(Text, nullable=True)
+    oauth_connected_at = Column(DateTime, nullable=True)
+    oauth_last_error = Column(Text, nullable=True)
+    gmail_history_id = Column(String(32), nullable=True)
 
     is_send_only = Column(Boolean, nullable=False, default=False)
     is_active = Column(Boolean, nullable=False, default=True)
@@ -148,6 +163,7 @@ class MailMessage(Base):
     __table_args__ = (
         UniqueConstraint("account_id", "imap_uid", name="uq_mail_msg_account_imap_uid"),
         UniqueConstraint("account_id", "message_id_header", name="uq_mail_msg_account_message_id"),
+        UniqueConstraint("account_id", "gmail_message_id", name="uq_mail_msg_account_gmail_id"),
         Index("ix_mail_msg_conversation_received", "conversation_id", "received_at"),
         Index("ix_mail_msg_tenant_message_id", "tenant_id", "message_id_header"),
     )
@@ -177,6 +193,8 @@ class MailMessage(Base):
     references_header = Column(Text, nullable=True)
 
     imap_uid = Column(Integer, nullable=True)
+    gmail_message_id = Column(String(128), nullable=True)
+    gmail_thread_id = Column(String(128), nullable=True)
     received_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 

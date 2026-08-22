@@ -14,6 +14,7 @@ from backend.models.messaging import EMAIL_FAILED, EMAIL_PENDING, EMAIL_SENT, Ou
 from backend.models.tenant import Tenant
 from backend.services.messaging.delivery import deliver_one_outbound_email
 from backend.services.messaging.email_outbox import enqueue_manual_reply_email
+from backend.services.secrets.credential_cipher import encrypt_secret
 from backend.services.messaging.providers import (
     EmailSendRequest,
     MemoryEmailProvider,
@@ -31,6 +32,18 @@ def _clear_env(monkeypatch):
     monkeypatch.delenv("EMAIL_SMTP_PASSWORD", raising=False)
     monkeypatch.delenv("RESEND_API_KEY", raising=False)
     monkeypatch.delenv("EMAIL_FROM", raising=False)
+
+
+@pytest.fixture
+def db():
+    engine = create_engine("sqlite:///:memory:")
+    for model in (Tenant, MailAccount, MailConversation, MailMessage, OutboundEmailMessage):
+        model.__table__.create(engine, checkfirst=True)
+    session = sessionmaker(bind=engine)()
+    session.add(Tenant(id=1, name="T", default_warehouse_id=1))
+    session.commit()
+    yield session
+    session.close()
 
 
 def test_resend_provider_selected_when_configured(monkeypatch):
@@ -284,24 +297,24 @@ def test_smtp_provider_still_selected(monkeypatch):
     assert provider.host == "smtp.example.com"
 
 
-def test_gmail_manual_reply_blocked_on_resend(monkeypatch):
-    monkeypatch.setenv("EMAIL_PROVIDER", "resend")
-    monkeypatch.setenv("RESEND_API_KEY", "re_test")
-    monkeypatch.setenv("EMAIL_FROM", "noreply@shop.pl")
+def test_gmail_manual_reply_routes_to_gmail_provider(db, monkeypatch):
+    from backend.services.secrets.credential_cipher import reset_cipher_cache_for_tests
 
-    post_mock = MagicMock(return_value="should-not-be-called")
-    monkeypatch.setattr(resend_mod, "_post_resend_email", post_mock)
+    monkeypatch.setenv("AUTH_SECRET_KEY", "test-auth-secret-key-min-32-chars!!")
+    reset_cipher_cache_for_tests()
+    from backend.models.mail import PROVIDER_GOOGLE_OAUTH
+    from backend.services.messaging import provider_routing as routing_mod
+    from backend.services.messaging.gmail_api_provider import GmailApiEmailProvider
 
-    engine = create_engine("sqlite:///:memory:")
-    for model in (Tenant, MailAccount, MailConversation, MailMessage, OutboundEmailMessage):
-        model.__table__.create(engine, checkfirst=True)
-    db = sessionmaker(bind=engine)()
-    db.add(Tenant(id=1, name="T", default_warehouse_id=1))
     acc = MailAccount(
         tenant_id=1,
         name="Gmail",
         email_address="shop@gmail.com",
+        provider_type=PROVIDER_GOOGLE_OAUTH,
+        google_email="shop@gmail.com",
+        google_refresh_token_ciphertext=encrypt_secret("rt"),
         is_active=True,
+        last_sync_uid=0,
     )
     db.add(acc)
     db.flush()
@@ -320,6 +333,13 @@ def test_gmail_manual_reply_blocked_on_resend(monkeypatch):
     )
     db.add(mail_msg)
     db.flush()
+
+    send_mock = MagicMock(return_value=type("R", (), {"provider": "gmail_api", "provider_message_id": "gm-1"})())
+    monkeypatch.setattr(GmailApiEmailProvider, "send", send_mock)
+    monkeypatch.setattr(
+        "backend.services.messaging.gmail_api_provider.ensure_valid_access_token",
+        lambda db_, a: "token",
+    )
 
     outbound, _ = enqueue_manual_reply_email(
         db,
@@ -340,12 +360,10 @@ def test_gmail_manual_reply_blocked_on_resend(monkeypatch):
     )
     db.commit()
 
+    provider, _, _ = routing_mod.resolve_outbound_email_provider(db, outbound)
+    assert provider.name == "gmail_api"
     result = deliver_one_outbound_email(db, outbound)
     db.commit()
-    db.refresh(outbound)
+    assert send_mock.called
+    assert result["status"] == EMAIL_SENT
 
-    post_mock.assert_not_called()
-    assert result["status"] == EMAIL_FAILED
-    assert result["error_code"] == "gmail_oauth_required"
-    assert "Google OAuth" in (outbound.last_error or "")
-    assert outbound.status == EMAIL_FAILED

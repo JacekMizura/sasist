@@ -5,6 +5,12 @@ export type MailAccountDto = {
   tenant_id: number;
   name: string;
   email_address: string;
+  provider_type: "MANUAL" | "GOOGLE_OAUTH";
+  google_connected: boolean;
+  google_email: string | null;
+  oauth_connected_at: string | null;
+  oauth_last_error: string | null;
+  google_granted_scopes: string | null;
   imap_host: string | null;
   imap_port: number | null;
   imap_security: string | null;
@@ -108,6 +114,24 @@ export async function testMailAccountConnection(
 
 export async function testMailAccountConfig(payload: MailAccountPayload): Promise<MailConnectionTestResult> {
   const res = await api.post<MailConnectionTestResult>("/mail/accounts/test-config", payload);
+  return res.data;
+}
+
+export async function startGoogleMailConnect(
+  tenantId: number,
+  accountId?: number,
+): Promise<{ authorization_url: string }> {
+  const res = await api.post<{ authorization_url: string }>("/mail/google/connect", {
+    tenant_id: tenantId,
+    account_id: accountId ?? null,
+  });
+  return res.data;
+}
+
+export async function disconnectGoogleMailAccount(accountId: number, tenantId: number): Promise<MailAccountDto> {
+  const res = await api.post<MailAccountDto>(`/mail/accounts/${accountId}/google/disconnect`, null, {
+    params: { tenant_id: tenantId },
+  });
   return res.data;
 }
 

@@ -8,11 +8,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from .mail_conversations import router as conversations_router
+from .mail_google import router as google_router
 
 from ..auth.deps import get_current_user, require_permission
 from ..database import get_db
 from ..models.app_user import AppUser
-from ..models.mail import MailAccount, MailConversation
+from ..models.mail import MailAccount, MailConversation, PROVIDER_GOOGLE_OAUTH
 from ..schemas.mail import MailAccountCreate, MailAccountTestBody, MailAccountUpdate
 from ..services.mail.account_service import (
     account_to_dict,
@@ -24,9 +25,11 @@ from ..services.mail.account_service import (
     validate_account_config,
 )
 from ..services.mail.connection_test import probe_account_connection
+from ..services.mail.google.oauth_service import disconnect_google_account
 
 router = APIRouter(prefix="/mail", tags=["Mail"])
 router.include_router(conversations_router)
+router.include_router(google_router)
 
 _view_perm = require_permission("mail.view")
 _manage_accounts_perm = require_permission("mail.manage_accounts")
@@ -150,6 +153,13 @@ def patch_mail_account(
     row = get_account_for_tenant(db, tenant_id=tenant_id, account_id=account_id)
     if row is None:
         raise HTTPException(status_code=404, detail="account_not_found")
+    if row.provider_type == PROVIDER_GOOGLE_OAUTH:
+        if body.name is not None:
+            update_account(db, row, name=body.name)
+            db.commit()
+            db.refresh(row)
+            return account_to_dict(row)
+        raise HTTPException(status_code=400, detail="google_account_name_only")
     update_account(
         db,
         row,
@@ -193,6 +203,25 @@ def deactivate_mail_account(
     return account_to_dict(row)
 
 
+@router.post("/accounts/{account_id}/google/disconnect")
+def post_mail_account_google_disconnect(
+    account_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    _: AppUser = Depends(_manage_accounts_perm),
+) -> dict[str, Any]:
+    try:
+        row = disconnect_google_account(db, tenant_id=tenant_id, account_id=account_id)
+    except ValueError as exc:
+        code = str(exc)
+        if code == "account_not_found":
+            raise HTTPException(status_code=404, detail=code) from exc
+        raise HTTPException(status_code=400, detail=code) from exc
+    db.commit()
+    db.refresh(row)
+    return account_to_dict(row)
+
+
 @router.post("/accounts/{account_id}/test")
 def test_mail_account_connection(
     account_id: int,
@@ -204,6 +233,8 @@ def test_mail_account_connection(
     row = get_account_for_tenant(db, tenant_id=tenant_id, account_id=account_id)
     if row is None:
         raise HTTPException(status_code=404, detail="account_not_found")
+    if row.provider_type == PROVIDER_GOOGLE_OAUTH:
+        return {"ok": True, "message": "Konto Google OAuth — synchronizacja przez Gmail API."}
 
     probe = MailAccount(
         tenant_id=row.tenant_id,
