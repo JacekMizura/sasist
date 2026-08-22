@@ -5,6 +5,14 @@ import {
   SALES_BLOCK_REASON_OPTIONS,
   type SalesBlockReasonCode,
 } from "../../api/purchaseSalesBlockApi";
+import {
+  FORM_FIELD_DENSITY,
+  FormError,
+  FormField,
+  Input,
+  PrimaryButton,
+  Select,
+} from "../../design-system";
 
 type Props = {
   tenantId: number;
@@ -13,9 +21,6 @@ type Props = {
   onUpdated: () => void;
   variant?: "inline" | "drawer";
 };
-
-const inputClass =
-  "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-amber-400 focus:ring-2 focus:ring-amber-200";
 
 export function PurchaseSalesBlockLinePanel({
   tenantId,
@@ -83,21 +88,20 @@ export function PurchaseSalesBlockLinePanel({
         <p className="text-[11px] font-bold uppercase tracking-wide text-amber-900/80">Blokada sprzedaży</p>
       ) : null}
       <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="block text-xs text-slate-600">
-          Ilość niedopuszczona do sprzedaży
-          <input
+        <FormField label="Ilość niedopuszczona do sprzedaży">
+          <Input
             type="number"
             min={0}
             step="any"
-            className={`${inputClass} mt-1 tabular-nums`}
+            density={FORM_FIELD_DENSITY}
+            className="tabular-nums"
             value={blockedQty}
             onChange={(e) => setBlockedQty(e.target.value)}
           />
-        </label>
-        <label className="block text-xs text-slate-600">
-          Powód
-          <select
-            className={`${inputClass} mt-1`}
+        </FormField>
+        <FormField label="Powód">
+          <Select
+            density={FORM_FIELD_DENSITY}
             value={reason}
             onChange={(e) => setReason(e.target.value as SalesBlockReasonCode | "")}
           >
@@ -107,18 +111,17 @@ export function PurchaseSalesBlockLinePanel({
                 {o.label}
               </option>
             ))}
-          </select>
-        </label>
-        <label className="block text-xs text-slate-600 sm:col-span-2">
-          Notatka
-          <input
+          </Select>
+        </FormField>
+        <FormField label="Notatka" className="sm:col-span-2">
+          <Input
             type="text"
-            className={`${inputClass} mt-1`}
+            density={FORM_FIELD_DENSITY}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="Opcjonalnie; wymagana przy „Inne”"
           />
-        </label>
+        </FormField>
       </div>
       <dl className="mt-3 grid gap-1 text-xs text-slate-700 sm:grid-cols-3">
         <div>
@@ -139,15 +142,16 @@ export function PurchaseSalesBlockLinePanel({
           Powód: <span className="font-medium">{line.sales_block_reason_label}</span>
         </p>
       ) : null}
-      {err ? <p className="mt-2 text-xs text-red-600">{err}</p> : null}
-      <button
+      {err ? <FormError className="mt-2">{err}</FormError> : null}
+      <PrimaryButton
         type="button"
+        density="compact"
         disabled={busy}
+        className="mt-3"
         onClick={() => void save()}
-        className="mt-3 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
       >
         {busy ? "Zapisywanie…" : "Zapisz blokadę"}
-      </button>
+      </PrimaryButton>
     </div>
   );
 }

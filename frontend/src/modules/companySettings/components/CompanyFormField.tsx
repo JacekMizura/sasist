@@ -12,8 +12,3 @@ export function CompanyFormField({ label, children, className = "", ...rest }: P
     </FormField>
   );
 }
-
-/**
- * @deprecated Use Input with density={FORM_FIELD_DENSITY} from @/design-system.
- */
-export { appInputClass as companyInputClass } from "../../../components/app-shell";

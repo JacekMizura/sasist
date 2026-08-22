@@ -461,12 +461,13 @@ describe("UI architecture SSOT (Phase D2 catalog forms)", () => {
     expect(page!.src).toMatch(/\bSearchInput\b/);
   });
 
-  it("productLikeTokens deprecates field classes but keeps layout chrome exports", () => {
+  it("productLikeTokens keeps layout chrome exports without deprecated field aliases", () => {
     const tokens = files.find((f) => f.rel.endsWith("productLikeTokens.ts"));
     expect(tokens).toBeTruthy();
-    expect(tokens!.src).toMatch(/@deprecated Phase D2/);
+    expect(tokens!.src).not.toMatch(/\bexport const productLikeInputClass\b/);
+    expect(tokens!.src).not.toMatch(/\bexport const productLikeFieldLabelClass\b/);
     expect(tokens!.src).toMatch(/\bproductLikeStatCardClass\b/);
-    expect(tokens!.src).toMatch(/\binputClassName\b/);
+    expect(tokens!.src).toMatch(/\bproductLikeNumericInputNoSpinnerClass\b/);
   });
 
   it("does not reintroduce blue focus ring form recipes in Phase D2 files", () => {
@@ -559,5 +560,56 @@ describe("UI architecture SSOT (Phase D3 settings configurators)", () => {
     expect(modal!.src).toMatch(/\bInput\b/);
     expect(modal!.src).not.toMatch(FORBIDDEN_SETTINGS_PRIMARY);
     expect(modal!.src).not.toMatch(/\bconst inp\b/);
+  });
+});
+
+/**
+ * Phase D cleanup — legacy ERP primitive facades removed (NOT WMS, NOT visual designers).
+ */
+const FORBIDDEN_LEGACY_OA_PRIMITIVE_EXPORT =
+  /\bexport const oa(Inp|InpDense|SearchInp|Sel|Lbl|LblCaps|Btn|BtnPri|BtnGhost|BtnDanger|IconGhost|RowActionBtn)\b/;
+const FORBIDDEN_LEGACY_PRODUCT_LIKE_EXPORT =
+  /\bexport const (productLikeInputClass|productLikeFieldLabelClass|companyInputClass)\b/;
+
+describe("UI architecture SSOT (Phase D legacy cleanup)", () => {
+  it("orderAutomationUiTokens exports only specialized workflow tokens", () => {
+    const filePath = path.join(SRC_ROOT, "components/orders/automation/orderAutomationUiTokens.ts");
+    const src = fs.readFileSync(filePath, "utf8");
+    expect(src).not.toMatch(FORBIDDEN_LEGACY_OA_PRIMITIVE_EXPORT);
+    expect(src).toMatch(/\boaWorkflowLaneClass\b/);
+    expect(src).toMatch(/\boaEditorHeaderCardClass\b/);
+    expect(src).toMatch(/\boaLaunchTileClass\b/);
+  });
+
+  it("productLikeTokens does not export deprecated field class aliases", () => {
+    const filePath = path.join(SRC_ROOT, "components/catalog/productLikeTokens.ts");
+    const src = fs.readFileSync(filePath, "utf8");
+    expect(src).not.toMatch(FORBIDDEN_LEGACY_PRODUCT_LIKE_EXPORT);
+  });
+
+  it("CompanyFormField does not re-export companyInputClass", () => {
+    const filePath = path.join(SRC_ROOT, "modules/companySettings/components/CompanyFormField.tsx");
+    const src = fs.readFileSync(filePath, "utf8");
+    expect(src).not.toMatch(/\bcompanyInputClass\b/);
+  });
+
+  it("CustomersListPage does not import automation legacy button tokens", () => {
+    const filePath = path.join(SRC_ROOT, "pages/customers/CustomersListPage.tsx");
+    const src = fs.readFileSync(filePath, "utf8");
+    expect(src).not.toMatch(/orderAutomationUiTokens/);
+    expect(src).not.toMatch(FORBIDDEN_OA_FIELD_BTN);
+    expect(src).not.toMatch(/\bbrandPrimaryButtonClass\b/);
+    expect(src).toMatch(/\bDangerButton\b/);
+    expect(src).toMatch(/\bSecondaryButton\b/);
+  });
+
+  it("PurchaseSalesBlockLinePanel uses Form SSOT without local inputClass", () => {
+    const filePath = path.join(SRC_ROOT, "components/purchasing/PurchaseSalesBlockLinePanel.tsx");
+    const src = fs.readFileSync(filePath, "utf8");
+    expect(src).not.toMatch(/\binputClass\b/);
+    expect(src).not.toMatch(/focus:ring-amber/);
+    expect(src).toMatch(/\bFormField\b/);
+    expect(src).toMatch(/\bFORM_FIELD_DENSITY\b/);
+    expect(src).toMatch(/\bPrimaryButton\b/);
   });
 });

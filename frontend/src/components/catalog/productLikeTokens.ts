@@ -1,14 +1,6 @@
 /** Shared layout tokens — catalog entity pages (ProductLikeSection chrome). */
 
-import { FORM_FIELD_DENSITY, inputClassName } from "../../design-system";
 import { brandTabsNavItemClassName, brandTabsNavRowClassName } from "../../design-system/brandUi";
-import { typography } from "../../design-system/tokens/typography";
-
-/** @deprecated Phase D2 — use FormField label prop or FormLabel from design-system. */
-export const productLikeFieldLabelClass = `mb-1.5 block ${typography.label}`;
-
-/** @deprecated Phase D2 — use Input/Select/Textarea with density={FORM_FIELD_DENSITY}. */
-export const productLikeInputClass = inputClassName(FORM_FIELD_DENSITY);
 
 /** Text/numeric field bez natywnych spinnerów (receptury, ilości wpisywane z klawiatury). */
 export const productLikeNumericInputNoSpinnerClass =

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { Link } from "react-router-dom";
 import { ChevronDown, Columns3, Download, TableProperties } from "lucide-react";
 
@@ -35,7 +34,7 @@ import {
   listSellasistToolbarSquareBtn,
   listSellasistToolbarToggleBtn,
 } from "../../components/listPage/listSellasistTokens";
-import { oaBtnDanger } from "../../components/orders/automation/orderAutomationUiTokens";
+import { DangerButton, SecondaryButton, primaryButtonClassName } from "../../design-system";
 import { UI_STRINGS } from "../../constants/uiStrings";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { summarizeEntityBulkDeleteToast } from "../../types/entityBulkDelete";
@@ -315,22 +314,12 @@ export default function CustomersListPage() {
             <span className="text-sm font-medium text-slate-800">
               Zaznaczono: <span className="tabular-nums">{selectedIds.length}</span>
             </span>
-            <button
-              type="button"
-              disabled={deleteBusy}
-              onClick={() => setDeleteConfirm({ kind: "bulk" })}
-              className={oaBtnDanger}
-            >
+            <DangerButton type="button" density="compact" disabled={deleteBusy} onClick={() => setDeleteConfirm({ kind: "bulk" })}>
               Usuń zaznaczone
-            </button>
-            <button
-              type="button"
-              disabled={deleteBusy}
-              onClick={() => setExportOpen(true)}
-              className="inline-flex h-9 shrink-0 items-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
-            >
+            </DangerButton>
+            <SecondaryButton type="button" density="compact" disabled={deleteBusy} onClick={() => setExportOpen(true)}>
               Eksportuj
-            </button>
+            </SecondaryButton>
             <button
               type="button"
               disabled
@@ -371,10 +360,7 @@ export default function CustomersListPage() {
           <div className="rounded-lg border border-dashed border-slate-200 px-6 py-16 text-center">
             <p className="text-sm font-medium text-slate-800">Brak klientów</p>
             <p className="mt-1 text-sm text-slate-500">Zmień filtry lub dodaj pierwszego klienta.</p>
-            <Link
-              to="/customers/new"
-              className={`${brandPrimaryButtonClass} mt-6`}
-            >
+            <Link to="/customers/new" className={`${primaryButtonClassName()} mt-6 inline-flex`}>
               {UI_STRINGS.navigation.addCustomer}
             </Link>
           </div>
