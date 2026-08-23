@@ -156,6 +156,22 @@ const CATALOG: Record<
     title: "BŁĘDNA LOKALIZACJA",
     message: "Nieprawidłowa lokalizacja. Zeskanuj lokalizację wskazaną na ekranie.",
   },
+  NO_OPEN_QUANTITY: {
+    severity: "warning",
+    title: "BRAK OTWARTEJ ILOŚCI",
+    message: "Brak otwartej ilości do zebrania dla tego produktu w sesji.",
+  },
+  PRODUCT_NOT_IN_SESSION: {
+    severity: "error",
+    title: "PRODUKT POZA SESJĄ",
+    message: "Ten produkt nie należy do aktywnej sesji zbierania.",
+  },
+  INSUFFICIENT_STOCK: {
+    severity: "warning",
+    title: "BRAK STANU W LOKALIZACJI",
+    message:
+      "W wybranej lokalizacji nie ma wystarczającego stanu. Zeskanuj inną lokalizację albo zmniejsz ilość.",
+  },
   PRODUCT_WITHOUT_SCAN_CODE_BLOCKED: {
     severity: "error",
     title: "BRAK KODU EAN",
@@ -315,6 +331,12 @@ export function extractWmsScanErrorDetail(err: unknown): {
         title: null,
         eligibleLabels: null,
       };
+    }
+    if (/brak otwartej ilości/i.test(msg)) {
+      return { code: "NO_OPEN_QUANTITY", message: msg, title: null, eligibleLabels: null };
+    }
+    if (/zeskanowano nieprawidłową lokalizację|oczekiwana:.*zeskanowana:/i.test(msg)) {
+      return { code: "WRONG_LOCATION_SCAN", message: msg, title: null, eligibleLabels: null };
     }
     return {
       code: null,

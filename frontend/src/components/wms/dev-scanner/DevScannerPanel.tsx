@@ -7,6 +7,7 @@ import {
 } from "react";
 import { Keyboard, Loader2, ScanLine, Search, X } from "lucide-react";
 import { createPortal } from "react-dom";
+import { useLocation } from "react-router-dom";
 import {
   DEV_SCANNER_HISTORY_UI,
   SHOW_WMS_DEV_SCANNER,
@@ -27,6 +28,8 @@ import {
   saveDevScannerFavorites,
   scanKindToHistoryKind,
 } from "../../../utils/devScannerStorage";
+import { isWmsPickingProductsScanPath } from "../../../utils/wmsScanDispatch";
+import { deferPickingLocationHistoryKind } from "../../../utils/pickingScannerHistory";
 import { classifyWmsScanCode } from "../../../utils/wmsScanClassify";
 import {
   itemMatchesCategory,
@@ -138,6 +141,7 @@ export default function DevScannerPanel() {
     scannerError,
   } = useWmsScanner();
 
+  const routerLocation = useLocation();
   const { warehouse } = useWarehouse();
   const isHandheld = useIsHandheldDevice();
   const tenantId = useMemo(() => readTenantId(), []);
@@ -224,11 +228,18 @@ export default function DevScannerPanel() {
     (code: string, meta?: DevScanHistoryAppendMeta) => {
       const key = code.trim();
       if (!key) return;
-      appendScanToHistory(key, meta);
+      const classified = meta?.kind ?? scanKindToHistoryKind(classifyWmsScanCode(key));
+      // On picking products path: do not mark location history until page accepts the scan.
+      // Otherwise Helper shows OSTATNIA LOKALIZACJA while picking active location stays stale.
+      const historyKind = deferPickingLocationHistoryKind(
+        classified,
+        isWmsPickingProductsScanPath(routerLocation.pathname),
+      );
+      appendScanToHistory(key, { ...meta, kind: historyKind as DevScanHistoryEntry["kind"] });
       handleScan(key);
       setHistoryIndex(null);
     },
-    [appendScanToHistory, handleScan],
+    [appendScanToHistory, handleScan, routerLocation.pathname],
   );
 
   const scanCurrentInput = useCallback(() => {

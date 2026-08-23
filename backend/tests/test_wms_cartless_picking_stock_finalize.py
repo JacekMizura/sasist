@@ -480,3 +480,92 @@ def test_two_orders_cannot_overclaim_same_location_unit(db):
     assert ei.value.code == ec.QUANTITY_EXCEEDS_LOCATION_STOCK
     assert db.query(Pick).count() == 1
     assert int(db.query(Pick).one().order_id) == int(o1.id)
+
+
+def test_quick_pick_uses_explicit_location_id_on_pick(db):
+    """Regression: Pick.location_id must equal request location_id (SSOT)."""
+    sess = _session(db)
+    _order_with_line(db, session_id=int(sess.id))
+    _stock(db, qty=2.0)
+    db.commit()
+
+    oid, oiid = record_cartless_quick_pick(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        source_status_id=6,
+        order_type="single",
+        product_id=PROD_ID,
+        location_id=LOC_ID,
+        quantity=1.0,
+        picking_session_id=int(sess.id),
+        operator_user_id=9,
+    )
+    assert oid > 0 and oiid > 0
+    pick = db.query(Pick).one()
+    assert int(pick.location_id) == LOC_ID
+
+
+def test_wrong_location_not_in_allowed_raises_wrong_location(db, monkeypatch):
+    monkeypatch.setattr(
+        "backend.services.wms_cartless_picking.pick_service._allowed_pick_location_ids_for_product",
+        lambda *a, **k: {LOC_ID},
+    )
+    sess = _session(db)
+    _order_with_line(db, session_id=int(sess.id))
+    _stock(db, qty=1.0)
+    db.commit()
+    other_loc = 999
+    with pytest.raises(BasketPutError) as ei:
+        record_cartless_quick_pick(
+            db,
+            tenant_id=1,
+            warehouse_id=1,
+            source_status_id=6,
+            order_type="single",
+            product_id=PROD_ID,
+            location_id=other_loc,
+            quantity=1.0,
+            picking_session_id=int(sess.id),
+            operator_user_id=9,
+        )
+    assert ei.value.code == ec.WRONG_LOCATION_SCAN
+    assert db.query(Pick).count() == 0
+
+
+def test_no_open_quantity_is_structured_not_unknown(db):
+    sess = _session(db)
+    order = _order_with_line(db, session_id=int(sess.id), qty=1.0)
+    # Line already fully covered by a draft pick (remaining = 0).
+    db.add(
+        Pick(
+            tenant_id=1,
+            warehouse_id=1,
+            order_id=int(order.id),
+            order_item_id=int(order.items[0].id),
+            product_id=PROD_ID,
+            location_id=LOC_ID,
+            cart_id=None,
+            quantity=1.0,
+            picked_at=None,
+            status="picking",
+        )
+    )
+    _stock(db, qty=5.0)
+    db.commit()
+
+    with pytest.raises(BasketPutError) as ei:
+        record_cartless_quick_pick(
+            db,
+            tenant_id=1,
+            warehouse_id=1,
+            source_status_id=6,
+            order_type="single",
+            product_id=PROD_ID,
+            location_id=LOC_ID,
+            quantity=1.0,
+            picking_session_id=int(sess.id),
+            operator_user_id=9,
+        )
+    assert ei.value.code == ec.NO_OPEN_QUANTITY
+    assert ei.value.code != ec.UNKNOWN_SCAN_CODE

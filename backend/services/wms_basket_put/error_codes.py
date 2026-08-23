@@ -35,6 +35,9 @@ RESERVE_LOCATION_FORBIDDEN = "RESERVE_LOCATION_FORBIDDEN"
 WRONG_PRODUCT_SCAN = "WRONG_PRODUCT_SCAN"
 WRONG_LOCATION_SCAN = "WRONG_LOCATION_SCAN"
 QUANTITY_EXCEEDS_LOCATION_STOCK = "QUANTITY_EXCEEDS_LOCATION_STOCK"
+NO_OPEN_QUANTITY = "NO_OPEN_QUANTITY"
+PRODUCT_NOT_IN_SESSION = "PRODUCT_NOT_IN_SESSION"
+INSUFFICIENT_STOCK = "INSUFFICIENT_STOCK"  # alias surface for FE; prefer QUANTITY_EXCEEDS_LOCATION_STOCK
 SOURCE_LOCATION_NOT_ON_ROUTE = "SOURCE_LOCATION_NOT_ON_ROUTE"
 SOURCE_LOCATION_STALE = "SOURCE_LOCATION_STALE"
 SOURCE_LOCATION_INVALID = "SOURCE_LOCATION_INVALID"
@@ -82,6 +85,12 @@ OPERATOR_MESSAGES: dict[str, str] = {
     WRONG_PRODUCT_SCAN: "Zeskanowano inny produkt. Zeskanuj kod produktu wskazanego na ekranie.",
     WRONG_LOCATION_SCAN: "Nieprawidłowa lokalizacja. Zeskanuj lokalizację wskazaną na ekranie.",
     QUANTITY_EXCEEDS_LOCATION_STOCK: (
+        "W wybranej lokalizacji nie ma wystarczającego stanu (uwzględniając już zebrane, "
+        "ale jeszcze nie sfinalizowane sztuk)."
+    ),
+    NO_OPEN_QUANTITY: "Brak otwartej ilości do zebrania dla tego produktu w sesji.",
+    PRODUCT_NOT_IN_SESSION: "Ten produkt nie należy do aktywnej sesji zbierania.",
+    INSUFFICIENT_STOCK: (
         "W wybranej lokalizacji nie ma wystarczającego stanu (uwzględniając już zebrane, "
         "ale jeszcze nie sfinalizowane sztuk)."
     ),

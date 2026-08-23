@@ -55,6 +55,8 @@ def record_cartless_quick_pick(
     )
     from ..wms_basket_put.error_codes import (
         NO_ALLOWED_PICK_LOCATION_STOCK,
+        NO_OPEN_QUANTITY,
+        PRODUCT_NOT_IN_SESSION,
         QUANTITY_EXCEEDS_LOCATION_STOCK,
         RESERVE_LOCATION_FORBIDDEN,
         WRONG_LOCATION_SCAN,
@@ -266,7 +268,32 @@ def record_cartless_quick_pick(
             break
 
     if last_oid <= 0:
-        raise ValueError("Brak otwartej ilości do zebrania dla tego produktu w sesji.")
+        saw_product = False
+        for o in orders:
+            if int(getattr(o, "picking_session_id", 0) or 0) != int(picking_session_id):
+                continue
+            for oi in o.items or []:
+                if int(oi.product_id) != int(product_id):
+                    continue
+                if order_item_is_replaced_line(oi):
+                    continue
+                if order_item_skip_bundle_commercial_header_for_ops(oi):
+                    continue
+                saw_product = True
+                break
+            if saw_product:
+                break
+        if not saw_product:
+            raise BasketPutError(
+                PRODUCT_NOT_IN_SESSION,
+                operator_message(PRODUCT_NOT_IN_SESSION),
+                http_status=400,
+            )
+        raise BasketPutError(
+            NO_OPEN_QUANTITY,
+            operator_message(NO_OPEN_QUANTITY),
+            http_status=400,
+        )
     return last_oid, last_oiid
 
 

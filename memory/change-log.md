@@ -1,3 +1,17 @@
+## 2026-08-23 — WMS picking scanned location context SSOT
+
+- Root: Helper history marked B3 as location while picking `activeLocationId` stayed A1; silent `consumed=true` for non-routed location scans; product pick used stale A1; ValueError → NIEZNANY KOD
+- Fix: `resolvePickingSourceLocationScan` accept/reject; defer Helper location history on picking path; explicit `location_id` from active; `NO_OPEN_QUANTITY` / `PRODUCT_NOT_IN_SESSION` codes
+- Tests: pickingLocationScan*.test.ts + cartless stock finalize location/no-open regressions
+
+## 2026-08-23 — Legacy draft Pick stock conflict hardening
+
+- Detect draft Pick > finalize-aligned location stock on session product-lines read
+- UI: STOCK_CONFLICT + can_finalize=false; picked_qty history preserved
+- Recovery: undo_wms_pick_by_id supports cartless picking_session_id
+- Activity WMS_PICKING_DRAFT_STOCK_CONFLICT (correlation pick_id, no GET spam)
+- Tests: test_wms_picking_draft_stock_conflict.py
+
 ## 2026-08-23 — WMS cartless picking stock vs finalize 409
 
 - Exact cause: cartless pick created draft `Pick` without stock gate; UI „Zebrano” = SUM(Pick); finalize = Inventory consume
