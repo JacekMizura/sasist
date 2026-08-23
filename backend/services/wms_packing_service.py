@@ -3303,6 +3303,20 @@ def packing_pack_all_lines(
         sku_pa = _packing_sku_from_item(it)
         audits.append((int(it.id), int(it.product_id), int(delta), sku_pa))
         last_oid = int(it.id)
+    if audits:
+        try:
+            from .wms_audit_service import emit_wms_pack_all_used
+
+            emit_wms_pack_all_used(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                order_id=int(order_id),
+                operator_user_id=operator_user_id,
+                lines_packed=len(audits),
+            )
+        except Exception:
+            logger.exception("emit_wms_pack_all_used failed order_id=%s", order_id)
     return _finalize_after_packing_mutations(
         db,
         order=order,
@@ -4403,8 +4417,42 @@ def _append_sales_companion_to_message(db: Session, *, order: Order, message: st
 def _packing_step_generate_shipment(db: Session, order: Order) -> WmsPackingPostPackStepResult:
     try:
         logger.info("wms_packing post-pack generate_shipment order_id=%s", order.id)
+        try:
+            from .wms_audit_service import emit_wms_shipment_generation_requested, emit_wms_waybill_assigned
+
+            ship = getattr(order, "shipping_method_row", None)
+            carrier = (getattr(ship, "name", None) or getattr(order, "shipping_method", None) or "").strip()
+            emit_wms_shipment_generation_requested(
+                db,
+                tenant_id=int(order.tenant_id),
+                warehouse_id=int(order.warehouse_id),
+                order_id=int(order.id),
+                carrier_name=carrier or "przewoźnik",
+            )
+        except Exception:
+            logger.exception("emit shipment request activity failed order_id=%s", order.id)
         msg = _waybill_docs_client_message(db, order=order, kind="existing_waybill")
         if msg:
+            try:
+                from .wms_audit_service import emit_wms_waybill_assigned
+
+                # Best-effort: extract tracking-like token from client message if present.
+                tn = None
+                if "tracking=" in msg:
+                    tn = msg.split("tracking=", 1)[1].split(";")[0].strip() or None
+                if tn:
+                    ship = getattr(order, "shipping_method_row", None)
+                    carrier = (getattr(ship, "name", None) or "").strip() or None
+                    emit_wms_waybill_assigned(
+                        db,
+                        tenant_id=int(order.tenant_id),
+                        warehouse_id=int(order.warehouse_id),
+                        order_id=int(order.id),
+                        waybill=tn,
+                        carrier_name=carrier,
+                    )
+            except Exception:
+                logger.exception("emit waybill activity failed order_id=%s", order.id)
             return WmsPackingPostPackStepResult(
                 step="generate_shipment",
                 ok=True,
@@ -4668,6 +4716,27 @@ def _run_wms_packing_post_pack_pipeline(
             operator_user_id=operator_user_id,
             allow_negative=True,
         )
+        if pkg_rw is not None:
+            try:
+                from .wms_audit_service import emit_wms_warehouse_document_created
+
+                dnum = (
+                    getattr(pkg_rw, "document_number", None)
+                    or getattr(pkg_rw, "number", None)
+                    or f"#{int(pkg_rw.id)}"
+                )
+                emit_wms_warehouse_document_created(
+                    db,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    order_id=int(order.id),
+                    document_type=str(getattr(pkg_rw, "document_type", None) or "RW"),
+                    document_number=str(dnum),
+                    document_id=int(pkg_rw.id),
+                    operator_user_id=operator_user_id,
+                )
+            except Exception:
+                logger.exception("emit warehouse doc activity failed order_id=%s", order.id)
         out.append(
             WmsPackingPostPackStepResult(
                 step="packaging_rw",

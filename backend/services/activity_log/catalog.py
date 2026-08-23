@@ -29,6 +29,8 @@ Category = Literal[
     "order",
     "automation",
     "documents",
+    "wms",
+    "payments",
 ]
 
 Severity = Literal["INFO", "SUCCESS", "WARNING", "ERROR", "AUDIT"]

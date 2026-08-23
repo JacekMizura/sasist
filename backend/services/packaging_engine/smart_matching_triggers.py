@@ -172,6 +172,31 @@ def _apply_proposal_init(
         want_3d=want_3d,
     )
     if primary is None:
+        try:
+            from ..wms_audit_service import emit_wms_matching_outcome
+
+            if want_3d and not want_smart:
+                emit_wms_matching_outcome(
+                    db,
+                    tenant_id=tenant_id,
+                    warehouse_id=warehouse_id,
+                    order_id=int(order.id),
+                    source="THREE_D",
+                    matched=False,
+                    operator_user_id=triggered_by_user_id,
+                )
+            elif want_smart:
+                emit_wms_matching_outcome(
+                    db,
+                    tenant_id=tenant_id,
+                    warehouse_id=warehouse_id,
+                    order_id=int(order.id),
+                    source="SMART",
+                    matched=False,
+                    operator_user_id=triggered_by_user_id,
+                )
+        except Exception:
+            logger.exception("matching activity emit failed order_id=%s", getattr(order, "id", None))
         return {"ok": False, "message": "no_suggestion", "assigned": False}
 
     outcome_source = CARTON_SOURCE_SMART
@@ -192,6 +217,25 @@ def _apply_proposal_init(
         outcome_source=outcome_source,
     )
     if not decision.assign or not decision.carton_id:
+        try:
+            from ..wms_audit_service import emit_wms_matching_outcome
+
+            # Protected / keep existing — not a matching failure for timeline.
+            reason = str(decision.reason or "")
+            if "no_fit" in reason.lower() or reason in ("no_suggestion", "no_primary"):
+                emit_wms_matching_outcome(
+                    db,
+                    tenant_id=tenant_id,
+                    warehouse_id=warehouse_id,
+                    order_id=int(order.id),
+                    source=outcome_source,
+                    matched=False,
+                    carton_id=str(primary.suggested_package_id or "") or None,
+                    carton_name=getattr(primary, "package_name", None),
+                    operator_user_id=triggered_by_user_id,
+                )
+        except Exception:
+            logger.exception("matching activity emit failed order_id=%s", getattr(order, "id", None))
         return {
             "ok": True,
             "message": decision.reason,
@@ -215,6 +259,35 @@ def _apply_proposal_init(
             )
         except Exception:
             logger.exception("attach_selected_carton_to_latest_attempt order_id=%s", order.id)
+    try:
+        from ..wms_audit_service import carton_label_by_id, emit_wms_matching_outcome
+
+        dim, _nm = carton_label_by_id(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            carton_id=str(decision.carton_id),
+        )
+        cname = getattr(primary, "package_name", None) or _nm
+        label = None
+        if cname and dim:
+            label = f"{cname} {dim}"
+        else:
+            label = cname or dim
+        emit_wms_matching_outcome(
+            db,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            order_id=int(order.id),
+            source=decision.source or outcome_source,
+            matched=True,
+            carton_id=str(decision.carton_id),
+            carton_name=label,
+            dimensions_label=dim,
+            operator_user_id=triggered_by_user_id,
+        )
+    except Exception:
+        logger.exception("matching activity emit failed order_id=%s", getattr(order, "id", None))
     logger.info(
         "packaging proposal_init assigned order_id=%s carton=%s source=%s engine=%s",
         order.id,

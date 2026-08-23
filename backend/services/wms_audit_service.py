@@ -535,6 +535,10 @@ def insert_wms_order_event(
     quantity: Optional[float] = None,
     metadata: Optional[dict[str, Any]] = None,
     created_at: Optional[datetime] = None,
+    activity_message: Optional[str] = None,
+    activity_metadata: Optional[dict[str, Any]] = None,
+    extra_activity_links: Optional[list[Dict[str, Any]]] = None,
+    project_activity: Optional[bool] = None,
 ) -> WmsOrderEvent:
     row = WmsOrderEvent(
         tenant_id=int(tenant_id),
@@ -551,6 +555,21 @@ def insert_wms_order_event(
         created_at=created_at or datetime.utcnow(),
     )
     db.add(row)
+    db.flush()
+    should_project = project_activity if project_activity is not None else (activity_message is not None)
+    if should_project and activity_message:
+        append_order_activity_for_wms(
+            db,
+            order_id=int(order_id),
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            event_type=str(event_type),
+            message=str(activity_message),
+            operator_user_id=operator_user_id,
+            metadata=activity_metadata if activity_metadata is not None else metadata,
+            extra_activity_links=extra_activity_links,
+            wms_order_event_id=int(row.id),
+        )
     return row
 
 
@@ -565,8 +584,16 @@ def append_order_activity_for_wms(
     operator_user_id: Optional[int] = None,
     metadata: Optional[Dict[str, Any]] = None,
     extra_activity_links: Optional[list[Dict[str, Any]]] = None,
+    wms_order_event_id: Optional[int] = None,
 ) -> None:
-    """OMS text log + dual-write into shared Activity Log (ready PL description)."""
+    """OMS text log + dual-write into shared Activity Log (business checkpoints only)."""
+    from .activity_log.domain_activity import find_activity_by_correlation
+    from .activity_log.wms_order_activity import (
+        WMS_EVENT_TITLES_PL,
+        correlation_for_wms_event,
+        wms_activity_should_project,
+    )
+
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
     # SAVEPOINT: lean test DBs may lack order_activity_logs — never poison outer txn.
     try:
@@ -594,8 +621,31 @@ def append_order_activity_for_wms(
             order_id,
             event_type,
         )
+
+    if not wms_activity_should_project(event_type):
+        return
+
     try:
         from .activity_log import ActivityLinkSpec, record_activity
+
+        cid = None
+        if wms_order_event_id is not None and int(wms_order_event_id) > 0:
+            cid = correlation_for_wms_event(int(wms_order_event_id))
+            if find_activity_by_correlation(db, correlation_id=cid, tenant_id=int(tenant_id)):
+                return
+
+        meta = dict(metadata or {})
+        meta.setdefault("timeline_tier", "business")
+        meta.setdefault("source_category", "WMS")
+        if uid:
+            meta.setdefault("actor_kind", "USER")
+        else:
+            meta.setdefault("actor_kind", "SYSTEM")
+            meta.setdefault("actor_label", "System")
+        if wms_order_event_id is not None:
+            meta.setdefault("wms_order_event_id", int(wms_order_event_id))
+            meta.setdefault("ref_type", "wms_order_event")
+            meta.setdefault("ref_id", int(wms_order_event_id))
 
         links = [
             ActivityLinkSpec(
@@ -626,12 +676,13 @@ def append_order_activity_for_wms(
                 description=str(message).strip()[:512] or "Zdarzenie zamówienia.",
                 links=links,
                 severity="INFO",
-                category="status",
+                category="wms",
                 tenant_id=int(tenant_id),
                 warehouse_id=int(warehouse_id),
                 actor_user_id=uid,
                 source_module="wms_audit",
-                metadata=dict(metadata or {}),
+                correlation_id=cid,
+                metadata=meta,
             )
             nested.commit()
         except Exception:
@@ -663,9 +714,8 @@ def emit_wms_picking_started(
         except Exception:
             meta["basket"] = (getattr(bsk, "code", None) or getattr(bsk, "label", None) or "") or None
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
-    op_name = operator_display_name(db, uid)
-    title = f"{op_name} rozpoczął zbieranie" if op_name else "Rozpoczęto zbieranie"
-    insert_wms_order_event(
+    title = "Rozpoczęto zbieranie zamówienia."
+    row = insert_wms_order_event(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
@@ -684,6 +734,7 @@ def emit_wms_picking_started(
         message=title,
         operator_user_id=uid,
         metadata=meta,
+        wms_order_event_id=int(row.id),
     )
 
 
@@ -721,7 +772,7 @@ def emit_wms_picked_item(
         "cartless": cart is None,
     }
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
-    insert_wms_order_event(
+    row = insert_wms_order_event(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
@@ -737,20 +788,8 @@ def emit_wms_picked_item(
         quantity=qty,
         metadata=meta,
     )
-    op_name = operator_display_name(db, uid)
-    qtxt = _fmt_qty(qty)
-    msg = f"Zebrano {qtxt}× {sku} — {loc_label} → {cart_label}"
-    if basket_lbl:
-        msg += f", koszyk {basket_lbl}"
-    title = f"Zebrano {qtxt}× {sku}"
-    append_order_activity_for_wms(
-        db,
-        order_id=int(order.id),
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        event_type=EVT_PICKED_ITEM,
-        message=f"{title}" + (f" — {op_name}" if op_name else ""),
-    )
+    # TECHNICAL: wms_order_events only — no Activity Log (scanner spam policy)
+    _ = row
 
 
 def emit_wms_pick_undone(
@@ -785,7 +824,7 @@ def emit_wms_pick_undone(
         "order_item_id": int(order_item_id) if order_item_id is not None else None,
         "event_code": EVT_PICK_UNDONE,
     }
-    insert_wms_order_event(
+    row = insert_wms_order_event(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
@@ -799,23 +838,7 @@ def emit_wms_pick_undone(
         quantity=float(quantity),
         metadata=meta,
     )
-    loc_part = f" z lokalizacji {loc_label}" if loc_label else ""
-    msg = (
-        f"Cofnięto pobranie {qtxt} szt. produktu EAN {sku}{loc_part} "
-        f"dla zamówienia #{order_no}."
-    )
-    if op_name:
-        msg = f"{msg} — {op_name}"
-    append_order_activity_for_wms(
-        db,
-        order_id=int(order_id),
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        event_type=EVT_PICK_UNDONE,
-        message=msg,
-        operator_user_id=uid,
-        metadata=meta,
-    )
+    _ = row  # TECHNICAL — no Activity Log
 
 
 def emit_wms_location_emptied(
@@ -972,7 +995,7 @@ def emit_wms_picking_cancelled(
     }
     # One order-scoped event per affected order (timeline), plus shared metadata.
     for oid in order_ids:
-        insert_wms_order_event(
+        row = insert_wms_order_event(
             db,
             tenant_id=int(tenant_id),
             warehouse_id=int(warehouse_id),
@@ -1025,6 +1048,7 @@ def emit_wms_picking_cancelled(
             message="\n".join(lines),
             operator_user_id=uid,
             metadata=meta,
+            wms_order_event_id=int(row.id),
         )
 
 
@@ -1059,7 +1083,7 @@ def emit_wms_picking_finished(
         if st is not None and getattr(st, "name", None):
             meta["new_order_ui_status_name"] = str(st.name)
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
-    insert_wms_order_event(
+    row = insert_wms_order_event(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
@@ -1073,7 +1097,7 @@ def emit_wms_picking_finished(
     status_bit = ""
     if meta.get("new_order_ui_status_name"):
         status_bit = f" → {meta['new_order_ui_status_name']}"
-    msg = f"Zakończono zbieranie{status_bit}"
+    msg = f"Zakończono zbieranie zamówienia{status_bit}"
     if body_extra:
         msg += f" (czas zbierania: {body_extra})"
     append_order_activity_for_wms(
@@ -1085,6 +1109,7 @@ def emit_wms_picking_finished(
         message=msg,
         operator_user_id=uid,
         metadata=meta,
+        wms_order_event_id=int(row.id),
     )
 
 
@@ -1178,7 +1203,7 @@ def emit_line_shortage_reported(
     if original_product_name:
         meta["original_product_name"] = original_product_name[:512]
 
-    insert_wms_order_event(
+    row = insert_wms_order_event(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
@@ -1223,6 +1248,7 @@ def emit_line_shortage_reported(
                 "object_label": cart_code_eff[:64],
             }
         ],
+        wms_order_event_id=int(row.id),
     )
 
 
@@ -1241,15 +1267,21 @@ def emit_wms_shortage_reported(
     loc_label = location_display_label(db, int(location_id)) if location_id is not None else None
     cart_row = db.query(Cart).filter(Cart.id == int(cart_id)).first()
     cart_label = cart_display_name_for_wms(cart_row) if cart_row is not None else f"#{cart_id}"
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    product = db.query(Product).filter(Product.id == int(product_id)).first()
+    sku = ""
+    if product is not None:
+        sku = (getattr(product, "sku", None) or getattr(product, "ean", None) or "").strip()
+    sku = sku or f"#{product_id}"
     meta = {
         "product_id": int(product_id),
+        "sku": sku,
         "quantity": float(shortage_qty),
         "source_location": loc_label,
         "target_cart": cart_label,
         "cart_id": int(cart_id),
     }
-    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
-    insert_wms_order_event(
+    row = insert_wms_order_event(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
@@ -1268,7 +1300,12 @@ def emit_wms_shortage_reported(
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         event_type=EVT_SHORTAGE_REPORTED,
-        message=f"Zgłoszono brak {_fmt_qty(float(shortage_qty))} szt. produktu #{product_id} ({loc_label or 'lokalizacja ?'}, {cart_label})",
+        message=(
+            f"Podczas zbierania wykryto brak: SKU {sku}, brak {_fmt_qty(float(shortage_qty))} szt."
+        ),
+        operator_user_id=uid,
+        metadata=meta,
+        wms_order_event_id=int(row.id),
     )
 
 
@@ -1295,7 +1332,7 @@ def emit_replacement_item_removed(
         "quantity": float(quantity),
     }
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
-    insert_wms_order_event(
+    row = insert_wms_order_event(
         db,
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
@@ -1320,6 +1357,7 @@ def emit_replacement_item_removed(
         warehouse_id=int(warehouse_id),
         event_type=EVT_REPLACEMENT_ITEM_REMOVED,
         message=msg,
+        wms_order_event_id=int(row.id),
     )
 
 
@@ -1339,7 +1377,7 @@ def emit_order_item_removed(
     """Audyt usunięcia zwykłej linii (alias operacyjny ORDER_ITEM_REMOVED)."""
     meta = {"product_name": product_name[:512], "reason": reason[:256], "quantity": float(quantity)}
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
-    insert_wms_order_event(
+    row = insert_wms_order_event(
         db,
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
@@ -1359,6 +1397,7 @@ def emit_order_item_removed(
         event_type=EVT_ORDER_ITEM_REMOVED,
         message=f"Usunięto pozycję: {product_name} ({_fmt_qty(quantity)} szt.)"
         + (f" — {reason}" if reason else ""),
+        wms_order_event_id=int(row.id),
     )
 
 
@@ -1377,7 +1416,7 @@ def emit_order_line_removed(
 ) -> None:
     meta = {"product_name": product_name[:512], "reason": reason[:256], "quantity": float(quantity)}
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
-    insert_wms_order_event(
+    row = insert_wms_order_event(
         db,
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
@@ -1396,6 +1435,7 @@ def emit_order_line_removed(
         warehouse_id=int(warehouse_id),
         event_type=EVT_ORDER_LINE_REMOVED,
         message=f"Usunięto linię: {product_name} ({_fmt_qty(quantity)} szt.)" + (f" — {reason}" if reason else ""),
+        wms_order_event_id=int(row.id),
     )
 
 
@@ -1419,7 +1459,7 @@ def emit_order_line_replaced(
         "quantity": float(quantity),
     }
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
-    insert_wms_order_event(
+    row = insert_wms_order_event(
         db,
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
@@ -1438,6 +1478,7 @@ def emit_order_line_replaced(
         warehouse_id=int(warehouse_id),
         event_type=EVT_ORDER_LINE_REPLACED,
         message=f"Zamiana produktu: {old_product_name} → {new_product_name} ({_fmt_qty(quantity)} szt.)",
+        wms_order_event_id=int(row.id),
     )
 
 
@@ -1457,7 +1498,7 @@ def emit_oms_decision_wait(
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
     pname = (product_name or "").strip() or (f"Produkt #{int(product_id)}" if product_id else "Produkt")
     op_name = (operator_display_name or "").strip()
-    insert_wms_order_event(
+    row = insert_wms_order_event(
         db,
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
@@ -1497,6 +1538,7 @@ def emit_oms_decision_wait(
         operator_user_id=uid,
         metadata={"product_name": pname[:512], "quantity": float(quantity)},
         extra_activity_links=extra_links or None,
+        wms_order_event_id=int(row.id),
     )
 
 
@@ -1514,7 +1556,7 @@ def emit_oms_decision_accepted(
     operator_user_id: int | None = None,
 ) -> None:
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
-    insert_wms_order_event(
+    row = insert_wms_order_event(
         db,
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
@@ -1533,6 +1575,7 @@ def emit_oms_decision_accepted(
         warehouse_id=int(warehouse_id),
         event_type=EVT_OMS_DECISION_ACCEPTED,
         message=f"OMS: {action} — {product_name} ({_fmt_qty(quantity)} szt.)",
+        wms_order_event_id=int(row.id),
     )
 
 
@@ -1546,7 +1589,7 @@ def emit_recovery_finished(
     operator_user_id: int | None = None,
 ) -> None:
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
-    insert_wms_order_event(
+    row = insert_wms_order_event(
         db,
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
@@ -1562,7 +1605,9 @@ def emit_recovery_finished(
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
         event_type=EVT_RECOVERY_FINISHED,
-        message="Zakończono dogrywkę zbierki",
+        message="Brak został rozwiązany: zakończono dogrywkę zbierki.",
+        operator_user_id=uid,
+        wms_order_event_id=int(row.id),
     )
 
 
@@ -1636,7 +1681,7 @@ def emit_wms_packing_started(
         "workstation_id": ws,
     }
     meta.update(carton_audit_snapshot(db, order))
-    insert_wms_order_event(
+    row = insert_wms_order_event(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
@@ -1652,7 +1697,10 @@ def emit_wms_packing_started(
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         event_type=EVT_PACKING_STARTED,
-        message=f"{nm} rozpoczął pakowanie" if nm else "Rozpoczęto pakowanie",
+        message="Rozpoczęto pakowanie zamówienia.",
+        operator_user_id=uid,
+        metadata=meta,
+        wms_order_event_id=int(row.id),
     )
     return sess
 
@@ -1692,7 +1740,7 @@ def emit_wms_packed_item(
     if ws is not None:
         meta["workstation_id"] = ws
     meta.update(carton_audit_snapshot(db, order))
-    insert_wms_order_event(
+    row = insert_wms_order_event(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
@@ -1704,16 +1752,7 @@ def emit_wms_packed_item(
         quantity=float(quantity),
         metadata=meta,
     )
-    cart_bit = (meta.get("carton_label") or "").strip()
-    append_order_activity_for_wms(
-        db,
-        order_id=int(order.id),
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        event_type=EVT_PACKED_ITEM,
-        message=f"Spakowano {_fmt_qty(float(quantity))}× {sku_s}"
-        + (f" → {cart_bit}" if cart_bit else ""),
-    )
+    _ = row  # TECHNICAL — no Activity Log
 
 
 def emit_wms_packing_finished(
@@ -1739,7 +1778,7 @@ def emit_wms_packing_finished(
     }
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
     meta.update(carton_audit_snapshot(db, order))
-    insert_wms_order_event(
+    row = insert_wms_order_event(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
@@ -1754,10 +1793,11 @@ def emit_wms_packing_finished(
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         event_type=EVT_PACKING_FINISHED,
-        message=f"Kompletacja fizyczna (czas skanów: {_format_duration_pl(dur_sec)})"
-        if dur_sec is not None
-        else "Kompletacja fizyczna — wszystkie pozycje spakowane",
+        message="Zakończono pakowanie zamówienia."
+        if dur_sec is None
+        else f"Zakończono pakowanie zamówienia (czas: {_format_duration_pl(dur_sec)}).",
         operator_user_id=uid,
+        wms_order_event_id=int(row.id),
     )
 
 
@@ -1776,7 +1816,7 @@ def emit_wms_packing_reopen_acknowledged(
         "Użytkownik zapoznał się z komunikatem o wcześniej spakowanym zamówieniu "
         "i ponownie przeszedł do pakowania."
     )
-    insert_wms_order_event(
+    row = insert_wms_order_event(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
@@ -1797,6 +1837,7 @@ def emit_wms_packing_reopen_acknowledged(
         event_type=EVT_PACKING_REOPEN_ACKNOWLEDGED,
         message=msg,
         operator_user_id=uid,
+        wms_order_event_id=int(row.id),
     )
 
 
@@ -1849,7 +1890,7 @@ def emit_wms_packing_automation_finished(
         meta["post_pack_steps"] = post_pack_steps[:24]
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
     meta.update(carton_audit_snapshot(db, order))
-    insert_wms_order_event(
+    row = insert_wms_order_event(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
@@ -1868,6 +1909,7 @@ def emit_wms_packing_automation_finished(
         message=f"Automatyka pakowania zakończona (czas: {_format_duration_pl(dur_sec)})"
         if dur_sec is not None
         else "Automatyka pakowania zakończona",
+        wms_order_event_id=int(row.id),
     )
 
 
@@ -1899,13 +1941,14 @@ def emit_wms_carton_selected_or_changed(
         meta["old_carton_label"] = odim
         meta["old_carton_name"] = onm
         evt = EVT_CARTON_CHANGED
-        title_pl = "Zmieniono karton"
-        msg = f"Karton {odim or prev_s} → {new_dim or new_carton_id}"
+        msg = (
+            f"Zmieniono opakowanie z „{onm or odim or prev_s}” "
+            f"na „{new_nm or new_dim or new_carton_id}”."
+        )
     else:
         evt = EVT_CARTON_SELECTED
-        title_pl = "Wybrano karton"
-        msg = f"Karton {new_dim or new_carton_id}"
-    insert_wms_order_event(
+        msg = f"Wybrano opakowanie „{new_nm or new_dim or new_carton_id}”."
+    row = insert_wms_order_event(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
@@ -1921,6 +1964,9 @@ def emit_wms_carton_selected_or_changed(
         warehouse_id=warehouse_id,
         event_type=evt,
         message=msg,
+        operator_user_id=uid,
+        metadata={**meta, "source": "MANUAL"},
+        wms_order_event_id=int(row.id),
     )
 
 
@@ -1941,7 +1987,7 @@ def emit_wms_label_generated(
         "tracking_number": (tracking_number or "").strip() or None,
         "template_hint": template_hint,
     }
-    insert_wms_order_event(
+    row = insert_wms_order_event(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
@@ -1959,6 +2005,7 @@ def emit_wms_label_generated(
         warehouse_id=warehouse_id,
         event_type=EVT_LABEL_GENERATED,
         message=f"Wygenerowano etykietę {cn}" + (f", nr {tn}" if tn else ""),
+        wms_order_event_id=int(row.id),
     )
 
 
@@ -1974,7 +2021,7 @@ def emit_wms_label_reprinted(
 ) -> None:
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
     meta = {"carrier_name": carrier_name, "reason": reason}
-    insert_wms_order_event(
+    row = insert_wms_order_event(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
@@ -1991,6 +2038,7 @@ def emit_wms_label_reprinted(
         warehouse_id=warehouse_id,
         event_type=EVT_LABEL_REPRINTED,
         message=f"Ponowny wydruk etykiety ({nm or 'operator'})",
+        wms_order_event_id=int(row.id),
     )
 
 
@@ -2006,7 +2054,7 @@ def emit_wms_package_weight_confirmed(
 ) -> None:
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
     meta = {"weight_kg": float(weight_kg), "source": source}
-    insert_wms_order_event(
+    row = insert_wms_order_event(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
@@ -2022,7 +2070,10 @@ def emit_wms_package_weight_confirmed(
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         event_type=EVT_PACKAGE_WEIGHT_CONFIRMED,
-        message=f"Potwierdzono wagę przesyłki: {weight_kg:g} kg",
+        message=f"Automatycznie wyliczono wagę przesyłki: {float(weight_kg):.2f} kg.".replace(".", ","),
+        operator_user_id=uid,
+        metadata=meta,
+        wms_order_event_id=int(row.id),
     )
 
 
@@ -2037,7 +2088,7 @@ def emit_wms_packing_paused(
 ) -> None:
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
     meta = {"reason": reason} if reason else {}
-    insert_wms_order_event(
+    row = insert_wms_order_event(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
@@ -2045,14 +2096,6 @@ def emit_wms_packing_paused(
         operator_user_id=uid,
         event_type=EVT_PACKING_PAUSED,
         metadata=meta,
-    )
-    append_order_activity_for_wms(
-        db,
-        order_id=int(order_id),
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        event_type=EVT_PACKING_PAUSED,
-        message="Wstrzymano pakowanie" + (f" ({reason})" if reason else ""),
     )
 
 
@@ -2065,7 +2108,7 @@ def emit_wms_packing_resumed(
     operator_user_id: Optional[int],
 ) -> None:
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
-    insert_wms_order_event(
+    row = insert_wms_order_event(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
@@ -2074,13 +2117,193 @@ def emit_wms_packing_resumed(
         event_type=EVT_PACKING_RESUMED,
         metadata={},
     )
-    append_order_activity_for_wms(
+    _ = row  # TECHNICAL
+
+
+def emit_wms_matching_outcome(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+    source: str,
+    matched: bool,
+    carton_id: Optional[str] = None,
+    carton_name: Optional[str] = None,
+    dimensions_label: Optional[str] = None,
+    matching_event_id: Optional[int] = None,
+    operator_user_id: Optional[int] = None,
+) -> None:
+    """Smart / 3D matching → wms_order_events + Activity Log (business)."""
+    from .activity_log.wms_order_activity import (
+        EVT_SMART_MATCHING_MATCHED,
+        EVT_SMART_MATCHING_NO_MATCH,
+        EVT_THREE_D_MATCHING_MATCHED,
+        EVT_THREE_D_MATCHING_NO_FIT,
+    )
+
+    src = str(source or "").strip().upper()
+    if src in ("THREE_D", "3D", "THREE_D_MATCHING"):
+        evt = EVT_THREE_D_MATCHING_MATCHED if matched else EVT_THREE_D_MATCHING_NO_FIT
+        engine_label = "3D Matching"
+    else:
+        evt = EVT_SMART_MATCHING_MATCHED if matched else EVT_SMART_MATCHING_NO_MATCH
+        engine_label = "Smart Matching"
+        src = "SMART"
+    label = (carton_name or dimensions_label or carton_id or "").strip()
+    if matched and label:
+        msg = f"{engine_label} dopasował opakowanie „{label}”."
+    elif matched:
+        msg = f"{engine_label} dopasował opakowanie."
+    else:
+        msg = f"{engine_label} nie znalazł pasującego opakowania."
+    meta: dict[str, Any] = {
+        "source": src if src in ("SMART", "THREE_D", "MANUAL") else "SMART",
+        "carton_id": (str(carton_id).strip() if carton_id else None),
+        "carton_name": (str(carton_name).strip() if carton_name else None),
+        "dimensions": dimensions_label,
+        "matching_event_id": int(matching_event_id) if matching_event_id else None,
+    }
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    row = insert_wms_order_event(
         db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
         order_id=int(order_id),
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        event_type=EVT_PACKING_RESUMED,
-        message="Wznowiono pakowanie",
+        operator_user_id=uid,
+        event_type=evt,
+        metadata=meta,
+        activity_message=msg,
+        activity_metadata=meta,
+    )
+    _ = row
+
+
+def emit_wms_pack_all_used(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+    operator_user_id: Optional[int] = None,
+    lines_packed: Optional[int] = None,
+) -> None:
+    from .activity_log.wms_order_activity import EVT_PACK_ALL_USED
+
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    meta: dict[str, Any] = {}
+    if lines_packed is not None:
+        meta["lines_packed"] = int(lines_packed)
+    insert_wms_order_event(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_id=int(order_id),
+        operator_user_id=uid,
+        event_type=EVT_PACK_ALL_USED,
+        metadata=meta or None,
+        activity_message='Spakowano całe zamówienie opcją „Spakuj wszystko”.',
+        activity_metadata=meta or None,
+    )
+
+
+def emit_wms_shipment_generation_requested(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+    carrier_name: Optional[str] = None,
+    service_name: Optional[str] = None,
+    operator_user_id: Optional[int] = None,
+) -> None:
+    from .activity_log.wms_order_activity import EVT_SHIPMENT_GENERATION_REQUESTED
+
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    carrier = (carrier_name or service_name or "przewoźnik").strip()
+    meta = {
+        "carrier": carrier,
+        "service": (service_name or None),
+    }
+    insert_wms_order_event(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_id=int(order_id),
+        operator_user_id=uid,
+        event_type=EVT_SHIPMENT_GENERATION_REQUESTED,
+        metadata=meta,
+        activity_message=f"Zlecono wygenerowanie przesyłki {carrier}.",
+        activity_metadata=meta,
+    )
+
+
+def emit_wms_waybill_assigned(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+    waybill: str,
+    carrier_name: Optional[str] = None,
+    shipment_id: Optional[str] = None,
+    operator_user_id: Optional[int] = None,
+) -> None:
+    from .activity_log.wms_order_activity import EVT_WAYBILL_ASSIGNED
+
+    wb = str(waybill or "").strip()
+    if not wb:
+        return
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    meta = {
+        "waybill": wb[:128],
+        "carrier": (carrier_name or None),
+        "shipment_id": (str(shipment_id) if shipment_id else None),
+    }
+    insert_wms_order_event(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_id=int(order_id),
+        operator_user_id=uid,
+        event_type=EVT_WAYBILL_ASSIGNED,
+        metadata=meta,
+        activity_message=f"Pobrano list przewozowy {wb}.",
+        activity_metadata=meta,
+    )
+
+
+def emit_wms_warehouse_document_created(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+    document_type: str,
+    document_number: str,
+    document_id: Optional[int] = None,
+    operator_user_id: Optional[int] = None,
+) -> None:
+    from .activity_log.wms_order_activity import EVT_WMS_WAREHOUSE_DOCUMENT_CREATED
+
+    dtype = str(document_type or "DOC").strip().upper()
+    dnum = str(document_number or "").strip() or f"#{document_id or '?'}"
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    meta = {
+        "document_type": dtype,
+        "document_number": dnum,
+        "document_id": int(document_id) if document_id else None,
+    }
+    insert_wms_order_event(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        order_id=int(order_id),
+        operator_user_id=uid,
+        event_type=EVT_WMS_WAREHOUSE_DOCUMENT_CREATED,
+        metadata=meta,
+        activity_message=f"Utworzono dokument {dtype} {dnum}.",
+        activity_metadata=meta,
     )
 
 

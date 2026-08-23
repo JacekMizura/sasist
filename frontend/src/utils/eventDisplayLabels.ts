@@ -107,6 +107,17 @@ export const EVENT_DISPLAY_LABELS: Record<string, string> = {
   ORDER_SHIPPING_METHOD_CHANGED: "Metoda dostawy",
   ORDER_IMPORTED: "Import zamówienia",
 
+  // --- WMS matching / packing extras (Order › Logi) ---
+  SMART_MATCHING_MATCHED: "Smart Matching",
+  SMART_MATCHING_NO_MATCH: "Smart Matching",
+  THREE_D_MATCHING_MATCHED: "3D Matching",
+  THREE_D_MATCHING_NO_FIT: "3D Matching",
+  PACK_ALL_USED: "Pakowanie",
+  SHIPMENT_GENERATION_REQUESTED: "Przesyłka",
+  WAYBILL_ASSIGNED: "List przewozowy",
+  LABEL_PRINTED: "Etykieta",
+  WMS_WAREHOUSE_DOCUMENT_CREATED: "Dokument magazynowy",
+
   // --- Ops workflow actions ---
   WAITING_PROMOTED: "Przyjęcie odblokowało workflow",
   WAITING_PARTIAL_PROMOTED: "Częściowe przyjęcie",

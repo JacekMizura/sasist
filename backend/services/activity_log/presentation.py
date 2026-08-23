@@ -299,12 +299,17 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
         # Default: no expandable metadata dump (raw keys). Picking-entry uses structured rows.
         details = []
     from backend.services.activity_log.order_event_codes import ORDER_EVENT_TITLES_PL
+    from backend.services.activity_log.wms_order_activity import WMS_EVENT_TITLES_PL
 
     event_display_label = (
         ORDER_EVENT_TITLES_PL.get(code_norm)
+        or WMS_EVENT_TITLES_PL.get(code_norm)
         or resolve_return_event_title(event_code, meta)
         or title_pl(event_code)
     )
+    if str(meta.get("source_category") or "").upper() == "WMS" and not ORDER_EVENT_TITLES_PL.get(code_norm):
+        # Prefer explicit WMS titles; keep event column as WMS-facing label.
+        event_display_label = WMS_EVENT_TITLES_PL.get(code_norm) or event_display_label or "WMS"
     # Order # list only when writer opted in (assign / detach) — never for start/stop session noise.
     show_nums = bool(meta.get("show_order_numbers"))
     order_nums = order_numbers_from_meta(meta) if show_nums else []

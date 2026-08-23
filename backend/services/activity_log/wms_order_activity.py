@@ -1,0 +1,155 @@
+"""WMS → Activity Log projection helpers (order-facing business timeline).
+
+``wms_order_events`` remains SSOT. This module classifies business vs technical
+events and provides summaries for matching / packing extras without a second log.
+"""
+
+from __future__ import annotations
+
+from typing import FrozenSet
+
+from ...models.wms_order_event import (
+    EVT_CARTON_CHANGED,
+    EVT_CARTON_SELECTED,
+    EVT_LABEL_GENERATED,
+    EVT_LABEL_REPRINTED,
+    EVT_OMS_DECISION_ACCEPTED,
+    EVT_OMS_DECISION_WAIT,
+    EVT_ORDER_ITEM_REMOVED,
+    EVT_ORDER_LINE_REMOVED,
+    EVT_ORDER_LINE_REPLACED,
+    EVT_ORDER_LINE_SHORTAGE_REPORTED,
+    EVT_PACKAGE_WEIGHT_CONFIRMED,
+    EVT_PACKED_ITEM,
+    EVT_PACKING_AUTOMATION_FINISHED,
+    EVT_PACKING_FINISHED,
+    EVT_PACKING_PAUSED,
+    EVT_PACKING_REOPEN_ACKNOWLEDGED,
+    EVT_PACKING_RESUMED,
+    EVT_PACKING_STARTED,
+    EVT_PICKED_ITEM,
+    EVT_PICKING_CANCELLED,
+    EVT_PICKING_FINISHED,
+    EVT_PICKING_STARTED,
+    EVT_PICK_UNDONE,
+    EVT_LOCATION_EMPTIED,
+    EVT_LOCATION_CHANGED,
+    EVT_RECOVERY_FINISHED,
+    EVT_RECOVERY_SHORTAGE_REPORTED,
+    EVT_RECOVERY_STARTED,
+    EVT_REPLACEMENT_ITEM_REMOVED,
+    EVT_REPLACEMENT_SHORTAGE_REPORTED,
+    EVT_RESERVATION_CREATED,
+    EVT_RESERVATION_RELEASED,
+    EVT_SHORTAGE_REPORTED,
+    EVT_WMS_VALIDATION_FAILED,
+    EVT_WMS_VALIDATION_PASSED,
+)
+
+# --- New / extended WMS event codes (also stored on wms_order_events) ---
+EVT_SMART_MATCHING_MATCHED = "SMART_MATCHING_MATCHED"
+EVT_SMART_MATCHING_NO_MATCH = "SMART_MATCHING_NO_MATCH"
+EVT_THREE_D_MATCHING_MATCHED = "THREE_D_MATCHING_MATCHED"
+EVT_THREE_D_MATCHING_NO_FIT = "THREE_D_MATCHING_NO_FIT"
+EVT_PACK_ALL_USED = "PACK_ALL_USED"
+EVT_SHIPMENT_GENERATION_REQUESTED = "SHIPMENT_GENERATION_REQUESTED"
+EVT_WAYBILL_ASSIGNED = "WAYBILL_ASSIGNED"
+EVT_LABEL_PRINTED = "LABEL_PRINTED"
+EVT_WMS_WAREHOUSE_DOCUMENT_CREATED = "WMS_WAREHOUSE_DOCUMENT_CREATED"
+
+# Item-level / scanner noise — stay in wms_order_events only (not Activity Log).
+WMS_TECHNICAL_ACTIVITY_SKIP: FrozenSet[str] = frozenset(
+    {
+        EVT_PICKED_ITEM,
+        EVT_PACKED_ITEM,
+        EVT_PICK_UNDONE,
+        EVT_LOCATION_EMPTIED,
+        EVT_LOCATION_CHANGED,
+        EVT_RESERVATION_CREATED,
+        EVT_RESERVATION_RELEASED,
+        EVT_PACKING_PAUSED,
+        EVT_PACKING_RESUMED,
+        EVT_WMS_VALIDATION_PASSED,
+    }
+)
+
+# Business checkpoints for Order › Logi (default timeline).
+WMS_BUSINESS_TIMELINE_EVENTS: FrozenSet[str] = frozenset(
+    {
+        EVT_PICKING_STARTED,
+        EVT_PICKING_FINISHED,
+        EVT_PICKING_CANCELLED,
+        EVT_SHORTAGE_REPORTED,
+        EVT_ORDER_LINE_SHORTAGE_REPORTED,
+        EVT_REPLACEMENT_SHORTAGE_REPORTED,
+        EVT_RECOVERY_SHORTAGE_REPORTED,
+        EVT_RECOVERY_STARTED,
+        EVT_RECOVERY_FINISHED,
+        EVT_OMS_DECISION_WAIT,
+        EVT_OMS_DECISION_ACCEPTED,
+        EVT_ORDER_LINE_REMOVED,
+        EVT_ORDER_ITEM_REMOVED,
+        EVT_REPLACEMENT_ITEM_REMOVED,
+        EVT_ORDER_LINE_REPLACED,
+        EVT_PACKING_STARTED,
+        EVT_PACKING_FINISHED,
+        EVT_PACKING_AUTOMATION_FINISHED,
+        EVT_PACKING_REOPEN_ACKNOWLEDGED,
+        EVT_PACK_ALL_USED,
+        EVT_CARTON_SELECTED,
+        EVT_CARTON_CHANGED,
+        EVT_PACKAGE_WEIGHT_CONFIRMED,
+        EVT_SMART_MATCHING_MATCHED,
+        EVT_SMART_MATCHING_NO_MATCH,
+        EVT_THREE_D_MATCHING_MATCHED,
+        EVT_THREE_D_MATCHING_NO_FIT,
+        EVT_SHIPMENT_GENERATION_REQUESTED,
+        EVT_WAYBILL_ASSIGNED,
+        EVT_LABEL_GENERATED,
+        EVT_LABEL_PRINTED,
+        EVT_LABEL_REPRINTED,
+        EVT_WMS_WAREHOUSE_DOCUMENT_CREATED,
+        EVT_WMS_VALIDATION_FAILED,
+    }
+)
+
+WMS_EVENT_TITLES_PL: dict[str, str] = {
+    EVT_PICKING_STARTED: "Zbieranie",
+    EVT_PICKING_FINISHED: "Zbieranie",
+    EVT_PICKING_CANCELLED: "Zbieranie",
+    EVT_SHORTAGE_REPORTED: "Brak",
+    EVT_ORDER_LINE_SHORTAGE_REPORTED: "Brak",
+    EVT_RECOVERY_FINISHED: "Rozwiązanie braku",
+    EVT_PACKING_STARTED: "Pakowanie",
+    EVT_PACKING_FINISHED: "Pakowanie",
+    EVT_PACK_ALL_USED: "Pakowanie",
+    EVT_CARTON_SELECTED: "Opakowanie",
+    EVT_CARTON_CHANGED: "Opakowanie",
+    EVT_SMART_MATCHING_MATCHED: "Smart Matching",
+    EVT_SMART_MATCHING_NO_MATCH: "Smart Matching",
+    EVT_THREE_D_MATCHING_MATCHED: "3D Matching",
+    EVT_THREE_D_MATCHING_NO_FIT: "3D Matching",
+    EVT_PACKAGE_WEIGHT_CONFIRMED: "Waga",
+    EVT_SHIPMENT_GENERATION_REQUESTED: "Przesyłka",
+    EVT_WAYBILL_ASSIGNED: "List przewozowy",
+    EVT_LABEL_GENERATED: "Etykieta",
+    EVT_LABEL_PRINTED: "Etykieta",
+    EVT_LABEL_REPRINTED: "Etykieta",
+    EVT_WMS_WAREHOUSE_DOCUMENT_CREATED: "Dokument magazynowy",
+}
+
+
+def wms_activity_should_project(event_type: str) -> bool:
+    et = str(event_type or "").strip().upper()
+    if not et:
+        return False
+    if et in WMS_TECHNICAL_ACTIVITY_SKIP:
+        return False
+    if et in WMS_BUSINESS_TIMELINE_EVENTS:
+        return True
+    # Unknown future business emits: project unless explicitly technical.
+    return True
+
+
+def correlation_for_wms_event(wms_order_event_id: int) -> str:
+    return f"wms-evt:{int(wms_order_event_id)}"[:64]
