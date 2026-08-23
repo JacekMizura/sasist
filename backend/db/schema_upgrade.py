@@ -6645,6 +6645,32 @@ def ensure_stock_document_series_columns(engine: Engine) -> None:
     from .schema_introspection import ensure_stock_documents_orm_columns
 
     ensure_stock_documents_orm_columns(engine)
+    ensure_stock_documents_wz_idempotency_unique_index(engine)
+
+
+def ensure_stock_documents_wz_idempotency_unique_index(engine: Engine) -> None:
+    """Phase 2 WZ: DB idempotency for documentary/issue WZ (tenant + idempotency_key)."""
+    index_name = "uq_stock_documents_tenant_idempotency_key"
+    with engine.connect() as conn:
+        if _has_index(conn, index_name, table_name="stock_documents"):
+            return
+        dialect = engine.dialect.name
+        if dialect in ("sqlite", "postgresql"):
+            conn.execute(
+                text(
+                    f"CREATE UNIQUE INDEX IF NOT EXISTS {index_name} "
+                    "ON stock_documents(tenant_id, idempotency_key) "
+                    "WHERE idempotency_key IS NOT NULL"
+                )
+            )
+        else:
+            conn.execute(
+                text(
+                    f"CREATE UNIQUE INDEX IF NOT EXISTS {index_name} "
+                    "ON stock_documents(tenant_id, idempotency_key)"
+                )
+            )
+        conn.commit()
 
 
 def ensure_sale_documents_extended_columns(engine: Engine) -> None:

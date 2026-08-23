@@ -4767,37 +4767,34 @@ def finalize_wms_picking_cart(
         from .bundles.bundle_lot_snapshot_service import persist_bundle_lot_snapshots_for_picks
 
         persist_bundle_lot_snapshots_for_picks(db, finalized_ids)
-        from .warehouse_wz.documentary_service import create_documentary_wz_for_wms_pick_finalize
+        from .warehouse_wz.constants import FULFILLMENT_KIND_CART
+        from .warehouse_wz.post_pick_settlement import ensure_documentary_wz_for_pick_settlement_batch
 
-        for o in orders:
-            oid = int(o.id)
-            pick_ids = finalized_by_order.get(oid) or []
-            if not pick_ids:
-                continue
-            try:
-                create_documentary_wz_for_wms_pick_finalize(
-                    db,
-                    tenant_id=int(tenant_id),
-                    warehouse_id=int(warehouse_id),
-                    order=o,
-                    pick_ids=pick_ids,
-                    session_key=cid,
-                    performed_by_user_id=operator_user_id,
-                )
-            except Exception as wz_exc:
-                logger.exception(
-                    "[picking.finalize.error] order_id=%s cart_id=%s step=documentary_wz",
-                    oid,
-                    cid,
-                )
-                raise PickingFinalizeError(
-                    f"Nie udało się utworzyć dokumentu WZ po zakończeniu zbierania: {wz_exc}",
-                    reason=wz_exc.__class__.__name__,
-                    order_id=oid,
-                    step="documentary_wz",
-                    http_status=409,
-                    code="wz_documentary_create_failed",
-                ) from wz_exc
+        orders_by_id = {int(o.id): o for o in orders}
+        try:
+            ensure_documentary_wz_for_pick_settlement_batch(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                orders_by_id=orders_by_id,
+                finalized_by_order=finalized_by_order,
+                fulfillment_kind=FULFILLMENT_KIND_CART,
+                fulfillment_session_id=cid,
+                performed_by_user_id=operator_user_id,
+            )
+        except Exception as wz_exc:
+            logger.exception(
+                "[picking.finalize.error] cart_id=%s source_status_id=%s step=documentary_wz",
+                cid,
+                sid,
+            )
+            raise PickingFinalizeError(
+                f"Nie udało się utworzyć dokumentu WZ po zakończeniu zbierania: {wz_exc}",
+                reason=wz_exc.__class__.__name__,
+                step="documentary_wz",
+                http_status=409,
+                code="wz_documentary_create_failed",
+            ) from wz_exc
         logger.info(
             "[picking.finalize.finish] cart_id=%s source_status_id=%s step=inventory picks_finalized=%s",
             cid,
@@ -5369,6 +5366,32 @@ def finalize_wms_recovery_picking_cart(
     from .bundles.bundle_lot_snapshot_service import persist_bundle_lot_snapshots_for_picks
 
     persist_bundle_lot_snapshots_for_picks(db, finalized_ids)
+
+    from .warehouse_wz.constants import FULFILLMENT_KIND_RECOVERY
+    from .warehouse_wz.post_pick_settlement import ensure_documentary_wz_for_pick_settlement
+
+    if finalized_ids:
+        try:
+            ensure_documentary_wz_for_pick_settlement(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                order=o,
+                pick_ids=finalized_ids,
+                fulfillment_kind=FULFILLMENT_KIND_RECOVERY,
+                fulfillment_session_id=int(rt.id),
+                performed_by_user_id=operator_user_id,
+                metadata_extra={"recovery_task_id": int(rt.id), "cart_id": cid},
+            )
+        except Exception as wz_exc:
+            logger.exception(
+                "[recovery.finalize.error] order_id=%s recovery_task_id=%s step=documentary_wz",
+                int(order_id),
+                int(rt.id),
+            )
+            raise ValueError(
+                f"Nie udało się utworzyć dokumentu WZ po dogrywce recovery: {wz_exc}"
+            ) from wz_exc
 
     from .recovery_workflow_service import apply_fulfillment_state_from_resolver
 

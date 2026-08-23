@@ -9,6 +9,7 @@ from datetime import date
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
+from backend.models.activity_event import ActivityEvent, ActivityEventLink
 from backend.models.document_series import DocumentSeries
 from backend.models.inventory import Inventory
 from backend.models.location import Location
@@ -62,8 +63,18 @@ def _mk_engine():
         StockOperation,
         OrderWarehouseReservation,
         Pick,
+        ActivityEvent,
+        ActivityEventLink,
     ):
         model.__table__.create(engine, checkfirst=True)
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_stock_documents_tenant_idempotency_key "
+                "ON stock_documents(tenant_id, idempotency_key) "
+                "WHERE idempotency_key IS NOT NULL"
+            )
+        )
     return engine
 
 

@@ -234,6 +234,34 @@ def finalize_cartless_picking_session(
             code="inventory_finalize_failed",
         ) from exc
 
+    from ..warehouse_wz.constants import FULFILLMENT_KIND_CARTLESS
+    from ..warehouse_wz.post_pick_settlement import (
+        ensure_documentary_wz_for_pick_settlement_batch,
+        group_finalized_pick_ids_by_order,
+    )
+
+    finalized_by_order = group_finalized_pick_ids_by_order(db, finalized_pick_ids=finalized_ids)
+    orders_by_id = {int(o.id): o for o in orders}
+    try:
+        ensure_documentary_wz_for_pick_settlement_batch(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            orders_by_id=orders_by_id,
+            finalized_by_order=finalized_by_order,
+            fulfillment_kind=FULFILLMENT_KIND_CARTLESS,
+            fulfillment_session_id=psid,
+            performed_by_user_id=operator_user_id,
+        )
+    except Exception as wz_exc:
+        raise PickingFinalizeError(
+            f"Nie udało się utworzyć dokumentu WZ po zakończeniu zbierania: {wz_exc}",
+            reason=wz_exc.__class__.__name__,
+            step="documentary_wz",
+            http_status=409,
+            code="wz_documentary_create_failed",
+        ) from wz_exc
+
     ss = get_or_create_wms_picking_shortage_settings(
         db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)
     )
