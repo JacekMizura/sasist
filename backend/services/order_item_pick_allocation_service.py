@@ -36,6 +36,27 @@ def lot_key_from_inventory(inv) -> tuple[str, date]:
     return batch, exp
 
 
+class LocationInventoryInsufficientError(ValueError):
+    """Finalize / consume cannot cover requested qty at location (structured)."""
+
+    def __init__(
+        self,
+        *,
+        product_id: int,
+        location_id: int,
+        required_qty: float,
+        available_qty: float,
+    ) -> None:
+        self.product_id = int(product_id)
+        self.location_id = int(location_id)
+        self.required_qty = float(required_qty)
+        self.available_qty = float(available_qty)
+        super().__init__(
+            f"Brak stanu w lokalizacji dla produktu #{self.product_id}: "
+            f"wymagane {self.required_qty}, dostępne {round(self.available_qty, 4)}."
+        )
+
+
 def consume_inventory_fifo_slices(
     db: Session,
     *,
@@ -105,8 +126,11 @@ def consume_inventory_fifo_slices(
         net_by_id[int(r.id)] = net
         total_avail += net
     if total_avail + 1e-9 < qty:
-        raise ValueError(
-            f"Brak stanu w lokalizacji dla produktu #{product_id}: wymagane {qty}, dostępne {round(total_avail, 4)}."
+        raise LocationInventoryInsufficientError(
+            product_id=int(product_id),
+            location_id=int(location_id),
+            required_qty=float(qty),
+            available_qty=float(total_avail),
         )
     remaining = qty
     slices: list[PickLotSlice] = []

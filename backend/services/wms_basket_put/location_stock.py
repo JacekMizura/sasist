@@ -13,6 +13,10 @@ PENDING_PICKED_QTY       = SUM(Pick.quantity) where picked_at IS NULL
                            (warehouse-wide: any cart/session — shelf stock is shared)
 EFFECTIVE_AVAILABLE      = max(0, PHYSICAL − PENDING)
 
+Optional (cartless / finalize-aligned):
+  FOREIGN_RESERVED     = SUM(StockReservation) excluding own sales-order holds
+  EFFECTIVE_FINALIZE   = max(0, PHYSICAL − PENDING − FOREIGN_RESERVED)
+
 Finalized picks (picked_at IS NOT NULL) must NOT be subtracted again — Inventory
 was already mutated at finalize.
 
@@ -102,9 +106,15 @@ def effective_pickable_qty_at_location(
     location_id: int,
     stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
     for_update: bool = True,
+    exclude_order_id: int | None = None,
+    account_foreign_reservations: bool = False,
 ) -> float:
     """
     effective_available = on_hand Inventory − SUM(unfinalized Pick @ product+location).
+
+    When ``account_foreign_reservations`` is True, also subtract active foreign
+    StockReservation qty (own ``exclude_order_id`` holds remain consumable) —
+    aligned with ``consume_inventory_fifo_slices`` at finalize.
     """
     on_hand = on_hand_qty_at_location(
         db,
@@ -122,7 +132,20 @@ def effective_pickable_qty_at_location(
         product_id=product_id,
         location_id=location_id,
     )
-    return max(0.0, float(on_hand) - float(pending))
+    foreign = 0.0
+    if account_foreign_reservations:
+        from ..wms_picking_atp import reserved_qty_at_location
+
+        foreign = reserved_qty_at_location(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            product_id=int(product_id),
+            location_id=int(location_id),
+            exclude_order_id=int(exclude_order_id) if exclude_order_id is not None else None,
+            stock_disposition=stock_disposition,
+        )
+    return max(0.0, float(on_hand) - float(pending) - float(foreign))
 
 
 def location_pick_stock_projection_map(

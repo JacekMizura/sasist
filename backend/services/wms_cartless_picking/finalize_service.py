@@ -31,6 +31,7 @@ from ..wms_picking_product_list_service import (
     _decrement_inventory_for_wms_pick,
     _order_type_filter,
     _panel_status_after_picking_finalize,
+    build_picking_inventory_finalize_error,
 )
 from ..wms_picking_shortage_settings_service import get_or_create_wms_picking_shortage_settings
 from .scope import get_cartless_session_or_raise, list_order_ids_on_picking_session
@@ -181,14 +182,24 @@ def finalize_cartless_picking_session(
         now = datetime.utcnow()
         finalized_ids: list[int] = []
         for p in pending_picks:
-            finalized_rows = _decrement_inventory_for_wms_pick(
-                db, p, performed_by=performed_by, picked_at=now
-            )
+            try:
+                finalized_rows = _decrement_inventory_for_wms_pick(
+                    db, p, performed_by=performed_by, picked_at=now
+                )
+            except Exception as pick_exc:
+                raise build_picking_inventory_finalize_error(
+                    db,
+                    p,
+                    pick_exc,
+                    picking_session_id=psid,
+                ) from pick_exc
             for row in finalized_rows:
                 row.picked_at = now
                 row.status = "done"
                 finalized_ids.append(int(row.id))
         mark_pick_events_finalized_for_pick_ids(db, finalized_ids)
+    except PickingFinalizeError:
+        raise
     except Exception as exc:
         raise PickingFinalizeError(
             f"Nie udało się spisać stanu magazynu: {exc}",

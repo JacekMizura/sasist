@@ -39,6 +39,7 @@ from ..models.wms_order_event import (
     EVT_PICKING_FINISHED,
     EVT_PICKING_CANCELLED,
     EVT_PICKING_STARTED,
+    EVT_WMS_PICKING_FINALIZE_FAILED,
     EVT_SHORTAGE_REPORTED,
     EVT_ORDER_LINE_SHORTAGE_REPORTED,
     EVT_REPLACEMENT_SHORTAGE_REPORTED,
@@ -585,6 +586,8 @@ def append_order_activity_for_wms(
     metadata: Optional[Dict[str, Any]] = None,
     extra_activity_links: Optional[list[Dict[str, Any]]] = None,
     wms_order_event_id: Optional[int] = None,
+    severity: str = "INFO",
+    correlation_id: Optional[str] = None,
 ) -> None:
     """OMS text log + dual-write into shared Activity Log (business checkpoints only)."""
     from .activity_log.domain_activity import find_activity_by_correlation
@@ -628,11 +631,11 @@ def append_order_activity_for_wms(
     try:
         from .activity_log import ActivityLinkSpec, record_activity
 
-        cid = None
-        if wms_order_event_id is not None and int(wms_order_event_id) > 0:
+        cid = (str(correlation_id).strip()[:64] if correlation_id else None) or None
+        if not cid and wms_order_event_id is not None and int(wms_order_event_id) > 0:
             cid = correlation_for_wms_event(int(wms_order_event_id))
-            if find_activity_by_correlation(db, correlation_id=cid, tenant_id=int(tenant_id)):
-                return
+        if cid and find_activity_by_correlation(db, correlation_id=cid, tenant_id=int(tenant_id)):
+            return
 
         meta = dict(metadata or {})
         meta.setdefault("timeline_tier", "business")
@@ -675,7 +678,7 @@ def append_order_activity_for_wms(
                 event_code=str(event_type)[:64],
                 description=str(message).strip()[:512] or "Zdarzenie zamówienia.",
                 links=links,
-                severity="INFO",
+                severity=str(severity or "INFO").strip().upper()[:16] or "INFO",
                 category="wms",
                 tenant_id=int(tenant_id),
                 warehouse_id=int(warehouse_id),
@@ -1090,16 +1093,16 @@ def emit_wms_picking_finished(
         order_id=int(order.id),
         operator_user_id=uid,
         event_type=EVT_PICKING_FINISHED,
-        target_cart_id=int(cart_id),
+        target_cart_id=int(cart_id) if cart_id is not None else None,
         metadata=meta,
     )
     body_extra = _format_duration_pl(dur_sec) if dur_sec is not None else ""
     status_bit = ""
     if meta.get("new_order_ui_status_name"):
         status_bit = f" → {meta['new_order_ui_status_name']}"
-    msg = f"Zakończono zbieranie zamówienia{status_bit}"
+    msg = f"Zakończono zbieranie zamówienia{status_bit}."
     if body_extra:
-        msg += f" (czas zbierania: {body_extra})"
+        msg = f"Zakończono zbieranie zamówienia{status_bit} (czas zbierania: {body_extra})."
     append_order_activity_for_wms(
         db,
         order_id=int(order.id),
@@ -1110,6 +1113,103 @@ def emit_wms_picking_finished(
         operator_user_id=uid,
         metadata=meta,
         wms_order_event_id=int(row.id),
+    )
+
+
+def correlation_for_picking_finalize_failure(
+    *,
+    picking_session_id: int | None,
+    order_id: int,
+    product_id: int | None,
+    location_id: int | None,
+) -> str:
+    """Stable identity for finalize-failure Activity (no timestamp) — dedupes retries."""
+    sid = int(picking_session_id) if picking_session_id is not None and int(picking_session_id) > 0 else 0
+    pid = int(product_id) if product_id is not None and int(product_id) > 0 else 0
+    lid = int(location_id) if location_id is not None and int(location_id) > 0 else 0
+    return f"wms-pick-fin-fail:{sid}:{int(order_id)}:{pid}:{lid}"[:64]
+
+
+def emit_wms_picking_finalize_failed(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order_id: int,
+    operator_user_id: Optional[int],
+    picking_session_id: int | None = None,
+    cart_id: int | None = None,
+    product_id: int | None = None,
+    product_name: str | None = None,
+    sku: str | None = None,
+    ean: str | None = None,
+    location_id: int | None = None,
+    location_code: str | None = None,
+    required_qty: float | None = None,
+    available_qty: float | None = None,
+    error_code: str | None = None,
+    detail_message: str | None = None,
+) -> None:
+    """
+    Business Activity for failed picking finalize (stock conflict / inventory consume).
+    Idempotent via stable correlation — duplicate retries must not spam Order › Logi.
+    """
+    from .activity_log.domain_activity import find_activity_by_correlation
+
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    corr = correlation_for_picking_finalize_failure(
+        picking_session_id=picking_session_id,
+        order_id=int(order_id),
+        product_id=product_id,
+        location_id=location_id,
+    )
+    if find_activity_by_correlation(db, correlation_id=corr, tenant_id=int(tenant_id)):
+        return
+
+    meta: dict[str, Any] = {
+        "cartless": cart_id is None,
+        "cart_id": int(cart_id) if cart_id is not None else None,
+        "picking_session_id": int(picking_session_id) if picking_session_id else None,
+        "product_id": int(product_id) if product_id else None,
+        "product_name": (product_name or "").strip() or None,
+        "sku": (sku or "").strip() or None,
+        "ean": (ean or "").strip() or None,
+        "location_id": int(location_id) if location_id else None,
+        "location_code": (location_code or "").strip() or None,
+        "required_qty": float(required_qty) if required_qty is not None else None,
+        "available_qty": float(available_qty) if available_qty is not None else None,
+        "error_code": (error_code or "").strip() or None,
+        "event_code": EVT_WMS_PICKING_FINALIZE_FAILED,
+    }
+    row = insert_wms_order_event(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        order_id=int(order_id),
+        operator_user_id=uid,
+        event_type=EVT_WMS_PICKING_FINALIZE_FAILED,
+        product_id=int(product_id) if product_id else None,
+        source_location_id=int(location_id) if location_id else None,
+        target_cart_id=int(cart_id) if cart_id is not None else None,
+        quantity=float(required_qty) if required_qty is not None else None,
+        metadata=meta,
+    )
+    msg = "Nie udało się zakończyć zbierania."
+    if detail_message and str(detail_message).strip():
+        # Keep summary short for timeline; full text stays in metadata for inline details.
+        meta["detail_message"] = str(detail_message).strip()[:2000]
+    append_order_activity_for_wms(
+        db,
+        order_id=int(order_id),
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        event_type=EVT_WMS_PICKING_FINALIZE_FAILED,
+        message=msg,
+        operator_user_id=uid,
+        metadata=meta,
+        wms_order_event_id=int(row.id),
+        severity="ERROR",
+        correlation_id=corr,
     )
 
 

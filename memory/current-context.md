@@ -1,7 +1,5 @@
-﻿**Return Activity Log — PASS (2026-08-23).**
+﻿**WMS picking stock consistency + finalize audit — PASS (2026-08-23).**
 
-- Dziennik = ActivityLog `object_type=return` (reuse Order framework; no second log system)
-- New codes: STATUS_CHANGED, ITEM_ADDED, REFUND_COMPLETED, ARCHIVED (+ existing create/decision/intake/receipt/putaway/finalize)
-- Mutations wired: create, add-line, panel/workflow status, bulk status, refund, commit-wms finalize, archive
-- Return-only links (no Order Logi spam); `[WMS - Zwroty]` presentation; actors from `get_current_user`
-- Forward-only; backfill plan in `memory/return-activity-log.md` (not run)
+- Root cause: cartless `record_cartless_quick_pick` wrote draft Picks without `effective_pickable` gate → UI 1/1 while Inventory 0 at finalize
+- Fix: pick-time gate (physical − pending − foreign res) + structured 409 + `WMS_PICKING_FINALIZE_FAILED` Activity + cartless cart_id emit fix
+- Tests: `test_wms_cartless_picking_stock_finalize.py`

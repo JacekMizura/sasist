@@ -1,3 +1,10 @@
+## 2026-08-23 — WMS cartless picking stock vs finalize 409
+
+- Exact cause: cartless pick created draft `Pick` without stock gate; UI „Zebrano” = SUM(Pick); finalize = Inventory consume
+- Rule A (+ soft hold): validate `effective_pickable` at pick (pending drafts + foreign reservations); commit at finalize
+- Structured `inventory_finalize_failed` 409; Activity `WMS_PICKING_FINALIZE_FAILED` (idempotent correlation); success emit cartless-safe
+- Tests: `backend/tests/test_wms_cartless_picking_stock_finalize.py`
+
 ## 2026-08-23 — Complete order activity audit coverage
 
 - NEW events: PRIORITY / DOCUMENT_SERIES / WAREHOUSE / BUNDLE_ADDED

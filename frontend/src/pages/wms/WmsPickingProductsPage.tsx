@@ -1640,14 +1640,20 @@ export default function WmsPickingProductsPage() {
     } catch (e: unknown) {
       console.error("[picking.finalize]", e);
       const parsed = extractFinalizeFailingPick(e);
-      if (parsed.failingPick && (parsed.code === "PICK_LOCATION_STOCK_MISMATCH" || parsed.failingPick.pick_id)) {
+      if (
+        parsed.failingPick &&
+        (parsed.code === "PICK_LOCATION_STOCK_MISMATCH" ||
+          parsed.code === "inventory_finalize_failed" ||
+          parsed.failingPick.pick_id ||
+          parsed.failingPick.product_id)
+      ) {
         const fp = parsed.failingPick;
         const qty = fp.quantity ?? fp.pick_quantity;
         const loc = fp.location_code || (fp.location_id != null ? `#${fp.location_id}` : "—");
         const name = fp.product_name || (fp.product_id != null ? `produkt #${fp.product_id}` : "produkt");
         setFinalizeErr(
           parsed.message ||
-            `Nie można zakończyć zbierania.\n\nPobranie ${qty ?? "?"} szt. produktu ${name} zapisano z lokalizacji ${loc}, ale dostępny stan nie pokrywa tego pobrania.\n\nSprawdź zapisane pobranie.`,
+            `Nie udało się zakończyć zbierania. Brak stanu w lokalizacji ${loc} dla produktu „${name}”. Wymagane: ${qty ?? "?"} szt., dostępne: ${fp.inventory_physical_available ?? "?"} szt.`,
         );
         setFinalizeFailingPick({
           product_id: fp.product_id,

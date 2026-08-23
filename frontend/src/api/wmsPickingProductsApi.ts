@@ -887,6 +887,14 @@ export function extractFinalizeFailingPick(err: unknown): {
     error?: unknown;
     code?: unknown;
     failing_pick?: unknown;
+    product_id?: unknown;
+    product_name?: unknown;
+    sku?: unknown;
+    ean?: unknown;
+    location_id?: unknown;
+    location_code?: unknown;
+    required_qty?: unknown;
+    available_qty?: unknown;
   };
   const message =
     (typeof d.message === "string" && d.message.trim()) ||
@@ -895,6 +903,30 @@ export function extractFinalizeFailingPick(err: unknown): {
   const code = typeof d.code === "string" ? d.code : null;
   const fp = d.failing_pick;
   if (!fp || typeof fp !== "object") {
+    if (
+      d.product_id != null ||
+      d.location_id != null ||
+      (typeof d.product_name === "string" && d.product_name.trim())
+    ) {
+      return {
+        message,
+        code,
+        failingPick: {
+          product_id: typeof d.product_id === "number" ? d.product_id : Number(d.product_id) || undefined,
+          product_name: typeof d.product_name === "string" ? d.product_name : undefined,
+          location_id: typeof d.location_id === "number" ? d.location_id : Number(d.location_id) || undefined,
+          location_code: typeof d.location_code === "string" ? d.location_code : undefined,
+          quantity:
+            typeof d.required_qty === "number"
+              ? d.required_qty
+              : Number(d.required_qty) || undefined,
+          inventory_physical_available:
+            typeof d.available_qty === "number"
+              ? d.available_qty
+              : Number(d.available_qty) || undefined,
+        },
+      };
+    }
     return { message, code, failingPick: null };
   }
   const f = fp as Record<string, unknown>;

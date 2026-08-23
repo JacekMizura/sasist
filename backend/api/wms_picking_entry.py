@@ -903,6 +903,7 @@ def post_picking_finalize_cartless(
     current_user: AppUser = Depends(get_current_user),
 ):
     from ..services.wms_cartless_picking import finalize_cartless_picking_session
+    from ..services.wms_audit_service import emit_wms_picking_finalize_failed
     from ..services.wms_picking_product_list_service import PickingFinalizeError
 
     try:
@@ -920,9 +921,49 @@ def post_picking_finalize_cartless(
         return out
     except PickingFinalizeError as e:
         db.rollback()
+        detail = e.as_detail()
+        detail["picking_session_id"] = int(picking_session_id)
+        if e.step == "inventory" or e.code in (
+            "inventory_finalize_failed",
+            "PICK_LOCATION_STOCK_MISMATCH",
+        ):
+            try:
+                oid = int(e.order_id) if e.order_id is not None else None
+                if oid is None:
+                    from ..services.wms_cartless_picking.scope import list_order_ids_on_picking_session
+
+                    ids = list_order_ids_on_picking_session(db, session_id=int(picking_session_id))
+                    oid = int(ids[0]) if ids else None
+                if oid is not None:
+                    emit_wms_picking_finalize_failed(
+                        db,
+                        tenant_id=int(tenant_id),
+                        warehouse_id=int(warehouse_id),
+                        order_id=int(oid),
+                        operator_user_id=int(current_user.id),
+                        picking_session_id=int(picking_session_id),
+                        cart_id=None,
+                        product_id=detail.get("product_id"),
+                        product_name=detail.get("product_name"),
+                        sku=detail.get("sku"),
+                        ean=detail.get("ean"),
+                        location_id=detail.get("location_id"),
+                        location_code=detail.get("location_code"),
+                        required_qty=detail.get("required_qty"),
+                        available_qty=detail.get("available_qty"),
+                        error_code=e.code,
+                        detail_message=str(e),
+                    )
+                    db.commit()
+            except Exception:
+                db.rollback()
+                logger.exception(
+                    "FINALIZE_CARTLESS audit emit failed session_id=%s",
+                    picking_session_id,
+                )
         raise HTTPException(
             status_code=int(getattr(e, "http_status", 409) or 409),
-            detail={"code": getattr(e, "code", None), "error": str(e)},
+            detail=detail,
         ) from e
     except Exception:
         logger.exception("FINALIZE_CARTLESS FAIL session_id=%s", picking_session_id)
@@ -3189,6 +3230,42 @@ def post_picking_finalize_cart(
         ):
             detail["message"] = safe_fail_msg
             detail["error"] = safe_fail_msg
+        elif e.step == "inventory" or e.code in (
+            "inventory_finalize_failed",
+            "PICK_LOCATION_STOCK_MISMATCH",
+        ):
+            try:
+                from ..services.wms_audit_service import emit_wms_picking_finalize_failed
+
+                oid = int(e.order_id) if e.order_id is not None else None
+                if oid is not None:
+                    emit_wms_picking_finalize_failed(
+                        db,
+                        tenant_id=int(tenant_id),
+                        warehouse_id=int(warehouse_id),
+                        order_id=int(oid),
+                        operator_user_id=int(current_user.id),
+                        picking_session_id=None,
+                        cart_id=int(cart_id),
+                        product_id=detail.get("product_id"),
+                        product_name=detail.get("product_name"),
+                        sku=detail.get("sku"),
+                        ean=detail.get("ean"),
+                        location_id=detail.get("location_id"),
+                        location_code=detail.get("location_code"),
+                        required_qty=detail.get("required_qty"),
+                        available_qty=detail.get("available_qty"),
+                        error_code=e.code,
+                        detail_message=str(detail.get("message") or e),
+                    )
+                    db.commit()
+            except Exception:
+                db.rollback()
+                logger.exception(
+                    "[picking.finalize] audit emit failed cart_id=%s request_id=%s",
+                    cart_id,
+                    request_id,
+                )
         raise HTTPException(status_code=int(e.http_status), detail=detail) from e
     except ValueError as e:
         db.rollback()

@@ -165,6 +165,104 @@ class PickingFinalizeError(Exception):
         return out
 
 
+def build_picking_inventory_finalize_error(
+    db: Session,
+    pick: Pick,
+    exc: BaseException,
+    *,
+    picking_session_id: int | None = None,
+    trace: dict | None = None,
+) -> "PickingFinalizeError":
+    """
+    Operator-facing 409 for inventory consume failure at finalize.
+    Structured fields are SSOT for FE — do not resolve product names on the client.
+    """
+    from ..models.location import Location
+    from ..models.product import Product
+    from .order_item_pick_allocation_service import LocationInventoryInsufficientError
+
+    pid = int(getattr(pick, "product_id", 0) or 0)
+    lid = int(getattr(pick, "location_id", 0) or 0)
+    required = float(getattr(pick, "quantity", 0) or 0)
+    available = 0.0
+    if isinstance(exc, LocationInventoryInsufficientError):
+        pid = int(exc.product_id)
+        lid = int(exc.location_id)
+        required = float(exc.required_qty)
+        available = float(exc.available_qty)
+    elif isinstance(trace, dict):
+        available = float(trace.get("inventory_physical_available") or 0)
+
+    prow = db.query(Product).filter(Product.id == int(pid)).first() if pid > 0 else None
+    product_name = (getattr(prow, "name", None) or "").strip() if prow is not None else ""
+    if not product_name:
+        product_name = f"produkt #{pid}"
+    sku = ""
+    if prow is not None:
+        sku = (getattr(prow, "sku", None) or getattr(prow, "symbol", None) or "").strip()
+    ean = (getattr(prow, "ean", None) or "").strip() if prow is not None else ""
+
+    loc = db.query(Location).filter(Location.id == int(lid)).first() if lid > 0 else None
+    location_code = ""
+    if loc is not None:
+        location_code = (getattr(loc, "name", None) or getattr(loc, "code", None) or "").strip()
+    if not location_code:
+        location_code = f"#{lid}" if lid > 0 else "—"
+
+    sku_bit = f" (SKU {sku})" if sku else ""
+    req_disp = int(required) if abs(required - round(required)) < 1e-9 else required
+    avail_disp = int(available) if abs(available - round(available)) < 1e-9 else available
+    msg = (
+        f"Nie udało się zakończyć zbierania. Brak stanu w lokalizacji {location_code} "
+        f"dla produktu „{product_name}”{sku_bit}. "
+        f"Wymagane: {req_disp} szt., dostępne: {avail_disp} szt."
+    )
+    oid = int(pick.order_id) if getattr(pick, "order_id", None) is not None else None
+    oiid = int(pick.order_item_id) if getattr(pick, "order_item_id", None) is not None else None
+    failing_pick = {
+        "pick_id": int(pick.id) if getattr(pick, "id", None) is not None else None,
+        "product_id": int(pid),
+        "product_name": product_name,
+        "sku": sku or None,
+        "ean": ean or None,
+        "order_id": oid,
+        "order_item_id": oiid,
+        "location_id": int(lid) if lid > 0 else None,
+        "location_code": location_code,
+        "quantity": float(required),
+        "pick_quantity": float(required),
+        "required_qty": float(required),
+        "available_qty": float(available),
+        "inventory_physical_available": float(available),
+    }
+    if isinstance(trace, dict):
+        for k, v in trace.items():
+            failing_pick.setdefault(k, v)
+    extra: dict = {
+        "product_id": int(pid),
+        "product_name": product_name,
+        "sku": sku or None,
+        "ean": ean or None,
+        "location_id": int(lid) if lid > 0 else None,
+        "location_code": location_code,
+        "required_qty": float(required),
+        "available_qty": float(available),
+        "failing_pick": failing_pick,
+    }
+    if picking_session_id is not None and int(picking_session_id) > 0:
+        extra["picking_session_id"] = int(picking_session_id)
+    return PickingFinalizeError(
+        msg,
+        reason=exc.__class__.__name__,
+        step="inventory",
+        http_status=409,
+        code="inventory_finalize_failed",
+        order_id=oid,
+        line_id=oiid,
+        extra=extra,
+    )
+
+
 def _location_label_for_pick(db: Session, location_id: int) -> str:
     from ..models.location import Location
 
@@ -4529,37 +4627,25 @@ def finalize_wms_picking_cart(
             cid,
             sid,
         )
+        if failing_pick_diag is not None:
+            # Prefer live Pick row for structured shortage message.
+            fail_pick = None
+            try:
+                fp_id = failing_pick_diag.get("pick_id")
+                if fp_id:
+                    fail_pick = db.query(Pick).filter(Pick.id == int(fp_id)).first()
+            except Exception:
+                fail_pick = None
+            if fail_pick is not None:
+                raise build_picking_inventory_finalize_error(
+                    db,
+                    fail_pick,
+                    exc,
+                    trace=failing_pick_diag,
+                ) from exc
         err_code = "inventory_finalize_failed"
         err_msg = f"Nie udało się spisać stanu magazynu dla zbierania: {exc}"
         extra: dict | None = {"failing_pick": failing_pick_diag} if failing_pick_diag else None
-        if failing_pick_diag:
-            err_code = "PICK_LOCATION_STOCK_MISMATCH"
-            fp = failing_pick_diag
-            prod_name = f"produkt #{fp.get('product_id')}"
-            try:
-                from ..models.product import Product as _Product
-
-                prow = db.query(_Product).filter(_Product.id == int(fp.get("product_id") or 0)).first()
-                if prow is not None and (prow.name or "").strip():
-                    prod_name = str(prow.name).strip()
-            except Exception:
-                pass
-            loc_code = fp.get("location_code") or f"#{fp.get('location_id')}"
-            pq = float(fp.get("pick_quantity") or 0)
-            avail = float(fp.get("inventory_physical_available") or 0)
-            err_msg = (
-                "Nie można zakończyć zbierania.\n\n"
-                f"Pobranie {pq:g} szt. produktu {prod_name} "
-                f"zapisano z lokalizacji {loc_code}, "
-                f"ale dostępny stan nie pokrywa tego pobrania "
-                f"(dostępne {avail:g}).\n\n"
-                "Sprawdź zapisane pobranie i cofnij błędny wpis."
-            )
-            # Keep machine fields for FE CTA (normalize quantity alias).
-            fp_out = dict(fp)
-            fp_out["quantity"] = fp.get("pick_quantity")
-            fp_out["product_name"] = prod_name
-            extra = {"failing_pick": fp_out}
         raise PickingFinalizeError(
             err_msg,
             reason=exc.__class__.__name__,

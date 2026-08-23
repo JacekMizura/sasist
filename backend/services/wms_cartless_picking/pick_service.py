@@ -55,10 +55,12 @@ def record_cartless_quick_pick(
     )
     from ..wms_basket_put.error_codes import (
         NO_ALLOWED_PICK_LOCATION_STOCK,
+        QUANTITY_EXCEEDS_LOCATION_STOCK,
         RESERVE_LOCATION_FORBIDDEN,
         WRONG_LOCATION_SCAN,
         operator_message,
     )
+    from ..wms_basket_put.location_stock import effective_pickable_qty_at_location
     from ..wms_basket_put.scan_service import BasketPutError
     from ...models.product import Product
 
@@ -180,6 +182,29 @@ def record_cartless_quick_pick(
                 if rem <= 1e-9:
                     continue
                 take = min(q_remain, rem)
+                loc_avail = effective_pickable_qty_at_location(
+                    db,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    product_id=int(product_id),
+                    location_id=int(location_id),
+                    for_update=True,
+                    exclude_order_id=int(o.id),
+                    account_foreign_reservations=True,
+                )
+                if float(take) > float(loc_avail) + 1e-9:
+                    raise BasketPutError(
+                        QUANTITY_EXCEEDS_LOCATION_STOCK,
+                        operator_message(QUANTITY_EXCEEDS_LOCATION_STOCK),
+                        extra={
+                            "product_id": int(product_id),
+                            "location_id": int(location_id),
+                            "required_qty": float(take),
+                            "available_qty": float(loc_avail),
+                            "order_id": int(o.id),
+                            "picking_session_id": int(picking_session_id),
+                        },
+                    )
                 ps_before = getattr(o, "picking_started_at", None)
                 touch_picking_in_progress(o)
                 if getattr(o, "picking_session_id", None) is None:

@@ -62,6 +62,7 @@ from .wms_order_activity import (
     EVT_PICKING_CANCELLED,
     EVT_PICKING_FINISHED,
     EVT_PICKING_STARTED,
+    EVT_WMS_PICKING_FINALIZE_FAILED,
     EVT_RECOVERY_FINISHED,
     EVT_RECOVERY_SHORTAGE_REPORTED,
     EVT_RECOVERY_STARTED,
@@ -118,6 +119,7 @@ ORDER_ACTION_LABELS_PL: dict[str, str] = {
     EVT_PICKING_STARTED: "Rozpoczęto zbieranie",
     EVT_PICKING_FINISHED: "Zakończono zbieranie",
     EVT_PICKING_CANCELLED: "Anulowano zbieranie",
+    EVT_WMS_PICKING_FINALIZE_FAILED: "Nie udało się zakończyć zbierania",
     EVT_SHORTAGE_REPORTED: "Zgłoszono brak",
     EVT_ORDER_LINE_SHORTAGE_REPORTED: "Zgłoszono brak",
     EVT_REPLACEMENT_SHORTAGE_REPORTED: "Zgłoszono brak",
@@ -155,6 +157,7 @@ WMS_PREFIX_BY_EVENT: dict[str, str] = {
     EVT_PICKING_STARTED: "[WMS - Zbieranie]",
     EVT_PICKING_FINISHED: "[WMS - Zbieranie]",
     EVT_PICKING_CANCELLED: "[WMS - Zbieranie]",
+    EVT_WMS_PICKING_FINALIZE_FAILED: "[WMS - Zbieranie]",
     EVT_SHORTAGE_REPORTED: "[WMS - Braki]",
     EVT_ORDER_LINE_SHORTAGE_REPORTED: "[WMS - Braki]",
     EVT_REPLACEMENT_SHORTAGE_REPORTED: "[WMS - Braki]",
@@ -214,6 +217,7 @@ INLINE_DETAIL_CODES: frozenset[str] = frozenset(
         AUTOMATION_FAILED,
         AUTOMATION_BLOCKED,
         EVT_ORDER_ITEM_REMOVED,
+        EVT_WMS_PICKING_FINALIZE_FAILED,
     }
 )
 
@@ -302,7 +306,7 @@ def suggest_severity(event_code: str, stored_severity: str | None) -> str:
     if raw in ("SUCCESS", "OK", "AUDIT"):
         return "SUCCESS"
     code = _norm(event_code)
-    if code in (AUTOMATION_FAILED, SALE_DOCUMENT_FAILED, EVT_WMS_VALIDATION_FAILED):
+    if code in (AUTOMATION_FAILED, SALE_DOCUMENT_FAILED, EVT_WMS_VALIDATION_FAILED, EVT_WMS_PICKING_FINALIZE_FAILED):
         return "ERROR"
     if code in (AUTOMATION_BLOCKED, EVT_SHORTAGE_REPORTED, EVT_ORDER_LINE_SHORTAGE_REPORTED):
         return "WARNING"
@@ -371,6 +375,23 @@ def build_order_inline_detail_rows(event_code: str, metadata: dict[str, Any] | N
         price = _money(meta)
         if price:
             rows.append({"label": "Cena", "value": price})
+        return rows
+
+    if code == EVT_WMS_PICKING_FINALIZE_FAILED:
+        if meta.get("product_name"):
+            rows.append({"label": "Produkt", "value": str(meta["product_name"])})
+        if meta.get("sku"):
+            rows.append({"label": "SKU", "value": str(meta["sku"])})
+        if meta.get("ean"):
+            rows.append({"label": "EAN", "value": str(meta["ean"])})
+        if meta.get("location_code"):
+            rows.append({"label": "Lokalizacja", "value": str(meta["location_code"])})
+        if meta.get("required_qty") is not None:
+            rows.append({"label": "Wymagane", "value": f"{meta['required_qty']} szt."})
+        if meta.get("available_qty") is not None:
+            rows.append({"label": "Dostępne", "value": f"{meta['available_qty']} szt."})
+        if meta.get("picking_session_id") is not None:
+            rows.append({"label": "Sesja zbierania", "value": str(meta["picking_session_id"])})
         return rows
 
     if code == ORDER_ITEM_QUANTITY_CHANGED:
