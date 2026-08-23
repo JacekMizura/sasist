@@ -175,10 +175,16 @@ export type WmsPackingOrderLineApi = {
   last_pack_audit_summary?: string | null;
 };
 
+export type WmsOrderTimelineDetailApi = {
+  label: string;
+  value: string;
+};
+
 export type WmsOrderTimelineEventApi = {
   at: string;
   title: string;
   body?: string[];
+  details?: WmsOrderTimelineDetailApi[];
   badge?: string | null;
   user_label?: string | null;
   event_type?: string | null;

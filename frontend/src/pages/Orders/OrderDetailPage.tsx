@@ -1163,7 +1163,7 @@ export default function OrderDetailPage() {
   }, []);
 
   const orderHistoryTimelineEvents = useMemo(
-    () => (order ? buildOrderHistoryTimelineEvents(order, wmsFulfillment) : []),
+    () => (order ? buildOrderHistoryTimelineEvents(order, wmsFulfillment, { mode: "wms" }) : []),
     [order, wmsFulfillment],
   );
 
@@ -1445,7 +1445,7 @@ export default function OrderDetailPage() {
                       orderId={order.id}
                     />
                   ) : null}
-                  <OrderHistoryTimeline compact hideHeader events={orderHistoryTimelineEvents} formatDate={formatDetailDate} title="Historia zamówienia" />
+                  <OrderHistoryTimeline compact hideHeader events={orderHistoryTimelineEvents} formatDate={formatDetailDate} title="Historia WMS" />
                 </aside>
               </div>
             ) : null}

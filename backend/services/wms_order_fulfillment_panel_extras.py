@@ -34,13 +34,13 @@ def build_wms_timeline_and_operation_times(
 
     raw_events: list[tuple[datetime, str, str, str]] = []
     if ps is not None:
-        raw_events.append((ps, "PICKING_STARTED", "Rozpoczęto zbieranie (WMS)", "WMS Zbieranie"))
+        raw_events.append((ps, "PICKING_STARTED", "Rozpoczęto zbieranie", ""))
     if pd is not None:
-        raw_events.append((pd, "PICKED", "Zebrano zamówienie", "WMS Zbieranie"))
+        raw_events.append((pd, "PICKED", "Zebrano zamówienie", ""))
     if ks is not None:
-        raw_events.append((ks, "PACKING_STARTED", "Przekazano do pakowania", "WMS Pakowanie"))
+        raw_events.append((ks, "PACKING_STARTED", "Rozpoczęto pakowanie", ""))
     if kd is not None:
-        raw_events.append((kd, "PACKED", "Spakowano zamówienie", "WMS Pakowanie"))
+        raw_events.append((kd, "PACKED", "Spakowano zamówienie", ""))
 
     raw_events.sort(key=lambda x: (x[0], x[1]))
     timeline: List[WmsOrderTimelineEvent] = [

@@ -55,7 +55,16 @@ from ..models.wms_order_event import (
     EVT_RECOVERY_FINISHED,
     WmsOrderEvent,
 )
-from ..schemas.wms_packing import WmsOperationTimesOut, WmsOrderTimelineEvent
+from ..schemas.wms_packing import WmsOperationTimesOut, WmsOrderTimelineEvent, WmsTimelineDetailRow
+from .activity_log.wms_business_presentation import (
+    carton_event_detail_rows,
+    pack_item_detail_rows,
+    packing_automation_detail_rows,
+    packing_finished_detail_rows,
+    pick_item_detail_rows,
+    picking_finished_detail_rows,
+    product_operation_title,
+)
 from .cart_display import cart_display_name_for_wms
 from .picking_assignment_service import format_cart_basket_label
 
@@ -1979,6 +1988,14 @@ def emit_wms_packed_item(
         "product_id": int(product_id),
         "quantity": int(quantity),
     }
+    product = db.query(Product).filter(Product.id == int(product_id)).first() if product_id else None
+    if product is not None:
+        pname = (getattr(product, "name", None) or "").strip()
+        if pname:
+            meta["product_name"] = pname
+        ean = (getattr(product, "ean", None) or "").strip()
+        if ean:
+            meta["ean"] = ean
     if sess is not None:
         meta["packing_session_id"] = int(sess.id)
     ws = workstation_id_for_operator(db, uid)
@@ -2183,6 +2200,8 @@ def emit_wms_packing_automation_finished(
         message=f"Automatyka pakowania zakończona (czas: {_format_duration_pl(dur_sec)})"
         if dur_sec is not None
         else "Automatyka pakowania zakończona",
+        operator_user_id=uid,
+        metadata=meta,
         wms_order_event_id=int(row.id),
     )
 
@@ -2597,7 +2616,35 @@ def _delta_seconds(a: datetime, b: datetime) -> Optional[int]:
     return int((b - a).total_seconds())
 
 
+def _resolve_product_name(db: Session, meta: dict[str, Any], product_id: Any) -> str | None:
+    name = (meta.get("product_name") or "").strip()
+    if name:
+        return name
+    try:
+        pid = int(product_id) if product_id is not None else 0
+    except (TypeError, ValueError):
+        pid = 0
+    if pid <= 0:
+        return None
+    product = db.query(Product).filter(Product.id == pid).first()
+    if product is None:
+        return None
+    return (getattr(product, "name", None) or "").strip() or None
+
+
+def _details_to_schema(rows: list[dict[str, str]]) -> list[WmsTimelineDetailRow]:
+    out: list[WmsTimelineDetailRow] = []
+    for r in rows[:8]:
+        label = str(r.get("label") or "").strip()
+        value = str(r.get("value") or "").strip()
+        if not label or not value:
+            continue
+        out.append(WmsTimelineDetailRow(label=label[:64], value=value[:512]))
+    return out
+
+
 def _timeline_event_from_row(db: Session, ev: WmsOrderEvent) -> WmsOrderTimelineEvent:
+    """Business presentation of a raw ``wms_order_events`` row (audit unchanged)."""
     meta = _json_meta(ev)
     uid = getattr(ev, "operator_user_id", None)
     user_label = operator_display_name(db, int(uid) if uid is not None else None)
@@ -2605,55 +2652,53 @@ def _timeline_event_from_row(db: Session, ev: WmsOrderEvent) -> WmsOrderTimeline
     at = getattr(ev, "created_at", None) or datetime.utcnow()
     title = et
     body: list[str] = []
-    badge = "WMS"
+    details: list[dict[str, str]] = []
+    # Historia WMS section is already scoped — no per-card WMS badge
+    badge = ""
 
     if et == EVT_PICKING_STARTED:
-        op = user_label or "Operator"
-        title = f"{op} rozpoczął zbieranie"
-        tc = meta.get("target_cart")
-        if tc:
-            body.append(f"wózek: {tc}")
+        title = "Rozpoczęto zbieranie"
+        if meta.get("target_cart"):
+            details.append({"label": "Wózek", "value": str(meta["target_cart"])})
         if meta.get("basket"):
-            body.append(f"koszyk: {meta['basket']}")
+            details.append({"label": "Koszyk", "value": str(meta["basket"])})
     elif et == EVT_PICKED_ITEM:
         qty = float(getattr(ev, "quantity", 0) or meta.get("quantity") or 0)
-        sku = (meta.get("sku") or "").strip() or "?"
-        title = f"Zebrano {_fmt_qty(qty)}× {sku}"
-        if meta.get("source_location"):
-            body.append(f"lokalizacja: {meta['source_location']}")
-        if meta.get("target_cart"):
-            body.append(f"wózek: {meta['target_cart']}")
-        if meta.get("basket"):
-            body.append(f"koszyk: {meta['basket']}")
+        sku = (meta.get("sku") or "").strip() or None
+        pname = _resolve_product_name(db, meta, meta.get("product_id") or getattr(ev, "product_id", None))
+        title = product_operation_title(verb="Zebrano", quantity=qty, product_name=pname, sku=sku)
+        details.extend(pick_item_detail_rows({**meta, "product_name": pname, "sku": sku}))
     elif et == EVT_PICKING_FINISHED:
-        title = "Zbieranie zakończone"
-        if meta.get("picking_duration_label"):
-            body.append(f"czas: {meta['picking_duration_label']}")
-        if meta.get("new_order_ui_status_name"):
-            body.append(f"status: {meta['new_order_ui_status_name']}")
+        title = "Zakończono zbieranie"
+        details.extend(picking_finished_detail_rows(meta))
     elif et in (EVT_ORDER_LINE_REMOVED, EVT_ORDER_ITEM_REMOVED, EVT_REPLACEMENT_ITEM_REMOVED):
         title = {
             EVT_REPLACEMENT_ITEM_REMOVED: "Usunięto zamiennik",
             EVT_ORDER_ITEM_REMOVED: "Usunięto pozycję",
         }.get(et, "Usunięto produkt z zamówienia")
         if meta.get("product_name"):
-            body.append(str(meta["product_name"]))
+            details.append({"label": "Produkt", "value": str(meta["product_name"])})
         if meta.get("original_product_name"):
-            body.append(f"zamiast: {meta['original_product_name']}")
+            details.append({"label": "Zamiast", "value": str(meta["original_product_name"])})
         if meta.get("reason"):
-            body.append(str(meta["reason"]))
+            details.append({"label": "Powód", "value": str(meta["reason"])[:200]})
     elif et == EVT_ORDER_LINE_REPLACED:
         title = "Zamiana produktu"
         if meta.get("old_product_name") and meta.get("new_product_name"):
-            body.append(f"{meta['old_product_name']} → {meta['new_product_name']}")
+            details.append(
+                {
+                    "label": "Zmiana",
+                    "value": f"{meta['old_product_name']} → {meta['new_product_name']}",
+                }
+            )
     elif et == EVT_OMS_DECISION_WAIT:
         title = "Produkt oznaczony jako CZEKA"
         if meta.get("product_name"):
-            body.append(str(meta["product_name"]))
+            details.append({"label": "Produkt", "value": str(meta["product_name"])})
     elif et == EVT_OMS_DECISION_ACCEPTED:
-        title = meta.get("action") or "Decyzja OMS"
+        title = str(meta.get("action") or "Decyzja OMS")
         if meta.get("product_name"):
-            body.append(str(meta["product_name"]))
+            details.append({"label": "Produkt", "value": str(meta["product_name"])})
     elif et == EVT_RECOVERY_FINISHED:
         title = "Zakończono dogrywkę zbierki"
     elif et in (
@@ -2668,82 +2713,74 @@ def _timeline_event_from_row(db: Session, ev: WmsOrderEvent) -> WmsOrderTimeline
             EVT_ORDER_LINE_SHORTAGE_REPORTED: "Zgłoszono brak",
         }.get(et, "Zgłoszono brak")
         if meta.get("product_name"):
-            body.append(str(meta["product_name"]))
+            details.append({"label": "Produkt", "value": str(meta["product_name"])})
         if meta.get("original_product_name"):
-            body.append(f"zamiast: {meta['original_product_name']}")
+            details.append({"label": "Zamiast", "value": str(meta["original_product_name"])})
         pq = meta.get("quantity")
         if pq is not None:
-            body.append(f"ilość: {_fmt_qty(float(pq))}")
+            details.append({"label": "Ilość", "value": _fmt_qty(float(pq))})
         if meta.get("source_location"):
-            body.append(f"lokalizacja: {meta['source_location']}")
-        if meta.get("target_cart"):
-            body.append(f"wózek: {meta['target_cart']}")
+            details.append({"label": "Lokalizacja", "value": str(meta["source_location"])})
     elif et == EVT_PACKING_STARTED:
-        title = f"{user_label} rozpoczął pakowanie" if user_label else "Rozpoczęto pakowanie"
-        if meta.get("carton_label"):
-            body.append(f"karton: {meta['carton_label']}")
+        title = "Rozpoczęto pakowanie"
         if meta.get("workstation_id") is not None:
-            body.append(f"stanowisko: #{meta['workstation_id']}")
+            details.append({"label": "Stanowisko", "value": f"#{meta['workstation_id']}"})
+        if meta.get("carton_name") or meta.get("carton_label"):
+            details.extend(carton_event_detail_rows(meta))
     elif et == EVT_PACKED_ITEM:
         qty = float(meta.get("quantity") or getattr(ev, "quantity") or 0)
-        sku = (meta.get("sku") or "").strip() or "?"
-        title = f"Spakowano {_fmt_qty(qty)}× {sku}"
-        if meta.get("carton_label"):
-            body.append(f"karton: {meta['carton_label']}")
-        if meta.get("workstation_id") is not None:
-            body.append(f"stanowisko: #{meta['workstation_id']}")
+        sku = (meta.get("sku") or "").strip() or None
+        pname = _resolve_product_name(db, meta, meta.get("product_id") or getattr(ev, "product_id", None))
+        title = product_operation_title(verb="Spakowano", quantity=qty, product_name=pname, sku=sku)
+        details.extend(pack_item_detail_rows({**meta, "product_name": pname, "sku": sku}))
     elif et == EVT_PACKING_PAUSED:
         title = "Wstrzymano pakowanie"
         if meta.get("reason"):
-            body.append(str(meta["reason"]))
+            details.append({"label": "Powód", "value": str(meta["reason"])[:200]})
     elif et == EVT_PACKING_RESUMED:
         title = "Wznowiono pakowanie"
     elif et == EVT_PACKING_FINISHED:
-        title = "Kompletacja fizyczna — wszystkie pozycje spakowane"
-        if meta.get("packing_duration_label"):
-            body.append(f"czas (skany / kompletacja): {meta['packing_duration_label']}")
+        title = "Zakończono pakowanie"
+        details.extend(packing_finished_detail_rows(meta))
     elif et == EVT_PACKING_REOPEN_ACKNOWLEDGED:
-        title = (
-            "Użytkownik zapoznał się z komunikatem o wcześniej spakowanym zamówieniu "
-            "i ponownie przeszedł do pakowania"
-        )
+        title = "Ponowne wejście do pakowania"
     elif et == EVT_PACKING_AUTOMATION_FINISHED:
-        title = "Automatyka i synchronizacja zakończone"
-        if meta.get("packing_duration_label"):
-            body.append(f"czas pakowania (do końca automatyki): {meta['packing_duration_label']}")
-        for row in meta.get("post_pack_steps") or []:
-            if not isinstance(row, dict):
-                continue
-            step = str(row.get("step") or "").strip()
-            ok = row.get("ok")
-            msg = (row.get("message") or "").strip()
-            if not step:
-                continue
-            sym = "✓" if ok else "✗"
-            body.append(f"{sym} {step}" + (f" — {msg}" if msg else ""))
+        title = "Automatyka pakowania zakończona"
+        details.extend(packing_automation_detail_rows(meta))
     elif et == EVT_CARTON_SELECTED:
-        title = "Wybrano karton"
-        if meta.get("carton_label"):
-            body.append(meta["carton_label"])
-        elif meta.get("new_carton_id"):
-            body.append(str(meta["new_carton_id"]))
+        if meta.get("no_carton"):
+            title = "Bez dodatkowego opakowania"
+            details = []
+        else:
+            from .activity_log.wms_business_presentation import carton_phrase
+
+            phrase = carton_phrase(
+                name=meta.get("carton_name"),
+                dimensions=meta.get("carton_label"),
+                carton_id=str(meta.get("new_carton_id") or "") or None,
+            )
+            title = (
+                f"Wybrano opakowanie {phrase}"
+                if phrase and phrase != "opakowanie"
+                else "Wybrano opakowanie"
+            )
+            details = []
+            if meta.get("carton_label") and meta.get("carton_name"):
+                details.append({"label": "Wymiary", "value": str(meta["carton_label"])})
+            src_rows = [d for d in carton_event_detail_rows(meta) if d.get("label") == "Źródło"]
+            details.extend(src_rows)
     elif et == EVT_CARTON_CHANGED:
-        title = "Zmieniono karton"
-        if meta.get("old_carton_label") and meta.get("carton_label"):
-            body.append(f"{meta['old_carton_label']} → {meta['carton_label']}")
-        elif meta.get("carton_label"):
-            body.append(str(meta["carton_label"]))
+        title = "Zmieniono opakowanie"
+        details.extend(carton_event_detail_rows(meta, changed=True))
     elif et == EVT_LABEL_GENERATED:
         cn = (meta.get("carrier_name") or "").strip() or "Przewoźnik"
         title = f"Wygenerowano etykietę: {cn}"
         if meta.get("tracking_number"):
-            body.append(f"numer: {meta['tracking_number']}")
+            details.append({"label": "Numer", "value": str(meta["tracking_number"])})
     elif et == EVT_LABEL_REPRINTED:
         title = "Ponownie wydrukowano etykietę"
-        if user_label:
-            body.append(f"operator: {user_label}")
         if meta.get("carrier_name"):
-            body.append(str(meta["carrier_name"]))
+            details.append({"label": "Przewoźnik", "value": str(meta["carrier_name"])})
     elif et == EVT_PACKAGE_WEIGHT_CONFIRMED:
         wraw = meta.get("weight_kg")
         try:
@@ -2752,14 +2789,31 @@ def _timeline_event_from_row(db: Session, ev: WmsOrderEvent) -> WmsOrderTimeline
             wf = None
         title = f"Potwierdzono wagę: {wf:g} kg" if wf is not None else "Potwierdzono wagę przesyłki"
     else:
-        title = et.replace("_", " ").title()
-        if meta:
-            body.append(json.dumps(meta, ensure_ascii=False)[:500])
+        # Prefer known activity labels over raw enum dump
+        try:
+            from .activity_log.order_presentation import ORDER_ACTION_LABELS_PL
+
+            title = ORDER_ACTION_LABELS_PL.get(et) or et.replace("_", " ").title()
+        except Exception:
+            title = et.replace("_", " ").title()
+        # Never dump raw JSON metadata into operator timeline
+        if meta.get("document_number"):
+            details.append(
+                {
+                    "label": "Dokument",
+                    "value": f"{meta.get('document_type') or 'DOC'} {meta['document_number']}".strip(),
+                }
+            )
+
+    # Compact body fallback for clients that ignore ``details``
+    if details and not body:
+        body = [f"{d['label']}: {d['value']}" for d in details[:6]]
 
     return WmsOrderTimelineEvent(
         at=at,
         title=title,
         body=body,
+        details=_details_to_schema(details),
         badge=badge,
         user_label=user_label,
         event_type=et[:64],

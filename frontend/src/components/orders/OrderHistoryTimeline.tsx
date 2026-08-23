@@ -72,7 +72,16 @@ function TimelineEventCard({
           <span className="text-slate-600">{ev.userName}</span>
         </MetaIconRow>
       ) : null}
-      {ev.description && ev.variant === "note" ? (
+      {ev.details && ev.details.length > 0 ? (
+        <dl className={`space-y-0.5 text-xs text-slate-600 ${compact ? "mt-1" : "mt-1.5"}`}>
+          {ev.details.slice(0, 4).map((row) => (
+            <div key={`${row.label}-${row.value}`} className="flex gap-1.5 leading-snug">
+              <dt className="shrink-0 font-medium text-slate-500">{row.label}</dt>
+              <dd className="min-w-0 text-slate-700">{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : ev.description && ev.variant === "note" ? (
         <MetaIconRow icon={MapPin} compact={compact}>
           <span className="text-slate-600">{ev.description}</span>
         </MetaIconRow>

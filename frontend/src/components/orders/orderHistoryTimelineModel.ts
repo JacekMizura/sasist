@@ -1,4 +1,4 @@
-import type { WmsPackingOrderCardApi } from "../../api/wmsPackingApi";
+import type { WmsPackingOrderCardApi, WmsOrderTimelineEventApi } from "../../api/wmsPackingApi";
 import { getOrderEventLabel } from "../../utils/orderEventLabels";
 
 export type OrderHistoryBadgeTone = "muted" | "dark" | "blue";
@@ -11,6 +11,11 @@ export type OrderHistoryTimelineVariant =
   | "panel_change"
   | "wms_event";
 
+export type OrderHistoryDetailRow = {
+  label: string;
+  value: string;
+};
+
 export type OrderHistoryTimelineEvent = {
   key: string;
   at: string;
@@ -19,6 +24,7 @@ export type OrderHistoryTimelineEvent = {
   badge?: { label: string; tone: OrderHistoryBadgeTone };
   userName?: string | null;
   description?: string | null;
+  details?: OrderHistoryDetailRow[];
   automationLabel?: string | null;
 };
 
@@ -37,6 +43,14 @@ export type OrderHistoryTimelineOrderInput = {
     message: string;
     created_at?: string | null;
   }[];
+};
+
+export type BuildOrderHistoryOptions = {
+  /**
+   * `wms` — only WMS audit timeline (Historia WMS sidebar).
+   * `full` — legacy mix of panel + activity + WMS (other surfaces).
+   */
+  mode?: "wms" | "full";
 };
 
 function panelHistoryTitle(kind: string): string {
@@ -71,12 +85,46 @@ function inferAutomationLabel(msg: string): string | null {
   return null;
 }
 
+function mapWmsTimelineEvent(ev: WmsOrderTimelineEventApi, wi: number): OrderHistoryTimelineEvent {
+  const at = typeof ev.at === "string" ? ev.at : String(ev.at);
+  const rawBadge = (ev.badge ?? "").trim();
+  const detailRows = (ev.details ?? [])
+    .map((d) => ({
+      label: String(d.label ?? "").trim(),
+      value: String(d.value ?? "").trim(),
+    }))
+    .filter((d) => d.label && d.value);
+  const bodyLines = (ev.body ?? []).map((x) => String(x).trim()).filter(Boolean);
+  return {
+    key: `wms-tl-${wi}-${at}-${ev.title}-${ev.event_type ?? ""}`,
+    at,
+    variant: "wms_event",
+    title: ev.title,
+    // Historia WMS is already scoped — omit redundant WMS badge
+    badge: rawBadge && rawBadge.toUpperCase() !== "WMS" ? { label: rawBadge, tone: "muted" } : undefined,
+    userName: (ev.user_label ?? "").trim() || null,
+    details: detailRows.length ? detailRows : undefined,
+    description: detailRows.length ? null : bodyLines.length ? bodyLines.join(" · ") : null,
+  };
+}
+
 /** Najnowsze na górze (jak w makiecie Sellasist). */
 export function buildOrderHistoryTimelineEvents(
   order: OrderHistoryTimelineOrderInput,
   wmsFulfillment: WmsPackingOrderCardApi | null | undefined,
+  options?: BuildOrderHistoryOptions,
 ): OrderHistoryTimelineEvent[] {
+  const mode = options?.mode ?? "full";
   const rows: OrderHistoryTimelineEvent[] = [];
+
+  const wmsTl = wmsFulfillment?.timeline ?? wmsFulfillment?.wms_timeline ?? [];
+
+  if (mode === "wms") {
+    for (let wi = 0; wi < wmsTl.length; wi += 1) {
+      rows.push(mapWmsTimelineEvent(wmsTl[wi]!, wi));
+    }
+    return rows.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  }
 
   if (order.created_at) {
     rows.push({
@@ -104,7 +152,6 @@ export function buildOrderHistoryTimelineEvents(
     });
   });
 
-  const wmsTl = wmsFulfillment?.timeline ?? wmsFulfillment?.wms_timeline ?? [];
   const wmsAuditActivitySkip = new Set([
     "PICKING_STARTED",
     "PICKED_ITEM",
@@ -114,6 +161,7 @@ export function buildOrderHistoryTimelineEvents(
     "PACKING_PAUSED",
     "PACKING_RESUMED",
     "PACKING_FINISHED",
+    "PACKING_AUTOMATION_FINISHED",
     "SHORTAGE_REPORTED",
     "CARTON_SELECTED",
     "CARTON_CHANGED",
@@ -122,19 +170,7 @@ export function buildOrderHistoryTimelineEvents(
     "PACKAGE_WEIGHT_CONFIRMED",
   ]);
   for (let wi = 0; wi < wmsTl.length; wi += 1) {
-    const ev = wmsTl[wi]!;
-    const at = typeof ev.at === "string" ? ev.at : String(ev.at);
-    const rawBadge = (ev.badge ?? "").trim();
-    const bodyLines = (ev.body ?? []).map((x) => String(x).trim()).filter(Boolean);
-    rows.push({
-      key: `wms-tl-${wi}-${at}-${ev.title}`,
-      at,
-      variant: "wms_event",
-      title: ev.title,
-      badge: rawBadge ? { label: rawBadge, tone: "muted" } : { label: "WMS", tone: "muted" },
-      userName: (ev.user_label ?? "").trim() || null,
-      description: bodyLines.length ? bodyLines.join(" · ") : null,
-    });
+    rows.push(mapWmsTimelineEvent(wmsTl[wi]!, wi));
   }
 
   for (const log of order.order_activity_logs ?? []) {
@@ -152,7 +188,6 @@ export function buildOrderHistoryTimelineEvents(
         at: at || new Date(0).toISOString(),
         variant: "note",
         title: "Dodano notatkę",
-        badge: { label: "WMS Zbieranie", tone: "muted" },
         description: msg || "—",
       });
       continue;

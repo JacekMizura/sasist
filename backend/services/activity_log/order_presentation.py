@@ -42,6 +42,12 @@ from .order_event_codes import (
     SALE_DOCUMENT_FAILED,
     SALE_DOCUMENT_NUMBER_ASSIGNED,
 )
+from .wms_business_presentation import (
+    carton_event_detail_rows,
+    packing_automation_detail_rows,
+    packing_finished_detail_rows,
+    picking_finished_detail_rows,
+)
 from .wms_order_activity import (
     EVT_CARTON_CHANGED,
     EVT_CARTON_SELECTED,
@@ -562,51 +568,21 @@ def build_order_inline_detail_rows(event_code: str, metadata: dict[str, Any] | N
         return rows
 
     if code in (EVT_PICKING_FINISHED,):
-        if meta.get("products_count") is not None:
-            rows.append({"label": "Produkty", "value": str(meta["products_count"])})
-        if meta.get("units_count") is not None:
-            rows.append({"label": "Sztuki", "value": str(meta["units_count"])})
-        if meta.get("locations_count") is not None:
-            rows.append({"label": "Lokalizacje", "value": str(meta["locations_count"])})
-        if meta.get("picking_duration_label"):
-            rows.append({"label": "Czas", "value": str(meta["picking_duration_label"])})
-        return rows
+        return picking_finished_detail_rows(meta)
 
-    if code in (EVT_PACKING_FINISHED, EVT_PACKING_AUTOMATION_FINISHED):
-        if meta.get("carton_name") or meta.get("carton_label"):
-            name = meta.get("carton_name")
-            dims = meta.get("carton_label")
-            if name and dims:
-                rows.append({"label": "Opakowanie", "value": f"„{name}” ({dims})"})
-            else:
-                rows.append({"label": "Opakowanie", "value": str(name or dims)})
-        elif meta.get("no_carton"):
-            rows.append({"label": "Opakowanie", "value": "Bez dodatkowego opakowania"})
+    if code == EVT_PACKING_AUTOMATION_FINISHED:
+        return packing_automation_detail_rows(meta)
+
+    if code == EVT_PACKING_FINISHED:
+        rows.extend(packing_finished_detail_rows(meta))
         if meta.get("packages_count") is not None:
             rows.append({"label": "Paczki", "value": str(meta["packages_count"])})
         if meta.get("weight_kg") is not None:
             rows.append({"label": "Waga", "value": f"{meta['weight_kg']} kg"})
-        if meta.get("packing_duration_label"):
-            rows.append({"label": "Czas", "value": str(meta["packing_duration_label"])})
         return rows
 
     if code in (EVT_CARTON_SELECTED, EVT_CARTON_CHANGED, "SMART_MATCHING_MATCHED", "THREE_D_MATCHING_MATCHED"):
-        if meta.get("carton_name") or meta.get("carton_label") or meta.get("dimensions"):
-            name = meta.get("carton_name")
-            dims = meta.get("carton_label") or meta.get("dimensions")
-            if name and dims:
-                rows.append({"label": "Opakowanie", "value": f"„{name}” ({dims})"})
-            elif name or dims:
-                rows.append({"label": "Opakowanie", "value": str(name or dims)})
-        if meta.get("source"):
-            src = str(meta["source"]).upper()
-            label = (
-                "3D Matching"
-                if src in ("THREE_D", "3D")
-                else ("Smart Matching" if src == "SMART" else "Ręcznie")
-            )
-            rows.append({"label": "Źródło", "value": label})
-        return rows
+        return carton_event_detail_rows(meta, changed=(code == EVT_CARTON_CHANGED))
 
     if code == ORDER_STATUS_CHANGED:
         return []

@@ -99,13 +99,28 @@ class WmsPackingOrderUiStatusBadge(BaseModel):
     main_group: OrderUiMainGroup
 
 
+class WmsTimelineDetailRow(BaseModel):
+    """Business detail line for Historia WMS / shared presentation."""
+
+    label: str = Field(..., max_length=64)
+    value: str = Field(..., max_length=512)
+
+
 class WmsOrderTimelineEvent(BaseModel):
     """Zdarzenie osi czasu WMS w panelu zamówienia (OMS)."""
 
     at: datetime
     title: str
     body: List[str] = Field(default_factory=list)
-    badge: str = Field(default="WMS", max_length=64)
+    details: List[WmsTimelineDetailRow] = Field(
+        default_factory=list,
+        description="Structured business rows (label/value) — prefer over dumping body.",
+    )
+    badge: str = Field(
+        default="",
+        max_length=64,
+        description="Optional source badge; empty when section is already Historia WMS.",
+    )
     user_label: Optional[str] = Field(default=None, max_length=255)
     event_type: Optional[str] = Field(
         default=None,
