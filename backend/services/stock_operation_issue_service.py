@@ -41,6 +41,9 @@ def append_issue_operation(
     """Insert one ISSUE row and record warehouse inventory movement tied to WZ."""
     if qty <= 1e-12:
         raise ValueError("issue qty must be positive")
+    from .warehouse_wz.guards import assert_wz_may_issue_inventory
+
+    assert_wz_may_issue_inventory(doc)
     if getattr(line, "product_id", None) is None:
         raise ValueError("issue line requires product_id")
 

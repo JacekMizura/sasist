@@ -23,7 +23,17 @@ class StockDocument(Base):
     delivery_id = Column(Integer, ForeignKey("deliveries.id", ondelete="RESTRICT"), nullable=True, index=True)
     #: PANEL = z zamówienia / panelu; WMS = ad-hoc przyjęcie magazynowe (pusta PZ); DIRECT_SALE = sprzedaż bezpośrednia.
     creation_source = Column(String(16), nullable=False, default="PANEL", server_default=text("'PANEL'"), index=True)
+    #: WZ_ISSUE = WZ owns inventory decrement; WMS_PICK = documentary WZ after pick finalize.
+    settlement_mode = Column(String(32), nullable=True, index=True)
+    #: Idempotency for WZ creation (tenant-scoped uniqueness enforced in app layer).
+    idempotency_key = Column(String(160), nullable=True, index=True)
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
+    source_rz_document_id = Column(
+        Integer,
+        ForeignKey("stock_documents.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     source_sale_document_id = Column(
         String(36),
         ForeignKey("sale_documents.id", ondelete="SET NULL"),

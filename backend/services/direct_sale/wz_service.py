@@ -280,6 +280,7 @@ def create_and_post_wz_for_direct_sale(
     warehouse_id = int(order.warehouse_id)
 
     from ..bundles.bundle_warehouse_document_service import expected_warehouse_product_quantities
+    from ..warehouse_wz.constants import SETTLEMENT_WZ_ISSUE, direct_sale_wz_idempotency_key
 
     expected_wh = expected_warehouse_product_quantities(db, order, document_type="WZ")
     if expected_wh:
@@ -332,6 +333,8 @@ def create_and_post_wz_for_direct_sale(
         warehouse_id=warehouse_id,
         document_type="WZ",
         creation_source="DIRECT_SALE",
+        settlement_mode=SETTLEMENT_WZ_ISSUE,
+        idempotency_key=direct_sale_wz_idempotency_key(order_id=order_id, sale_document_id=sale_doc_id),
         order_id=order_id,
         source_sale_document_id=sale_doc_id,
         direct_sale_session_id=session_id,
@@ -426,7 +429,22 @@ def create_and_post_wz_for_direct_sale(
             "wz_id": int(wz.id),
             "wz_number": doc_number,
             "sale_document_id": sale_doc_id,
+            "settlement_mode": SETTLEMENT_WZ_ISSUE,
         },
+    )
+    from ..activity_log.domain_activity import record_domain_activity
+    from ..activity_log.domain_event_codes import ORDER_WZ_ISSUE_CREATED
+
+    record_domain_activity(
+        db,
+        tenant_id=tenant_id,
+        event_type=ORDER_WZ_ISSUE_CREATED,
+        description=f"Utworzono i zrealizowano dokument WZ {doc_number}.",
+        order_id=order_id,
+        warehouse_id=warehouse_id,
+        stock_document_id=int(wz.id),
+        correlation_id=direct_sale_wz_idempotency_key(order_id=order_id, sale_document_id=sale_doc_id),
+        metadata={"settlement_mode": SETTLEMENT_WZ_ISSUE, "sale_document_id": sale_doc_id},
     )
     logger.info(
         "[direct_sales.wz] created wz_id=%s number=%s sale_document_id=%s order_id=%s",

@@ -4738,6 +4738,7 @@ def finalize_wms_picking_cart(
         )
         now = datetime.utcnow()
         finalized_ids: list[int] = []
+        finalized_by_order: dict[int, list[int]] = {}
         for p in pending_picks:
             trace = _finalize_pick_trace_payload(
                 db, p, cart_id=cid, prior_consumed_pick_ids=list(finalized_ids)
@@ -4759,10 +4760,44 @@ def finalize_wms_picking_cart(
                 row.picked_at = now
                 row.status = "done"
                 finalized_ids.append(int(row.id))
+                if row.order_id is not None:
+                    oid_row = int(row.order_id)
+                    finalized_by_order.setdefault(oid_row, []).append(int(row.id))
         mark_pick_events_finalized_for_pick_ids(db, finalized_ids)
         from .bundles.bundle_lot_snapshot_service import persist_bundle_lot_snapshots_for_picks
 
         persist_bundle_lot_snapshots_for_picks(db, finalized_ids)
+        from .warehouse_wz.documentary_service import create_documentary_wz_for_wms_pick_finalize
+
+        for o in orders:
+            oid = int(o.id)
+            pick_ids = finalized_by_order.get(oid) or []
+            if not pick_ids:
+                continue
+            try:
+                create_documentary_wz_for_wms_pick_finalize(
+                    db,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    order=o,
+                    pick_ids=pick_ids,
+                    session_key=cid,
+                    performed_by_user_id=operator_user_id,
+                )
+            except Exception as wz_exc:
+                logger.exception(
+                    "[picking.finalize.error] order_id=%s cart_id=%s step=documentary_wz",
+                    oid,
+                    cid,
+                )
+                raise PickingFinalizeError(
+                    f"Nie udało się utworzyć dokumentu WZ po zakończeniu zbierania: {wz_exc}",
+                    reason=wz_exc.__class__.__name__,
+                    order_id=oid,
+                    step="documentary_wz",
+                    http_status=409,
+                    code="wz_documentary_create_failed",
+                ) from wz_exc
         logger.info(
             "[picking.finalize.finish] cart_id=%s source_status_id=%s step=inventory picks_finalized=%s",
             cid,
