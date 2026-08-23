@@ -107,6 +107,41 @@ def sum_picks_for_order_item_cartless(db: Session, *, order_item_id: int) -> flo
     return float(row or 0.0)
 
 
+def cartless_order_item_open_qty(
+    db: Session,
+    *,
+    order_item_id: int,
+    required_qty: float,
+    missing_qty: float = 0.0,
+) -> float:
+    """
+    Canonical open qty for cartless (same math as product-lines ``remaining_to_pick``):
+
+      open = required − SUM(Pick cart_id IS NULL) − missing
+
+    Scope is the order_item (orders on the active picking_session_id). Does **not**
+    invent product-wide Pick sums across unrelated sessions/orders.
+    """
+    need = float(required_qty or 0)
+    miss = max(0.0, float(missing_qty or 0))
+    if need <= 1e-9:
+        return 0.0
+    picked = float(sum_picks_for_order_item_cartless(db, order_item_id=int(order_item_id)))
+    return max(0.0, need - picked - miss)
+
+
+def heal_stale_picked_line_status(oi, rem: float) -> bool:
+    """
+    If Pick/missing math says rem>0, clear stale ``wms_picking_line_status='picked'``
+    (left after undo / partial flows). Same policy as MULTI basket-put resolve.
+    """
+    st = (getattr(oi, "wms_picking_line_status", None) or "").strip().lower()
+    if rem > 1e-9 and st == "picked":
+        oi.wms_picking_line_status = None
+        return True
+    return False
+
+
 def picked_by_product_cartless(
     db: Session,
     *,

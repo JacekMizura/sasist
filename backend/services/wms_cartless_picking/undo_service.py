@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 from ...models.pick import Pick
 from ..fulfillment_event_service import delete_pick_events_for_pick_ids
 from ..order_fulfillment_recompute import recompute_order_fulfillment
+from .scope import cartless_order_item_open_qty, heal_stale_picked_line_status
+from ...models.order_item import OrderItem
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +57,7 @@ def undo_cartless_session_picks(
     remaining = qty
     deleted_ids: list[int] = []
     touched_orders: set[int] = set()
+    touched_oi_ids: set[int] = set()
 
     for p in picks:
         if remaining <= 1e-9:
@@ -66,18 +69,31 @@ def undo_cartless_session_picks(
         if take + 1e-9 >= pq:
             deleted_ids.append(int(p.id))
             touched_orders.add(int(p.order_id))
+            touched_oi_ids.add(int(p.order_item_id))
             db.delete(p)
             remaining -= pq
         else:
             p.quantity = round(pq - take, 6)
             db.add(p)
             touched_orders.add(int(p.order_id))
+            touched_oi_ids.add(int(p.order_item_id))
             remaining -= take
 
     if deleted_ids:
         delete_pick_events_for_pick_ids(db, deleted_ids)
     for oid in touched_orders:
         recompute_order_fulfillment(db, int(oid), commit=False, session_cart_id=None)
+
+    # Heal stale line status after undo so detail remaining and quick-pick stay aligned.
+    if touched_oi_ids:
+        for oi in db.query(OrderItem).filter(OrderItem.id.in_(list(touched_oi_ids))).all():
+            rem = cartless_order_item_open_qty(
+                db,
+                order_item_id=int(oi.id),
+                required_qty=float(oi.quantity or 0),
+                missing_qty=float(oi.wms_picking_line_missing_qty or 0),
+            )
+            heal_stale_picked_line_status(oi, rem)
 
     return {
         "ok": True,

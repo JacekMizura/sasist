@@ -20,7 +20,12 @@ from ..wms_picking_product_list_service import (
     _order_type_filter,
     resolve_wms_picking_order_ids,
 )
-from .scope import get_cartless_session_or_raise, sum_picks_for_order_item_cartless
+from .scope import (
+    cartless_order_item_open_qty,
+    get_cartless_session_or_raise,
+    heal_stale_picked_line_status,
+    sum_picks_for_order_item_cartless,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -174,13 +179,17 @@ def record_cartless_quick_pick(
                     continue
                 if order_item_skip_bundle_commercial_header_for_ops(oi):
                     continue
-                st_oi = (getattr(oi, "wms_picking_line_status", None) or "").strip().lower()
-                if st_oi in ("picked", "missing"):
-                    continue
+                # SSOT open qty = same as product-lines remaining_to_pick.
+                # Never gate on stale wms_picking_line_status='picked' (blocks rem>0).
                 need = float(oi.quantity)
                 miss_ln = float(oi.wms_picking_line_missing_qty or 0)
-                picked_sum = sum_picks_for_order_item_cartless(db, order_item_id=int(oi.id))
-                rem = need - float(picked_sum or 0) - miss_ln
+                rem = cartless_order_item_open_qty(
+                    db,
+                    order_item_id=int(oi.id),
+                    required_qty=need,
+                    missing_qty=miss_ln,
+                )
+                heal_stale_picked_line_status(oi, rem)
                 if rem <= 1e-9:
                     continue
                 take = min(q_remain, rem)

@@ -3516,13 +3516,14 @@ def record_wms_quick_pick(
                     continue
                 if order_item_skip_bundle_commercial_header_for_ops(oi):
                     continue
-                st_oi = (getattr(oi, "wms_picking_line_status", None) or "").strip().lower()
-                if st_oi in ("picked", "missing"):
-                    continue
                 need = float(oi.quantity)
                 miss_ln = float(oi.wms_picking_line_missing_qty or 0)
                 picked_sum = sum_pick_events_for_line_cart(db, int(oi.id), cid)
-                rem = need - float(picked_sum or 0) - miss_ln
+                rem = max(0.0, need - float(picked_sum or 0) - miss_ln)
+                # Align with MULTI basket-put / cartless: rem>0 wins over stale status='picked'.
+                from .wms_cartless_picking.scope import heal_stale_picked_line_status
+
+                heal_stale_picked_line_status(oi, rem)
                 if rem <= 1e-9:
                     continue
                 take = min(q_remain, rem)
