@@ -363,12 +363,17 @@ def emit_order_note_added_activity(
         meta["show_in_picking"] = bool(show_in_picking)
     if show_in_packing is not None:
         meta["show_in_packing"] = bool(show_in_packing)
+    preview = str(content_preview or "").strip()
+    if preview:
+        note_desc = f"Dodano notatkę:\n„{preview[:280]}”"
+    else:
+        note_desc = "Dodano notatkę do zamówienia."
     return record_domain_activity(
         db,
         tenant_id=int(tenant_id),
         warehouse_id=warehouse_id,
         event_type=ORDER_NOTE_ADDED,
-        description="Dodano notatkę do zamówienia.",
+        description=note_desc,
         actor_user_id=actor_user_id if kind == "USER" else None,
         order_id=int(order_id),
         metadata=meta,
@@ -491,7 +496,7 @@ def emit_order_item_added_activity(
         tenant_id=int(tenant_id),
         warehouse_id=warehouse_id,
         event_type=ORDER_ITEM_ADDED,
-        description=f"Dodano produkt „{name}” do zamówienia.",
+        description=f"Dodano produkt „{name}”.",
         actor_user_id=actor_user_id if kind == "USER" else None,
         order_id=int(order_id),
         metadata=meta,
@@ -592,7 +597,7 @@ def emit_order_item_quantity_changed_activity(
         tenant_id=int(tenant_id),
         warehouse_id=warehouse_id,
         event_type=ORDER_ITEM_QUANTITY_CHANGED,
-        description=f"Zmieniono ilość produktu „{name}” z {oq} na {nq}.",
+        description=f"Zmieniono ilość produktu „{name}”.",
         actor_user_id=actor_user_id if kind == "USER" else None,
         order_id=int(order_id),
         metadata=meta,
@@ -655,7 +660,7 @@ def emit_order_item_price_changed_activity(
         tenant_id=int(tenant_id),
         warehouse_id=warehouse_id,
         event_type=ORDER_ITEM_PRICE_CHANGED,
-        description=f"Zmieniono cenę produktu „{name}” z {old_d} na {new_d}.",
+        description=f"Zmieniono cenę produktu „{name}”.",
         actor_user_id=actor_user_id if kind == "USER" else None,
         order_id=int(order_id),
         metadata=meta,
@@ -716,7 +721,7 @@ def emit_order_item_vat_changed_activity(
         tenant_id=int(tenant_id),
         warehouse_id=warehouse_id,
         event_type=ORDER_ITEM_VAT_CHANGED,
-        description=f"Zmieniono VAT produktu „{name}” z {o_s} na {n_s}.",
+        description=f"Zmieniono VAT produktu „{name}”.",
         actor_user_id=actor_user_id if kind == "USER" else None,
         order_id=int(order_id),
         metadata=meta,

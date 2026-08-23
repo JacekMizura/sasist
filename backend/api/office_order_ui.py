@@ -36,7 +36,7 @@ from ..services.order_ui_status_panel import (
     order_ui_status_row_to_read,
 )
 from ..services.panel_status_image_upload import save_panel_status_image_bytes
-from ..auth.deps import get_optional_current_user
+from ..auth.deps import get_current_user
 from ..models.app_user import AppUser
 from ..services.order_panel_ui_status_service import apply_order_panel_ui_status
 from ..services.cart_picking_lifecycle_service import CartLifecycleError
@@ -363,7 +363,7 @@ def patch_order_ui_status(
         description="Opcjonalny; gdy brak — używany jest orders.warehouse_id (operacja workflow).",
     ),
     db: Session = Depends(get_db),
-    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+    current_user: AppUser = Depends(get_current_user),
 ):
     """Set or clear panel sub-status on an order (does not touch Order.status)."""
     row = _load_order_for_panel(db, order_id, tenant_id, warehouse_id)
@@ -383,7 +383,7 @@ def patch_order_ui_status(
             raise HTTPException(status_code=400, detail="Unknown panel sub-status for this warehouse")
         if not bool(getattr(us, "is_active", True)):
             raise HTTPException(status_code=400, detail="Ten status panelu jest nieaktywny")
-    uid = int(current_user.id) if current_user is not None and current_user.id is not None else None
+    uid = int(current_user.id)
     try:
         apply_order_panel_ui_status(
             db,

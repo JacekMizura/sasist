@@ -48,6 +48,8 @@ export type ActivityEventItem = {
   source_module: string | null;
   metadata: Record<string, unknown>;
   details?: ActivityDetailRow[];
+  /** Backend: inline = always visible; expand = accordion; none = no details. */
+  details_display?: "inline" | "expand" | "none" | string;
   order_numbers?: string[];
   links: ActivityLink[];
 };

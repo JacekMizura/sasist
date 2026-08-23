@@ -229,6 +229,22 @@ def warehouse_commit_rmz_return(
         },
     )
 
+    if snapshot.refund_processing == "warehouse" and process_refund and refund is not None:
+        try:
+            from .return_domain_activity import emit_return_refund_completed
+
+            emit_return_refund_completed(
+                db,
+                rmz=row,
+                refund_type=getattr(refund, "refund_type", None),
+                refund_amount=getattr(refund, "refund_amount", None),
+                refund_shipping_amount=getattr(refund, "refund_shipping_amount", None),
+                actor_user_id=actor_user_id,
+                source="warehouse",
+            )
+        except Exception:
+            logger.exception("return activity RETURN_REFUND_COMPLETED failed rmz_id=%s", row.id)
+
     try:
         from .return_domain_activity import emit_return_finalized
 
@@ -310,6 +326,36 @@ def warehouse_commit_rmz_existing_lines(
             "z_pz_document_id": getattr(pz_doc, "id", None) if pz_doc is not None else None,
         },
     )
+
+    if snapshot.refund_processing == "warehouse" and process_refund and refund is not None:
+        try:
+            from .return_domain_activity import emit_return_refund_completed
+
+            emit_return_refund_completed(
+                db,
+                rmz=row,
+                refund_type=getattr(refund, "refund_type", None),
+                refund_amount=getattr(refund, "refund_amount", None),
+                refund_shipping_amount=getattr(refund, "refund_shipping_amount", None),
+                actor_user_id=actor_user_id,
+                source="warehouse",
+            )
+        except Exception:
+            logger.exception("return activity RETURN_REFUND_COMPLETED failed rmz_id=%s", row.id)
+
+    try:
+        from .return_domain_activity import emit_return_finalized
+
+        emit_return_finalized(
+            db,
+            rmz=row,
+            actor_user_id=actor_user_id,
+            transition=transition_key,
+            z_pz_document_id=getattr(pz_doc, "id", None) if pz_doc is not None else None,
+        )
+    except Exception:
+        logger.exception("return domain activity on commit-wms failed rmz_id=%s", row.id)
+
     return row
 
 
@@ -342,6 +388,28 @@ def process_rmz_office_refund(
         entity_id=int(row.id),
         detail={"rmz_id": int(row.id), "transition": "success"},
     )
+
+    try:
+        from .return_domain_activity import emit_return_refund_completed, emit_return_finalized
+
+        emit_return_refund_completed(
+            db,
+            rmz=row,
+            refund_type=getattr(body, "refund_type", None),
+            refund_amount=getattr(body, "refund_amount", None),
+            refund_shipping_amount=getattr(body, "refund_shipping_amount", None),
+            actor_user_id=actor_user_id,
+            source="office",
+        )
+        emit_return_finalized(
+            db,
+            rmz=row,
+            actor_user_id=actor_user_id,
+            transition="success",
+        )
+    except Exception:
+        logger.exception("return activity on office refund failed rmz_id=%s", row.id)
+
     return row
 
 

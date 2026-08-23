@@ -18,7 +18,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
-from ..auth.deps import get_optional_current_user, require_permission
+from ..auth.deps import get_current_user, get_optional_current_user, require_permission
 from ..models.app_user import AppUser
 from ..models.customer import Customer
 from ..models.order import Order
@@ -2664,7 +2664,7 @@ def _ordered_qty_for_return_line(db: Session, oi: OrderItem) -> int:
 def create_wms_return(
     body: WmsReturnCreate,
     db: Session = Depends(get_db),
-    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+    current_user: AppUser = Depends(get_current_user),
 ):
     # Resolve warehouse from the order row (same as GET .../orders/{id}/returns), not tenant default —
     # otherwise numeric lookup can load a non-default-warehouse order and POST here returns 404.
@@ -2768,7 +2768,7 @@ def create_wms_return(
     try:
         from ..services.returns.return_domain_activity import emit_return_created
 
-        emit_return_created(db, rmz=row, actor_user_id=getattr(current_user, "id", None) if current_user else None)
+        emit_return_created(db, rmz=row, actor_user_id=int(current_user.id) if current_user.id is not None else None)
         db.commit()
     except Exception:
         db.rollback()
@@ -2815,6 +2815,7 @@ def add_wms_return_line(
         description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ.",
     ),
     db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
 ) -> WmsReturnRead:
     """Dodaj pozycję do istniejącego RMZ (operacyjny ekran obsługi)."""
     wh_id = _warehouse_id_for_return_mutation(db, return_id, tenant_id, warehouse_id)
@@ -2879,6 +2880,29 @@ def add_wms_return_line(
         }
     )
     row.lines_json = json.dumps(parsed)
+    db.flush()
+
+    new_line = (
+        db.query(RMZLine)
+        .filter(RMZLine.rmz_id == row.id, RMZLine.order_item_id == body.order_item_id)
+        .order_by(RMZLine.id.desc())
+        .first()
+    )
+    try:
+        from ..services.returns.return_domain_activity import emit_return_item_added
+
+        unit_price = getattr(oi, "unit_price", None)
+        if new_line is not None:
+            emit_return_item_added(
+                db,
+                rmz=row,
+                line=new_line,
+                actor_user_id=int(current_user.id) if current_user.id is not None else None,
+                unit_price=float(unit_price) if unit_price is not None else None,
+            )
+    except Exception:
+        logger.exception("return activity RETURN_ITEM_ADDED failed rmz_id=%s", return_id)
+
     db.commit()
 
     row = _load_rmz(db, return_id, tenant_id, wh_id)
@@ -2929,9 +2953,16 @@ def get_customer_insights(
 
 
 @router.post("/bulk-archive", response_model=EntityBulkDeleteResult)
-def wms_returns_bulk_archive(body: WmsReturnsBulkArchiveBody, db: Session = Depends(get_db)):
+def wms_returns_bulk_archive(
+    body: WmsReturnsBulkArchiveBody,
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+):
     """Archiwizacja wielu RMZ: usuwa linie operacyjne, ustawia deleted_at na nagłówku."""
-    result = archive_wms_returns_bulk(db, body.tenant_id, body.warehouse_id, body.ids)
+    uid = int(current_user.id) if current_user.id is not None else None
+    result = archive_wms_returns_bulk(
+        db, body.tenant_id, body.warehouse_id, body.ids, actor_user_id=uid
+    )
     if result.get("errors"):
         db.rollback()
     else:
@@ -3346,12 +3377,18 @@ def patch_wms_return_workflow_status(
         description="Opcjonalny magazyn; musi zgadzać się z magazynem dokumentu RMZ (jak GET /wms/returns/id/{id}).",
     ),
     db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
 ):
     """Set RMZ workflow `ReturnStatus` by id (must belong to tenant + return warehouse)."""
     wh_id = _warehouse_id_for_return_mutation(db, return_id, tenant_id, warehouse_id)
     row = _load_rmz(db, return_id, tenant_id, wh_id)
     if not row:
         raise HTTPException(status_code=404, detail="Return not found")
+    old_sid = int(row.status_id) if getattr(row, "status_id", None) is not None else None
+    old_rs = row.return_status
+    if old_rs is None and old_sid is not None:
+        old_rs = db.query(ReturnStatus).filter(ReturnStatus.id == old_sid).first()
+    old_name = str(getattr(old_rs, "name", None) or "").strip() or None if old_rs else None
     new_rs = (
         db.query(ReturnStatus)
         .filter(
@@ -3364,6 +3401,21 @@ def patch_wms_return_workflow_status(
     if not new_rs:
         raise HTTPException(status_code=400, detail="Invalid status_id for this warehouse")
     row.status_id = int(new_rs.id)
+    try:
+        from ..services.returns.return_domain_activity import emit_return_status_changed
+
+        emit_return_status_changed(
+            db,
+            rmz=row,
+            old_status_id=old_sid,
+            new_status_id=int(new_rs.id),
+            old_status_name=old_name,
+            new_status_name=str(getattr(new_rs, "name", None) or "").strip() or None,
+            status_kind="workflow",
+            actor_user_id=int(current_user.id) if current_user.id is not None else None,
+        )
+    except Exception:
+        logger.exception("return activity workflow status failed rmz_id=%s", return_id)
     db.commit()
     row = _load_rmz(db, return_id, tenant_id, wh_id)
     if not row:
@@ -3416,10 +3468,12 @@ def archive_single_wms_return(
         description="Opcjonalny magazyn; musi zgadzać się z magazynem RMZ.",
     ),
     db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
 ):
     """Archiwizacja pojedynczego RMZ (jak bulk-archive)."""
     wh_id = _warehouse_id_for_return_mutation(db, return_id, tenant_id, warehouse_id)
-    result = archive_wms_returns_bulk(db, tenant_id, wh_id, [return_id])
+    uid = int(current_user.id) if current_user.id is not None else None
+    result = archive_wms_returns_bulk(db, tenant_id, wh_id, [return_id], actor_user_id=uid)
     if result.get("errors"):
         db.rollback()
     else:

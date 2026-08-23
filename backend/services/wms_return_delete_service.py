@@ -25,6 +25,8 @@ def archive_wms_returns_bulk_transaction(
     tenant_id: int,
     warehouse_id: int,
     id_list: list[int],
+    *,
+    actor_user_id: int | None = None,
 ) -> dict[str, Any]:
     """Caller robi commit/rollback. Zwraca success_count = zarchiwizowane RMZ."""
     errors: list[str] = []
@@ -79,6 +81,24 @@ def archive_wms_returns_bulk_transaction(
 
     now = datetime.utcnow()
     try:
+        # Activity before line delete — header stays; correlation is return-scoped.
+        try:
+            from .returns.return_domain_activity import emit_return_archived
+
+            headers = (
+                db.query(WmsOrderReturn)
+                .filter(
+                    WmsOrderReturn.tenant_id == tenant_id,
+                    WmsOrderReturn.warehouse_id == warehouse_id,
+                    WmsOrderReturn.id.in_(to_archive),
+                )
+                .all()
+            )
+            for hdr in headers:
+                emit_return_archived(db, rmz=hdr, actor_user_id=actor_user_id)
+        except Exception:
+            logger.exception("return activity RETURN_ARCHIVED failed ids=%s", to_archive)
+
         db.execute(delete(WmsRefund).where(WmsRefund.rmz_id.in_(to_archive)))
         db.execute(delete(RMZLine).where(RMZLine.rmz_id.in_(to_archive)))
         db.execute(

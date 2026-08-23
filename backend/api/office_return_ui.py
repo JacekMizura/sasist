@@ -13,7 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..auth.deps import get_optional_current_user
+from ..auth.deps import get_current_user
 from ..models.app_user import AppUser
 from ..models.return_ui_panel_subgroup import ReturnUiPanelSubgroup
 from ..models.return_ui_status import ReturnUiStatus
@@ -281,7 +281,7 @@ def patch_return_ui_status(
     tenant_id: int = Query(..., ge=1),
     warehouse_id: int = Depends(office_return_ui_warehouse_id),
     db: Session = Depends(get_db),
-    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+    current_user: AppUser = Depends(get_current_user),
 ):
     """Set or clear panel sub-status on an RMZ (does not touch ReturnStatus)."""
     row = _load_rmz(db, rmz_id, tenant_id, warehouse_id)
@@ -289,7 +289,7 @@ def patch_return_ui_status(
         raise HTTPException(status_code=404, detail="Return not found")
     from ..services.automation.return_ui_status import apply_return_panel_ui_status
 
-    uid = int(current_user.id) if current_user is not None and current_user.id is not None else None
+    uid = int(current_user.id) if current_user.id is not None else None
     try:
         apply_return_panel_ui_status(
             db,

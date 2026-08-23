@@ -202,10 +202,12 @@ export function renderRmzDetailSection(id: ReturnDetailSectionId, ctx: RmzDetail
       return (
         <ReturnDetailWidgetShell title={label}>
           <ActivityLogPanel
+            key={`return-activity-${rid}`}
             objectType="return"
             objectId={rid}
             title="Dziennik"
             defaultCollapsed={false}
+            tenantId={DAMAGE_TENANT_ID}
             className="mt-0 border-0 p-0 shadow-none"
           />
         </ReturnDetailWidgetShell>

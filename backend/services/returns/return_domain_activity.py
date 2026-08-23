@@ -13,12 +13,16 @@ from ...models.wms_order_return import WmsOrderReturn
 from ...models.wms_rmz_line import RMZLine
 from ..activity_log.domain_activity import record_domain_activity
 from ..activity_log.domain_event_codes import (
+    RETURN_ARCHIVED,
     RETURN_COMPONENT_RECOVERY,
     RETURN_CREATED,
     RETURN_FINALIZED,
+    RETURN_ITEM_ADDED,
     RETURN_LINE_DECISION,
     RETURN_PUTAWAY_COMPLETED,
     RETURN_RECEIPT_CREATED,
+    RETURN_REFUND_COMPLETED,
+    RETURN_STATUS_CHANGED,
     RETURN_STOCK_INTAKE_SELECTED,
 )
 
@@ -33,13 +37,20 @@ def _order_number(db: Session, order_id: Optional[int]) -> Optional[str]:
     return str(num).strip() if num else str(order_id)
 
 
-def _product_snap(db: Session, product_id: Optional[int]) -> tuple[Optional[str], Optional[str]]:
+def _product_snap(db: Session, product_id: Optional[int]) -> dict[str, Optional[str]]:
+    """Historical product fields for Activity metadata (not live Product re-reads in UI)."""
+    empty: dict[str, Optional[str]] = {"name": None, "sku": None, "ean": None}
     if not product_id:
-        return None, None
+        return empty
     p = db.query(Product).filter(Product.id == int(product_id)).first()
     if p is None:
-        return None, None
-    return (getattr(p, "name", None), getattr(p, "sku", None))
+        return empty
+    ean = getattr(p, "ean", None) or getattr(p, "barcode", None)
+    return {
+        "name": getattr(p, "name", None),
+        "sku": getattr(p, "sku", None) or getattr(p, "symbol", None),
+        "ean": str(ean).strip() if ean else None,
+    }
 
 
 def _format_product_label(name: Optional[str], sku: Optional[str]) -> str:
@@ -48,6 +59,30 @@ def _format_product_label(name: Optional[str], sku: Optional[str]) -> str:
     if n and s:
         return f"{n} ({s})"
     return n or s or "—"
+
+
+def _snap_name_sku(snap: dict[str, Optional[str]] | tuple) -> tuple[Optional[str], Optional[str]]:
+    """Accept dict snap or legacy (name, sku) tuple from tests."""
+    if isinstance(snap, tuple):
+        return (snap[0] if len(snap) > 0 else None, snap[1] if len(snap) > 1 else None)
+    return (snap.get("name"), snap.get("sku"))
+
+
+def _actor_meta(actor_user_id: Optional[int]) -> dict:
+    if actor_user_id is not None:
+        return {"actor_kind": "USER"}
+    return {"actor_kind": "SYSTEM", "actor_label": "System"}
+
+
+def _money_pl(value: float | int | None) -> Optional[str]:
+    if value is None:
+        return None
+    try:
+        from ..activity_log.order_mutation_activity import format_money_pl
+
+        return format_money_pl(value, currency="PLN")
+    except Exception:
+        return f"{float(value):.2f} zł"
 
 
 def _qty_txt(n: float | int | None) -> str:
@@ -97,7 +132,9 @@ def _parent_label(db: Session, line: RMZLine, *, is_bundle: bool) -> str:
                     return bname
         except Exception:
             pass
-    name, sku = _product_snap(db, int(line.product_id) if getattr(line, "product_id", None) else None)
+    name, sku = _snap_name_sku(
+        _product_snap(db, int(line.product_id) if getattr(line, "product_id", None) else None)
+    )
     return _format_product_label(name, sku)
 
 
@@ -132,25 +169,135 @@ def emit_return_created(
     oid = int(rmz.order_id) if getattr(rmz, "order_id", None) else None
     rmz_no = str(getattr(rmz, "rmz_number", None) or f"RMZ-{rid}")
     order_no = _order_number(db, oid)
+    meta = {
+        **_actor_meta(actor_user_id),
+        "rmz_number": rmz_no,
+        "order_id": oid,
+        "order_number": order_no,
+        "return_type": getattr(rmz, "return_type", None),
+    }
+    # Return Activity SSOT: link return only (do not project onto Order Logi).
     record_domain_activity(
         db,
         tenant_id=int(rmz.tenant_id),
         warehouse_id=int(rmz.warehouse_id) if getattr(rmz, "warehouse_id", None) else None,
         event_type=RETURN_CREATED,
-        description=f"Utworzono zwrot {rmz_no}",
+        description=(
+            f"Utworzono zwrot {rmz_no}"
+            + (f" dla zamówienia #{order_no}." if order_no else ".")
+        ),
         actor_user_id=actor_user_id,
-        order_id=oid,
         rmz_id=rid,
         correlation_id=f"return:{rid}:created",
         source_module="returns",
         category="status",
         severity="SUCCESS",
         rmz_label=rmz_no,
-        order_label=f"#{order_no}" if order_no else None,
+        metadata=meta,
+    )
+
+
+def emit_return_status_changed(
+    db: Session,
+    *,
+    rmz: WmsOrderReturn,
+    old_status_id: Optional[int],
+    new_status_id: Optional[int],
+    old_status_name: Optional[str] = None,
+    new_status_name: Optional[str] = None,
+    status_kind: str = "panel",
+    actor_user_id: Optional[int] = None,
+) -> None:
+    """Panel UI status or workflow ReturnStatus change."""
+    rid = int(rmz.id)
+    if old_status_id == new_status_id and (old_status_name or "") == (new_status_name or ""):
+        return
+    rmz_no = str(getattr(rmz, "rmz_number", None) or f"RMZ-{rid}")
+    before = str(old_status_name or "").strip() or ("—" if old_status_id is None else f"#{old_status_id}")
+    after = str(new_status_name or "").strip() or ("—" if new_status_id is None else f"#{new_status_id}")
+    kind = str(status_kind or "panel").strip().lower()
+    corr = f"return:{rid}:status:{kind}:{old_status_id}:{new_status_id}"[:64]
+    record_domain_activity(
+        db,
+        tenant_id=int(rmz.tenant_id),
+        warehouse_id=int(rmz.warehouse_id) if getattr(rmz, "warehouse_id", None) else None,
+        event_type=RETURN_STATUS_CHANGED,
+        description=f"Zmieniono status zwrotu:\n{before} → {after}",
+        actor_user_id=actor_user_id,
+        rmz_id=rid,
+        correlation_id=corr,
+        source_module="returns",
+        category="status",
+        rmz_label=rmz_no,
         metadata={
+            **_actor_meta(actor_user_id),
             "rmz_number": rmz_no,
-            "order_number": order_no,
-            "return_type": getattr(rmz, "return_type", None),
+            "status_kind": kind,
+            "old_status_id": old_status_id,
+            "new_status_id": new_status_id,
+            "old_status_name": before,
+            "new_status_name": after,
+            "before": before,
+            "after": after,
+        },
+    )
+
+
+def emit_return_item_added(
+    db: Session,
+    *,
+    rmz: WmsOrderReturn,
+    line: RMZLine,
+    actor_user_id: Optional[int] = None,
+    unit_price: Optional[float] = None,
+) -> None:
+    rid = int(rmz.id)
+    lid = int(line.id)
+    pid = int(line.product_id) if getattr(line, "product_id", None) else None
+    snap = _product_snap(db, pid)
+    name, sku = _snap_name_sku(snap)
+    ean = snap.get("ean") if isinstance(snap, dict) else None
+    qty = float(getattr(line, "quantity", 0) or 0)
+    rmz_no = str(getattr(rmz, "rmz_number", None) or f"RMZ-{rid}")
+    price_disp = _money_pl(unit_price)
+    lines = [f"Dodano produkt do zwrotu:", _format_product_label(name, sku) if name or sku else "—"]
+    id_bits = []
+    if sku:
+        id_bits.append(f"SKU: {sku}")
+    if ean:
+        id_bits.append(f"EAN: {ean}")
+    if id_bits:
+        lines.append(" · ".join(id_bits))
+    lines.append(f"Ilość: {_qty_txt(qty)}")
+    if price_disp:
+        lines.append(f"Cena: {price_disp}")
+    record_domain_activity(
+        db,
+        tenant_id=int(rmz.tenant_id),
+        warehouse_id=int(rmz.warehouse_id) if getattr(rmz, "warehouse_id", None) else None,
+        event_type=RETURN_ITEM_ADDED,
+        description="\n".join(lines),
+        actor_user_id=actor_user_id,
+        rmz_id=rid,
+        product_id=pid,
+        correlation_id=f"return:{rid}:line:{lid}:added",
+        source_module="returns",
+        category="status",
+        severity="SUCCESS",
+        rmz_label=rmz_no,
+        product_label=sku or name,
+        metadata={
+            **_actor_meta(actor_user_id),
+            "rmz_number": rmz_no,
+            "rmz_line_id": lid,
+            "order_item_id": int(getattr(line, "order_item_id", 0) or 0) or None,
+            "product_id": pid,
+            "product_name": name,
+            "product_sku": sku,
+            "product_ean": ean,
+            "quantity": qty,
+            "unit_price": unit_price,
+            "unit_price_display": price_disp,
         },
     )
 
@@ -165,12 +312,13 @@ def emit_return_line_decision(
     rid = int(rmz.id)
     lid = int(line.id)
     pid = int(line.product_id) if getattr(line, "product_id", None) else None
-    name, sku = _product_snap(db, pid)
+    snap = _product_snap(db, pid)
+    name, sku = _snap_name_sku(snap)
+    ean = snap.get("ean") if isinstance(snap, dict) else None
     rmz_no = str(getattr(rmz, "rmz_number", None) or f"RMZ-{rid}")
-    order_no = _order_number(db, int(rmz.order_id) if rmz.order_id else None)
     decision = getattr(line, "decision", None)
     label = _format_product_label(name, sku) if pid else ""
-    desc = f"Decyzja pozycji: {_decision_label(decision)}" + (f" — {label}" if label else "")
+    desc = f"Zapisano decyzję pozycji: {_decision_label(decision)}" + (f" — {label}" if label else "")
     record_domain_activity(
         db,
         tenant_id=int(rmz.tenant_id),
@@ -178,20 +326,21 @@ def emit_return_line_decision(
         event_type=RETURN_LINE_DECISION,
         description=desc,
         actor_user_id=actor_user_id,
-        order_id=int(rmz.order_id) if rmz.order_id else None,
         rmz_id=rid,
         product_id=pid,
         correlation_id=f"return:{rid}:line:{lid}:decision",
         source_module="returns",
-        category="status",
+        category="wms",
         rmz_label=rmz_no,
-        order_label=f"#{order_no}" if order_no else None,
         product_label=sku or name,
         metadata={
+            **_actor_meta(actor_user_id),
+            "source_category": "WMS",
+            "wms_module": "returns",
             "rmz_number": rmz_no,
-            "order_number": order_no,
             "product_name": name,
             "product_sku": sku,
+            "product_ean": ean,
             "decision": decision,
             "accepted_qty": int(getattr(line, "accepted_qty", 0) or 0),
             "rejected_qty": int(getattr(line, "rejected_qty", 0) or 0),
@@ -219,7 +368,6 @@ def emit_return_stock_intake_selected(
     parent_label = _parent_label(db, line, is_bundle=is_bundle)
     effect = _intake_effect(parent_label=parent_label, mode=mode, fg=fg, dq=dq, is_bundle=is_bundle)
     rmz_no = str(getattr(rmz, "rmz_number", None) or f"RMZ-{rid}")
-    order_no = _order_number(db, int(rmz.order_id) if rmz.order_id else None)
     record_domain_activity(
         db,
         tenant_id=int(rmz.tenant_id),
@@ -227,17 +375,17 @@ def emit_return_stock_intake_selected(
         event_type=RETURN_STOCK_INTAKE_SELECTED,
         description=effect,
         actor_user_id=actor_user_id,
-        order_id=int(rmz.order_id) if rmz.order_id else None,
         rmz_id=rid,
         product_id=int(line.product_id) if line.product_id else None,
         correlation_id=f"return:{rid}:line:{lid}:intake:{mode}:{fg}:{dq}",
         source_module="returns",
-        category="status",
+        category="wms",
         rmz_label=rmz_no,
-        order_label=f"#{order_no}" if order_no else None,
         metadata={
+            **_actor_meta(actor_user_id),
+            "source_category": "WMS",
+            "wms_module": "returns",
             "rmz_number": rmz_no,
-            "order_number": order_no,
             "stock_intake_mode": mode,
             "fg_intake_qty": fg,
             "disassembly_qty": dq,
@@ -271,10 +419,10 @@ def emit_return_component_recovery(
     rid = int(rmz.id)
     lid = int(line.id)
     pid = int(component_product_id)
-    name, sku = _product_snap(db, pid)
+    snap = _product_snap(db, pid)
+    name, sku = _snap_name_sku(snap)
     label = _format_product_label(name, sku)
     rmz_no = str(getattr(rmz, "rmz_number", None) or f"RMZ-{rid}")
-    order_no = _order_number(db, int(rmz.order_id) if rmz.order_id else None)
     corr_suffix = str(source_row_id or f"{pid}:{accepted_qty}:{scrap_qty}")
     acc = float(accepted_qty or 0)
     scrap = float(scrap_qty or 0)
@@ -291,21 +439,22 @@ def emit_return_component_recovery(
         event_type=RETURN_COMPONENT_RECOVERY,
         description=effect,
         actor_user_id=actor_user_id,
-        order_id=int(rmz.order_id) if rmz.order_id else None,
         rmz_id=rid,
         product_id=pid,
         correlation_id=f"return:{rid}:line:{lid}:recovery-posted:{corr_suffix}",
         source_module="returns",
-        category="status",
+        category="wms",
         severity="SUCCESS" if acc > 1e-9 else "WARNING",
         rmz_label=rmz_no,
-        order_label=f"#{order_no}" if order_no else None,
         product_label=label,
         metadata={
+            **_actor_meta(actor_user_id),
+            "source_category": "WMS",
+            "wms_module": "returns",
             "rmz_number": rmz_no,
-            "order_number": order_no,
             "product_name": name,
             "product_sku": sku,
+            "product_ean": snap.get("ean") if isinstance(snap, dict) else None,
             "expected_qty": float(expected_qty),
             "accepted_qty": acc,
             "scrap_qty": scrap,
@@ -327,28 +476,27 @@ def emit_return_receipt_created(
     doc_id = int(doc.id)
     doc_no = str(getattr(doc, "document_number", None) or f"Z-PZ#{doc_id}")
     rmz_no = str(getattr(rmz, "rmz_number", None) or f"RMZ-{rid}")
-    order_no = _order_number(db, int(rmz.order_id) if rmz.order_id else None)
     record_domain_activity(
         db,
         tenant_id=int(rmz.tenant_id),
         warehouse_id=int(rmz.warehouse_id) if getattr(rmz, "warehouse_id", None) else None,
         event_type=RETURN_RECEIPT_CREATED,
-        description=f"Utworzono {doc_no}"
+        description=f"Utworzono dokument magazynowy {doc_no}"
         + (f" ({new_line_count} poz.)" if new_line_count else ""),
         actor_user_id=actor_user_id,
-        order_id=int(rmz.order_id) if rmz.order_id else None,
         rmz_id=rid,
         stock_document_id=doc_id,
         correlation_id=f"return:{rid}:zpz:{doc_id}",
         source_module="returns",
-        category="status",
+        category="wms",
         severity="SUCCESS",
         rmz_label=rmz_no,
-        order_label=f"#{order_no}" if order_no else None,
         document_label=doc_no,
         metadata={
+            **_actor_meta(actor_user_id),
+            "source_category": "WMS",
+            "wms_module": "returns",
             "rmz_number": rmz_no,
-            "order_number": order_no,
             "document_number": doc_no,
             "document_type": getattr(doc, "document_type", None),
             "new_line_count": int(new_line_count),
@@ -372,8 +520,6 @@ def emit_return_putaway_completed(
     doc_no = str(getattr(doc, "document_number", None) or f"Z-PZ#{doc_id}")
     rmz = db.query(WmsOrderReturn).filter(WmsOrderReturn.id == rid).first()
     rmz_no = str(getattr(rmz, "rmz_number", None) or f"RMZ-{rid}") if rmz else f"RMZ-{rid}"
-    oid = int(order_id) if order_id else (int(rmz.order_id) if rmz and rmz.order_id else None)
-    order_no = _order_number(db, oid)
     first_pid = product_ids[0] if product_ids else None
     record_domain_activity(
         db,
@@ -382,22 +528,82 @@ def emit_return_putaway_completed(
         event_type=RETURN_PUTAWAY_COMPLETED,
         description=f"Rozlokowano przyjęcie {doc_no}",
         actor_user_id=actor_user_id,
-        order_id=oid,
         rmz_id=rid,
         product_id=first_pid,
         stock_document_id=doc_id,
         correlation_id=f"return:{rid}:zpz:{doc_id}:putaway-done",
         source_module="returns",
-        category="status",
+        category="wms",
         severity="SUCCESS",
         rmz_label=rmz_no,
-        order_label=f"#{order_no}" if order_no else None,
         document_label=doc_no,
         metadata={
+            **_actor_meta(actor_user_id),
+            "source_category": "WMS",
+            "wms_module": "returns",
             "rmz_number": rmz_no,
-            "order_number": order_no,
+            "order_id": int(order_id) if order_id else None,
             "document_number": doc_no,
             "product_ids": list(product_ids or []),
+        },
+    )
+
+
+def emit_return_refund_completed(
+    db: Session,
+    *,
+    rmz: WmsOrderReturn,
+    refund_type: Optional[str] = None,
+    refund_amount: Optional[float] = None,
+    refund_shipping_amount: Optional[float] = None,
+    actor_user_id: Optional[int] = None,
+    source: str = "office",
+) -> None:
+    rid = int(rmz.id)
+    rmz_no = str(getattr(rmz, "rmz_number", None) or f"RMZ-{rid}")
+    rtype = str(refund_type or "NONE").strip().upper()
+    method_pl = {
+        "NONE": "brak",
+        "TRANSFER": "przelew",
+        "ORIGINAL": "oryginalna metoda",
+        "CASH": "gotówka",
+        "STORE_CREDIT": "saldo sklepu",
+    }.get(rtype, rtype.lower())
+    amount_disp = _money_pl(refund_amount)
+    ship_disp = _money_pl(refund_shipping_amount)
+    lines = ["Rozliczono zwrot."]
+    if amount_disp:
+        lines.append(f"Kwota: {amount_disp}")
+    if rtype and rtype != "NONE":
+        lines.append(f"Metoda: {method_pl}")
+    if ship_disp:
+        lines.append(f"Zwrot kosztów wysyłki: {ship_disp}")
+    src = str(source or "office").strip().lower()
+    is_wms = src == "warehouse"
+    record_domain_activity(
+        db,
+        tenant_id=int(rmz.tenant_id),
+        warehouse_id=int(rmz.warehouse_id) if getattr(rmz, "warehouse_id", None) else None,
+        event_type=RETURN_REFUND_COMPLETED,
+        description="\n".join(lines),
+        actor_user_id=actor_user_id,
+        rmz_id=rid,
+        correlation_id=f"return:{rid}:refund:{rtype}:{refund_amount}:{refund_shipping_amount}"[:64],
+        source_module="returns",
+        category="wms" if is_wms else "status",
+        severity="SUCCESS",
+        rmz_label=rmz_no,
+        metadata={
+            **_actor_meta(actor_user_id),
+            **({"source_category": "WMS", "wms_module": "returns"} if is_wms else {}),
+            "rmz_number": rmz_no,
+            "refund_type": rtype,
+            "refund_method_label": method_pl,
+            "refund_amount": refund_amount,
+            "refund_amount_display": amount_disp,
+            "refund_shipping_amount": refund_shipping_amount,
+            "refund_shipping_amount_display": ship_disp,
+            "refund_source": src,
         },
     )
 
@@ -412,28 +618,55 @@ def emit_return_finalized(
 ) -> None:
     rid = int(rmz.id)
     rmz_no = str(getattr(rmz, "rmz_number", None) or f"RMZ-{rid}")
-    order_no = _order_number(db, int(rmz.order_id) if rmz.order_id else None)
     record_domain_activity(
         db,
         tenant_id=int(rmz.tenant_id),
         warehouse_id=int(rmz.warehouse_id) if getattr(rmz, "warehouse_id", None) else None,
         event_type=RETURN_FINALIZED,
-        description=f"Zwrot {rmz_no} zakończony",
+        description=f"Zakończono obsługę zwrotu {rmz_no}.",
         actor_user_id=actor_user_id,
-        order_id=int(rmz.order_id) if rmz.order_id else None,
         rmz_id=rid,
         stock_document_id=int(z_pz_document_id) if z_pz_document_id else None,
         correlation_id=f"return:{rid}:finalized",
         source_module="returns",
-        category="status",
+        category="wms",
         severity="SUCCESS",
         rmz_label=rmz_no,
-        order_label=f"#{order_no}" if order_no else None,
         metadata={
+            **_actor_meta(actor_user_id),
+            "source_category": "WMS",
+            "wms_module": "returns",
             "rmz_number": rmz_no,
-            "order_number": order_no,
             "transition": transition,
             "stock_document_id": int(z_pz_document_id) if z_pz_document_id else None,
+        },
+    )
+
+
+def emit_return_archived(
+    db: Session,
+    *,
+    rmz: WmsOrderReturn,
+    actor_user_id: Optional[int] = None,
+) -> None:
+    rid = int(rmz.id)
+    rmz_no = str(getattr(rmz, "rmz_number", None) or f"RMZ-{rid}")
+    record_domain_activity(
+        db,
+        tenant_id=int(rmz.tenant_id),
+        warehouse_id=int(rmz.warehouse_id) if getattr(rmz, "warehouse_id", None) else None,
+        event_type=RETURN_ARCHIVED,
+        description=f"Zarchiwizowano zwrot {rmz_no}.",
+        actor_user_id=actor_user_id,
+        rmz_id=rid,
+        correlation_id=f"return:{rid}:archived",
+        source_module="returns",
+        category="status",
+        severity="WARNING",
+        rmz_label=rmz_no,
+        metadata={
+            **_actor_meta(actor_user_id),
+            "rmz_number": rmz_no,
         },
     )
 

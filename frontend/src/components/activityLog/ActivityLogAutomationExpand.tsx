@@ -65,7 +65,7 @@ export function ActivityLogAutomationExpand({ executionId, tenantId }: Props) {
         aria-expanded={open}
       >
         {open ? <ChevronDown className="h-3.5 w-3.5" aria-hidden /> : <ChevronRight className="h-3.5 w-3.5" aria-hidden />}
-        {open ? "Zwiń szczegóły" : "Rozwiń szczegóły"}
+        {open ? "Zwiń pełne szczegóły" : "Pełne warunki i efekty"}
       </button>
       {open ? (
         <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-[12px] leading-snug text-slate-700">

@@ -2757,7 +2757,7 @@ def patch_order(
     order_id: int,
     body: OrderPatchBody,
     db: Session = Depends(get_db),
-    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+    current_user: AppUser = Depends(get_current_user),
 ):
     order = (
         db.query(Order)
@@ -2771,7 +2771,7 @@ def patch_order(
         db,
         order,
         body,
-        actor_user_id=int(current_user.id) if current_user is not None else None,
+        actor_user_id=int(current_user.id),
     )
 
     db.commit()
@@ -2794,7 +2794,7 @@ def patch_order_priority(
     order_id: int,
     body: OrderPriorityPatchBody,
     db: Session = Depends(get_db),
-    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+    current_user: AppUser = Depends(get_current_user),
 ):
     """Ustawienie koloru priorytetu (flame); ta sama semantyka co ``priority_color`` w ``OrderPatchBody``."""
     order = (
@@ -2809,7 +2809,7 @@ def patch_order_priority(
         db,
         order,
         OrderPatchBody(priority_color=body.priority_color),
-        actor_user_id=int(current_user.id) if current_user is not None else None,
+        actor_user_id=int(current_user.id),
     )
     db.commit()
     order = (
@@ -2831,10 +2831,10 @@ def add_order_line(
     order_id: int,
     body: OrderAddLineBody,
     db: Session = Depends(get_db),
-    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+    current_user: AppUser = Depends(get_current_user),
 ):
     """Append a catalog product line (merge po produkcie) lub zestaw z eksplozją i nagłówkiem komercyjnym."""
-    actor_uid = int(current_user.id) if current_user is not None else None
+    actor_uid = int(current_user.id)
     order = (
         db.query(Order)
         .options(joinedload(Order.items))
@@ -3067,7 +3067,7 @@ def delete_order_item_line(
     order_id: int,
     item_id: int,
     db: Session = Depends(get_db),
-    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+    current_user: AppUser = Depends(get_current_user),
 ):
     """Usuwa pojedynczą linię zamówienia (OMS). Nie dotyczy linii rozbitych z zestawu."""
     import traceback
@@ -3083,7 +3083,7 @@ def delete_order_item_line(
         emit_replacement_item_removed,
     )
 
-    actor_uid = int(current_user.id) if current_user is not None else None
+    actor_uid = int(current_user.id)
     logger.info(
         "[order.item.delete] ENTER order_id=%s item_id=%s",
         order_id,
@@ -3123,8 +3123,12 @@ def delete_order_item_line(
         )
 
         nm = ""
+        rm_sku = None
+        rm_ean = None
         if item.product is not None and getattr(item.product, "name", None):
             nm = str(item.product.name).strip()
+            rm_sku = str(getattr(item.product, "sku", None) or "").strip() or None
+            rm_ean = str(getattr(item.product, "ean", None) or "").strip() or None
         elif item.product_id:
             nm = f"Produkt #{int(item.product_id)}"
         qty_line = int(item.quantity or 0)
@@ -3202,6 +3206,7 @@ def delete_order_item_line(
                 quantity=float(qty_line),
                 reason="usunięto linię zamiennika (OMS)",
                 operator_user_id=actor_uid,
+                project_to_activity=False,
             )
         else:
             emit_order_item_removed(
@@ -3215,6 +3220,11 @@ def delete_order_item_line(
                 quantity=float(qty_line),
                 reason="usunięto linię z zamówienia (OMS)",
                 operator_user_id=actor_uid,
+                project_to_activity=False,
+                sku=rm_sku,
+                ean=rm_ean,
+                unit_price=rm_unit if rm_unit else None,
+                currency=str(getattr(order, "currency", None) or "PLN"),
             )
         emit_order_line_removed(
             db,
@@ -3227,7 +3237,33 @@ def delete_order_item_line(
             quantity=float(qty_line),
             reason="usunięto linię z zamówienia (OMS)",
             operator_user_id=actor_uid,
+            project_to_activity=False,
         )
+        try:
+            from ..services.activity_log.order_mutation_activity import (
+                emit_order_item_removed_activity,
+                product_line_snapshot,
+            )
+
+            emit_order_item_removed_activity(
+                db,
+                tenant_id=int(order.tenant_id),
+                warehouse_id=int(order.warehouse_id),
+                order_id=int(order.id),
+                order_item_id=int(item.id),
+                snapshot=product_line_snapshot(
+                    product_name=nm,
+                    product_id=int(item.product_id) if item.product_id else None,
+                    sku=rm_sku,
+                    ean=rm_ean,
+                    quantity=qty_line,
+                    unit_price=rm_unit if rm_unit else None,
+                    currency=str(getattr(order, "currency", None) or "PLN"),
+                ),
+                actor_user_id=actor_uid,
+            )
+        except Exception:
+            logger.exception("ORDER_ITEM_REMOVED OMS activity failed order_id=%s", order_id)
         soft_remove_order_item(
             db,
             item,
@@ -3272,7 +3308,7 @@ def patch_order_item_line(
     item_id: int,
     body: OrderItemPanelPatchBody,
     db: Session = Depends(get_db),
-    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+    current_user: AppUser = Depends(get_current_user),
 ):
     """Akcje na wyliczonym braku: zamiana tylko brakującej ilości, zmniejszenie zamówionej o brak, „czeka na towar`` tylko dla braku (metadane). Pobrań nie zmieniamy."""
     order = (
@@ -3580,7 +3616,7 @@ def patch_order_item_line(
         if not pname:
             pname = f"Produkt #{int(item.product_id)}" if item.product_id else "Produkt"
         currency = str(getattr(order, "currency", None) or "PLN")
-        actor_uid = int(current_user.id) if current_user is not None else None
+        actor_uid = int(current_user.id)
         mut_tok = str(getattr(item, "id", "") or "")
 
         if le.quantity is not None:
@@ -3807,7 +3843,7 @@ def create_order_operational_note(
     order_id: int,
     body: OrderOperationalNoteCreateBody,
     db: Session = Depends(get_db),
-    user: Optional[AppUser] = Depends(get_optional_current_user),
+    user: AppUser = Depends(get_current_user),
 ):
     order = db.query(Order).filter(Order.id == int(order_id)).first()
     if not order:
@@ -3815,7 +3851,7 @@ def create_order_operational_note(
     now = datetime.utcnow()
     row = OrderOperationalNote(
         order_id=int(order_id),
-        author_user_id=int(user.id) if user is not None else None,
+        author_user_id=int(user.id),
         content=str(body.content).strip()[:8000],
         show_in_picking=bool(body.show_in_picking),
         show_in_packing=bool(body.show_in_packing),
@@ -3841,7 +3877,7 @@ def create_order_operational_note(
             content_preview=str(body.content).strip()[:280],
             show_in_picking=bool(body.show_in_picking),
             show_in_packing=bool(body.show_in_packing),
-            actor_user_id=int(user.id) if user is not None else None,
+            actor_user_id=int(user.id),
         )
     except Exception:
         logger.exception("ORDER_NOTE_ADDED (POST operational) failed order_id=%s", order_id)

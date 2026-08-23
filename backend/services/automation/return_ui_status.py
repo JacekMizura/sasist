@@ -50,6 +50,38 @@ def apply_return_panel_ui_status(
     db.add(row)
     db.flush()
 
+    try:
+        from ..returns.return_domain_activity import emit_return_status_changed
+
+        old_name = None
+        new_name = None
+        if previous_sid is not None:
+            prev_us = (
+                db.query(ReturnUiStatus)
+                .filter(ReturnUiStatus.id == int(previous_sid))
+                .first()
+            )
+            old_name = str(getattr(prev_us, "name", None) or "").strip() or None if prev_us else None
+        if new_sid is not None:
+            new_us = (
+                db.query(ReturnUiStatus)
+                .filter(ReturnUiStatus.id == int(new_sid))
+                .first()
+            )
+            new_name = str(getattr(new_us, "name", None) or "").strip() or None if new_us else None
+        emit_return_status_changed(
+            db,
+            rmz=row,
+            old_status_id=previous_sid,
+            new_status_id=new_sid,
+            old_status_name=old_name,
+            new_status_name=new_name,
+            status_kind="panel",
+            actor_user_id=actor_user_id,
+        )
+    except Exception:
+        logger.exception("return activity RETURN_STATUS_CHANGED failed rmz_id=%s", getattr(row, "id", None))
+
     _emit_automation(
         db,
         row=row,

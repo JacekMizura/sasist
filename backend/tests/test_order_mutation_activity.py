@@ -212,7 +212,7 @@ def test_note_add_via_operational_post(db, user):
         if i["event_code"] == ORDER_NOTE_ADDED
     ]
     assert len(items) == 1
-    assert items[0]["description"] == "Dodano notatkę do zamówienia."
+    assert "Sprawdź opakowanie" in items[0]["description"]
     assert items[0]["actor_user_id"] == 7
     assert items[0]["metadata"]["show_in_picking"] is True
     assert items[0]["metadata"]["note_id"]
@@ -244,8 +244,8 @@ def test_item_quantity_and_price_change(db, user, monkeypatch):
         if i["event_code"] == ORDER_ITEM_QUANTITY_CHANGED
     ]
     assert len(qty_rows) == 1
-    assert "z 1 na 3" in qty_rows[0]["description"]
     assert "Sznurówadła CAT 100 cm" in qty_rows[0]["description"]
+    assert "z 1 na 3" not in qty_rows[0]["description"]
     assert qty_rows[0]["actor_user_id"] == 7
 
     patch_order_item_line(
@@ -261,8 +261,9 @@ def test_item_quantity_and_price_change(db, user, monkeypatch):
         if i["event_code"] == ORDER_ITEM_PRICE_CHANGED
     ]
     assert len(price_rows) == 1
-    assert "136,41 zł" in price_rows[0]["description"]
-    assert "246,00 zł" in price_rows[0]["description"]
+    assert "Sznurówadła CAT 100 cm" in price_rows[0]["description"]
+    assert price_rows[0]["metadata"].get("old_value") and "136,41" in str(price_rows[0]["metadata"]["old_value"])
+    assert "246,00" in str(price_rows[0]["metadata"].get("new_value"))
 
 
 def test_item_qty_noop(db, user, monkeypatch):

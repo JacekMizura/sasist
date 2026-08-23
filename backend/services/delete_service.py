@@ -47,9 +47,18 @@ def delete_products_bulk(db: Session, tenant_id: int, id_list: list[int]) -> dic
     return bulk_delete_products_transaction(db, tenant_id, id_list)
 
 
-def archive_wms_returns_bulk(db: Session, tenant_id: int, warehouse_id: int, id_list: list[int]) -> dict[str, Any]:
+def archive_wms_returns_bulk(
+    db: Session,
+    tenant_id: int,
+    warehouse_id: int,
+    id_list: list[int],
+    *,
+    actor_user_id: int | None = None,
+) -> dict[str, Any]:
     """Archiwizacja RMZ + zwolnienie FK (linie RMZ/refund usuwane)."""
-    return archive_wms_returns_bulk_transaction(db, tenant_id, warehouse_id, id_list)
+    return archive_wms_returns_bulk_transaction(
+        db, tenant_id, warehouse_id, id_list, actor_user_id=actor_user_id
+    )
 
 
 def soft_delete_complaint(db: Session, complaint_row: "Complaint") -> None:

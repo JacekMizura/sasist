@@ -171,6 +171,17 @@ class TestDomainActivityReturnsProduction(unittest.TestCase):
             .one()
         )
         self.assertEqual(fin.actor_user_id, 7)
+        created = (
+            self.db.query(ActivityEvent)
+            .filter(ActivityEvent.event_code == RETURN_CREATED)
+            .one()
+        )
+        created_links = (
+            self.db.query(ActivityEventLink).filter(ActivityEventLink.event_id == created.id).all()
+        )
+        self.assertEqual({str(x.object_type) for x in created_links}, {"return"})
+        order_items = list_activity_for_object(self.db, object_type="order", object_id=200)
+        self.assertEqual(len(order_items), 0)
 
     def test_A_manufactured_full_disassembly_copy(self):
         rmz = SimpleNamespace(id=3, tenant_id=1, warehouse_id=1, order_id=10, rmz_number="RMZ-3")
@@ -195,7 +206,7 @@ class TestDomainActivityReturnsProduction(unittest.TestCase):
         meta = json.loads(row.metadata_json or "{}")
         self.assertEqual(
             resolve_return_event_title(RETURN_STOCK_INTAKE_SELECTED, meta),
-            "Rozmontowano produkt",
+            "[WMS - Zwroty] Rozmontowano produkt",
         )
 
     def test_B_manufactured_mixed_copy(self):
@@ -249,7 +260,7 @@ class TestDomainActivityReturnsProduction(unittest.TestCase):
         meta = json.loads(row.metadata_json or "{}")
         self.assertEqual(
             resolve_return_event_title(RETURN_STOCK_INTAKE_SELECTED, meta),
-            "Rozmontowano zestaw",
+            "[WMS - Zwroty] Rozmontowano zestaw",
         )
 
     def test_D_bundle_mixed_copy(self):
@@ -330,7 +341,7 @@ class TestDomainActivityReturnsProduction(unittest.TestCase):
         meta = json.loads(row.metadata_json or "{}")
         self.assertEqual(
             resolve_return_event_title(RETURN_COMPONENT_RECOVERY, meta),
-            "Rozliczono komponent",
+            "[WMS - Zwroty] Rozliczono komponent",
         )
         prod_items = list_activity_for_object(self.db, object_type="product", object_id=192)
         self.assertGreaterEqual(len(prod_items), 1)
@@ -355,7 +366,7 @@ class TestDomainActivityReturnsProduction(unittest.TestCase):
         meta = json.loads(row.metadata_json or "{}")
         self.assertEqual(
             resolve_return_event_title(RETURN_COMPONENT_RECOVERY, meta),
-            "Rozliczono element zestawu",
+            "[WMS - Zwroty] Rozliczono element zestawu",
         )
         self.assertIn("Odzyskano: 1 szt.", row.description)
         self.assertIn("Odrzucono: 2 szt.", row.description)
@@ -452,7 +463,7 @@ class TestDomainActivityReturnsProduction(unittest.TestCase):
         meta = json.loads(row.metadata_json or "{}")
         self.assertEqual(
             resolve_return_event_title(RETURN_STOCK_INTAKE_SELECTED, meta),
-            "Przyjęto gotowy produkt",
+            "[WMS - Zwroty] Przyjęto gotowy produkt",
         )
 
     def test_zpz_document_link(self):

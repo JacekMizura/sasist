@@ -1323,6 +1323,7 @@ def emit_replacement_item_removed(
     quantity: float,
     operator_user_id: int | None = None,
     reason: str = "",
+    project_to_activity: bool = True,
 ) -> None:
     meta = {
         "product_name": product_name[:512],
@@ -1350,6 +1351,8 @@ def emit_replacement_item_removed(
         msg += f" · zamiast: {orig}"
     if reason:
         msg += f" — {reason}"
+    if not project_to_activity:
+        return
     append_order_activity_for_wms(
         db,
         order_id=int(order_id),
@@ -1357,6 +1360,8 @@ def emit_replacement_item_removed(
         warehouse_id=int(warehouse_id),
         event_type=EVT_REPLACEMENT_ITEM_REMOVED,
         message=msg,
+        operator_user_id=uid,
+        metadata=meta,
         wms_order_event_id=int(row.id),
     )
 
@@ -1373,9 +1378,25 @@ def emit_order_item_removed(
     quantity: float,
     operator_user_id: int | None = None,
     reason: str = "",
+    project_to_activity: bool = True,
+    sku: str | None = None,
+    ean: str | None = None,
+    unit_price: float | None = None,
+    currency: str = "PLN",
 ) -> None:
     """Audyt usunięcia zwykłej linii (alias operacyjny ORDER_ITEM_REMOVED)."""
-    meta = {"product_name": product_name[:512], "reason": reason[:256], "quantity": float(quantity)}
+    meta: dict[str, Any] = {
+        "product_name": product_name[:512],
+        "reason": reason[:256],
+        "quantity": float(quantity),
+    }
+    if sku:
+        meta["sku"] = str(sku)[:128]
+    if ean:
+        meta["ean"] = str(ean)[:64]
+    if unit_price is not None:
+        meta["unit_price"] = float(unit_price)
+        meta["currency"] = (currency or "PLN")[:8]
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
     row = insert_wms_order_event(
         db,
@@ -1389,14 +1410,17 @@ def emit_order_item_removed(
         quantity=float(quantity),
         metadata=meta,
     )
+    if not project_to_activity:
+        return
     append_order_activity_for_wms(
         db,
         order_id=int(order_id),
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
         event_type=EVT_ORDER_ITEM_REMOVED,
-        message=f"Usunięto pozycję: {product_name} ({_fmt_qty(quantity)} szt.)"
-        + (f" — {reason}" if reason else ""),
+        message=f"Usunięto produkt „{product_name}”.",
+        operator_user_id=uid,
+        metadata=meta,
         wms_order_event_id=int(row.id),
     )
 
@@ -1413,6 +1437,7 @@ def emit_order_line_removed(
     quantity: float,
     operator_user_id: int | None = None,
     reason: str = "",
+    project_to_activity: bool = True,
 ) -> None:
     meta = {"product_name": product_name[:512], "reason": reason[:256], "quantity": float(quantity)}
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
@@ -1428,6 +1453,8 @@ def emit_order_line_removed(
         quantity=float(quantity),
         metadata=meta,
     )
+    if not project_to_activity:
+        return
     append_order_activity_for_wms(
         db,
         order_id=int(order_id),
@@ -1435,6 +1462,8 @@ def emit_order_line_removed(
         warehouse_id=int(warehouse_id),
         event_type=EVT_ORDER_LINE_REMOVED,
         message=f"Usunięto linię: {product_name} ({_fmt_qty(quantity)} szt.)" + (f" — {reason}" if reason else ""),
+        operator_user_id=uid,
+        metadata=meta,
         wms_order_event_id=int(row.id),
     )
 

@@ -81,18 +81,21 @@ def resolve_operator_display(
 ) -> str:
     meta = metadata or {}
     actor_kind = str(meta.get("actor_kind") or "").strip().upper()
+    # Prefer real user when actor_user_id is present — heals SYSTEM mis-tags from optional auth.
+    if actor_user_id is not None and int(actor_user_id) > 0 and actor_name and str(actor_name).strip():
+        if actor_kind in ("", "USER", "SYSTEM"):
+            return str(actor_name).strip()
     if actor_kind == "AUTOMATION":
         return str(meta.get("actor_label") or "Automatyzacja").strip() or "Automatyzacja"
-    if actor_kind == "SYSTEM":
-        return str(meta.get("actor_label") or "System").strip() or "System"
     if actor_kind == "INTEGRATION":
         return str(meta.get("actor_label") or meta.get("integration_name") or "Integracja").strip() or "Integracja"
+    if actor_kind == "SYSTEM" and not (actor_user_id and int(actor_user_id) > 0):
+        return str(meta.get("actor_label") or "System").strip() or "System"
     integration = meta.get("integration_name") or meta.get("actor_label")
     if isinstance(integration, str) and integration.strip():
-        # Prefer explicit USER name when present
         if actor_kind == "USER" and actor_name and str(actor_name).strip():
             return str(actor_name).strip()
-        if actor_kind != "USER":
+        if actor_kind not in ("USER", ""):
             return integration.strip()
     if actor_name and str(actor_name).strip():
         return str(actor_name).strip()
@@ -242,13 +245,21 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
         build_production_detail_rows,
         format_production_activity_message,
     )
-    from backend.services.activity_log.return_activity_presentation import resolve_return_event_title
+    from backend.services.activity_log.return_activity_presentation import (
+        build_return_inline_detail_rows,
+        format_return_effect_message,
+        is_return_event_code,
+        resolve_return_event_title,
+        return_details_display_for,
+    )
     from backend.services.cart_lifecycle_event_catalog import (
         compose_informative_message,
         title_pl,
     )
 
     meta = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+    if str(item.get("category") or "").strip().lower() == "wms":
+        meta = {**meta, "source_category": meta.get("source_category") or "WMS"}
     occurred_raw = item.get("occurred_at")
     occurred_display = format_occurred_at_display(occurred_raw)
     operator = resolve_operator_display(
@@ -259,7 +270,24 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
     event_code = str(item.get("event_code") or "").strip()
     stored_desc = str(item.get("description") or "").strip()
     code_norm = event_code.upper().replace("-", "_")
-    if code_norm == PICKING_ENTRY_GATE_BLOCKED:
+    details_display = "expand"
+    from backend.services.activity_log.order_presentation import (
+        build_order_inline_detail_rows,
+        details_display_for,
+        format_order_effect_message,
+        order_event_action_label,
+        suggest_severity,
+    )
+
+    if is_return_event_code(code_norm):
+        action = format_return_effect_message(
+            code_norm,
+            stored_description=stored_desc,
+            metadata=meta,
+        )
+        details = build_return_inline_detail_rows(code_norm, meta)
+        details_display = return_details_display_for(code_norm) if details else "none"
+    elif code_norm == PICKING_ENTRY_GATE_BLOCKED:
         action = format_picking_entry_gate_blocked_message(
             stored_description=stored_desc,
             metadata=meta,
@@ -291,61 +319,35 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
         )
         details = build_production_detail_rows(meta)
     else:
-        action = compose_informative_message(
+        action = format_order_effect_message(
             event_code,
-            stored_description=stored_desc,
+            stored_description=compose_informative_message(
+                event_code,
+                stored_description=stored_desc,
+                metadata=meta,
+            ),
             metadata=meta,
         )
-        from backend.services.activity_log.order_event_codes import (
-            ORDER_BILLING_ADDRESS_CHANGED,
-            ORDER_BUNDLE_ADDED,
-            ORDER_DOCUMENT_SERIES_CHANGED,
-            ORDER_ITEM_ADDED,
-            ORDER_ITEM_PRICE_CHANGED,
-            ORDER_ITEM_QUANTITY_CHANGED,
-            ORDER_ITEM_REMOVED,
-            ORDER_ITEM_VAT_CHANGED,
-            ORDER_NOTE_ADDED,
-            ORDER_NOTE_DELETED,
-            ORDER_NOTE_UPDATED,
-            ORDER_PRIORITY_CHANGED,
-            ORDER_SHIPPING_ADDRESS_CHANGED,
-            ORDER_WAREHOUSE_CHANGED,
-        )
-        from backend.services.activity_log.order_mutation_activity import build_mutation_detail_rows
+        details = build_order_inline_detail_rows(event_code, meta)
+        details_display = details_display_for(event_code) if details else "none"
 
-        if code_norm in {
-            ORDER_SHIPPING_ADDRESS_CHANGED,
-            ORDER_BILLING_ADDRESS_CHANGED,
-            ORDER_NOTE_ADDED,
-            ORDER_NOTE_UPDATED,
-            ORDER_NOTE_DELETED,
-            ORDER_ITEM_ADDED,
-            ORDER_ITEM_REMOVED,
-            ORDER_ITEM_QUANTITY_CHANGED,
-            ORDER_ITEM_PRICE_CHANGED,
-            ORDER_ITEM_VAT_CHANGED,
-            ORDER_PRIORITY_CHANGED,
-            ORDER_DOCUMENT_SERIES_CHANGED,
-            ORDER_WAREHOUSE_CHANGED,
-            ORDER_BUNDLE_ADDED,
-        }:
-            details = build_mutation_detail_rows(meta)
-        else:
-            # Default: no expandable metadata dump (raw keys). Picking-entry uses structured rows.
-            details = []
     from backend.services.activity_log.order_event_codes import ORDER_EVENT_TITLES_PL
     from backend.services.activity_log.wms_order_activity import WMS_EVENT_TITLES_PL
 
     event_display_label = (
-        ORDER_EVENT_TITLES_PL.get(code_norm)
+        resolve_return_event_title(event_code, meta)
+        or order_event_action_label(code_norm, fallback=None)
+        or ORDER_EVENT_TITLES_PL.get(code_norm)
         or WMS_EVENT_TITLES_PL.get(code_norm)
-        or resolve_return_event_title(event_code, meta)
         or title_pl(event_code)
     )
-    if str(meta.get("source_category") or "").upper() == "WMS" and not ORDER_EVENT_TITLES_PL.get(code_norm):
-        # Prefer explicit WMS titles; keep event column as WMS-facing label.
-        event_display_label = WMS_EVENT_TITLES_PL.get(code_norm) or event_display_label or "WMS"
+    if str(meta.get("source_category") or "").upper() == "WMS" and not is_return_event_code(code_norm):
+        event_display_label = (
+            order_event_action_label(code_norm, fallback=None)
+            or WMS_EVENT_TITLES_PL.get(code_norm)
+            or event_display_label
+            or "WMS"
+        )
     # Order # list only when writer opted in (assign / detach) — never for start/stop session noise.
     show_nums = bool(meta.get("show_order_numbers"))
     order_nums = order_numbers_from_meta(meta) if show_nums else []
@@ -355,5 +357,7 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
     out["action"] = action
     out["event_display_label"] = event_display_label
     out["details"] = details
+    out["details_display"] = details_display if details else "none"
+    out["severity"] = suggest_severity(code_norm, item.get("severity"))
     out["order_numbers"] = order_nums
     return out

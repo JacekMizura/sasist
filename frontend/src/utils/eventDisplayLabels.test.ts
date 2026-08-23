@@ -51,13 +51,14 @@ describe("eventDisplayLabels SSOT", () => {
     expect(getEventDisplayLabel("ORDER_CUSTOM_FIELD_CHANGED")).toBe("Pole dodatkowe");
     expect(getEventDisplayLabel("ORDER_PAYMENT_REGISTERED")).toBe("Płatność");
     expect(getEventDisplayLabel("ORDER_IMPORTED")).toBe("Import zamówienia");
-    expect(getEventDisplayLabel("ORDER_SHIPPING_ADDRESS_CHANGED")).toBe("Adres dostawy");
-    expect(getEventDisplayLabel("ORDER_NOTE_ADDED")).toBe("Notatka");
-    expect(getEventDisplayLabel("ORDER_ITEM_QUANTITY_CHANGED")).toBe("Pozycja zamówienia");
-    expect(getEventDisplayLabel("ORDER_ITEM_PRICE_CHANGED")).toBe("Pozycja zamówienia");
-    expect(getEventDisplayLabel("ORDER_PRIORITY_CHANGED")).toBe("Priorytet");
-    expect(getEventDisplayLabel("ORDER_WAREHOUSE_CHANGED")).toBe("Magazyn");
-    expect(getEventDisplayLabel("ORDER_BUNDLE_ADDED")).toBe("Zestaw");
+    expect(getEventDisplayLabel("ORDER_SHIPPING_ADDRESS_CHANGED")).toBe("Zmieniono adres dostawy");
+    expect(getEventDisplayLabel("ORDER_NOTE_ADDED")).toBe("Dodano notatkę");
+    expect(getEventDisplayLabel("ORDER_ITEM_QUANTITY_CHANGED")).toBe("Zmieniono ilość");
+    expect(getEventDisplayLabel("ORDER_ITEM_PRICE_CHANGED")).toBe("Zmieniono cenę");
+    expect(getEventDisplayLabel("ORDER_PRIORITY_CHANGED")).toBe("Zmieniono priorytet");
+    expect(getEventDisplayLabel("ORDER_WAREHOUSE_CHANGED")).toBe("Zmieniono magazyn");
+    expect(getEventDisplayLabel("ORDER_BUNDLE_ADDED")).toBe("Dodano zestaw");
+    expect(getEventDisplayLabel("ORDER_ITEM_ADDED")).toBe("Dodano produkt");
   });
 
   it("specific labels match warehouse Polish", () => {

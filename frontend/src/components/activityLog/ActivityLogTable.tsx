@@ -36,6 +36,7 @@ export type ActivityLogTableRow = {
   automationExecutionId?: number | null;
   metadata?: Record<string, unknown>;
   details?: { label: string; value: string }[];
+  detailsDisplay?: "inline" | "expand" | "none";
 };
 
 type ActivityLogTableProps = {
@@ -102,6 +103,12 @@ function mapApiItem(item: ActivityEventItem): ActivityLogTableRow {
           .filter((d) => d && typeof d.label === "string" && typeof d.value === "string")
           .map((d) => ({ label: d.label, value: d.value }))
       : undefined,
+    detailsDisplay:
+      item.details_display === "inline" || item.details_display === "expand" || item.details_display === "none"
+        ? item.details_display
+        : Array.isArray(item.details) && item.details.length > 0
+          ? "expand"
+          : "none",
   };
 }
 
@@ -457,7 +464,10 @@ export default function ActivityLogTable({
 
                     const hasDetails = Array.isArray(row.details) && row.details.length > 0;
                     const rowKey = String(row.id);
+                    const detailsMode = row.detailsDisplay || (hasDetails ? "expand" : "none");
                     const detailsOpen = Boolean(expandedRowIds[rowKey]);
+                    const showInlineDetails = hasDetails && detailsMode === "inline";
+                    const showExpandDetails = hasDetails && detailsMode === "expand";
 
                     return (
                       <tr
@@ -485,7 +495,20 @@ export default function ActivityLogTable({
                         <td className={tdClass}>
                           {effectNode}
                           {productionLinkNode}
-                          {hasDetails ? (
+                          {showInlineDetails ? (
+                            <dl className="mt-1.5 space-y-0.5">
+                              {row.details!.map((d) => (
+                                <div
+                                  key={`${rowKey}-${d.label}-${d.value}`}
+                                  className="grid grid-cols-[minmax(0,7.5rem)_1fr] gap-x-2 text-[12px] leading-snug"
+                                >
+                                  <dt className="truncate text-slate-500">{d.label}</dt>
+                                  <dd className="min-w-0 break-words font-medium text-slate-800">{d.value}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                          ) : null}
+                          {showExpandDetails ? (
                             <div className="mt-1.5">
                               <button
                                 type="button"
