@@ -13,6 +13,7 @@ import {
   normalizeActivitySeverity,
   type ActivityLogPageSize,
 } from "./activityLogTableUi";
+import { ActivityLogAutomationExpand } from "./ActivityLogAutomationExpand";
 
 export type ActivityLogTableRow = {
   id: string | number;
@@ -30,6 +31,10 @@ export type ActivityLogTableRow = {
   /** Optional link to MO/BAT detail when event is production-related. */
   productionHref?: string | null;
   productionLabel?: string | null;
+  eventCode?: string;
+  actorKind?: string | null;
+  automationExecutionId?: number | null;
+  metadata?: Record<string, unknown>;
 };
 
 type ActivityLogTableProps = {
@@ -41,6 +46,8 @@ type ActivityLogTableProps = {
   refreshKey?: number;
   className?: string;
   searchable?: boolean;
+  /** Required for automation expand API (tenant-scoped). */
+  tenantId?: number | null;
 };
 
 type SortDir = "newest" | "oldest";
@@ -68,6 +75,13 @@ function mapApiItem(item: ActivityEventItem): ActivityLogTableRow {
       productionHref = erpProductionPaths.order(prodLink.object_id);
     }
   }
+  const execRaw = meta.automation_execution_id ?? meta.ref_id;
+  const automationExecutionId =
+    String(meta.ref_type || "") === "automation_execution" && execRaw != null && Number(execRaw) > 0
+      ? Number(execRaw)
+      : meta.automation_execution_id != null && Number(meta.automation_execution_id) > 0
+        ? Number(meta.automation_execution_id)
+        : null;
   return {
     id: `${item.source_module || "act"}-${item.id}`,
     date: when,
@@ -78,6 +92,10 @@ function mapApiItem(item: ActivityEventItem): ActivityLogTableRow {
     occurredAt: item.occurred_at,
     productionHref,
     productionLabel,
+    eventCode: item.event_code,
+    actorKind: typeof meta.actor_kind === "string" ? meta.actor_kind : null,
+    automationExecutionId,
+    metadata: meta,
   };
 }
 
@@ -94,6 +112,7 @@ export default function ActivityLogTable({
   refreshKey = 0,
   className = "",
   searchable = true,
+  tenantId = null,
 }: ActivityLogTableProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [loading, setLoading] = useState(false);
@@ -444,7 +463,7 @@ export default function ActivityLogTable({
                           <ActivityLogStatusBadge severity={row.severity} />
                         </td>
                         <td className={`${tdClass} w-[11rem]`}>
-                          <ActivityLogOperatorCell name={row.operator} />
+                          <ActivityLogOperatorCell name={row.operator} actorKind={row.actorKind} />
                         </td>
                         <td className={tdClass}>
                           <p className="text-[13px] font-semibold leading-snug text-slate-900">{eventTitle}</p>
@@ -452,6 +471,14 @@ export default function ActivityLogTable({
                         <td className={tdClass}>
                           {effectNode}
                           {productionLinkNode}
+                          {row.automationExecutionId != null &&
+                          tenantId != null &&
+                          Number(tenantId) > 0 ? (
+                            <ActivityLogAutomationExpand
+                              executionId={row.automationExecutionId}
+                              tenantId={Number(tenantId)}
+                            />
+                          ) : null}
                         </td>
                       </tr>
                     );

@@ -80,9 +80,18 @@ def resolve_operator_display(
     metadata: dict[str, Any] | None = None,
 ) -> str:
     meta = metadata or {}
+    actor_kind = str(meta.get("actor_kind") or "").strip().upper()
+    if actor_kind == "AUTOMATION":
+        return str(meta.get("actor_label") or "Automatyzacja").strip() or "Automatyzacja"
+    if actor_kind == "SYSTEM":
+        return str(meta.get("actor_label") or "System").strip() or "System"
     integration = meta.get("integration_name") or meta.get("actor_label")
     if isinstance(integration, str) and integration.strip():
-        return integration.strip()
+        # Prefer explicit USER name when present
+        if actor_kind == "USER" and actor_name and str(actor_name).strip():
+            return str(actor_name).strip()
+        if actor_kind != "USER":
+            return integration.strip()
     if actor_name and str(actor_name).strip():
         return str(actor_name).strip()
     if actor_user_id is not None and int(actor_user_id) > 0:
@@ -139,6 +148,24 @@ def build_detail_rows(
         "cart_lifecycle_event_id",
         "actor_source",
         "actor_label",
+        "actor_kind",
+        "automation_execution_id",
+        "automation_rule_id",
+        "rule_name",
+        "trigger_event_id",
+        "execution_status",
+        "effects_count",
+        "effects_succeeded",
+        "effects_failed",
+        "status_transition_event_id",
+        "root_event_id",
+        "old_status_key",
+        "new_status_key",
+        "old_status_name",
+        "new_status_name",
+        "sale_document_id",
+        "ref_type",
+        "ref_id",
         "integration_name",
         "assigned_volume_from",
         "assigned_volume_to",
@@ -269,7 +296,13 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
         )
         # Default: no expandable metadata dump (raw keys). Picking-entry uses structured rows.
         details = []
-    event_display_label = resolve_return_event_title(event_code, meta) or title_pl(event_code)
+    from backend.services.activity_log.order_event_codes import ORDER_EVENT_TITLES_PL
+
+    event_display_label = (
+        ORDER_EVENT_TITLES_PL.get(code_norm)
+        or resolve_return_event_title(event_code, meta)
+        or title_pl(event_code)
+    )
     # Order # list only when writer opted in (assign / detach) — never for start/stop session noise.
     show_nums = bool(meta.get("show_order_numbers"))
     order_nums = order_numbers_from_meta(meta) if show_nums else []

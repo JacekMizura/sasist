@@ -190,6 +190,64 @@ def _get_or_create_execution(
         return existing, False
 
 
+def _effect_counts(execution: AutomationExecution) -> tuple[int, int, int]:
+    rows = list(execution.effect_executions or [])
+    total = len(rows)
+    ok = sum(1 for ee in rows if str(ee.status).upper() == EXEC_SUCCEEDED)
+    fail = sum(1 for ee in rows if str(ee.status).upper() == EXEC_FAILED)
+    return total, ok, fail
+
+
+def _emit_execution_activity(
+    db: Session,
+    *,
+    rule: AutomationRule,
+    event: StatusTransitionEvent,
+    execution: AutomationExecution,
+) -> None:
+    status = str(execution.status or "").upper()
+    if status not in (EXEC_SUCCEEDED, EXEC_FAILED, EXEC_BLOCKED):
+        return
+    # Do not emit for conditions_not_matched (SKIPPED) — caller must not invoke for that path.
+    if status == EXEC_SKIPPED or str(execution.error or "") == "conditions_not_matched":
+        return
+    total, ok, fail = _effect_counts(execution)
+    try:
+        from ..activity_log.order_activity import emit_automation_execution_activity
+
+        emit_automation_execution_activity(
+            db,
+            tenant_id=int(event.tenant_id),
+            warehouse_id=int(event.warehouse_id) if event.warehouse_id is not None else None,
+            entity_type=str(event.entity_type),
+            entity_id=int(event.entity_id),
+            rule_id=int(rule.id),
+            rule_name=str(rule.name or f"Reguła #{int(rule.id)}"),
+            execution_id=int(execution.id),
+            execution_status=status,
+            trigger_event_id=str(execution.trigger_event_id) if execution.trigger_event_id else str(event.id),
+            effects_count=total,
+            effects_succeeded=ok,
+            effects_failed=fail,
+            error=execution.error,
+            occurred_at=execution.completed_at or datetime.utcnow(),
+        )
+    except Exception:
+        logger.exception(
+            "automation activity emit failed execution_id=%s rule_id=%s",
+            execution.id,
+            rule.id,
+        )
+
+
+def _persist_conditions_snapshot(execution: AutomationExecution, details: list[dict] | None) -> None:
+    from .execution_audit import dump_conditions_evaluation
+
+    raw = dump_conditions_evaluation(details)
+    if raw:
+        execution.conditions_evaluation_json = raw
+
+
 def _run_or_resume_rule(
     db: Session,
     *,
@@ -199,6 +257,8 @@ def _run_or_resume_rule(
     execution, _created = _get_or_create_execution(db, rule=rule, event=event)
 
     if execution.status == EXEC_SUCCEEDED:
+        # Idempotent retry — ensure Activity exists once (correlation_id dedupe).
+        _emit_execution_activity(db, rule=rule, event=event, execution=execution)
         return {
             "rule_id": int(rule.id),
             "execution_id": int(execution.id),
@@ -207,6 +267,8 @@ def _run_or_resume_rule(
             "duplicate": True,
         }
     if execution.status in (EXEC_SKIPPED, EXEC_BLOCKED):
+        if execution.status == EXEC_BLOCKED:
+            _emit_execution_activity(db, rule=rule, event=event, execution=execution)
         return {
             "rule_id": int(rule.id),
             "execution_id": int(execution.id),
@@ -227,6 +289,7 @@ def _run_or_resume_rule(
         execution.completed_at = datetime.utcnow()
         db.add(execution)
         db.flush()
+        _emit_execution_activity(db, rule=rule, event=event, execution=execution)
         return {
             "rule_id": int(rule.id),
             "execution_id": int(execution.id),
@@ -245,6 +308,7 @@ def _run_or_resume_rule(
             entity_id=int(event.entity_id),
             tenant_id=int(event.tenant_id),
         )
+        _persist_conditions_snapshot(execution, cond_result.details)
         if cond_result.blocked:
             execution.status = EXEC_BLOCKED
             execution.error = cond_result.blocked_code or "unsupported_condition"
@@ -253,6 +317,7 @@ def _run_or_resume_rule(
             execution.completed_at = datetime.utcnow()
             db.add(execution)
             db.flush()
+            _emit_execution_activity(db, rule=rule, event=event, execution=execution)
             return {
                 "rule_id": int(rule.id),
                 "execution_id": int(execution.id),
@@ -269,6 +334,7 @@ def _run_or_resume_rule(
             execution.completed_at = datetime.utcnow()
             db.add(execution)
             db.flush()
+            # No Activity Log for not-matched rules.
             return {
                 "rule_id": int(rule.id),
                 "execution_id": int(execution.id),
@@ -276,6 +342,8 @@ def _run_or_resume_rule(
                 "reason": "conditions_not_matched",
                 "effects_executed": 0,
             }
+    else:
+        _persist_conditions_snapshot(execution, [])
 
     # Resume FAILED / PENDING / RUNNING — skip completed effects
     execution.status = EXEC_RUNNING
@@ -304,6 +372,7 @@ def _run_or_resume_rule(
             execution.completed_at = datetime.utcnow()
             db.add(execution)
             db.flush()
+            _emit_execution_activity(db, rule=rule, event=event, execution=execution)
             return {
                 "rule_id": int(rule.id),
                 "execution_id": int(execution.id),
@@ -316,6 +385,7 @@ def _run_or_resume_rule(
     execution.error = None
     db.add(execution)
     db.flush()
+    _emit_execution_activity(db, rule=rule, event=event, execution=execution)
     return {
         "rule_id": int(rule.id),
         "execution_id": int(execution.id),
@@ -408,7 +478,7 @@ def emit_entity_status_entered_and_run(
     old_key = str(int(previous_status_id)) if previous_status_id is not None else None
 
     try:
-        from .events import create_status_transition_event
+        from .events import create_status_transition_event, automation_depth_var
 
         event = create_status_transition_event(
             db,
@@ -420,6 +490,34 @@ def emit_entity_status_entered_and_run(
             new_status_key=new_key,
             actor_user_id=actor_user_id,
         )
+        # Order-facing timeline (Activity Log) — one event per transition identity.
+        if str(entity_type).strip().upper() == "ORDER":
+            try:
+                from ..activity_log.order_activity import emit_order_status_changed_activity
+
+                emit_order_status_changed_activity(
+                    db,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id) if warehouse_id is not None else None,
+                    order_id=int(entity_id),
+                    old_status_key=old_key,
+                    new_status_key=new_key,
+                    status_transition_event_id=str(event.id),
+                    actor_user_id=actor_user_id,
+                    root_event_id=getattr(event, "root_event_id", None),
+                    automation_depth=(
+                        int(event.depth)
+                        if getattr(event, "depth", None) is not None
+                        else int(automation_depth_var.get() or 0)
+                    ),
+                    occurred_at=getattr(event, "occurred_at", None),
+                )
+            except Exception:
+                logger.exception(
+                    "order status activity emit failed order_id=%s event_id=%s",
+                    entity_id,
+                    event.id,
+                )
         run_automations_for_status_entered(db, event=event)
         return event
     except Exception:

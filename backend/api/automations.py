@@ -430,6 +430,24 @@ def run_automation(
         raise HTTPException(status_code=500, detail="Database error") from e
 
 
+@router.get("/executions/{execution_id}")
+def get_automation_execution_detail(
+    execution_id: int,
+    tenant_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Structured execution detail for Order › Logi expand (tenant-scoped)."""
+    from ..services.automation.execution_detail import (
+        build_execution_expand_detail,
+        get_execution_for_tenant,
+    )
+
+    ex = get_execution_for_tenant(db, execution_id=int(execution_id), tenant_id=int(tenant_id))
+    if ex is None:
+        raise HTTPException(status_code=404, detail="Automation execution not found")
+    return build_execution_expand_detail(db, execution=ex, tenant_id=int(tenant_id))
+
+
 @router.get("/{rule_id}/executions", response_model=list[AutomationExecutionOut])
 def get_automation_executions(
     rule_id: int,

@@ -37,6 +37,24 @@ class TestPresentation(unittest.TestCase):
             "Integracja Allegro",
         )
 
+    def test_operator_automation_actor_kind(self):
+        self.assertEqual(
+            resolve_operator_display(
+                actor_name=None,
+                metadata={"actor_kind": "AUTOMATION", "actor_label": "Automatyzacja"},
+            ),
+            "Automatyzacja",
+        )
+
+    def test_operator_system_actor_kind(self):
+        self.assertEqual(
+            resolve_operator_display(
+                actor_name="Jacek",
+                metadata={"actor_kind": "SYSTEM"},
+            ),
+            "System",
+        )
+
     def test_enrich_ready_fields(self):
         item = enrich_activity_item(
             {

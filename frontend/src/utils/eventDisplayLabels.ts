@@ -86,6 +86,19 @@ export const EVENT_DISPLAY_LABELS: Record<string, string> = {
   LOCATION_EMPTIED: "Opróżniono lokalizację",
   PICKING_CANCELLED_WMS: "Anulowano zbieranie",
 
+  // --- Order › Logi (OMS / automation / documents) ---
+  ORDER_STATUS_CHANGED: "Zmiana statusu",
+  AUTOMATION_SUCCEEDED: "Automatyzacja",
+  AUTOMATION_FAILED: "Automatyzacja",
+  AUTOMATION_BLOCKED: "Automatyzacja",
+  SALE_DOCUMENT_CREATED: "Dokument sprzedaży",
+  SALE_DOCUMENT_NUMBER_ASSIGNED: "Numer dokumentu",
+  SALE_DOCUMENT_CORRECTION_CREATED: "Korekta dokumentu",
+  SALE_DOCUMENT_FAILED: "Dokument sprzedaży",
+  WAREHOUSE_DOCUMENT_CREATED: "Dokument magazynowy",
+  WAREHOUSE_DOCUMENT_NUMBER_ASSIGNED: "Numer dokumentu magazynowego",
+  WAREHOUSE_DOCUMENT_FAILED: "Dokument magazynowy",
+
   // --- Ops workflow actions ---
   WAITING_PROMOTED: "Przyjęcie odblokowało workflow",
   WAITING_PARTIAL_PROMOTED: "Częściowe przyjęcie",

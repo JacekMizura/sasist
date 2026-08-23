@@ -268,11 +268,16 @@ def list_activity_for_object(
         actor = actors.get(int(ev.actor_user_id)) if ev.actor_user_id else None
         name = None
         if actor is not None:
+            first = str(getattr(actor, "first_name", None) or "").strip()
+            last = str(getattr(actor, "last_name", None) or "").strip()
+            combined = f"{first} {last}".strip()
             name = (
-                getattr(actor, "display_name", None)
+                combined
+                or getattr(actor, "display_name", None)
                 or getattr(actor, "full_name", None)
                 or getattr(actor, "name", None)
                 or getattr(actor, "email", None)
+                or getattr(actor, "login", None)
             )
         meta = _parse_meta(getattr(ev, "metadata_json", None))
         link_items = []

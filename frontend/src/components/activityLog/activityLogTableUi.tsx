@@ -35,18 +35,34 @@ export function ActivityLogStatusBadge({ severity }: { severity?: string }) {
   );
 }
 
-export function ActivityLogOperatorCell({ name }: { name: string }) {
+export function ActivityLogOperatorCell({
+  name,
+  actorKind,
+}: {
+  name: string;
+  actorKind?: string | null;
+}) {
   const n = name.trim();
   const lower = n.toLowerCase();
-  const isSystem = lower === "system" || lower.startsWith("system ");
+  const kind = String(actorKind || "").trim().toUpperCase();
+  const isAutomation =
+    kind === "AUTOMATION" || lower === "automatyzacja" || lower.startsWith("automatyzacj");
+  const isSystem =
+    kind === "SYSTEM" || lower === "system" || lower.startsWith("system ");
   const isIntegration =
-    lower.includes("integracj") || lower.includes("api") || lower.includes("webhook");
-  const Icon = isSystem ? Bot : isIntegration ? Plug : User;
+    !isAutomation &&
+    (lower.includes("integracj") || lower.includes("api") || lower.includes("webhook"));
+  const Icon = isAutomation || isSystem ? Bot : isIntegration ? Plug : User;
+  const display = isAutomation ? n || "Automatyzacja" : n || "System";
 
   return (
     <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-slate-700">
-      <Icon className="h-3.5 w-3.5 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
-      <span className="truncate">{n || "System"}</span>
+      <Icon
+        className={`h-3.5 w-3.5 shrink-0 ${isAutomation ? "text-violet-500" : "text-slate-400"}`}
+        strokeWidth={2}
+        aria-hidden
+      />
+      <span className="truncate">{display}</span>
     </span>
   );
 }

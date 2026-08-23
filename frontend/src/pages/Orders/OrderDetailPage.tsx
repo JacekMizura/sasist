@@ -1524,11 +1524,16 @@ export default function OrderDetailPage() {
                   objectId={order.id}
                   defaultCollapsed={false}
                   className="mt-0"
+                  tenantId={order.tenant_id ?? DAMAGE_TENANT_ID}
                 />
               </div>
             ) : (
               <div className={`${odMainMaxWidthClass} mt-8 border-t border-slate-100 pt-4 pb-6`}>
-                <ActivityLogPanel objectType="order" objectId={order.id} />
+                <ActivityLogPanel
+                  objectType="order"
+                  objectId={order.id}
+                  tenantId={order.tenant_id ?? DAMAGE_TENANT_ID}
+                />
               </div>
             )}
           </div>

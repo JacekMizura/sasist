@@ -8,6 +8,7 @@ type ActivityLogPanelProps = {
   defaultCollapsed?: boolean;
   refreshKey?: number;
   className?: string;
+  tenantId?: number | null;
 };
 
 /**
@@ -21,6 +22,7 @@ export default function ActivityLogPanel({
   defaultCollapsed = true,
   refreshKey = 0,
   className = "",
+  tenantId = null,
 }: ActivityLogPanelProps) {
   return (
     <ActivityLogTable
@@ -30,6 +32,7 @@ export default function ActivityLogPanel({
       defaultCollapsed={defaultCollapsed}
       refreshKey={refreshKey}
       className={className}
+      tenantId={tenantId}
     />
   );
 }

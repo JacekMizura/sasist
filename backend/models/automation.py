@@ -109,6 +109,8 @@ class AutomationExecution(Base):
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     error = Column(Text, nullable=True)
+    #: Snapshot of condition evaluation at run time (list of dicts JSON) — not live rule definition.
+    conditions_evaluation_json = Column(Text, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     effect_executions = relationship(

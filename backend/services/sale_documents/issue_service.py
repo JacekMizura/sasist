@@ -276,6 +276,25 @@ def issue_sale_correction(
         doc_number,
         source.id,
     )
+    try:
+        from ..activity_log.order_activity import emit_sale_document_created_activity
+
+        emit_sale_document_created_activity(
+            db,
+            tenant_id=int(source.tenant_id),
+            warehouse_id=int(source.warehouse_id) if source.warehouse_id else None,
+            order_id=int(source.order_id),
+            sale_document_id=str(row.id),
+            document_number=doc_number,
+            document_kind="CORRECTION",
+            document_subtype="CORRECTION",
+            panel_document_type=str(source.panel_document_type or "INVOICE"),
+            source_document_id=str(source.id),
+            source_document_number=str(getattr(source, "document_number", None) or "") or None,
+            is_correction=True,
+        )
+    except Exception:
+        logger.exception("sale correction activity emit failed doc_id=%s", row.id)
     return row, False
 
 

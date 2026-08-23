@@ -195,6 +195,59 @@ export async function listAutomationExecutions(
   return res.data;
 }
 
+export type AutomationExecutionExpandCondition = {
+  condition_type?: string;
+  operator?: string | null;
+  configured_value?: unknown;
+  actual_value?: unknown;
+  matched?: boolean;
+  label?: string;
+  operator_label?: string;
+  classification?: string;
+  error?: string | null;
+  message?: string | null;
+};
+
+export type AutomationExecutionExpandEffect = {
+  position: number;
+  effect_type: string;
+  summary: string;
+  status: string;
+  result?: Record<string, unknown> | null;
+  error?: string | null;
+};
+
+export type AutomationExecutionExpandDto = {
+  id: number;
+  status: string;
+  error?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  rule: { id: number; name: string };
+  entity_type: string;
+  entity_id: number;
+  trigger: {
+    type?: string;
+    timestamp?: string | null;
+    trigger_event_id?: string | null;
+    summary?: string;
+    old_status_name?: string | null;
+    new_status_name?: string | null;
+  };
+  conditions: AutomationExecutionExpandCondition[];
+  effects: AutomationExecutionExpandEffect[];
+};
+
+export async function getAutomationExecutionDetail(
+  executionId: number,
+  tenantId: number,
+): Promise<AutomationExecutionExpandDto> {
+  const res = await api.get<AutomationExecutionExpandDto>(`automations/executions/${executionId}`, {
+    params: { tenant_id: tenantId },
+  });
+  return res.data;
+}
+
 export type StatusActionRuleDto = AutomationRuleDto & {
   last_execution_status?: string | null;
   last_run_at?: string | null;

@@ -131,6 +131,27 @@ def process_document_job(db: Session, job: DocumentGenerationJob) -> DocumentGen
             source="document_pipeline",
             extra={"job_id": int(job.id), **result},
         )
+        try:
+            from backend.services.activity_log.order_activity import emit_sale_document_created_activity
+
+            emit_sale_document_created_activity(
+                db,
+                tenant_id=int(job.tenant_id),
+                warehouse_id=int(job.warehouse_id),
+                order_id=int(job.order_id),
+                sale_document_id=str(doc.id),
+                document_number=doc_number or getattr(doc, "document_number", None),
+                document_kind=str(getattr(doc, "document_kind", None) or "PRIMARY"),
+                document_subtype=str(job.document_subtype or getattr(doc, "document_subtype", None) or ""),
+                panel_document_type=panel,
+                document_generation_job_id=int(job.id),
+                is_correction=False,
+            )
+        except Exception:
+            logger.exception(
+                "[direct_sales.document] activity emit failed job_id=%s",
+                job.id,
+            )
         log_document_pipeline(
             action="generated",
             job_id=int(job.id),
@@ -169,6 +190,24 @@ def process_document_job(db: Session, job: DocumentGenerationJob) -> DocumentGen
                 source="document_pipeline",
                 extra={"job_id": int(job.id), "error": job.error_message},
             )
+            if job.order_id:
+                try:
+                    from backend.services.activity_log.order_activity import emit_sale_document_failed_activity
+
+                    emit_sale_document_failed_activity(
+                        db,
+                        tenant_id=int(job.tenant_id),
+                        warehouse_id=int(job.warehouse_id),
+                        order_id=int(job.order_id),
+                        error_message=str(job.error_message or "failed"),
+                        document_generation_job_id=int(job.id),
+                        document_subtype=str(job.document_subtype or ""),
+                    )
+                except Exception:
+                    logger.exception(
+                        "[direct_sales.document] failure activity emit failed job_id=%s",
+                        job.id,
+                    )
         else:
             job.status = JOB_RETRYING
             job.next_retry_at = datetime.utcnow() + timedelta(minutes=2 ** int(job.attempt_count or 1))
