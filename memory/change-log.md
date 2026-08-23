@@ -1,3 +1,12 @@
+## 2026-08-23 — Manual order mutations in Activity Log
+
+- Writers: `order_mutation_activity.py` (address/notes/items)
+- Wired: patch address/notes, POST operational note, add line, line_edit qty/price/vat
+- Shipping/payment method already in commerce writers
+- UI: ActivityLog default expanded + details expand for address/note
+- Tests: `test_order_mutation_activity.py`
+- Gaps: note edit/delete API; billing street patch; line discount; remove still dual WMS events
+
 ## 2026-08-23 — ORDER_CREATED on order create paths
 
 - Bug: manual #1273 → Logi empty; `create_order` had no Activity emit / optional user

@@ -1,7 +1,8 @@
-﻿**ORDER_CREATED Activity Log — PASS (2026-08-23).**
+﻿**Manual order mutations → Activity Log — PASS (2026-08-23).**
 
-- Root cause: ERP `POST /orders` (`create_order`) never emitted Activity; create is distributed (no central factory)
-- Wired: MANUAL/COPY via `create_order`, IMPORT via `ORDER_IMPORTED` (shared `order-created:{id}`), DIRECT_SALE via `create_order_from_session`
-- Policy A: initial `Nowe` does not emit fake null→Nowe status event
-- Actor: `get_optional_current_user` → USER when Bearer present
-- WMS touched=0
+- Wired: shipping/billing address diffs, notes (append/POST), item add/qty/price/VAT
+- Shipping/payment method already logged (Phase 2)
+- Remove line: WMS projection + actor; no extra OMS duplicate
+- Note edit/delete API: missing (writers ready)
+- Logi UI: Historia czynności default expanded + detail expand for diffs
+- WMS files touched=0 (only operator_user_id passed into existing WMS emits)

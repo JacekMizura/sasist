@@ -296,8 +296,36 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
             stored_description=stored_desc,
             metadata=meta,
         )
-        # Default: no expandable metadata dump (raw keys). Picking-entry uses structured rows.
-        details = []
+        from backend.services.activity_log.order_event_codes import (
+            ORDER_BILLING_ADDRESS_CHANGED,
+            ORDER_ITEM_ADDED,
+            ORDER_ITEM_PRICE_CHANGED,
+            ORDER_ITEM_QUANTITY_CHANGED,
+            ORDER_ITEM_REMOVED,
+            ORDER_ITEM_VAT_CHANGED,
+            ORDER_NOTE_ADDED,
+            ORDER_NOTE_DELETED,
+            ORDER_NOTE_UPDATED,
+            ORDER_SHIPPING_ADDRESS_CHANGED,
+        )
+        from backend.services.activity_log.order_mutation_activity import build_mutation_detail_rows
+
+        if code_norm in {
+            ORDER_SHIPPING_ADDRESS_CHANGED,
+            ORDER_BILLING_ADDRESS_CHANGED,
+            ORDER_NOTE_ADDED,
+            ORDER_NOTE_UPDATED,
+            ORDER_NOTE_DELETED,
+            ORDER_ITEM_ADDED,
+            ORDER_ITEM_REMOVED,
+            ORDER_ITEM_QUANTITY_CHANGED,
+            ORDER_ITEM_PRICE_CHANGED,
+            ORDER_ITEM_VAT_CHANGED,
+        }:
+            details = build_mutation_detail_rows(meta)
+        else:
+            # Default: no expandable metadata dump (raw keys). Picking-entry uses structured rows.
+            details = []
     from backend.services.activity_log.order_event_codes import ORDER_EVENT_TITLES_PL
     from backend.services.activity_log.wms_order_activity import WMS_EVENT_TITLES_PL
 

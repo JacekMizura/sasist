@@ -51,6 +51,10 @@ describe("eventDisplayLabels SSOT", () => {
     expect(getEventDisplayLabel("ORDER_CUSTOM_FIELD_CHANGED")).toBe("Pole dodatkowe");
     expect(getEventDisplayLabel("ORDER_PAYMENT_REGISTERED")).toBe("Płatność");
     expect(getEventDisplayLabel("ORDER_IMPORTED")).toBe("Import zamówienia");
+    expect(getEventDisplayLabel("ORDER_SHIPPING_ADDRESS_CHANGED")).toBe("Adres dostawy");
+    expect(getEventDisplayLabel("ORDER_NOTE_ADDED")).toBe("Notatka");
+    expect(getEventDisplayLabel("ORDER_ITEM_QUANTITY_CHANGED")).toBe("Pozycja zamówienia");
+    expect(getEventDisplayLabel("ORDER_ITEM_PRICE_CHANGED")).toBe("Pozycja zamówienia");
   });
 
   it("specific labels match warehouse Polish", () => {

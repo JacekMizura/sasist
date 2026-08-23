@@ -35,6 +35,7 @@ export type ActivityLogTableRow = {
   actorKind?: string | null;
   automationExecutionId?: number | null;
   metadata?: Record<string, unknown>;
+  details?: { label: string; value: string }[];
 };
 
 type ActivityLogTableProps = {
@@ -96,6 +97,11 @@ function mapApiItem(item: ActivityEventItem): ActivityLogTableRow {
     actorKind: typeof meta.actor_kind === "string" ? meta.actor_kind : null,
     automationExecutionId,
     metadata: meta,
+    details: Array.isArray(item.details)
+      ? item.details
+          .filter((d) => d && typeof d.label === "string" && typeof d.value === "string")
+          .map((d) => ({ label: d.label, value: d.value }))
+      : undefined,
   };
 }
 
@@ -108,13 +114,16 @@ export default function ActivityLogTable({
   objectId,
   rows: externalRows,
   title = "Historia czynności",
-  defaultCollapsed = true,
+  defaultCollapsed = false,
   refreshKey = 0,
   className = "",
   searchable = true,
   tenantId = null,
 }: ActivityLogTableProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  useEffect(() => {
+    setCollapsed(defaultCollapsed);
+  }, [defaultCollapsed, objectType, objectId]);
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<ActivityLogTableRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -129,6 +138,7 @@ export default function ActivityLogTable({
   const [appliedSeverity, setAppliedSeverity] = useState("");
   const [appliedDateFrom, setAppliedDateFrom] = useState("");
   const [appliedDateTo, setAppliedDateTo] = useState("");
+  const [expandedRowIds, setExpandedRowIds] = useState<Record<string, boolean>>({});
 
   const fetchReady =
     externalRows == null && objectType != null && objectId != null && Number(objectId) > 0;
@@ -445,6 +455,10 @@ export default function ActivityLogTable({
                         </div>
                       ) : null;
 
+                    const hasDetails = Array.isArray(row.details) && row.details.length > 0;
+                    const rowKey = String(row.id);
+                    const detailsOpen = Boolean(expandedRowIds[rowKey]);
+
                     return (
                       <tr
                         key={row.id}
@@ -471,6 +485,33 @@ export default function ActivityLogTable({
                         <td className={tdClass}>
                           {effectNode}
                           {productionLinkNode}
+                          {hasDetails ? (
+                            <div className="mt-1.5">
+                              <button
+                                type="button"
+                                className="text-[12px] font-semibold text-slate-600 hover:text-slate-900"
+                                onClick={() =>
+                                  setExpandedRowIds((prev) => ({
+                                    ...prev,
+                                    [rowKey]: !prev[rowKey],
+                                  }))
+                                }
+                                aria-expanded={detailsOpen}
+                              >
+                                {detailsOpen ? "Ukryj szczegóły" : "Pokaż szczegóły"}
+                              </button>
+                              {detailsOpen ? (
+                                <dl className="mt-1.5 space-y-1 rounded-md border border-slate-100 bg-slate-50/80 px-2.5 py-2">
+                                  {row.details!.map((d) => (
+                                    <div key={`${rowKey}-${d.label}`} className="text-[12px] leading-snug">
+                                      <dt className="font-semibold text-slate-500">{d.label}</dt>
+                                      <dd className="text-slate-800">{d.value}</dd>
+                                    </div>
+                                  ))}
+                                </dl>
+                              ) : null}
+                            </div>
+                          ) : null}
                           {row.automationExecutionId != null &&
                           tenantId != null &&
                           Number(tenantId) > 0 ? (

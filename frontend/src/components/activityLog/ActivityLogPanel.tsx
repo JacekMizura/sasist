@@ -19,7 +19,7 @@ export default function ActivityLogPanel({
   objectType,
   objectId,
   title = "Historia czynności",
-  defaultCollapsed = true,
+  defaultCollapsed = false,
   refreshKey = 0,
   className = "",
   tenantId = null,

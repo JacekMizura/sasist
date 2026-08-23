@@ -2416,8 +2416,20 @@ def _apply_order_patch_to_order(
         )
 
     if "customer_id" in _patch_fields:
+        old_cid = int(order.customer_id) if getattr(order, "customer_id", None) is not None else None
+        old_cust_label = None
+        if old_cid is not None:
+            oc = db.query(Customer).filter(Customer.id == old_cid).first()
+            if oc is not None:
+                old_cust_label = (
+                    f"{(getattr(oc, 'first_name', None) or '').strip()} {(getattr(oc, 'last_name', None) or '').strip()}".strip()
+                    or str(getattr(oc, "company_name", None) or "").strip()
+                    or f"#{old_cid}"
+                )
         if body.customer_id is None:
             order.customer_id = None
+            new_cid = None
+            new_cust_label = None
         else:
             cu = (
                 db.query(Customer)
@@ -2427,6 +2439,29 @@ def _apply_order_patch_to_order(
             if cu is None:
                 raise HTTPException(status_code=400, detail="customer_id not found for this tenant")
             order.customer_id = int(body.customer_id)
+            new_cid = int(body.customer_id)
+            new_cust_label = (
+                f"{(getattr(cu, 'first_name', None) or '').strip()} {(getattr(cu, 'last_name', None) or '').strip()}".strip()
+                or str(getattr(cu, "company_name", None) or "").strip()
+                or f"#{new_cid}"
+            )
+        try:
+            from ..services.activity_log.order_mutation_activity import emit_order_customer_data_changed_activity
+
+            emit_order_customer_data_changed_activity(
+                db,
+                tenant_id=int(order.tenant_id),
+                warehouse_id=int(order.warehouse_id),
+                order_id=int(order.id),
+                old_customer_id=old_cid,
+                new_customer_id=new_cid,
+                old_label=old_cust_label,
+                new_label=new_cust_label,
+                actor_user_id=actor_user_id,
+                mutation_token=mutation_token,
+            )
+        except Exception:
+            logger.exception("ORDER_CUSTOMER_DATA_CHANGED activity failed order_id=%s", order.id)
 
     if "sales_document_number" in _patch_fields:
         sdn = body.sales_document_number
@@ -2529,55 +2564,143 @@ def _apply_order_patch_to_order(
             notes = meta.get("panel_internal_notes")
             if not isinstance(notes, list):
                 notes = []
-            notes.append(
-                {
-                    "at": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
-                    "text": s[:2000],
-                }
-            )
+            note_at = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+            notes.append({"at": note_at, "text": s[:2000]})
             meta["panel_internal_notes"] = notes[-50:]
             meta_changed = True
+            try:
+                from ..services.activity_log.order_mutation_activity import emit_order_note_added_activity
+
+                emit_order_note_added_activity(
+                    db,
+                    tenant_id=int(order.tenant_id),
+                    warehouse_id=int(order.warehouse_id),
+                    order_id=int(order.id),
+                    note_id=None,
+                    note_type="internal",
+                    content_preview=s[:280],
+                    actor_user_id=actor_user_id,
+                    mutation_token=f"{mutation_token}:{note_at}:{s[:64]}",
+                )
+            except Exception:
+                logger.exception("ORDER_NOTE_ADDED (internal) failed order_id=%s", order.id)
 
     if "customer_note_append" in _patch_fields:
         s = str(body.customer_note_append or "").strip()
         if s:
             now = datetime.utcnow()
-            db.add(
-                OrderNote(
-                    order_id=int(order.id),
+            note_row = OrderNote(
+                order_id=int(order.id),
+                tenant_id=int(order.tenant_id),
+                warehouse_id=int(order.warehouse_id),
+                type="customer",
+                content=s[:8000],
+                created_at=now,
+            )
+            db.add(note_row)
+            db.flush()
+            try:
+                from ..services.activity_log.order_mutation_activity import emit_order_note_added_activity
+
+                emit_order_note_added_activity(
+                    db,
                     tenant_id=int(order.tenant_id),
                     warehouse_id=int(order.warehouse_id),
-                    type="customer",
-                    content=s[:8000],
-                    created_at=now,
+                    order_id=int(order.id),
+                    note_id=int(note_row.id),
+                    note_type="customer",
+                    content_preview=s[:280],
+                    actor_user_id=actor_user_id,
                 )
-            )
+            except Exception:
+                logger.exception("ORDER_NOTE_ADDED (customer) failed order_id=%s", order.id)
 
     if "operational_note_append" in _patch_fields:
         s = str(body.operational_note_append or "").strip()
         if s:
             now = datetime.utcnow()
-            db.add(
-                OrderOperationalNote(
+            op_row = OrderOperationalNote(
+                order_id=int(order.id),
+                author_user_id=int(actor_user_id) if actor_user_id else None,
+                content=s[:8000],
+                show_in_picking=True,
+                show_in_packing=True,
+                show_in_returns=False,
+                show_in_complaints=False,
+                priority=None,
+                color_tag=None,
+                created_at=now,
+                updated_at=now,
+            )
+            db.add(op_row)
+            db.flush()
+            try:
+                from ..services.activity_log.order_mutation_activity import emit_order_note_added_activity
+
+                emit_order_note_added_activity(
+                    db,
+                    tenant_id=int(order.tenant_id),
+                    warehouse_id=int(order.warehouse_id),
                     order_id=int(order.id),
-                    author_user_id=None,
-                    content=s[:8000],
+                    note_id=int(op_row.id),
+                    note_type="operational",
+                    content_preview=s[:280],
                     show_in_picking=True,
                     show_in_packing=True,
-                    show_in_returns=False,
-                    show_in_complaints=False,
-                    priority=None,
-                    color_tag=None,
-                    created_at=now,
-                    updated_at=now,
+                    actor_user_id=actor_user_id,
                 )
-            )
+            except Exception:
+                logger.exception("ORDER_NOTE_ADDED (operational) failed order_id=%s", order.id)
 
     if meta_changed:
         _order_set_import_meta(order, meta)
 
+    from ..services.activity_log.order_mutation_activity import (
+        emit_order_billing_address_changed_activity,
+        emit_order_shipping_address_changed_activity,
+        snapshot_billing_address,
+        snapshot_shipping_address,
+    )
+
+    addr_before = _order_addresses_dict(order)
+    ship_before = snapshot_shipping_address(
+        addr_before.get("shipping") if isinstance(addr_before.get("shipping"), dict) else None
+    )
+    bill_before = snapshot_billing_address(
+        addr_before.get("billing") if isinstance(addr_before.get("billing"), dict) else None
+    )
     _patch_order_billing_identity(order, body, _patch_fields)
     _patch_order_shipping_address(order, body, _patch_fields)
+    addr_after = _order_addresses_dict(order)
+    try:
+        ship_after = snapshot_shipping_address(
+            addr_after.get("shipping") if isinstance(addr_after.get("shipping"), dict) else None
+        )
+        bill_after = snapshot_billing_address(
+            addr_after.get("billing") if isinstance(addr_after.get("billing"), dict) else None
+        )
+        emit_order_shipping_address_changed_activity(
+            db,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=int(order.warehouse_id),
+            order_id=int(order.id),
+            old_snapshot=ship_before,
+            new_snapshot=ship_after,
+            actor_user_id=actor_user_id,
+            mutation_token=mutation_token,
+        )
+        emit_order_billing_address_changed_activity(
+            db,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=int(order.warehouse_id),
+            order_id=int(order.id),
+            old_snapshot=bill_before,
+            new_snapshot=bill_after,
+            actor_user_id=actor_user_id,
+            mutation_token=mutation_token,
+        )
+    except Exception:
+        logger.exception("address activity failed order_id=%s", getattr(order, "id", None))
 
 
 @router.patch("/{order_id}/", response_model=OrderRead)
@@ -2645,8 +2768,14 @@ def patch_order_priority(order_id: int, body: OrderPriorityPatchBody, db: Sessio
 
 
 @router.post("/{order_id}/items/", response_model=OrderRead)
-def add_order_line(order_id: int, body: OrderAddLineBody, db: Session = Depends(get_db)):
+def add_order_line(
+    order_id: int,
+    body: OrderAddLineBody,
+    db: Session = Depends(get_db),
+    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+):
     """Append a catalog product line (merge po produkcie) lub zestaw z eksplozją i nagłówkiem komercyjnym."""
+    actor_uid = int(current_user.id) if current_user is not None else None
     order = (
         db.query(Order)
         .options(joinedload(Order.items))
@@ -2724,6 +2853,10 @@ def add_order_line(order_id: int, body: OrderAddLineBody, db: Session = Depends(
         existing = existing_q.first()
         vat_opt = float(body.vat_percent) if body.vat_percent is not None else None
         vat_final: Optional[float] = vat_opt if vat_opt is not None else resolved.vat_percent
+        currency = str(getattr(order, "currency", None) or "PLN")
+        pname = str(getattr(product, "name", None) or "").strip() or f"Produkt #{int(product.id)}"
+        psku = str(getattr(product, "sku", None) or "").strip() or None
+        pean = str(getattr(product, "ean", None) or "").strip() or None
         if existing:
             old_qty = int(existing.quantity or 0)
             new_qty = old_qty + qty
@@ -2745,6 +2878,34 @@ def add_order_line(order_id: int, body: OrderAddLineBody, db: Session = Depends(
                 existing.vat_percent = vat_final
             prev_vol = float(existing.total_volume) if existing.total_volume is not None else 0.0
             existing.total_volume = round(prev_vol + float(resolved.line_volume), 4)
+            db.flush()
+            try:
+                from ..services.activity_log.order_mutation_activity import (
+                    emit_order_item_quantity_changed_activity,
+                    product_line_snapshot,
+                )
+
+                emit_order_item_quantity_changed_activity(
+                    db,
+                    tenant_id=int(order.tenant_id),
+                    warehouse_id=int(order.warehouse_id),
+                    order_id=int(order.id),
+                    order_item_id=int(existing.id),
+                    product_name=pname,
+                    old_quantity=old_qty,
+                    new_quantity=new_qty,
+                    snapshot=product_line_snapshot(
+                        product_name=pname,
+                        product_id=int(product.id),
+                        sku=psku,
+                        ean=pean,
+                        currency=currency,
+                    ),
+                    actor_user_id=actor_uid,
+                    mutation_token=f"merge-add:{old_qty}:{new_qty}",
+                )
+            except Exception:
+                logger.exception("ORDER_ITEM_QUANTITY_CHANGED (merge) failed order_id=%s", order.id)
         else:
             oi = OrderItem(
                 order_id=order.id,
@@ -2764,6 +2925,32 @@ def add_order_line(order_id: int, body: OrderAddLineBody, db: Session = Depends(
                 offer_name_snapshot=resolved.offer_name,
             )
             db.add(oi)
+            db.flush()
+            try:
+                from ..services.activity_log.order_mutation_activity import (
+                    emit_order_item_added_activity,
+                    product_line_snapshot,
+                )
+
+                emit_order_item_added_activity(
+                    db,
+                    tenant_id=int(order.tenant_id),
+                    warehouse_id=int(order.warehouse_id),
+                    order_id=int(order.id),
+                    order_item_id=int(oi.id),
+                    snapshot=product_line_snapshot(
+                        product_name=pname,
+                        product_id=int(product.id),
+                        sku=psku,
+                        ean=pean,
+                        quantity=resolved.quantity,
+                        unit_price=resolved.unit_price,
+                        currency=currency,
+                    ),
+                    actor_user_id=actor_uid,
+                )
+            except Exception:
+                logger.exception("ORDER_ITEM_ADDED failed order_id=%s", order.id)
         db.flush()
         _recompute_order_value_and_volume(order, db)
         db.commit()
@@ -2782,7 +2969,12 @@ def add_order_line(order_id: int, body: OrderAddLineBody, db: Session = Depends(
 
 
 @router.delete("/{order_id}/items/{item_id}", response_model=OrderRead)
-def delete_order_item_line(order_id: int, item_id: int, db: Session = Depends(get_db)):
+def delete_order_item_line(
+    order_id: int,
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+):
     """Usuwa pojedynczą linię zamówienia (OMS). Nie dotyczy linii rozbitych z zestawu."""
     import traceback
 
@@ -2797,6 +2989,7 @@ def delete_order_item_line(order_id: int, item_id: int, db: Session = Depends(ge
         emit_replacement_item_removed,
     )
 
+    actor_uid = int(current_user.id) if current_user is not None else None
     logger.info(
         "[order.item.delete] ENTER order_id=%s item_id=%s",
         order_id,
@@ -2914,6 +3107,7 @@ def delete_order_item_line(order_id: int, item_id: int, db: Session = Depends(ge
                 original_order_item_id=audit_ctx.get("replacement_parent_id"),
                 quantity=float(qty_line),
                 reason="usunięto linię zamiennika (OMS)",
+                operator_user_id=actor_uid,
             )
         else:
             emit_order_item_removed(
@@ -2926,6 +3120,7 @@ def delete_order_item_line(order_id: int, item_id: int, db: Session = Depends(ge
                 product_name=nm,
                 quantity=float(qty_line),
                 reason="usunięto linię z zamówienia (OMS)",
+                operator_user_id=actor_uid,
             )
         emit_order_line_removed(
             db,
@@ -2937,6 +3132,7 @@ def delete_order_item_line(order_id: int, item_id: int, db: Session = Depends(ge
             product_name=nm,
             quantity=float(qty_line),
             reason="usunięto linię z zamówienia (OMS)",
+            operator_user_id=actor_uid,
         )
         soft_remove_order_item(
             db,
@@ -3277,6 +3473,22 @@ def patch_order_item_line(
 
     elif body.line_edit is not None:
         le = body.line_edit
+        old_qty = int(item.quantity or 0)
+        old_price = float(item.unit_price) if getattr(item, "unit_price", None) is not None else None
+        old_vat = float(item.vat_percent) if getattr(item, "vat_percent", None) is not None else None
+        pname = ""
+        psku = None
+        pean = None
+        if item.product is not None:
+            pname = str(getattr(item.product, "name", None) or "").strip()
+            psku = str(getattr(item.product, "sku", None) or "").strip() or None
+            pean = str(getattr(item.product, "ean", None) or "").strip() or None
+        if not pname:
+            pname = f"Produkt #{int(item.product_id)}" if item.product_id else "Produkt"
+        currency = str(getattr(order, "currency", None) or "PLN")
+        actor_uid = int(current_user.id) if current_user is not None else None
+        mut_tok = str(getattr(item, "id", "") or "")
+
         if le.quantity is not None:
             item.quantity = int(le.quantity)
         if le.unit_price is not None:
@@ -3291,6 +3503,66 @@ def patch_order_item_line(
         if up is not None and qn > 0:
             item.total_price = round(float(up) * float(qn), 2)
         touch_picking_in_progress(order)
+        try:
+            from ..services.activity_log.order_mutation_activity import (
+                emit_order_item_price_changed_activity,
+                emit_order_item_quantity_changed_activity,
+                emit_order_item_vat_changed_activity,
+                product_line_snapshot,
+            )
+
+            snap = product_line_snapshot(
+                product_name=pname,
+                product_id=int(item.product_id) if item.product_id else None,
+                sku=psku,
+                ean=pean,
+                currency=currency,
+            )
+            if le.quantity is not None:
+                emit_order_item_quantity_changed_activity(
+                    db,
+                    tenant_id=int(order.tenant_id),
+                    warehouse_id=int(order.warehouse_id),
+                    order_id=int(order.id),
+                    order_item_id=int(item.id),
+                    product_name=pname,
+                    old_quantity=old_qty,
+                    new_quantity=qn,
+                    snapshot=snap,
+                    actor_user_id=actor_uid,
+                    mutation_token=mut_tok,
+                )
+            if le.unit_price is not None and old_price is not None:
+                emit_order_item_price_changed_activity(
+                    db,
+                    tenant_id=int(order.tenant_id),
+                    warehouse_id=int(order.warehouse_id),
+                    order_id=int(order.id),
+                    order_item_id=int(item.id),
+                    product_name=pname,
+                    old_price=old_price,
+                    new_price=float(item.unit_price or 0),
+                    currency=currency,
+                    snapshot=snap,
+                    actor_user_id=actor_uid,
+                    mutation_token=mut_tok,
+                )
+            if le.vat_percent is not None:
+                emit_order_item_vat_changed_activity(
+                    db,
+                    tenant_id=int(order.tenant_id),
+                    warehouse_id=int(order.warehouse_id),
+                    order_id=int(order.id),
+                    order_item_id=int(item.id),
+                    product_name=pname,
+                    old_vat=old_vat,
+                    new_vat=getattr(item, "vat_percent", None),
+                    snapshot=snap,
+                    actor_user_id=actor_uid,
+                    mutation_token=mut_tok,
+                )
+        except Exception:
+            logger.exception("line_edit activity failed order_id=%s item_id=%s", order.id, item.id)
 
     _recompute_order_value_and_volume(order, db)
     db.flush()
@@ -3461,6 +3733,24 @@ def create_order_operational_note(
         updated_at=now,
     )
     db.add(row)
+    db.flush()
+    try:
+        from ..services.activity_log.order_mutation_activity import emit_order_note_added_activity
+
+        emit_order_note_added_activity(
+            db,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=int(order.warehouse_id),
+            order_id=int(order.id),
+            note_id=int(row.id),
+            note_type="operational",
+            content_preview=str(body.content).strip()[:280],
+            show_in_picking=bool(body.show_in_picking),
+            show_in_packing=bool(body.show_in_packing),
+            actor_user_id=int(user.id) if user is not None else None,
+        )
+    except Exception:
+        logger.exception("ORDER_NOTE_ADDED (POST operational) failed order_id=%s", order_id)
     db.commit()
     db.refresh(row)
     return _serialize_operational_note_row(row)

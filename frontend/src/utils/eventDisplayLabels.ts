@@ -107,6 +107,17 @@ export const EVENT_DISPLAY_LABELS: Record<string, string> = {
   ORDER_PAYMENT_METHOD_CHANGED: "Metoda płatności",
   ORDER_SHIPPING_METHOD_CHANGED: "Metoda dostawy",
   ORDER_IMPORTED: "Import zamówienia",
+  ORDER_SHIPPING_ADDRESS_CHANGED: "Adres dostawy",
+  ORDER_BILLING_ADDRESS_CHANGED: "Adres faktury",
+  ORDER_CUSTOMER_DATA_CHANGED: "Klient",
+  ORDER_NOTE_ADDED: "Notatka",
+  ORDER_NOTE_UPDATED: "Notatka",
+  ORDER_NOTE_DELETED: "Notatka",
+  ORDER_ITEM_ADDED: "Pozycja zamówienia",
+  ORDER_ITEM_QUANTITY_CHANGED: "Pozycja zamówienia",
+  ORDER_ITEM_PRICE_CHANGED: "Pozycja zamówienia",
+  ORDER_ITEM_DISCOUNT_CHANGED: "Pozycja zamówienia",
+  ORDER_ITEM_VAT_CHANGED: "Pozycja zamówienia",
 
   // --- WMS matching / packing extras (Order › Logi) ---
   SMART_MATCHING_MATCHED: "Smart Matching",
