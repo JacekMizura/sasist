@@ -2327,9 +2327,22 @@ def build_order_read(db: Session, order: Order) -> OrderRead:
     )
 
 
-def _apply_order_patch_to_order(db: Session, order: Order, body: OrderPatchBody) -> None:
+def _apply_order_patch_to_order(
+    db: Session,
+    order: Order,
+    body: OrderPatchBody,
+    *,
+    actor_user_id: Optional[int] = None,
+) -> None:
     """Apply ``OrderPatchBody`` to a loaded ``Order`` (no commit)."""
+    from ..services.activity_log.order_commerce_activity import (
+        emit_order_payment_method_changed_activity,
+        emit_order_payment_status_changed_activity,
+        emit_order_shipping_method_changed_activity,
+    )
+
     _patch_fields: Set[str] = getattr(body, "model_fields_set", None) or getattr(body, "__fields_set__", set())
+    mutation_token = str(getattr(order, "updated_at", None) or getattr(order, "id", "") or "")
     if "priority_color" in _patch_fields:
         v = body.priority_color
         if v is None or (isinstance(v, str) and not str(v).strip()):
@@ -2337,9 +2350,13 @@ def _apply_order_patch_to_order(db: Session, order: Order, body: OrderPatchBody)
         else:
             order.priority_color = str(v).strip().lower()
     if "shipping_method_id" in _patch_fields:
+        old_sm_id = str(getattr(order, "shipping_method_id", None) or "").strip() or None
+        old_sm_name = str(getattr(order, "shipping_method", None) or "").strip() or None
         raw = body.shipping_method_id
         if raw is None or (isinstance(raw, str) and not raw.strip()):
             order.shipping_method_id = None
+            new_sm_id = None
+            new_sm_name = None
         else:
             sid = str(raw).strip()
             sm = (
@@ -2355,6 +2372,20 @@ def _apply_order_patch_to_order(db: Session, order: Order, body: OrderPatchBody)
                 raise HTTPException(status_code=400, detail="Nieprawidłowa metoda dostawy.")
             order.shipping_method_id = str(sm.id)
             order.shipping_method = (sm.name or "").strip() or None
+            new_sm_id = str(sm.id)
+            new_sm_name = order.shipping_method
+        emit_order_shipping_method_changed_activity(
+            db,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=int(order.warehouse_id),
+            order_id=int(order.id),
+            old_method_id=old_sm_id,
+            old_method_name=old_sm_name,
+            new_method_id=new_sm_id,
+            new_method_name=new_sm_name,
+            actor_user_id=actor_user_id,
+            mutation_token=mutation_token,
+        )
 
     if "customer_id" in _patch_fields:
         if body.customer_id is None:
@@ -2389,30 +2420,59 @@ def _apply_order_patch_to_order(db: Session, order: Order, body: OrderPatchBody)
             meta_changed = True
 
     if "payment_method" in _patch_fields:
+        old_pm = str(meta.get("panel_payment_method") or "").strip()
         pm = body.payment_method
         if pm is None:
             meta.pop("panel_payment_method", None)
             meta_changed = True
+            new_pm = ""
         else:
             s = str(pm).strip()
             if not s:
                 meta.pop("panel_payment_method", None)
+                new_pm = ""
             else:
                 meta["panel_payment_method"] = s[:128]
+                new_pm = s[:128]
             meta_changed = True
+        emit_order_payment_method_changed_activity(
+            db,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=int(order.warehouse_id),
+            order_id=int(order.id),
+            old_method=old_pm,
+            new_method=new_pm,
+            actor_user_id=actor_user_id,
+            mutation_token=mutation_token,
+        )
 
     if "payment_status" in _patch_fields:
+        old_ps = str(meta.get("panel_payment_status") or "").strip()
         ps = body.payment_status
         if ps is None:
             meta.pop("panel_payment_status", None)
             meta_changed = True
+            new_ps = ""
         else:
             s = str(ps).strip()
             if not s:
                 meta.pop("panel_payment_status", None)
+                new_ps = ""
             else:
                 meta["panel_payment_status"] = s[:128]
+                new_ps = s[:128]
             meta_changed = True
+        emit_order_payment_status_changed_activity(
+            db,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=int(order.warehouse_id),
+            order_id=int(order.id),
+            old_status=old_ps,
+            new_status=new_ps,
+            actor_user_id=actor_user_id,
+            source="order_panel",
+            mutation_token=mutation_token,
+        )
 
     if "document_series_id" in _patch_fields:
         v = body.document_series_id
@@ -2493,7 +2553,12 @@ def _apply_order_patch_to_order(db: Session, order: Order, body: OrderPatchBody)
 
 
 @router.patch("/{order_id}/", response_model=OrderRead)
-def patch_order(order_id: int, body: OrderPatchBody, db: Session = Depends(get_db)):
+def patch_order(
+    order_id: int,
+    body: OrderPatchBody,
+    db: Session = Depends(get_db),
+    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+):
     order = (
         db.query(Order)
         .options(joinedload(Order.shipping_method_row))
@@ -2502,7 +2567,12 @@ def patch_order(order_id: int, body: OrderPatchBody, db: Session = Depends(get_d
     )
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    _apply_order_patch_to_order(db, order, body)
+    _apply_order_patch_to_order(
+        db,
+        order,
+        body,
+        actor_user_id=int(current_user.id) if current_user is not None else None,
+    )
 
     db.commit()
     order = (
@@ -3443,13 +3513,19 @@ def put_order_custom_fields_values(
     order_id: int,
     body: OrderCustomFieldValuesPutBody,
     db: Session = Depends(get_db),
-    _: AppUser = Depends(get_current_user),
+    current_user: AppUser = Depends(get_current_user),
 ):
+    from ..services.activity_log.order_commerce_activity import (
+        custom_field_value_repr,
+        emit_order_custom_field_changed_activity,
+    )
+
     order = db.query(Order).filter(Order.id == int(order_id)).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     tid = int(order.tenant_id)
     wid = int(order.warehouse_id)
+    actor_uid = int(current_user.id) if current_user is not None else None
     errors: List[str] = []
     staged: List[Tuple[OrderCustomField, Optional[str], Optional[float], Optional[str], bool]] = []
     for entry in body.values:
@@ -3494,6 +3570,27 @@ def put_order_custom_fields_values(
             .first()
         )
         ft_upper = (field.type or "").strip().upper()
+        old_repr = custom_field_value_repr(
+            field_type=ft_upper,
+            value_string=existing.value_string if existing else None,
+            value_number=existing.value_number if existing else None,
+            value_json=existing.value_json if existing else None,
+        )
+        new_repr = (
+            ""
+            if clear
+            else custom_field_value_repr(
+                field_type=ft_upper,
+                value_string=vs,
+                value_number=vn,
+                value_json=vj,
+            )
+        )
+        mutation_token = (
+            f"{getattr(existing, 'id', None)}:{getattr(existing, 'updated_at', None)}"
+            if existing
+            else "create"
+        )
         if ft_upper == "FILES":
             old_j = existing.value_json if existing else None
             new_j = None if clear else vj
@@ -3504,6 +3601,9 @@ def put_order_custom_fields_values(
                 warehouse_id=wid,
                 old_json_str=old_j,
                 new_json_str=new_j,
+                field_id=int(field.id),
+                field_name=str(field.name or ""),
+                actor_user_id=actor_uid,
             )
         elif ft_upper in ("SALES_DOCUMENT", "SHIPPING_LABEL"):
             old_j = existing.value_json if existing else None
@@ -3515,7 +3615,23 @@ def put_order_custom_fields_values(
                 warehouse_id=wid,
                 old_json_str=old_j,
                 new_json_str=new_j,
+                field_id=int(field.id),
+                field_name=str(field.name or ""),
+                actor_user_id=actor_uid,
             )
+        emit_order_custom_field_changed_activity(
+            db,
+            tenant_id=tid,
+            warehouse_id=wid,
+            order_id=int(order_id),
+            field_id=int(field.id),
+            field_name=str(field.name or ""),
+            field_type=ft_upper,
+            old_value=old_repr,
+            new_value=new_repr,
+            actor_user_id=actor_uid,
+            mutation_token=mutation_token,
+        )
         if clear:
             if existing:
                 db.delete(existing)
@@ -3548,8 +3664,10 @@ async def post_order_custom_field_file(
     field_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    _: AppUser = Depends(get_current_user),
+    current_user: AppUser = Depends(get_current_user),
 ):
+    from ..services.activity_log.order_commerce_activity import emit_order_custom_field_file_activity
+
     order = db.query(Order).filter(Order.id == int(order_id)).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -3587,6 +3705,7 @@ async def post_order_custom_field_file(
         doc_type = OrderDocumentType.LIST_PRZEWOZOWY.value
     else:
         doc_type = OrderDocumentType.ZALACZNIK.value
+    doc_row = None
     if ft in ("FILES", "SALES_DOCUMENT", "SHIPPING_LABEL"):
         doc_row = OrderDocument(
             order_id=int(order_id),
@@ -3600,6 +3719,20 @@ async def post_order_custom_field_file(
         db.add(doc_row)
         db.flush()
         out["order_document_id"] = int(doc_row.id)
+    emit_order_custom_field_file_activity(
+        db,
+        tenant_id=int(order.tenant_id),
+        warehouse_id=int(order.warehouse_id),
+        order_id=int(order_id),
+        field_id=int(field.id),
+        field_name=str(field.name or ""),
+        filename=str(meta.get("original_filename") or file.filename or "plik"),
+        attached=True,
+        order_document_id=int(doc_row.id) if doc_row is not None else None,
+        mime_type=str(getattr(file, "content_type", None) or "") or None,
+        size_bytes=len(raw),
+        actor_user_id=int(current_user.id) if current_user is not None else None,
+    )
     db.commit()
     return out
 

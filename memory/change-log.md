@@ -1,3 +1,11 @@
+## 2026-08-23 — Order › Logi Phase 2 (commerce + custom fields)
+
+- Activity Log writers: custom fields, file attach/remove, payments, payment/shipping method, ORDER_IMPORTED
+- ActorKind += INTEGRATION; FE labels + operator presentation
+- SKIP: refund / tracking / Wfirma (no non-WMS domain pipeline)
+- Tests: test_order_activity_timeline_phase2.py; Phase1 regression PASS
+- WMS touched=0; forward-only (no backfill)
+
 ## 2026-08-22 — ERP global sidebar scale-up (uncommitted)
 
 - `erpSidebarStyles.ts`: rail 80→104px, expanded 200→252px, icons 20→24px, labels 9→11px, WMS chrome tokens.

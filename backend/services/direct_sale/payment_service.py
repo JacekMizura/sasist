@@ -138,6 +138,25 @@ def orchestrate_direct_sale_payment(
         extra={"payment_id": int(pay.id), "amount": amt, "method": m, "settle": settle},
     )
 
+    from ..activity_log.order_commerce_activity import (
+        emit_order_payment_registered_activity,
+        emit_order_payment_status_changed_activity,
+    )
+
+    emit_order_payment_registered_activity(
+        db,
+        tenant_id=int(order.tenant_id),
+        warehouse_id=int(order.warehouse_id),
+        order_id=int(order.id),
+        payment_id=int(pay.id),
+        amount=amt,
+        currency=str(order.currency or "PLN"),
+        method=m,
+        status="PENDING",
+        actor_user_id=performed_by_user_id,
+        source="direct_sales",
+    )
+
     if not settle:
         pay.status = "PENDING"
         pay.settlement_state = "PENDING"
@@ -175,6 +194,18 @@ def orchestrate_direct_sale_payment(
     pay.authorization_reference = f"AUTH-{pay.id}"
     pay.external_transaction_id = f"DS-{sess.id}-{pay.id}"
     db.flush()
+    emit_order_payment_status_changed_activity(
+        db,
+        tenant_id=int(order.tenant_id),
+        warehouse_id=int(order.warehouse_id),
+        order_id=int(order.id),
+        old_status="PENDING",
+        new_status="PAID",
+        payment_id=int(pay.id),
+        actor_user_id=performed_by_user_id,
+        source="direct_sales",
+        mutation_token=str(pay.id),
+    )
     log_payment_orchestration(
         action="completed",
         payment_id=int(pay.id),

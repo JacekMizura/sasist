@@ -85,6 +85,8 @@ def resolve_operator_display(
         return str(meta.get("actor_label") or "Automatyzacja").strip() or "Automatyzacja"
     if actor_kind == "SYSTEM":
         return str(meta.get("actor_label") or "System").strip() or "System"
+    if actor_kind == "INTEGRATION":
+        return str(meta.get("actor_label") or meta.get("integration_name") or "Integracja").strip() or "Integracja"
     integration = meta.get("integration_name") or meta.get("actor_label")
     if isinstance(integration, str) and integration.strip():
         # Prefer explicit USER name when present

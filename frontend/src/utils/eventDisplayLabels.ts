@@ -98,6 +98,14 @@ export const EVENT_DISPLAY_LABELS: Record<string, string> = {
   WAREHOUSE_DOCUMENT_CREATED: "Dokument magazynowy",
   WAREHOUSE_DOCUMENT_NUMBER_ASSIGNED: "Numer dokumentu magazynowego",
   WAREHOUSE_DOCUMENT_FAILED: "Dokument magazynowy",
+  ORDER_CUSTOM_FIELD_CHANGED: "Pole dodatkowe",
+  ORDER_CUSTOM_FIELD_FILE_ATTACHED: "Plik pola dodatkowego",
+  ORDER_CUSTOM_FIELD_FILE_REMOVED: "Plik pola dodatkowego",
+  ORDER_PAYMENT_REGISTERED: "Płatność",
+  ORDER_PAYMENT_STATUS_CHANGED: "Status płatności",
+  ORDER_PAYMENT_METHOD_CHANGED: "Metoda płatności",
+  ORDER_SHIPPING_METHOD_CHANGED: "Metoda dostawy",
+  ORDER_IMPORTED: "Import zamówienia",
 
   // --- Ops workflow actions ---
   WAITING_PROMOTED: "Przyjęcie odblokowało workflow",

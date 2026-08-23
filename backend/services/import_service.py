@@ -2053,6 +2053,22 @@ class ImportService:
 
                     apply_initial_fulfillment_assignment(self.db, order)
                     created_orders.append(order)
+                    try:
+                        from .activity_log.order_commerce_activity import emit_order_imported_activity
+
+                        emit_order_imported_activity(
+                            self.db,
+                            tenant_id=int(tenant_id),
+                            warehouse_id=int(warehouse_id),
+                            order_id=int(order.id),
+                            source=str(source_val or "").strip() or "import",
+                            external_order_id=str(ext) if ext else None,
+                        )
+                    except Exception:
+                        logger.exception(
+                            "import_orders: ORDER_IMPORTED activity failed order_id=%s",
+                            getattr(order, "id", None),
+                        )
                 else:
                     order_warning_count += 1
                 if order is not None and not (getattr(order, "scan_code", None) or "").strip():

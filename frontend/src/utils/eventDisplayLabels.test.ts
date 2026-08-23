@@ -44,6 +44,14 @@ describe("eventDisplayLabels SSOT", () => {
     }
   });
 
+  it("maps Phase 1/2 order Logi codes to Polish", () => {
+    expect(getEventDisplayLabel("ORDER_STATUS_CHANGED")).toBe("Zmiana statusu");
+    expect(getEventDisplayLabel("AUTOMATION_SUCCEEDED")).toBe("Automatyzacja");
+    expect(getEventDisplayLabel("ORDER_CUSTOM_FIELD_CHANGED")).toBe("Pole dodatkowe");
+    expect(getEventDisplayLabel("ORDER_PAYMENT_REGISTERED")).toBe("Płatność");
+    expect(getEventDisplayLabel("ORDER_IMPORTED")).toBe("Import zamówienia");
+  });
+
   it("specific labels match warehouse Polish", () => {
     expect(getEventDisplayLabel("CART_RELEASED")).toBe("Zwolniono wózek");
     expect(getEventDisplayLabel("order_packed")).toBe("Spakowano zamówienie");

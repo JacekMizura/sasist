@@ -50,10 +50,16 @@ export function ActivityLogOperatorCell({
   const isSystem =
     kind === "SYSTEM" || lower === "system" || lower.startsWith("system ");
   const isIntegration =
-    !isAutomation &&
-    (lower.includes("integracj") || lower.includes("api") || lower.includes("webhook"));
+    kind === "INTEGRATION" ||
+    (!isAutomation &&
+      !isSystem &&
+      (lower.includes("integracj") || lower.includes("api") || lower.includes("webhook")));
   const Icon = isAutomation || isSystem ? Bot : isIntegration ? Plug : User;
-  const display = isAutomation ? n || "Automatyzacja" : n || "System";
+  const display = isAutomation
+    ? n || "Automatyzacja"
+    : isIntegration
+      ? n || "Integracja"
+      : n || "System";
 
   return (
     <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-slate-700">

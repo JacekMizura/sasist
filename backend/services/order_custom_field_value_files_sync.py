@@ -144,6 +144,9 @@ def sync_files_value_order_documents(
     warehouse_id: int,
     old_json_str: Optional[str],
     new_json_str: Optional[str],
+    field_id: Optional[int] = None,
+    field_name: Optional[str] = None,
+    actor_user_id: Optional[int] = None,
 ) -> None:
     """Usuwa dokumenty usunięte z JSON; aktualizuje nazwę pliku dla pozostałych."""
     old_list = _parse_list(old_json_str)
@@ -178,6 +181,21 @@ def sync_files_value_order_documents(
             .first()
         )
         if row is not None:
+            if field_id is not None:
+                from .activity_log.order_commerce_activity import emit_order_custom_field_file_activity
+
+                emit_order_custom_field_file_activity(
+                    db,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    order_id=int(order_id),
+                    field_id=int(field_id),
+                    field_name=str(field_name or f"Pole #{field_id}"),
+                    filename=str(row.original_filename or row.stored_filename or "plik"),
+                    attached=False,
+                    order_document_id=int(row.id),
+                    actor_user_id=actor_user_id,
+                )
             _unlink_upload_file(str(row.file_url or ""))
             db.delete(row)
 
@@ -226,6 +244,9 @@ def sync_custom_field_attached_files(
     warehouse_id: int,
     old_json_str: Optional[str],
     new_json_str: Optional[str],
+    field_id: Optional[int] = None,
+    field_name: Optional[str] = None,
+    actor_user_id: Optional[int] = None,
 ) -> None:
     """Usuwa z dysku (i z ``order_documents``) pliki, które zniknęły z listy JSON pola (np. SALES_DOCUMENT / SHIPPING_LABEL)."""
     old_list = _parse_list(old_json_str)
@@ -247,9 +268,40 @@ def sync_custom_field_attached_files(
             .first()
         )
         if row is not None:
+            if field_id is not None:
+                from .activity_log.order_commerce_activity import emit_order_custom_field_file_activity
+
+                emit_order_custom_field_file_activity(
+                    db,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    order_id=int(order_id),
+                    field_id=int(field_id),
+                    field_name=str(field_name or f"Pole #{field_id}"),
+                    filename=str(row.original_filename or row.stored_filename or "plik"),
+                    attached=False,
+                    order_document_id=int(row.id),
+                    actor_user_id=actor_user_id,
+                )
             _unlink_upload_file(str(row.file_url or ""))
             db.delete(row)
         else:
+            if field_id is not None:
+                from .activity_log.order_commerce_activity import emit_order_custom_field_file_activity
+
+                fname = url.rsplit("/", 1)[-1] if "/" in url else url
+                emit_order_custom_field_file_activity(
+                    db,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    order_id=int(order_id),
+                    field_id=int(field_id),
+                    field_name=str(field_name or f"Pole #{field_id}"),
+                    filename=str(fname or "plik"),
+                    attached=False,
+                    order_document_id=None,
+                    actor_user_id=actor_user_id,
+                )
             _unlink_upload_file(url)
 
     by_id: Dict[int, Dict[str, Any]] = {}
