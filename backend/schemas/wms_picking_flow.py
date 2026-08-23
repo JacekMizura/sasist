@@ -120,8 +120,11 @@ class WmsPickingOrderTypeHubSlice(BaseModel):
     """Liczniki dla jednego filtra typu zamówień na ekranie „Wybierz”."""
 
     order_count: int = Field(0, ge=0, description="Dostępne (wolne) zamówienia tego typu")
-    products_picked: int = Field(0, ge=0, description="Produkty już zebrane (SKU)")
-    products_total: int = Field(0, ge=0, description="Produkty do zebrania łącznie (SKU)")
+    products_picked: int = Field(0, ge=0, description="Produkty już zebrane (SKU / linie)")
+    products_total: int = Field(0, ge=0, description="Produkty do zebrania łącznie (SKU / linie)")
+    units_picked: int = Field(0, ge=0, description="Sztuki już zebrane (Σ qty)")
+    units_total: int = Field(0, ge=0, description="Sztuki do zebrania łącznie (Σ qty)")
+    units_remaining: int = Field(0, ge=0, description="Sztuki pozostałe (Σ remaining)")
 
 
 class WmsPickingOrderTypeHubResponse(BaseModel):

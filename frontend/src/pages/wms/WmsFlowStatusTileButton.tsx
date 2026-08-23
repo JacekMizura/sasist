@@ -169,8 +169,9 @@ export function WmsFlowStatusTileButton({
               <p className="pt-0.5 text-xs font-normal text-slate-400">
                 Produkty do zebrania:{" "}
                 <span className="tabular-nums text-slate-500">
-                  {Math.max(0, sessionProductsPicked)}/{Math.max(0, sessionProductsTotal)} szt.
+                  {Math.max(0, sessionProductsPicked)}/{Math.max(0, sessionProductsTotal)}
                 </span>
+                {" "}(pozycje SKU)
               </p>
             ) : null}
           </div>

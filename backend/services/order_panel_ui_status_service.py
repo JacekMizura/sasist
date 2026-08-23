@@ -211,11 +211,15 @@ def apply_order_panel_ui_status(
     skip_production_trigger: bool = False,
 ) -> dict[str, Any]:
     """
-    Ustawia ``order_ui_status_id`` (zawsze).
+    Ustawia ``order_ui_status_id`` (zawsze, z wyjątkiem bloku cartless-in-progress).
 
     Gdy ``order.cart_id`` jest ustawione:
     - jeśli detach dozwolony → CartLifecycle detach,
     - jeśli zablokowany → status zostaje zapisany, zamówienie zostaje na wózku.
+
+    Gdy cartless (``picking_session_id``):
+    - brak factual Pick → release z sesji przy wyjściu ze source status,
+    - istnieją Pick → ``CartLifecycleError`` (409) — bez split-brain ERP/WMS.
     """
     # Orphan shipping_method_id makes ANY UPDATE of the order row fail FK check on Postgres.
     # Clear before status mutation / production hook flush (keeps free-text label).
@@ -233,6 +237,20 @@ def apply_order_panel_ui_status(
         int(order.order_ui_status_id) if getattr(order, "order_ui_status_id", None) is not None else None
     )
     new_sid = int(sub_status_id) if sub_status_id is not None else None
+
+    # Cartless membership gate BEFORE mutating panel status (no half-applied change).
+    cart_id_pre = getattr(order, "cart_id", None)
+    if cart_id_pre is None or int(cart_id_pre) <= 0:
+        ps_pre = getattr(order, "picking_session_id", None)
+        if ps_pre is not None and int(ps_pre) > 0:
+            from .wms_cartless_picking.membership_service import (
+                assert_cartless_panel_status_change_allowed,
+            )
+
+            assert_cartless_panel_status_change_allowed(
+                db, order=order, new_status_id=new_sid
+            )
+
     order.order_ui_status_id = new_sid
     # Unikaj stale relationship przy serializacji w tej samej sesji.
     try:
@@ -276,9 +294,29 @@ def apply_order_panel_ui_status(
 
     cart_id = getattr(order, "cart_id", None)
     if cart_id is None or int(cart_id) <= 0:
+        # Cartless: leaving session source status must release membership (or block
+        # when factual picks exist) — no ERP/WMS split-brain.
+        cartless_out: dict[str, Any] = {}
+        ps = getattr(order, "picking_session_id", None)
+        if ps is not None and int(ps) > 0:
+            from .wms_cartless_picking.membership_service import (
+                sync_cartless_membership_on_panel_status_change,
+            )
+
+            cartless_out = sync_cartless_membership_on_panel_status_change(
+                db,
+                order=order,
+                previous_status_id=previous_sid,
+                new_status_id=new_sid,
+                operator_user_id=operator_user_id,
+            )
         db.add(order)
         _after_status_persisted()
-        return {"status_updated": True, "detached": False}
+        return {
+            "status_updated": True,
+            "detached": bool(cartless_out.get("action") == "released"),
+            "cartless_membership": cartless_out or None,
+        }
 
     tid = int(order.tenant_id)
     wid = int(order.warehouse_id)

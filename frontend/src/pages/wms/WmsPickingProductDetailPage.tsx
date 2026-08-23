@@ -966,7 +966,10 @@ export default function WmsPickingProductDetailPage() {
           if (requiresBasketPut) {
             void acceptSourceLocation(locRes.location_id, "accept");
           } else if (needsLocationScan) {
-            openQtyStep(locRes.location_id);
+            // Cartless / no basket-put: location accept only — product scan confirms +1.
+            // Do not open qty panel here (would toast PRODUCT_SCAN_REQUIRED via stale gate).
+            setScannerInputPlaceholder("Zeskanuj produkt");
+            setPickMsg(null);
           }
           return SCAN_CONSUMED;
         }
@@ -1072,16 +1075,10 @@ export default function WmsPickingProductDetailPage() {
             via: "detail",
             pending_before: Boolean(effectivePending),
           });
-          // Detail is mandatory — validated product scan opens qty, never auto-confirm.
-          if (requiresBasketPut) {
-            if (scanGateRef.current || pickBusy) return SCAN_CONSUMED;
-            scanGateRef.current = true;
-            void confirm_pick(1, loc.location_id);
-          } else {
-            playScanBeep();
-            appendScanToHistory(scan);
-            openQtyStep(loc.location_id);
-          }
+          // One intentional product scan = +1 pick (cartless and basket-put).
+          // Qty panel remains for manual „Zbierz” — not for scan confirmation.
+          scanGateRef.current = true;
+          void confirm_pick(1, loc.location_id);
         } else if (!loc) {
           showScanFeedbackFromCode("PICK_LOCATION_REQUIRED");
           setPickMsg(mapWmsScanErrorCode("PICK_LOCATION_REQUIRED").message);
@@ -1150,9 +1147,10 @@ export default function WmsPickingProductDetailPage() {
         if (requiresBasketPut) {
           void confirm_pick(1, selectedLocation.location_id);
         } else {
-          playScanBeep();
-          appendScanToHistory(scan);
-          openQtyStep(selectedLocation.location_id);
+          // Cartless / non-MULTI: same one-scan = +1 unit (no qty-panel gate).
+          if (scanGateRef.current || pickBusy) return SCAN_CONSUMED;
+          scanGateRef.current = true;
+          void confirm_pick(1, selectedLocation.location_id);
         }
         return SCAN_CONSUMED;
       }

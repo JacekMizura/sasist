@@ -117,6 +117,10 @@ export type WmsPickingOrderTypeHubSlice = {
   order_count: number;
   products_picked: number;
   products_total: number;
+  /** Sztuki (Σ qty) — canonical demand units from session stats. */
+  units_picked?: number;
+  units_total?: number;
+  units_remaining?: number;
 };
 
 export type WmsPickingOrderTypeHub = {

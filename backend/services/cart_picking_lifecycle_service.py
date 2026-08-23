@@ -2715,11 +2715,12 @@ def run_cart_lifecycle_maintenance(db: Session) -> dict[str, int]:
 
 def compute_session_stats_from_product_lines(lines: Sequence[Any]) -> dict[str, int | float]:
     """
-    Liczniki SKU w sesji + sumy sztuk braku.
+    Liczniki SKU w sesji + sumy sztuk.
 
     SHORTAGE (remaining≈0, missing>0) → ``braki`` (SKU), NIGDY ``zebrane``.
     COMPLETED_PICK (remaining≈0, missing≈0) → ``zebrane``.
     ``braki_szt`` = Σ missing_quantity (sztuki, nie SKU).
+    ``units_total`` / ``units_remaining`` / ``units_picked`` = Σ quantity (sztuki).
     ``zamowienia_z_brakami`` = unikalne order_id z allocations.shortage_qty>0.
     """
     zebrane = 0
@@ -2727,12 +2728,18 @@ def compute_session_stats_from_product_lines(lines: Sequence[Any]) -> dict[str, 
     w_trakcie = 0
     braki = 0
     braki_szt = 0.0
+    units_total = 0.0
+    units_picked = 0.0
+    units_remaining = 0.0
     orders_with_shortage: set[int] = set()
     for ln in lines:
         total = float(getattr(ln, "total_quantity", 0) or 0)
         picked = float(getattr(ln, "picked_quantity", 0) or 0)
         missing = float(getattr(ln, "missing_quantity", 0) or 0)
         remaining = float(getattr(ln, "remaining_to_pick", None) or 0)
+        units_total = round(units_total + max(0.0, total), 6)
+        units_picked = round(units_picked + max(0.0, picked), 6)
+        units_remaining = round(units_remaining + max(0.0, remaining), 6)
         braki_szt = round(braki_szt + max(0.0, missing), 6)
         allocs = getattr(ln, "allocations", None) or []
         for a in allocs:
@@ -2768,6 +2775,9 @@ def compute_session_stats_from_product_lines(lines: Sequence[Any]) -> dict[str, 
         "w_trakcie": w_trakcie,
         "braki": braki,
         "braki_szt": braki_szt,
+        "units_total": units_total,
+        "units_picked": units_picked,
+        "units_remaining": units_remaining,
         "zamowienia_z_brakami": len(orders_with_shortage),
     }
 

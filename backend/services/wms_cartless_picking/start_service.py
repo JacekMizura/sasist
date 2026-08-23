@@ -140,19 +140,32 @@ def start_cartless_picking(
     )
     if existing is not None:
         # Idempotent: wznów istniejącą sesję operatora (bez drugiego claim).
+        # Revalidate: drop members that left source status without factual picks.
+        from .membership_service import revalidate_cartless_session_membership
+
+        kept = revalidate_cartless_session_membership(
+            db,
+            session_id=int(existing.id),
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            source_status_id=int(source_status_id),
+            operator_user_id=uid,
+        )
         on_sess = (
             db.query(Order.id)
             .filter(Order.picking_session_id == int(existing.id), Order.deleted_at.is_(None))
             .count()
         )
-        if on_sess > 0:
+        if on_sess > 0 or kept:
             logger.info(
-                "cartless.start resume session_id=%s operator=%s orders=%s",
+                "cartless.start resume session_id=%s operator=%s kept=%s on_sess=%s",
                 int(existing.id),
                 uid,
+                len(kept),
                 on_sess,
             )
             return existing, None
+        # Session emptied by revalidation — fall through to claim fresh cohort.
 
     ot = _order_type_filter(order_type)  # type: ignore[arg-type]
     if fixed_order_ids is not None:

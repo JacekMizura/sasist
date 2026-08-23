@@ -199,12 +199,19 @@ def build_session_aware_order_type_hub(
             do_zebrania = int(stats.get("do_zebrania") or 0)
             w_trakcie = int(stats.get("w_trakcie") or 0)
             total = zebrane + do_zebrania + w_trakcie
+            units_picked = int(round(float(stats.get("units_picked") or 0)))
+            units_total = int(round(float(stats.get("units_total") or 0)))
+            units_remaining = int(round(float(stats.get("units_remaining") or 0)))
         except Exception:
             zebrane, total = 0, 0
+            units_picked, units_total, units_remaining = 0, 0, 0
         out[ot] = {
             "order_count": len(free_ids),
             "products_picked": zebrane,
             "products_total": total,
+            "units_picked": units_picked,
+            "units_total": units_total,
+            "units_remaining": units_remaining,
         }
 
     return {

@@ -1,3 +1,24 @@
+## 2026-08-23 — WMS picking session lifecycle + scan flow
+
+- Split-brain #1276: cartless `picking_session_id` survived Pilne→Nowe; resolve ignored source status
+- Policy: no picks → release membership + Activity; with picks → 409 block status change
+- Revalidate at `resolve_wms_picking_order_ids` / cartless start resume
+- Double scan: stale `productScanRequired` + openQtyStep; fix one EAN = confirm_pick(1)
+- Hub: products=SKU, units=Σ qty; stop labeling SKU as „szt.”
+- Tests: test_wms_cartless_session_membership.py
+
+## 2026-08-23 — Cartless open quantity vs stale line status
+
+- Detail rem=2 / quick-pick NO_OPEN: skipped on stale `wms_picking_line_status=picked` while Pick SSOT rem>0
+- Fix: `cartless_order_item_open_qty` SSOT; heal stale picked; undo clears status
+- Tests: test_wms_cartless_open_quantity.py
+
+## 2026-08-23 — Picking location false-match B3→A1 (endsWith id)
+
+- Runtime: scan B3-C-1 → toast `Lokalizacja A1-A-1` / consumed=true / active stays A1
+- Cause: `endsWith(location_id)` → `"B3-C-1".endsWith("1")` matches A1 id=1; stale source_lock could reset after
+- Fix: strict location match; operator explicit wins over stale lock; hook regression A1→B3→quick-pick B3
+
 ## 2026-08-23 — WMS picking scanned location context SSOT
 
 - Root: Helper history marked B3 as location while picking `activeLocationId` stayed A1; silent `consumed=true` for non-routed location scans; product pick used stale A1; ValueError → NIEZNANY KOD

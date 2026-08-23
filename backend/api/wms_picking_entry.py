@@ -597,6 +597,9 @@ def get_picking_order_type_hub(
                 order_count=int(d.get("order_count") or 0),
                 products_picked=int(d.get("products_picked") or 0),
                 products_total=int(d.get("products_total") or 0),
+                units_picked=int(d.get("units_picked") or 0),
+                units_total=int(d.get("units_total") or 0),
+                units_remaining=int(d.get("units_remaining") or 0),
             )
 
         return WmsPickingOrderTypeHubResponse(

@@ -828,7 +828,14 @@ def build_picking_order_type_hub(
         )
         order_count = len(free_ids)
         if order_count == 0:
-            out[ot] = {"order_count": 0, "products_picked": 0, "products_total": 0}
+            out[ot] = {
+                "order_count": 0,
+                "products_picked": 0,
+                "products_total": 0,
+                "units_picked": 0,
+                "units_total": 0,
+                "units_remaining": 0,
+            }
             continue
         lines = build_wms_picking_product_lines(
             db,
@@ -849,6 +856,9 @@ def build_picking_order_type_hub(
             "order_count": order_count,
             "products_picked": zebrane,
             "products_total": total,
+            "units_picked": int(round(float(stats.get("units_picked") or 0))),
+            "units_total": int(round(float(stats.get("units_total") or 0))),
+            "units_remaining": int(round(float(stats.get("units_remaining") or 0))),
         }
     return out
 
@@ -1279,7 +1289,8 @@ def resolve_wms_picking_order_ids(
         return order_ids
 
     if picking_session_id is not None:
-        from .wms_cartless_picking.scope import get_cartless_session_or_raise, list_order_ids_on_picking_session
+        from .wms_cartless_picking.membership_service import revalidate_cartless_session_membership
+        from .wms_cartless_picking.scope import get_cartless_session_or_raise
 
         # Walidacja tenant/warehouse (ownership opcjonalna — odczyt listy produktów).
         get_cartless_session_or_raise(
@@ -1291,11 +1302,13 @@ def resolve_wms_picking_order_ids(
             require_open=False,
             allow_system=True,
         )
-        return list_order_ids_on_picking_session(
+        # SSOT: session members still in source panel status (heal stale without picks).
+        return revalidate_cartless_session_membership(
             db,
             session_id=int(picking_session_id),
             tenant_id=int(tenant_id),
             warehouse_id=int(warehouse_id),
+            source_status_id=int(source_status_id),
         )
 
     if cart_id is not None:

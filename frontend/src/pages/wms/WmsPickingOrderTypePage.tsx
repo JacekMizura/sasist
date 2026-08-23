@@ -24,13 +24,33 @@ const EMPTY_SLICE: WmsPickingOrderTypeHubSlice = {
   order_count: 0,
   products_picked: 0,
   products_total: 0,
+  units_picked: 0,
+  units_total: 0,
+  units_remaining: 0,
 };
 
-function orderTypeProgressLabel(picked: number, total: number): string {
-  if (picked > 1e-9) {
-    return `Produkty: zebrano ${picked} / ${total} szt.`;
+function orderTypeProgressLabel(slice: WmsPickingOrderTypeHubSlice): string {
+  const products = Math.max(0, Number(slice.products_total) || 0);
+  const units =
+    slice.units_remaining != null || slice.units_total != null
+      ? Math.max(
+          0,
+          Number(
+            slice.units_remaining != null ? slice.units_remaining : slice.units_total,
+          ) || 0,
+        )
+      : null;
+  const pickedSku = Math.max(0, Number(slice.products_picked) || 0);
+  if (units != null) {
+    if (pickedSku > 1e-9) {
+      return `Produkty: ${pickedSku}/${products} · Sztuki: ${units}`;
+    }
+    return `Produkty: ${products} · Sztuki do zebrania: ${units}`;
   }
-  return `Produkty do zebrania: ${total} szt.`;
+  if (pickedSku > 1e-9) {
+    return `Pozycje: zebrano ${pickedSku} / ${products}`;
+  }
+  return `Pozycje do zebrania: ${products}`;
 }
 
 /**
@@ -176,8 +196,6 @@ export default function WmsPickingOrderTypePage() {
             {choices.map((id) => {
               const meta = CHOICE_META[id];
               const slice = sliceFor(id);
-              const picked = Math.max(0, Number(slice.products_picked) || 0);
-              const total = Math.max(0, Number(slice.products_total) || 0);
               return (
                 <li key={id} className="min-w-0">
                   <button
@@ -203,7 +221,7 @@ export default function WmsPickingOrderTypePage() {
                         wmsTypoClass.quantity,
                       ].join(" ")}
                     >
-                      {orderTypeProgressLabel(picked, total)}
+                      {orderTypeProgressLabel(slice)}
                     </p>
                   </button>
                 </li>
