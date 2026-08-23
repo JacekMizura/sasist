@@ -32,6 +32,7 @@ from .constants import (
     build_fulfillment_key,
     wms_pick_idempotency_key,
 )
+from .pick_movement_link import link_documentary_wz_to_pick_movements
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +149,30 @@ def _record_documentary_activity(
     )
 
 
+def _attach_pick_movements_to_documentary_wz(
+    db: Session,
+    *,
+    tenant_id: int,
+    pick_ids: list[int],
+    stock_document_id: int,
+) -> None:
+    if not pick_ids:
+        return
+    linked = link_documentary_wz_to_pick_movements(
+        db,
+        tenant_id=int(tenant_id),
+        pick_ids=pick_ids,
+        stock_document_id=int(stock_document_id),
+    )
+    if linked:
+        logger.info(
+            "[warehouse_wz.pick_link] wz_id=%s picks=%s operations_linked=%s",
+            int(stock_document_id),
+            len(pick_ids),
+            linked,
+        )
+
+
 def ensure_documentary_wz_for_pick_settlement(
     db: Session,
     *,
@@ -175,7 +200,14 @@ def ensure_documentary_wz_for_pick_settlement(
 
     existing = load_wz_by_idempotency_key(db, tenant_id=int(tenant_id), idempotency_key=idem)
     if existing is not None:
-        return _result_from_existing(existing, idempotency_key=idem)
+        result = _result_from_existing(existing, idempotency_key=idem)
+        _attach_pick_movements_to_documentary_wz(
+            db,
+            tenant_id=int(tenant_id),
+            pick_ids=pick_ids,
+            stock_document_id=result.stock_document_id,
+        )
+        return result
 
     if not pick_ids:
         return None
@@ -279,8 +311,22 @@ def ensure_documentary_wz_for_pick_settlement(
                 oid,
                 fulfillment_key,
             )
-            return _result_from_existing(existing, idempotency_key=idem)
+            result = _result_from_existing(existing, idempotency_key=idem)
+            _attach_pick_movements_to_documentary_wz(
+                db,
+                tenant_id=int(tenant_id),
+                pick_ids=pick_ids,
+                stock_document_id=result.stock_document_id,
+            )
+            return result
         raise
+
+    _attach_pick_movements_to_documentary_wz(
+        db,
+        tenant_id=int(tenant_id),
+        pick_ids=pick_ids,
+        stock_document_id=created_wz_id,
+    )
 
     logger.info(
         "[warehouse_wz.documentary] wz_id=%s number=%s order_id=%s fulfillment=%s picks=%s",

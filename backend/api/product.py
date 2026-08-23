@@ -47,6 +47,7 @@ from ..models.inventory import Inventory
 from ..models.location import Location
 from ..models.order import Order
 from ..models.order_item import OrderItem
+from ..models.pick import Pick
 from ..models.product_substitution import ProductSubstitution
 from ..models.stock_reservation import StockReservation
 from ..models.warehouse import Bin, Rack, WarehouseLayout
@@ -3237,6 +3238,20 @@ def list_product_inventory_movements(
         )
         .all()
     )
+    wms_pick_ids = sorted(
+        {int(w.pick_id) for w in wms_wh_ops if getattr(w, "pick_id", None) is not None}
+    )
+    picks_by_id: dict[int, Pick] = {}
+    order_ids_from_picks: set[int] = set()
+    if wms_pick_ids:
+        for p in db.query(Pick).filter(Pick.id.in_(wms_pick_ids), Pick.tenant_id == tid).all():
+            picks_by_id[int(p.id)] = p
+            if getattr(p, "order_id", None) is not None:
+                order_ids_from_picks.add(int(p.order_id))
+    orders_by_pick_id: dict[int, Order] = {}
+    if order_ids_from_picks:
+        for o in db.query(Order).filter(Order.id.in_(list(order_ids_from_picks)), Order.tenant_id == tid).all():
+            orders_by_pick_id[int(o.id)] = o
     wms_doc_ids = sorted(
         {int(w.stock_document_id) for w in wms_wh_ops if getattr(w, "stock_document_id", None) is not None}
     )
@@ -3303,6 +3318,18 @@ def list_product_inventory_movements(
                 doc_type_hint = str(getattr(sd, "document_type", "") or doc_type_hint or "WMS").strip().upper()
                 ref_doc_u = str(getattr(sd, "document_number", "") or ref_doc_u or "").strip() or ref_doc_u
             mt_u = str(w.movement_type or "").strip().upper()
+            if mt_u == "PICKING" and sd is None:
+                ref_doc_u = None
+            pick_row = picks_by_id.get(int(w.pick_id)) if getattr(w, "pick_id", None) is not None else None
+            order_id_evt: int | None = None
+            order_number_evt: str | None = None
+            if pick_row is not None and getattr(pick_row, "order_id", None) is not None:
+                order_id_evt = int(pick_row.order_id)
+                ord_row = orders_by_pick_id.get(order_id_evt)
+                if ord_row is not None:
+                    order_number_evt = str(ord_row.number or order_id_evt).strip() or str(order_id_evt)
+                else:
+                    order_number_evt = str(order_id_evt)
             ui_type = str(w.movement_type or "").lower()
             unit_net = None
             unit_gross = None
@@ -3339,6 +3366,8 @@ def list_product_inventory_movements(
                     "document_id": int(w.stock_document_id) if getattr(w, "stock_document_id", None) is not None else None,
                     "document_number": ref_doc_u,
                     "document_type": doc_type_hint or "WMS",
+                    "order_id": order_id_evt,
+                    "order_number": order_number_evt,
                     "location_label": loc_label,
                     "location_from": lf,
                     "location_to": lt,

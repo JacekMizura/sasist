@@ -19,6 +19,8 @@ export type MovementRow = {
   document_id: number | null;
   document_number: string | null;
   document_type: string | null;
+  order_id?: number | null;
+  order_number?: string | null;
   location_label: string;
   location: { id: number; name: string; storage_type: string } | null;
   quantity_before: number | null;
@@ -90,6 +92,8 @@ function normalizeMovementRow(raw: unknown): MovementRow {
     document_id: typeof r.document_id === "number" ? r.document_id : r.document_id != null ? Number(r.document_id) : null,
     document_number: typeof r.document_number === "string" ? r.document_number : null,
     document_type: typeof r.document_type === "string" ? r.document_type : null,
+    order_id: typeof r.order_id === "number" ? r.order_id : r.order_id != null ? Number(r.order_id) : null,
+    order_number: typeof r.order_number === "string" ? r.order_number : null,
     location_label: typeof r.location_label === "string" ? r.location_label : "—",
     location:
       r.location && typeof r.location === "object"
@@ -270,6 +274,7 @@ export function ProductWarehouseMovementsPanel({ productId, tenantId }: Props) {
                 <th className="px-3 py-2.5 text-left font-semibold text-slate-700">Data</th>
                 <th className="px-3 py-2.5 text-left font-semibold text-slate-700">Akcja</th>
                 <th className="px-3 py-2.5 text-left font-semibold text-slate-700">Dokument</th>
+                <th className="px-3 py-2.5 text-left font-semibold text-slate-700">Zamówienie</th>
                 <th className="px-3 py-2.5 text-left font-semibold text-slate-700">Użytkownik</th>
                 <th className="px-3 py-2.5 text-left font-semibold text-slate-700">Lokalizacja (regał / półka)</th>
                 <th className="px-3 py-2.5 text-left font-semibold text-slate-700">Partia</th>
@@ -298,6 +303,18 @@ export function ProductWarehouseMovementsPanel({ productId, tenantId }: Props) {
                       </Link>
                     ) : (row.document_number || "").trim() ? (
                       row.document_number
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-slate-700">
+                    {row.order_id != null ? (
+                      <Link
+                        to={`/orders/${row.order_id}`}
+                        className="font-medium text-blue-700 underline decoration-blue-200 underline-offset-2 hover:text-blue-900"
+                      >
+                        #{row.order_number?.trim() || row.order_id}
+                      </Link>
                     ) : (
                       "—"
                     )}

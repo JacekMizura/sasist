@@ -12,6 +12,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from backend.models.activity_event import ActivityEvent, ActivityEventLink
+from backend.models.wms_product_warehouse_operation import WmsProductWarehouseOperation
 from backend.models.document_series import DocumentSeries
 from backend.models.inventory import Inventory
 from backend.models.location import Location
@@ -75,6 +76,7 @@ def _mk_engine():
         Pick,
         ActivityEvent,
         ActivityEventLink,
+        WmsProductWarehouseOperation,
     ):
         model.__table__.create(engine, checkfirst=True)
     with engine.begin() as conn:
