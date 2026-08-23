@@ -21,6 +21,8 @@ import type { OrderStatusOption } from "../../types/wmsPackingSettings";
 import { orderPanelStatusSelectLabel } from "../../utils/orderPanelStatusUi";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
 import { readDocumentsSeriesListContext, rememberDocumentsSeriesListContext } from "./documentSeriesContext";
+import { WarehouseDocumentSeriesForm } from "./components/WarehouseDocumentSeriesForm";
+import { applyWarehouseSubtypeDefaults } from "./warehouseSeriesCapabilities";
 import {
   applyNumberingPreset,
   DOCUMENT_SERIES_PRINT_TEMPLATE_PRESETS,
@@ -184,13 +186,23 @@ export default function DocumentSeriesEditPage() {
   const [err, setErr] = useState<string | null>(null);
 
   const allowedSubtypes = useMemo(() => subtypesForDocumentSeriesType(draft.type), [draft.type]);
+  const isWarehouse = draft.type === "WAREHOUSE";
 
-  const numberingPreset = useMemo(() => numberingPresetFromDraft(draft), [draft.numbering_format, draft.reset_each_period]);
+  const numberingPreset = useMemo(
+    () => numberingPresetFromDraft(draft),
+    [draft.numbering_format, draft.reset_each_period, draft.monthly_reset, draft.yearly_reset],
+  );
 
   useEffect(() => {
     setDraft((d) => {
       const subs = subtypesForDocumentSeriesType(d.type);
-      return subs.includes(d.subtype) ? d : { ...d, subtype: subs[0] };
+      if (!subs.includes(d.subtype)) {
+        return { ...d, subtype: subs[0] };
+      }
+      if (d.type === "WAREHOUSE") {
+        return applyWarehouseSubtypeDefaults(d, d.subtype) as DocumentSeriesWritePayload;
+      }
+      return d;
     });
   }, [draft.type]);
 
@@ -357,6 +369,29 @@ export default function DocumentSeriesEditPage() {
   };
 
   const printModeCustom = draft.print_template_id == null;
+  const warehouseLabel = warehouse?.name?.trim() || `Magazyn #${warehouseId}`;
+
+  if (isWarehouse) {
+    return (
+      <div className={`min-h-full w-full ${formStackClass} pb-28 pt-1`}>
+        {err ? <FormError className="mt-0 text-sm">{err}</FormError> : null}
+        <WarehouseDocumentSeriesForm
+          draft={draft}
+          setDraft={setDraft}
+          warehouseLabel={warehouseLabel}
+          tenantId={tenantId}
+        />
+        <FormActions sticky>
+          <SecondaryButton type="button" className="hidden sm:inline-flex" onClick={() => navigate("/documents/series")}>
+            Anuluj
+          </SecondaryButton>
+          <PrimaryButton type="button" disabled={saving} onClick={() => void onSave()}>
+            {saving ? "Zapisywanie…" : "Zapisz"}
+          </PrimaryButton>
+        </FormActions>
+      </div>
+    );
+  }
 
   return (
     <div className={`min-h-full w-full ${formStackClass} pb-28 pt-1`}>
@@ -533,6 +568,7 @@ export default function DocumentSeriesEditPage() {
                 <Checkbox
                   checked={draft.warehouse_effect}
                   onChange={(e) => setField("warehouse_effect", e.target.checked)}
+                  disabled={draft.type === "WAREHOUSE"}
                 />
                 Efekt magazynowy (ruchy stanów / WMS)
               </label>

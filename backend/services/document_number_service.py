@@ -18,7 +18,7 @@ from ..models.stock_document import StockDocument
 
 logger = logging.getLogger(__name__)
 
-WarehouseDocSubtype = Literal["PZ", "WZ", "MM", "RW", "PW", "RESERVATION"]
+WarehouseDocSubtype = Literal["PZ", "WZ", "Z_PZ", "MM", "RW", "PW", "RESERVATION"]
 SaleDocSubtype = Literal["INVOICE", "RECEIPT"]
 CorrectionSubtype = Literal["CORRECTION"]
 

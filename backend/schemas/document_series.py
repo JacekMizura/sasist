@@ -32,7 +32,9 @@ def _allowed_subtypes(series_type: str) -> set[str]:
     if t == "SALE":
         return {"INVOICE", "RECEIPT"}
     if t == "WAREHOUSE":
-        return {"WZ", "PZ", "Z_PZ", "MM", "RW", "PW", "RESERVATION"}
+        from ..services.warehouse_series_capabilities import allowed_warehouse_subtypes
+
+        return set(allowed_warehouse_subtypes())
     if t == "CORRECTION":
         return {"CORRECTION"}
     return set()
@@ -125,6 +127,10 @@ class DocumentSeriesBase(BaseModel):
         if st not in allowed:
             raise ValueError(f"subtype {st!r} not allowed for type {self.type!r}")
         self.subtype = st  # type: ignore[assignment]
+        if str(self.type).strip().upper() == "WAREHOUSE":
+            from ..services.warehouse_series_capabilities import physical_effect_for_warehouse_subtype
+
+            self.warehouse_effect = physical_effect_for_warehouse_subtype(st)
         return self
 
 

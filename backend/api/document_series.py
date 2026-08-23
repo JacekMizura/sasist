@@ -6,6 +6,7 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, joinedload
 
 from ..database import engine, get_db
@@ -27,11 +28,36 @@ from ..schemas.document_series import (
     OperationalDocumentSeriesOut,
     OrderUiStatusMiniOut,
 )
+from ..services.document_series_warehouse_validation import apply_warehouse_series_rules
 from ..services.document_series_operational_service import build_operational_catalog
+from ..services.warehouse_series_capabilities import (
+    SUPPORTED_WAREHOUSE_SUBTYPES,
+    capabilities_public_dict,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/document-series", tags=["Document series"])
+
+
+class WarehouseSeriesCapabilitiesOut(BaseModel):
+    items: list[dict]
+
+
+class DocumentSeriesNumberingPreviewIn(BaseModel):
+    prefix: str = ""
+    suffix: str = ""
+    numbering_format: str = "{PREFIX}{NUMBER}"
+    numbering_start: int = Field(1, ge=1)
+    padding_length: int = Field(0, ge=0, le=12)
+    code: str = ""
+    reset_each_period: bool = False
+    yearly_reset: bool = False
+    monthly_reset: bool = False
+
+
+class DocumentSeriesNumberingPreviewOut(BaseModel):
+    preview: str
 
 _VALID_SERIES_TYPES = {"SALE", "WAREHOUSE", "CORRECTION"}
 _VALID_SUBTYPES = {
@@ -45,7 +71,7 @@ _VALID_SUBTYPES = {
     "RESERVATION",
     "Z_PZ",
     "CORRECTION",
-}
+} | set(SUPPORTED_WAREHOUSE_SUBTYPES)
 _VALID_DELETE_MODES = {"ALWAYS_DELETE", "ASK"}
 
 
@@ -369,6 +395,30 @@ def _sync_series_template_binding(db: Session, row: DocumentSeries) -> None:
     )
 
 
+@router.get("/warehouse-capabilities", response_model=WarehouseSeriesCapabilitiesOut)
+def warehouse_series_capabilities():
+    """SSOT projection for warehouse subtype UI capabilities."""
+    return WarehouseSeriesCapabilitiesOut(items=capabilities_public_dict())
+
+
+@router.post("/numbering-preview", response_model=DocumentSeriesNumberingPreviewOut)
+def document_series_numbering_preview(body: DocumentSeriesNumberingPreviewIn):
+    """Preview document number using backend document_number_service semantics."""
+    from types import SimpleNamespace
+
+    from ..services.document_number_service import format_document_number
+
+    row = SimpleNamespace(
+        prefix=(body.prefix or "").strip(),
+        suffix=(body.suffix or "").strip(),
+        numbering_format=(body.numbering_format or "{PREFIX}{NUMBER}").strip(),
+        padding_length=int(body.padding_length),
+        code=(body.code or "").strip(),
+    )
+    preview = format_document_number(row, int(body.numbering_start), warehouse_code=(body.code or "").strip() or None)
+    return DocumentSeriesNumberingPreviewOut(preview=preview)
+
+
 @router.post("/bulk-delete", response_model=DocumentSeriesBulkDeleteOut)
 def document_series_bulk_delete(body: DocumentSeriesBulkDeleteBody, db: Session = Depends(get_db)):
     q = db.query(DocumentSeries).filter(
@@ -556,6 +606,7 @@ def create_document_series(body: DocumentSeriesCreate, db: Session = Depends(get
         series_id=body.warehouse_document_series_id,
         self_id=None,
     )
+    apply_warehouse_series_rules(body)
     row = DocumentSeries(
         tenant_id=body.tenant_id,
         warehouse_id=body.warehouse_id,
@@ -647,6 +698,7 @@ def update_document_series(
         series_id=body.warehouse_document_series_id,
         self_id=str(row.id),
     )
+    apply_warehouse_series_rules(body)
     _apply_body_to_row(row, body)
     _sync_series_template_binding(db, row)
     db.commit()

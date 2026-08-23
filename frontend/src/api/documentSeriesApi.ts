@@ -1,4 +1,5 @@
 import api from "./axios";
+import { SUPPORTED_WAREHOUSE_SUBTYPES } from "../pages/documents/warehouseSeriesCapabilities";
 
 export type DocumentSeriesType = "SALE" | "WAREHOUSE" | "CORRECTION";
 export type DocumentSeriesSubtype =
@@ -170,8 +171,48 @@ export function createDefaultDocumentSeriesWrite(): DocumentSeriesWritePayload {
 
 export function subtypesForDocumentSeriesType(t: DocumentSeriesType): DocumentSeriesSubtype[] {
   if (t === "SALE") return ["INVOICE", "RECEIPT"];
-  if (t === "WAREHOUSE") return ["WZ", "PZ", "Z_PZ", "MM", "RW", "PW", "RESERVATION"];
+  if (t === "WAREHOUSE") return [...SUPPORTED_WAREHOUSE_SUBTYPES];
   return ["CORRECTION"];
+}
+
+export type DocumentSeriesNumberingPreviewPayload = {
+  prefix: string;
+  suffix: string;
+  numbering_format: string;
+  numbering_start: number;
+  padding_length: number;
+  code: string;
+  reset_each_period: boolean;
+  yearly_reset: boolean;
+  monthly_reset: boolean;
+};
+
+export async function previewDocumentSeriesNumbering(
+  body: DocumentSeriesNumberingPreviewPayload,
+): Promise<string> {
+  const res = await api.post<{ preview: string }>("document-series/numbering-preview", body);
+  return res.data.preview;
+}
+
+export type WarehouseSeriesCapabilitiesDto = {
+  subtype: DocumentSeriesSubtype;
+  label_pl: string;
+  operational_code: string;
+  physical_effect: boolean;
+  show_collective_return_receipt: boolean;
+  show_delete_mode: boolean;
+  show_email_notification: boolean;
+  show_print_template_preset: boolean;
+  show_document_template: boolean;
+  show_order_status_hooks: boolean;
+  show_company_block: boolean;
+  default_print_template_id: number | null;
+  document_template_kind: string | null;
+};
+
+export async function fetchWarehouseSeriesCapabilities(): Promise<WarehouseSeriesCapabilitiesDto[]> {
+  const res = await api.get<{ items: WarehouseSeriesCapabilitiesDto[] }>("document-series/warehouse-capabilities");
+  return res.data.items ?? [];
 }
 
 /** SALE + podtyp INVOICE | RECEIPT | CORRECTION (jedna lista dla pakowania i spójnych filtrów). */

@@ -80,14 +80,19 @@ class TestLocationPriority(unittest.TestCase):
 
 
 class TestDocumentSeriesCatalog(unittest.TestCase):
-    def test_zw_zd_in_operational_warehouse_bootstrap(self):
-        subtypes = {normalize_series_spec(s)["subtype"] for s in OPERATIONAL_WAREHOUSE_SERIES}
-        self.assertIn("ZW", subtypes)
-        self.assertIn("ZD", subtypes)
+    def test_zw_zd_moved_to_optional_not_bootstrap(self):
+        from backend.services.document_series_catalog import OPTIONAL_WAREHOUSE_SERIES, OPERATIONAL_WAREHOUSE_SERIES
 
-    def test_required_bootstrap_count_includes_zw_zd(self):
+        boot = {normalize_series_spec(s)["subtype"] for s in OPERATIONAL_WAREHOUSE_SERIES}
+        optional = {normalize_series_spec(s)["subtype"] for s in OPTIONAL_WAREHOUSE_SERIES}
+        self.assertNotIn("ZW", boot)
+        self.assertNotIn("ZD", boot)
+        self.assertIn("ZW", optional)
+        self.assertIn("ZD", optional)
+
+    def test_required_bootstrap_count_excludes_legacy_zw_zd(self):
         self.assertEqual(REQUIRED_BOOTSTRAP_COUNT, len(ALL_OPERATIONAL_SERIES))
-        self.assertGreaterEqual(REQUIRED_BOOTSTRAP_COUNT, 10)
+        self.assertGreaterEqual(REQUIRED_BOOTSTRAP_COUNT, 8)
 
 
 class TestOperationalSalesEvents(unittest.TestCase):

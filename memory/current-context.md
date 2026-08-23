@@ -1,7 +1,6 @@
-﻿# Project context (RZ / business reservation)
+﻿# Current context
 
-- BUSINESS RESERVATION SSOT: `order_warehouse_reservations` (warehouse+product+qty, no location).
-- WMS location holds stay in `stock_reservations` for production / DS / pick allocation.
-- AVAILABLE FOR SALE = physical - SUM(active OWR); location holds must not double-subtract.
-- RZ = StockDocument type RESERVATION via DocumentSeries subtype RESERVATION.
-- Backfill: `backfill_sales_order_location_holds_to_business` (dry-run, not auto on prod).
+- Phase 1 warehouse series standardization shipped: capabilities SSOT, warehouse-only form, backend validation, numbering preview API.
+- BUSINESS RESERVATION SSOT: `order_warehouse_reservations`; RZ subtype RESERVATION, physical_effect=false.
+- Supported warehouse subtypes: WZ, PZ, Z_PZ, RW, PW, MM, RESERVATION. Legacy ZW/ZD moved to optional seed only.
+- Physical decrement unchanged: classic WMS = pick finalize; direct sale = WZ issue; RZ = none.

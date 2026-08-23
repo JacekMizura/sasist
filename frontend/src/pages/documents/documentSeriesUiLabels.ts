@@ -29,17 +29,19 @@ export function documentSeriesSubtypeLabelPl(s: DocumentSeriesSubtype): string {
     case "CORRECTION":
       return "Korekta";
     case "WZ":
-      return "WZ";
+      return "WZ — Wydanie zewnętrzne";
     case "PZ":
-      return "PZ";
+      return "PZ — Przyjęcie zewnętrzne";
+    case "Z_PZ":
+      return "Z_PZ — Przyjęcie zwrotne";
     case "MM":
-      return "MM — przesunięcie";
+      return "MM — Przesunięcie magazynowe";
     case "RW":
-      return "RW";
+      return "RW — Rozchód wewnętrzny";
     case "PW":
-      return "PW";
+      return "PW — Przyjęcie wewnętrzne";
     case "RESERVATION":
-      return "Rezerwacja";
+      return "RZ — Rezerwacja";
     default:
       return "";
   }
@@ -101,21 +103,42 @@ export type NumberingPresetUi = "continuous" | "monthly" | "yearly";
 export function numberingPresetFromDraft(d: {
   numbering_format: string;
   reset_each_period: boolean;
+  monthly_reset?: boolean;
+  yearly_reset?: boolean;
 }): NumberingPresetUi {
-  if (!d.reset_each_period) return "continuous";
-  const fmt = (d.numbering_format || "").toUpperCase();
-  if (fmt.includes("{MONTH}") || fmt.includes("{MM}")) return "monthly";
-  if (fmt.includes("{YEAR}") || fmt.includes("{YYYY}")) return "yearly";
-  return "yearly";
+  if (d.monthly_reset) return "monthly";
+  if (d.yearly_reset || d.reset_each_period) return "yearly";
+  return "continuous";
 }
 
 export function applyNumberingPreset(p: NumberingPresetUi): {
   numbering_format: string;
   reset_each_period: boolean;
+  monthly_reset: boolean;
+  yearly_reset: boolean;
 } {
-  if (p === "continuous") return { numbering_format: "{PREFIX}{NUMBER}", reset_each_period: false };
-  if (p === "monthly") return { numbering_format: "{PREFIX}{YEAR}{MONTH}{NUMBER}", reset_each_period: true };
-  return { numbering_format: "{PREFIX}{YEAR}{NUMBER}", reset_each_period: true };
+  if (p === "continuous") {
+    return {
+      numbering_format: "{PREFIX}/{NUMBER}",
+      reset_each_period: false,
+      monthly_reset: false,
+      yearly_reset: false,
+    };
+  }
+  if (p === "monthly") {
+    return {
+      numbering_format: "{PREFIX}/{YEAR}/{MONTH}/{NUMBER}",
+      reset_each_period: false,
+      monthly_reset: true,
+      yearly_reset: false,
+    };
+  }
+  return {
+    numbering_format: "{PREFIX}-{YEAR}-{NUMBER}",
+    reset_each_period: false,
+    monthly_reset: false,
+    yearly_reset: true,
+  };
 }
 
 export function numberingPresetLabelPl(p: NumberingPresetUi): string {

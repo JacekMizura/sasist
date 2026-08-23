@@ -87,8 +87,6 @@ OPERATIONAL_WAREHOUSE_SERIES: list[OperationalSeriesSpec] = [
     _wh("MM", name="MM — przesunięcia magazynowe"),
     _wh("RW", name="RW — rozchód wewnętrzny"),
     _wh("PW", name="PW — przychód wewnętrzny"),
-    _wh("ZW", name="ZW — zwrot"),
-    _wh("ZD", name="ZD — dowód dostawy"),
 ]
 
 OPERATIONAL_SALE_SERIES: list[OperationalSeriesSpec] = [
@@ -110,6 +108,8 @@ OPERATIONAL_CORRECTION_SERIES: list[OperationalSeriesSpec] = [
 
 # Optional — legacy / extended warehouse series (not auto-seeded with bootstrap set).
 OPTIONAL_WAREHOUSE_SERIES: list[OperationalSeriesSpec] = [
+    _wh("ZW", name="ZW — zwrot (legacy)"),
+    _wh("ZD", name="ZD — dowód dostawy (legacy)"),
     _wh("PZ_RT", name="PZ zwrot RMZ (legacy)", prefix="PZR"),
     _wh("ZWZ", name="ZWZ — zwrot zewnętrzny"),
     _wh("INW", name="INW — inwentaryzacja"),
@@ -188,7 +188,12 @@ def normalize_series_spec(spec: OperationalSeriesSpec) -> dict:
     st = str(spec.get("series_type") or "WAREHOUSE").strip().upper()
     sub = str(spec["subtype"]).strip().upper()
     prefix = str(spec.get("prefix") or operational_code_for_spec(spec)).strip().upper()
-    wh_effect = bool(spec.get("warehouse_effect", st == "WAREHOUSE"))
+    if st == "WAREHOUSE":
+        from .warehouse_series_capabilities import physical_effect_for_warehouse_subtype
+
+        wh_effect = physical_effect_for_warehouse_subtype(sub)
+    else:
+        wh_effect = bool(spec.get("warehouse_effect", False))
     out: dict = {
         "name": str(spec.get("name") or f"{sub} — domyślna"),
         "subtype": sub,
