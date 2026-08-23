@@ -15,7 +15,9 @@ from sqlalchemy.orm import Session
 from .domain_activity import find_activity_by_correlation, record_domain_activity
 from .order_event_codes import (
     ORDER_BILLING_ADDRESS_CHANGED,
+    ORDER_BUNDLE_ADDED,
     ORDER_CUSTOMER_DATA_CHANGED,
+    ORDER_DOCUMENT_SERIES_CHANGED,
     ORDER_EVENT_CATEGORY,
     ORDER_ITEM_ADDED,
     ORDER_ITEM_DISCOUNT_CHANGED,
@@ -26,7 +28,9 @@ from .order_event_codes import (
     ORDER_NOTE_ADDED,
     ORDER_NOTE_DELETED,
     ORDER_NOTE_UPDATED,
+    ORDER_PRIORITY_CHANGED,
     ORDER_SHIPPING_ADDRESS_CHANGED,
+    ORDER_WAREHOUSE_CHANGED,
     ActorKind,
 )
 
@@ -771,6 +775,195 @@ def emit_order_item_discount_changed_activity(
     )
 
 
+def emit_order_priority_changed_activity(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: Optional[int],
+    order_id: int,
+    old_priority: Optional[str],
+    new_priority: Optional[str],
+    actor_user_id: Optional[int] = None,
+    mutation_token: Optional[str] = None,
+    occurred_at: Optional[datetime] = None,
+) -> Any:
+    old_p = str(old_priority or "").strip().lower() or None
+    new_p = str(new_priority or "").strip().lower() or None
+    if old_p == new_p:
+        return None
+    cid = f"oprio:{int(order_id)}:{_hash_key(old_p, new_p, mutation_token)}"[:64]
+    if find_activity_by_correlation(db, correlation_id=cid, tenant_id=int(tenant_id)):
+        return None
+    kind = _kind(actor_user_id)
+    o = old_p or "—"
+    n = new_p or "—"
+    return record_domain_activity(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=warehouse_id,
+        event_type=ORDER_PRIORITY_CHANGED,
+        description=f"Zmieniono priorytet zamówienia z „{o}” na „{n}”.",
+        actor_user_id=actor_user_id if kind == "USER" else None,
+        order_id=int(order_id),
+        metadata={
+            **_actor_meta(kind),
+            "ref_type": "order",
+            "ref_id": int(order_id),
+            "old_value": o[:64],
+            "new_value": n[:64],
+        },
+        correlation_id=cid,
+        severity="INFO",
+        category=ORDER_EVENT_CATEGORY[ORDER_PRIORITY_CHANGED],
+        source_module="order_panel",
+        occurred_at=occurred_at,
+    )
+
+
+def emit_order_document_series_changed_activity(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: Optional[int],
+    order_id: int,
+    old_series_id: Optional[str],
+    old_series_name: Optional[str],
+    new_series_id: Optional[str],
+    new_series_name: Optional[str],
+    actor_user_id: Optional[int] = None,
+    mutation_token: Optional[str] = None,
+    occurred_at: Optional[datetime] = None,
+) -> Any:
+    old_id = str(old_series_id or "").strip() or None
+    new_id = str(new_series_id or "").strip() or None
+    if old_id == new_id:
+        return None
+    cid = f"oser:{int(order_id)}:{_hash_key(old_id, new_id, mutation_token)}"[:64]
+    if find_activity_by_correlation(db, correlation_id=cid, tenant_id=int(tenant_id)):
+        return None
+    kind = _kind(actor_user_id)
+    o = str(old_series_name or "").strip() or old_id or "—"
+    n = str(new_series_name or "").strip() or new_id or "—"
+    return record_domain_activity(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=warehouse_id,
+        event_type=ORDER_DOCUMENT_SERIES_CHANGED,
+        description=f"Zmieniono serię dokumentu z „{o}” na „{n}”.",
+        actor_user_id=actor_user_id if kind == "USER" else None,
+        order_id=int(order_id),
+        metadata={
+            **_actor_meta(kind),
+            "ref_type": "order",
+            "ref_id": int(order_id),
+            "old_series_id": old_id,
+            "new_series_id": new_id,
+            "old_value": o[:255],
+            "new_value": n[:255],
+        },
+        correlation_id=cid,
+        severity="INFO",
+        category=ORDER_EVENT_CATEGORY[ORDER_DOCUMENT_SERIES_CHANGED],
+        source_module="order_panel",
+        occurred_at=occurred_at,
+    )
+
+
+def emit_order_warehouse_changed_activity(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: Optional[int],
+    order_id: int,
+    old_warehouse_id: Optional[int],
+    old_warehouse_name: Optional[str],
+    new_warehouse_id: Optional[int],
+    new_warehouse_name: Optional[str],
+    actor_user_id: Optional[int] = None,
+    mutation_token: Optional[str] = None,
+    occurred_at: Optional[datetime] = None,
+) -> Any:
+    if old_warehouse_id == new_warehouse_id:
+        return None
+    cid = f"owh:{int(order_id)}:{_hash_key(old_warehouse_id, new_warehouse_id, mutation_token)}"[:64]
+    if find_activity_by_correlation(db, correlation_id=cid, tenant_id=int(tenant_id)):
+        return None
+    kind = _kind(actor_user_id)
+    o = str(old_warehouse_name or "").strip() or (f"#{old_warehouse_id}" if old_warehouse_id else "—")
+    n = str(new_warehouse_name or "").strip() or (f"#{new_warehouse_id}" if new_warehouse_id else "—")
+    return record_domain_activity(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=warehouse_id,
+        event_type=ORDER_WAREHOUSE_CHANGED,
+        description=f"Zmieniono magazyn z „{o}” na „{n}”.",
+        actor_user_id=actor_user_id if kind == "USER" else None,
+        order_id=int(order_id),
+        metadata={
+            **_actor_meta(kind),
+            "ref_type": "order",
+            "ref_id": int(order_id),
+            "old_warehouse_id": old_warehouse_id,
+            "new_warehouse_id": new_warehouse_id,
+            "old_value": o[:255],
+            "new_value": n[:255],
+        },
+        correlation_id=cid,
+        severity="INFO",
+        category=ORDER_EVENT_CATEGORY[ORDER_WAREHOUSE_CHANGED],
+        source_module="order_fulfillment",
+        occurred_at=occurred_at,
+    )
+
+
+def emit_order_bundle_added_activity(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: Optional[int],
+    order_id: int,
+    bundle_id: int,
+    bundle_name: str,
+    quantity: int,
+    component_count: int,
+    component_summaries: Optional[list[dict[str, Any]]] = None,
+    actor_user_id: Optional[int] = None,
+    mutation_token: Optional[str] = None,
+    occurred_at: Optional[datetime] = None,
+) -> Any:
+    cid = f"obundle-add:{int(order_id)}:{int(bundle_id)}:{_hash_key(quantity, component_count, mutation_token)}"[:64]
+    if find_activity_by_correlation(db, correlation_id=cid, tenant_id=int(tenant_id)):
+        return None
+    kind = _kind(actor_user_id)
+    name = str(bundle_name or f"Zestaw #{bundle_id}").strip()
+    meta: dict[str, Any] = {
+        **_actor_meta(kind),
+        "ref_type": "bundle",
+        "ref_id": int(bundle_id),
+        "bundle_id": int(bundle_id),
+        "bundle_name": name[:255],
+        "quantity": int(quantity),
+        "component_count": int(component_count),
+    }
+    if component_summaries:
+        meta["components"] = component_summaries[:40]
+    return record_domain_activity(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=warehouse_id,
+        event_type=ORDER_BUNDLE_ADDED,
+        description=f"Dodano zestaw „{name}” do zamówienia.",
+        actor_user_id=actor_user_id if kind == "USER" else None,
+        order_id=int(order_id),
+        metadata=meta,
+        correlation_id=cid,
+        severity="INFO",
+        category=ORDER_EVENT_CATEGORY[ORDER_BUNDLE_ADDED],
+        source_module="order_items",
+        occurred_at=occurred_at,
+    )
+
+
 def build_mutation_detail_rows(metadata: dict[str, Any] | None) -> list[dict[str, str]]:
     meta = metadata or {}
     rows: list[dict[str, str]] = []
@@ -800,4 +993,14 @@ def build_mutation_detail_rows(metadata: dict[str, Any] | None) -> list[dict[str
         rows.append({"label": "Widoczność", "value": ", ".join(flags)})
     if not rows and meta.get("old_value") is not None and meta.get("new_value") is not None:
         rows.append({"label": "Zmiana", "value": f"{meta['old_value']} → {meta['new_value']}"})
+    comps = meta.get("components")
+    if isinstance(comps, list) and comps:
+        for c in comps[:20]:
+            if not isinstance(c, dict):
+                continue
+            nm = str(c.get("name") or c.get("product_name") or "").strip()
+            if not nm:
+                continue
+            qty = c.get("quantity")
+            rows.append({"label": "Składnik", "value": f"{nm}" + (f" × {qty}" if qty is not None else "")})
     return rows

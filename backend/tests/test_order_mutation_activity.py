@@ -32,14 +32,22 @@ from backend.schemas.order import (
     OrderPatchBody,
 )
 from backend.services.activity_log.order_event_codes import (
+    ORDER_BUNDLE_ADDED,
+    ORDER_DOCUMENT_SERIES_CHANGED,
     ORDER_ITEM_ADDED,
     ORDER_ITEM_PRICE_CHANGED,
     ORDER_ITEM_QUANTITY_CHANGED,
     ORDER_NOTE_ADDED,
+    ORDER_PRIORITY_CHANGED,
     ORDER_SHIPPING_ADDRESS_CHANGED,
+    ORDER_WAREHOUSE_CHANGED,
 )
 from backend.services.activity_log.order_mutation_activity import (
+    emit_order_bundle_added_activity,
+    emit_order_document_series_changed_activity,
+    emit_order_priority_changed_activity,
     emit_order_shipping_address_changed_activity,
+    emit_order_warehouse_changed_activity,
     snapshot_shipping_address,
 )
 from backend.services.activity_log.service import list_activity_for_object
@@ -376,3 +384,142 @@ def test_address_idempotent_retry(db):
         .count()
         == 1
     )
+
+
+def test_priority_change_via_patch(db, user):
+    order = db.query(Order).filter(Order.id == 100).one()
+    _apply_order_patch_to_order(
+        db,
+        order,
+        OrderPatchBody(priority_color="red"),
+        actor_user_id=7,
+    )
+    db.commit()
+    rows = [
+        i
+        for i in list_activity_for_object(db, object_type="order", object_id=100)
+        if i["event_code"] == ORDER_PRIORITY_CHANGED
+    ]
+    assert len(rows) == 1
+    assert "red" in rows[0]["description"]
+    assert rows[0]["actor_user_id"] == 7
+
+
+def test_priority_noop_no_event(db, user):
+    order = db.query(Order).filter(Order.id == 100).one()
+    order.priority_color = "blue"
+    db.commit()
+    _apply_order_patch_to_order(
+        db,
+        order,
+        OrderPatchBody(priority_color="blue"),
+        actor_user_id=7,
+    )
+    db.commit()
+    assert (
+        db.query(ActivityEvent)
+        .filter(ActivityEvent.event_code == ORDER_PRIORITY_CHANGED)
+        .count()
+        == 0
+    )
+
+
+def test_document_series_emit_idempotent(db):
+    emit_order_document_series_changed_activity(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        order_id=100,
+        old_series_id="aaa",
+        old_series_name="FV PL",
+        new_series_id="bbb",
+        new_series_name="FV CZ",
+        actor_user_id=7,
+        mutation_token="s1",
+    )
+    emit_order_document_series_changed_activity(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        order_id=100,
+        old_series_id="aaa",
+        old_series_name="FV PL",
+        new_series_id="bbb",
+        new_series_name="FV CZ",
+        actor_user_id=7,
+        mutation_token="s1",
+    )
+    db.commit()
+    rows = [
+        i
+        for i in list_activity_for_object(db, object_type="order", object_id=100)
+        if i["event_code"] == ORDER_DOCUMENT_SERIES_CHANGED
+    ]
+    assert len(rows) == 1
+    assert "FV PL" in rows[0]["description"] and "FV CZ" in rows[0]["description"]
+
+
+def test_warehouse_changed_emit(db):
+    emit_order_warehouse_changed_activity(
+        db,
+        tenant_id=1,
+        warehouse_id=2,
+        order_id=100,
+        old_warehouse_id=1,
+        old_warehouse_name="WH A",
+        new_warehouse_id=2,
+        new_warehouse_name="WH B",
+        actor_user_id=7,
+        mutation_token="w1",
+    )
+    db.commit()
+    rows = [
+        i
+        for i in list_activity_for_object(db, object_type="order", object_id=100)
+        if i["event_code"] == ORDER_WAREHOUSE_CHANGED
+    ]
+    assert len(rows) == 1
+    assert "WH A" in rows[0]["description"] and "WH B" in rows[0]["description"]
+    assert rows[0]["metadata"].get("old_warehouse_id") == 1
+    assert rows[0]["metadata"].get("new_warehouse_id") == 2
+
+
+def test_bundle_added_single_event_with_components(db):
+    emit_order_bundle_added_activity(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        order_id=100,
+        bundle_id=55,
+        bundle_name="Zestaw Start",
+        quantity=1,
+        component_count=2,
+        component_summaries=[
+            {"product_id": 10, "name": "Sznurówadła CAT 100 cm", "quantity": 1},
+            {"product_id": 11, "name": "Produkt B", "quantity": 2},
+        ],
+        actor_user_id=7,
+        mutation_token="b1",
+    )
+    emit_order_bundle_added_activity(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        order_id=100,
+        bundle_id=55,
+        bundle_name="Zestaw Start",
+        quantity=1,
+        component_count=2,
+        actor_user_id=7,
+        mutation_token="b1",
+    )
+    db.commit()
+    rows = [
+        i
+        for i in list_activity_for_object(db, object_type="order", object_id=100)
+        if i["event_code"] == ORDER_BUNDLE_ADDED
+    ]
+    assert len(rows) == 1
+    assert "Zestaw Start" in rows[0]["description"]
+    assert len(rows[0]["metadata"].get("components") or []) == 2
+    assert any(d.get("label") == "Składnik" for d in (rows[0].get("details") or []))

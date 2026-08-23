@@ -298,6 +298,8 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
         )
         from backend.services.activity_log.order_event_codes import (
             ORDER_BILLING_ADDRESS_CHANGED,
+            ORDER_BUNDLE_ADDED,
+            ORDER_DOCUMENT_SERIES_CHANGED,
             ORDER_ITEM_ADDED,
             ORDER_ITEM_PRICE_CHANGED,
             ORDER_ITEM_QUANTITY_CHANGED,
@@ -306,7 +308,9 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
             ORDER_NOTE_ADDED,
             ORDER_NOTE_DELETED,
             ORDER_NOTE_UPDATED,
+            ORDER_PRIORITY_CHANGED,
             ORDER_SHIPPING_ADDRESS_CHANGED,
+            ORDER_WAREHOUSE_CHANGED,
         )
         from backend.services.activity_log.order_mutation_activity import build_mutation_detail_rows
 
@@ -321,6 +325,10 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
             ORDER_ITEM_QUANTITY_CHANGED,
             ORDER_ITEM_PRICE_CHANGED,
             ORDER_ITEM_VAT_CHANGED,
+            ORDER_PRIORITY_CHANGED,
+            ORDER_DOCUMENT_SERIES_CHANGED,
+            ORDER_WAREHOUSE_CHANGED,
+            ORDER_BUNDLE_ADDED,
         }:
             details = build_mutation_detail_rows(meta)
         else:

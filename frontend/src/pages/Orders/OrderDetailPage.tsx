@@ -1520,6 +1520,7 @@ export default function OrderDetailPage() {
             {!caseCreateKind && activeTab === "logs" ? (
               <div className="mt-1 w-full max-w-none">
                 <ActivityLogPanel
+                  key={`order-logs-${order.id}`}
                   objectType="order"
                   objectId={order.id}
                   defaultCollapsed={false}
@@ -1530,8 +1531,10 @@ export default function OrderDetailPage() {
             ) : (
               <div className={`${odMainMaxWidthClass} mt-8 border-t border-slate-100 pt-4 pb-6`}>
                 <ActivityLogPanel
+                  key={`order-footer-log-${order.id}`}
                   objectType="order"
                   objectId={order.id}
+                  defaultCollapsed
                   tenantId={order.tenant_id ?? DAMAGE_TENANT_ID}
                 />
               </div>

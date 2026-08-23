@@ -55,6 +55,9 @@ describe("eventDisplayLabels SSOT", () => {
     expect(getEventDisplayLabel("ORDER_NOTE_ADDED")).toBe("Notatka");
     expect(getEventDisplayLabel("ORDER_ITEM_QUANTITY_CHANGED")).toBe("Pozycja zamówienia");
     expect(getEventDisplayLabel("ORDER_ITEM_PRICE_CHANGED")).toBe("Pozycja zamówienia");
+    expect(getEventDisplayLabel("ORDER_PRIORITY_CHANGED")).toBe("Priorytet");
+    expect(getEventDisplayLabel("ORDER_WAREHOUSE_CHANGED")).toBe("Magazyn");
+    expect(getEventDisplayLabel("ORDER_BUNDLE_ADDED")).toBe("Zestaw");
   });
 
   it("specific labels match warehouse Polish", () => {

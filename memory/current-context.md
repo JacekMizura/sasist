@@ -1,8 +1,6 @@
-﻿**Manual order mutations → Activity Log — PASS (2026-08-23).**
+﻿**Order Activity audit coverage — PASS (2026-08-23).**
 
-- Wired: shipping/billing address diffs, notes (append/POST), item add/qty/price/VAT
-- Shipping/payment method already logged (Phase 2)
-- Remove line: WMS projection + actor; no extra OMS duplicate
-- Note edit/delete API: missing (writers ready)
-- Logi UI: Historia czynności default expanded + detail expand for diffs
-- WMS files touched=0 (only operator_user_id passed into existing WMS emits)
+- After `7bb614fe`: priority, document series, warehouse assign, bundle add, customer link actor, remove ITEM/LINE projection dedup
+- Logi Historia default expanded (key remount + `defaultCollapsed={false}`); footer collapsed
+- Intentional gaps: note edit/delete (no API), billing street (PATCH schema unused / no apply), generic Docs upload (FE without BE), Detail UI warehouse panel unmounted / series selector absent
+- Carton / CF files / documents / WMS ops: existing projection — no duplicate writers

@@ -154,6 +154,21 @@ def assign_order_fulfillment_warehouse(
     _assert_warehouse_fulfillment_eligible(db, int(order.tenant_id), int(warehouse_id))
 
     wid = int(warehouse_id)
+    old_wid = int(order.warehouse_id) if getattr(order, "warehouse_id", None) is not None else None
+    old_name = None
+    new_name = None
+    if old_wid is not None:
+        from ..models.warehouse import Warehouse
+
+        ow = db.query(Warehouse).filter(Warehouse.id == old_wid).first()
+        if ow is not None:
+            old_name = str(getattr(ow, "name", None) or "").strip() or None
+    from ..models.warehouse import Warehouse
+
+    nw = db.query(Warehouse).filter(Warehouse.id == wid).first()
+    if nw is not None:
+        new_name = str(getattr(nw, "name", None) or "").strip() or None
+
     order.warehouse_id = wid
     order.fulfillment_assignment_phase = PHASE_FULFILLMENT_ASSIGNED
 
@@ -166,6 +181,27 @@ def assign_order_fulfillment_warehouse(
         reason=reason,
     )
     db.add(order)
+    try:
+        from .activity_log.order_mutation_activity import emit_order_warehouse_changed_activity
+
+        emit_order_warehouse_changed_activity(
+            db,
+            tenant_id=int(order.tenant_id),
+            warehouse_id=wid,
+            order_id=int(order.id),
+            old_warehouse_id=old_wid,
+            old_warehouse_name=old_name,
+            new_warehouse_id=wid,
+            new_warehouse_name=new_name,
+            actor_user_id=int(assigned_by_user_id) if assigned_by_user_id else None,
+            mutation_token=str(reason or "")[:64],
+        )
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "ORDER_WAREHOUSE_CHANGED activity failed order_id=%s", getattr(order, "id", None)
+        )
     return order
 
 

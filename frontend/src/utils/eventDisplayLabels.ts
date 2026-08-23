@@ -118,6 +118,10 @@ export const EVENT_DISPLAY_LABELS: Record<string, string> = {
   ORDER_ITEM_PRICE_CHANGED: "Pozycja zamówienia",
   ORDER_ITEM_DISCOUNT_CHANGED: "Pozycja zamówienia",
   ORDER_ITEM_VAT_CHANGED: "Pozycja zamówienia",
+  ORDER_PRIORITY_CHANGED: "Priorytet",
+  ORDER_DOCUMENT_SERIES_CHANGED: "Seria dokumentu",
+  ORDER_WAREHOUSE_CHANGED: "Magazyn",
+  ORDER_BUNDLE_ADDED: "Zestaw",
 
   // --- WMS matching / packing extras (Order › Logi) ---
   SMART_MATCHING_MATCHED: "Smart Matching",

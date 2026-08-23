@@ -58,6 +58,8 @@ EVT_LABEL_PRINTED = "LABEL_PRINTED"
 EVT_WMS_WAREHOUSE_DOCUMENT_CREATED = "WMS_WAREHOUSE_DOCUMENT_CREATED"
 
 # Item-level / scanner noise — stay in wms_order_events only (not Activity Log).
+# ORDER_LINE_REMOVED: kept in WMS SSOT alongside ORDER_ITEM_REMOVED; Order › Logi
+# shows one business row via ITEM only (fallback would otherwise project LINE).
 WMS_TECHNICAL_ACTIVITY_SKIP: FrozenSet[str] = frozenset(
     {
         EVT_PICKED_ITEM,
@@ -70,6 +72,7 @@ WMS_TECHNICAL_ACTIVITY_SKIP: FrozenSet[str] = frozenset(
         EVT_PACKING_PAUSED,
         EVT_PACKING_RESUMED,
         EVT_WMS_VALIDATION_PASSED,
+        EVT_ORDER_LINE_REMOVED,
     }
 )
 
@@ -87,7 +90,8 @@ WMS_BUSINESS_TIMELINE_EVENTS: FrozenSet[str] = frozenset(
         EVT_RECOVERY_FINISHED,
         EVT_OMS_DECISION_WAIT,
         EVT_OMS_DECISION_ACCEPTED,
-        EVT_ORDER_LINE_REMOVED,
+        # ORDER_LINE_REMOVED stays in wms_order_events SSOT but is not projected —
+        # OMS delete also emits ORDER_ITEM_REMOVED (one business row in Order › Logi).
         EVT_ORDER_ITEM_REMOVED,
         EVT_REPLACEMENT_ITEM_REMOVED,
         EVT_ORDER_LINE_REPLACED,

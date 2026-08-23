@@ -267,6 +267,7 @@ def create_customer_from_order(
     order_id: int,
     tenant_id: int,
     force_duplicate: bool = False,
+    actor_user_id: int | None = None,
 ) -> dict[str, Any]:
     preview = preview_order_customer_link(db, order_id=order_id, tenant_id=tenant_id)
     order = _get_order(db, order_id=order_id, tenant_id=tenant_id)
@@ -320,6 +321,27 @@ def create_customer_from_order(
 
     order.customer_id = int(row.id)
     db.flush()
+    try:
+        from ..activity_log.order_mutation_activity import emit_order_customer_data_changed_activity
+
+        emit_order_customer_data_changed_activity(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(order.warehouse_id) if getattr(order, "warehouse_id", None) else None,
+            order_id=int(order.id),
+            old_customer_id=None,
+            new_customer_id=int(row.id),
+            old_label=None,
+            new_label=_customer_display(row),
+            actor_user_id=int(actor_user_id) if actor_user_id else None,
+            mutation_token=f"create-from-order:{int(order.id)}",
+        )
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "ORDER_CUSTOMER_DATA_CHANGED (create) failed order_id=%s", order_id
+        )
     return {
         "customer_id": int(row.id),
         "display_name": _customer_display(row),
@@ -334,6 +356,7 @@ def link_order_to_customer(
     order_id: int,
     customer_id: int,
     tenant_id: int,
+    actor_user_id: int | None = None,
 ) -> dict[str, Any]:
     order = _get_order(db, order_id=order_id, tenant_id=tenant_id)
     if order.customer_id:
@@ -351,6 +374,27 @@ def link_order_to_customer(
         raise CustomerOrderLinkError("customer_not_found", "Nie znaleziono klienta.")
     order.customer_id = int(cust.id)
     db.flush()
+    try:
+        from ..activity_log.order_mutation_activity import emit_order_customer_data_changed_activity
+
+        emit_order_customer_data_changed_activity(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(order.warehouse_id) if getattr(order, "warehouse_id", None) else None,
+            order_id=int(order.id),
+            old_customer_id=None,
+            new_customer_id=int(cust.id),
+            old_label=None,
+            new_label=_customer_display(cust),
+            actor_user_id=int(actor_user_id) if actor_user_id else None,
+            mutation_token=f"link:{int(order.id)}:{int(cust.id)}",
+        )
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "ORDER_CUSTOMER_DATA_CHANGED (link) failed order_id=%s", order_id
+        )
     return {
         "customer_id": int(cust.id),
         "display_name": _customer_display(cust),

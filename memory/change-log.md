@@ -1,3 +1,12 @@
+## 2026-08-23 — Complete order activity audit coverage
+
+- NEW events: PRIORITY / DOCUMENT_SERIES / WAREHOUSE / BUNDLE_ADDED
+- Dedup remove: ORDER_LINE_REMOVED → WMS_TECHNICAL_ACTIVITY_SKIP (SSOT kept; Logi = ITEM only)
+- Wired: patch priority/series, assign warehouse, bundle add, customer link actor
+- Logi UI: default expanded + remount key; footer stays collapsed
+- Gaps (justified): note edit/delete API; billing street patch (schema without apply); Docs tab upload BE missing; series/warehouse Detail UI weak/unmounted
+- Carton: already WMS CARTON_* projection — no OMS duplicate
+
 ## 2026-08-23 — Manual order mutations in Activity Log
 
 - Writers: `order_mutation_activity.py` (address/notes/items)

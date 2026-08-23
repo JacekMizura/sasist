@@ -14,6 +14,9 @@ from backend.models.product import Product
 from backend.models.tenant import Tenant
 from backend.models.warehouse import Warehouse
 from backend.models.wms_order_event import (
+    EVT_CARTON_SELECTED,
+    EVT_ORDER_ITEM_REMOVED,
+    EVT_ORDER_LINE_REMOVED,
     EVT_PACKED_ITEM,
     EVT_PACKING_STARTED,
     EVT_PICKED_ITEM,
@@ -209,3 +212,59 @@ def test_pack_all_and_tenant_isolation(db):
     )
     # Other order isolation
     assert list_activity_for_object(db, object_type="order", object_id=999) == []
+
+
+def test_line_removed_not_projected_item_removed_is(db):
+    """OMS delete writes ITEM + LINE to WMS SSOT; Order › Logi shows ITEM only."""
+    assert wms_activity_should_project(EVT_ORDER_LINE_REMOVED) is False
+    assert wms_activity_should_project(EVT_ORDER_ITEM_REMOVED) is True
+    assert wms_activity_should_project(EVT_CARTON_SELECTED) is True
+
+    line_row = insert_wms_order_event(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        order_id=100,
+        operator_user_id=7,
+        event_type=EVT_ORDER_LINE_REMOVED,
+        product_id=50,
+        quantity=1,
+        metadata={"product_name": "P"},
+    )
+    item_row = insert_wms_order_event(
+        db,
+        tenant_id=1,
+        warehouse_id=1,
+        order_id=100,
+        operator_user_id=7,
+        event_type=EVT_ORDER_ITEM_REMOVED,
+        product_id=50,
+        quantity=1,
+        metadata={"product_name": "P"},
+    )
+    append_order_activity_for_wms(
+        db,
+        order_id=100,
+        tenant_id=1,
+        warehouse_id=1,
+        event_type=EVT_ORDER_LINE_REMOVED,
+        message="Usunięto linię",
+        operator_user_id=7,
+        wms_order_event_id=int(line_row.id),
+    )
+    append_order_activity_for_wms(
+        db,
+        order_id=100,
+        tenant_id=1,
+        warehouse_id=1,
+        event_type=EVT_ORDER_ITEM_REMOVED,
+        message="Usunięto pozycję",
+        operator_user_id=7,
+        wms_order_event_id=int(item_row.id),
+    )
+    db.commit()
+    codes = [i["event_code"] for i in list_activity_for_object(db, object_type="order", object_id=100)]
+    assert codes.count(EVT_ORDER_ITEM_REMOVED) == 1
+    assert EVT_ORDER_LINE_REMOVED not in codes
+    assert db.query(WmsOrderEvent).filter(WmsOrderEvent.event_type == EVT_ORDER_LINE_REMOVED).count() == 1
+    assert db.query(WmsOrderEvent).filter(WmsOrderEvent.event_type == EVT_ORDER_ITEM_REMOVED).count() == 1

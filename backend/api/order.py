@@ -2372,11 +2372,29 @@ def _apply_order_patch_to_order(
     _patch_fields: Set[str] = getattr(body, "model_fields_set", None) or getattr(body, "__fields_set__", set())
     mutation_token = str(getattr(order, "updated_at", None) or getattr(order, "id", "") or "")
     if "priority_color" in _patch_fields:
+        old_prio = str(getattr(order, "priority_color", None) or "").strip().lower() or None
         v = body.priority_color
         if v is None or (isinstance(v, str) and not str(v).strip()):
             order.priority_color = None
+            new_prio = None
         else:
             order.priority_color = str(v).strip().lower()
+            new_prio = order.priority_color
+        try:
+            from ..services.activity_log.order_mutation_activity import emit_order_priority_changed_activity
+
+            emit_order_priority_changed_activity(
+                db,
+                tenant_id=int(order.tenant_id),
+                warehouse_id=int(order.warehouse_id),
+                order_id=int(order.id),
+                old_priority=old_prio,
+                new_priority=new_prio,
+                actor_user_id=actor_user_id,
+                mutation_token=mutation_token,
+            )
+        except Exception:
+            logger.exception("ORDER_PRIORITY_CHANGED activity failed order_id=%s", order.id)
     if "shipping_method_id" in _patch_fields:
         old_sm_id = str(getattr(order, "shipping_method_id", None) or "").strip() or None
         old_sm_name = str(getattr(order, "shipping_method", None) or "").strip() or None
@@ -2538,6 +2556,18 @@ def _apply_order_patch_to_order(
         )
 
     if "document_series_id" in _patch_fields:
+        old_sid = str(meta.get("panel_document_series_id") or "").strip() or None
+        old_sname = None
+        if old_sid:
+            ods = (
+                db.query(DocumentSeries)
+                .filter(DocumentSeries.id == old_sid, DocumentSeries.tenant_id == int(order.tenant_id))
+                .first()
+            )
+            if ods is not None:
+                old_sname = str(getattr(ods, "name", None) or "").strip() or None
+        new_sid = None
+        new_sname = None
         v = body.document_series_id
         if v is None or v == "":
             meta.pop("panel_document_series_id", None)
@@ -2557,6 +2587,25 @@ def _apply_order_patch_to_order(
                 raise HTTPException(status_code=400, detail="Nieprawidłowa seria dokumentów.")
             meta["panel_document_series_id"] = sid
             meta_changed = True
+            new_sid = sid
+            new_sname = str(getattr(ds, "name", None) or "").strip() or None
+        try:
+            from ..services.activity_log.order_mutation_activity import emit_order_document_series_changed_activity
+
+            emit_order_document_series_changed_activity(
+                db,
+                tenant_id=int(order.tenant_id),
+                warehouse_id=int(order.warehouse_id),
+                order_id=int(order.id),
+                old_series_id=old_sid,
+                old_series_name=old_sname,
+                new_series_id=new_sid,
+                new_series_name=new_sname,
+                actor_user_id=actor_user_id,
+                mutation_token=mutation_token,
+            )
+        except Exception:
+            logger.exception("ORDER_DOCUMENT_SERIES_CHANGED activity failed order_id=%s", order.id)
 
     if "internal_note_append" in _patch_fields:
         s = str(body.internal_note_append or "").strip()
@@ -2741,7 +2790,12 @@ def patch_order(
 
 
 @router.patch("/{order_id}/priority", response_model=OrderRead)
-def patch_order_priority(order_id: int, body: OrderPriorityPatchBody, db: Session = Depends(get_db)):
+def patch_order_priority(
+    order_id: int,
+    body: OrderPriorityPatchBody,
+    db: Session = Depends(get_db),
+    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+):
     """Ustawienie koloru priorytetu (flame); ta sama semantyka co ``priority_color`` w ``OrderPatchBody``."""
     order = (
         db.query(Order)
@@ -2751,7 +2805,12 @@ def patch_order_priority(order_id: int, body: OrderPriorityPatchBody, db: Sessio
     )
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    _apply_order_patch_to_order(db, order, OrderPatchBody(priority_color=body.priority_color))
+    _apply_order_patch_to_order(
+        db,
+        order,
+        OrderPatchBody(priority_color=body.priority_color),
+        actor_user_id=int(current_user.id) if current_user is not None else None,
+    )
     db.commit()
     order = (
         db.query(Order)
@@ -2810,6 +2869,41 @@ def add_order_line(
             vat_override=float(body.vat_percent) if body.vat_percent is not None else None,
         )
         db.flush()
+        try:
+            from ..models.bundle import Bundle
+            from ..services.activity_log.order_mutation_activity import emit_order_bundle_added_activity
+
+            bun = db.query(Bundle).filter(Bundle.id == int(body.bundle_id)).first()
+            bname = str(getattr(bun, "name", None) or "").strip() or f"Zestaw #{int(body.bundle_id)}"
+            comps: list[dict] = []
+            for ln in merged:
+                pid = int(getattr(ln, "product_id", 0) or 0)
+                pname = None
+                if pid:
+                    p = db.query(Product).filter(Product.id == pid).first()
+                    pname = str(getattr(p, "name", None) or "").strip() if p else None
+                comps.append(
+                    {
+                        "product_id": pid or None,
+                        "name": pname or f"Produkt #{pid}",
+                        "quantity": getattr(ln, "quantity", None),
+                    }
+                )
+            emit_order_bundle_added_activity(
+                db,
+                tenant_id=int(order.tenant_id),
+                warehouse_id=int(order.warehouse_id),
+                order_id=int(order.id),
+                bundle_id=int(body.bundle_id),
+                bundle_name=bname,
+                quantity=qty,
+                component_count=len(merged),
+                component_summaries=comps,
+                actor_user_id=actor_uid,
+                mutation_token=str(getattr(order, "id", "")),
+            )
+        except Exception:
+            logger.exception("ORDER_BUNDLE_ADDED activity failed order_id=%s", order.id)
         _recompute_order_value_and_volume(order, db)
         db.commit()
     else:
