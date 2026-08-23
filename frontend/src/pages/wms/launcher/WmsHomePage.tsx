@@ -23,6 +23,7 @@ export default function WmsHomePage() {
     pinnedTabsInOrder,
     pinnableModules,
     isPinned,
+    pinOrder,
     togglePin,
     movePinned,
   } = useWmsPinnedModes(user?.id ?? null);
@@ -50,6 +51,7 @@ export default function WmsHomePage() {
       onOpenModule={onOpenModule}
       pinnableModules={pinnableModules}
       isPinned={isPinned}
+      pinOrder={pinOrder}
       onTogglePin={togglePin}
       onMovePinned={movePinned}
       pinnedCount={pinnedTabsInOrder.length}

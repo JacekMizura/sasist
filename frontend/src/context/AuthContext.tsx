@@ -15,6 +15,7 @@ import {
   logoutRequest,
   refreshRequest,
   type MeResponse,
+  type WmsTopbarPinItem,
 } from "../api/authApi";
 import { AUTH_SESSION_EXPIRED_EVENT } from "../auth/authEvents";
 import { setLoginNotice } from "../auth/authSessionPrefs";
@@ -31,6 +32,8 @@ type AuthContextValue = {
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
   hasPermission: (key: string) => boolean;
+  /** Keep /me mirror in sync after PUT /auth/me/wms-topbar-pins (avoids stale hydrate overwrite). */
+  patchWmsTopbarPins: (pins: WmsTopbarPinItem[]) => void;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -132,6 +135,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user],
   );
 
+  const patchWmsTopbarPins = useCallback((pins: WmsTopbarPinItem[]) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        wms_topbar_pins: pins,
+        wms_profile: {
+          ...prev.wms_profile,
+          wms_topbar_pins: pins,
+        },
+      };
+    });
+  }, []);
+
   const sessionReady = !loading && user !== null && Boolean(getStoredAccessToken());
 
   const value = useMemo(
@@ -143,8 +160,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logout,
       refreshSession,
       hasPermission,
+      patchWmsTopbarPins,
     }),
-    [user, loading, sessionReady, login, logout, refreshSession, hasPermission],
+    [user, loading, sessionReady, login, logout, refreshSession, hasPermission, patchWmsTopbarPins],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

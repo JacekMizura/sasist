@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { ChevronDown, ChevronUp, Pin, PinOff } from "lucide-react";
 
 import type { WmsModuleDefinition } from "../wmsTabConfig";
@@ -6,6 +7,7 @@ import { WMS_HOME_BORDER, WMS_HOME_DISPLAY_LABEL } from "./wmsHomeSections";
 type Props = {
   modules: WmsModuleDefinition[];
   isPinned: (id: string) => boolean;
+  pinOrder?: (id: string) => number;
   onTogglePin: (id: string) => void;
   onMoveUp: (id: string) => void;
   onMoveDown: (id: string) => void;
@@ -15,15 +17,28 @@ type Props = {
 /**
  * Preferencje topbara — tylko dozwolone (permission) + pinnable moduły.
  * Permission ≠ pin ≠ order.
+ * Lista: przypięte w zapisanej kolejności, potem nieprzypięte (kolejność rejestru).
  */
 export function WmsTopbarPinSettings({
   modules,
   isPinned,
+  pinOrder = () => 0,
   onTogglePin,
   onMoveUp,
   onMoveDown,
   pinnedCount,
 }: Props) {
+  const orderedModules = useMemo(() => {
+    const pinned: WmsModuleDefinition[] = [];
+    const unpinned: WmsModuleDefinition[] = [];
+    for (const mod of modules) {
+      if (isPinned(mod.id)) pinned.push(mod);
+      else unpinned.push(mod);
+    }
+    pinned.sort((a, b) => pinOrder(a.id) - pinOrder(b.id));
+    return [...pinned, ...unpinned];
+  }, [modules, isPinned, pinOrder]);
+
   return (
     <details className="rounded-xl border bg-white" style={{ borderColor: WMS_HOME_BORDER }}>
       <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-slate-800 marker:content-none [&::-webkit-details-marker]:hidden">
@@ -39,7 +54,7 @@ export function WmsTopbarPinSettings({
           Wybierz, które dozwolone tryby mają być widoczne w górnym pasku, i ustaw kolejność.
         </p>
         <ul className="space-y-1">
-          {modules.map((mod) => {
+          {orderedModules.map((mod) => {
             const pinned = isPinned(mod.id);
             const label = WMS_HOME_DISPLAY_LABEL[mod.id] ?? mod.label;
             const Icon = mod.icon;

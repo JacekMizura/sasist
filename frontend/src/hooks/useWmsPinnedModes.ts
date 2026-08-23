@@ -1,15 +1,25 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 
-import { putWmsTopbarPins } from "../api/authApi";
 import { useAuth } from "../context/AuthContext";
 import { useWarehouse } from "../context/WarehouseContext";
 import { WMS_TAB_ITEMS, type WmsTabConfigItem } from "../pages/wms/wmsTabConfig";
 import { resolveWmsNavTabs } from "../pages/wms/wmsNavTabs";
 import {
-  defaultWmsPinnedModes,
+  applyMovePinned,
+  applyReorderPinned,
+  applyTogglePin,
+} from "../pages/wms/wmsPinnedModesMutations";
+import {
+  applyWmsPinnedModesUserMutation,
+  configureWmsPinnedModesPersist,
+  getWmsPinnedModesHydratedKey,
+  getWmsPinnedModesSnapshot,
+  setWmsPinnedModesSnapshot,
+  subscribeWmsPinnedModes,
+} from "../pages/wms/wmsPinnedModesStore";
+import {
   normalizeWmsPinnedModes,
   readWmsPinnedModesFromStorage,
-  writeWmsPinnedModesToStorage,
   type WmsPinnedMode,
 } from "../pages/wms/wmsPinnedModesStorage";
 
@@ -26,8 +36,16 @@ function modesFromServerOrLocal(
   return readWmsPinnedModesFromStorage(userId);
 }
 
+function hydrateKeyFor(userId: number | null, serverPinsKey: string): string {
+  return `${userId ?? "anon"}|${serverPinsKey}`;
+}
+
+/**
+ * Shared pin preferences for dashboard config + topbar.
+ * All call sites subscribe to one in-memory snapshot (server field remains DB SSOT).
+ */
 export function useWmsPinnedModes(userId: number | null) {
-  const { user } = useAuth();
+  const { user, patchWmsTopbarPins } = useAuth();
   const { activeWarehouseRequiresPutaway } = useWarehouse();
   const serverPins = user?.wms_topbar_pins ?? user?.wms_profile?.wms_topbar_pins ?? null;
   const serverPinsKey = serverPins == null ? "null" : JSON.stringify(serverPins);
@@ -35,36 +53,29 @@ export function useWmsPinnedModes(userId: number | null) {
     user?.wms_operational_modes ?? user?.wms_profile?.wms_operational_modes ?? [];
   const permissionKeys = user?.permissions ?? [];
 
-  const [modes, setModes] = useState<WmsPinnedMode[]>(() =>
-    modesFromServerOrLocal(userId, serverPins as WmsPinnedMode[] | null),
+  useEffect(() => {
+    configureWmsPinnedModesPersist({ patchAuthPins: patchWmsTopbarPins });
+  }, [patchWmsTopbarPins]);
+
+  const modes = useSyncExternalStore(
+    subscribeWmsPinnedModes,
+    getWmsPinnedModesSnapshot,
+    getWmsPinnedModesSnapshot,
   );
-  const saveTimer = useRef<number | null>(null);
-  const skipNextPersist = useRef(false);
 
+  // Hydrate from Auth /me pins (or localStorage when server has no row yet).
   useEffect(() => {
-    skipNextPersist.current = true;
-    const parsed =
-      serverPinsKey === "null" ? null : (JSON.parse(serverPinsKey) as WmsPinnedMode[]);
-    setModes(modesFromServerOrLocal(userId, parsed));
-  }, [userId, serverPinsKey]);
-
-  useEffect(() => {
-    if (skipNextPersist.current) {
-      skipNextPersist.current = false;
+    const key = hydrateKeyFor(userId, serverPinsKey);
+    if (getWmsPinnedModesHydratedKey() === key && getWmsPinnedModesSnapshot().length > 0) {
       return;
     }
-    writeWmsPinnedModesToStorage(userId, modes);
-    if (userId == null) return;
-    if (saveTimer.current != null) window.clearTimeout(saveTimer.current);
-    saveTimer.current = window.setTimeout(() => {
-      void putWmsTopbarPins(modes).catch(() => {
-        /* local cache already written; next login may re-sync from server */
-      });
-    }, 400);
-    return () => {
-      if (saveTimer.current != null) window.clearTimeout(saveTimer.current);
-    };
-  }, [userId, modes]);
+    const parsed =
+      serverPinsKey === "null" ? null : (JSON.parse(serverPinsKey) as WmsPinnedMode[]);
+    setWmsPinnedModesSnapshot(modesFromServerOrLocal(userId, parsed), {
+      hydrateKey: key,
+      skipPersist: true,
+    });
+  }, [userId, serverPinsKey]);
 
   const navResolution = useMemo(
     () => resolveWmsNavTabs(modes, operationalModes, activeWarehouseRequiresPutaway, permissionKeys),
@@ -80,67 +91,21 @@ export function useWmsPinnedModes(userId: number | null) {
     [modes],
   );
 
+  const pinOrder = useCallback(
+    (key: string) => modes.find((m) => m.key === key)?.order ?? 0,
+    [modes],
+  );
+
   const togglePin = useCallback((key: string) => {
-    setModes((prev) => {
-      const idx = prev.findIndex((x) => x.key === key);
-      if (idx === -1) {
-        const keys = WMS_TAB_ITEMS.map((t) => t.id);
-        const base = normalizeWmsPinnedModes(prev.length ? prev : defaultWmsPinnedModes(), keys);
-        const i = base.findIndex((x) => x.key === key);
-        if (i === -1) return prev;
-        const next = [...base];
-        const maxOrder = Math.max(-1, ...next.filter((m) => m.pinned).map((m) => m.order));
-        next[i] = { ...next[i], pinned: true, order: maxOrder + 1 };
-        return next;
-      }
-      const cur = prev[idx];
-      if (cur.pinned) {
-        const next = [...prev];
-        next[idx] = { ...cur, pinned: false, order: 0 };
-        const pinned = next.filter((m) => m.pinned).sort((a, b) => a.order - b.order);
-        const orderByKey = new Map<string, number>();
-        pinned.forEach((m, i) => orderByKey.set(m.key, i));
-        return next.map((m) => (m.pinned ? { ...m, order: orderByKey.get(m.key) ?? m.order } : m));
-      }
-      const maxOrder = Math.max(-1, ...prev.filter((m) => m.pinned).map((m) => m.order));
-      const next = [...prev];
-      next[idx] = { ...cur, pinned: true, order: maxOrder + 1 };
-      return next;
-    });
+    applyWmsPinnedModesUserMutation(applyTogglePin(getWmsPinnedModesSnapshot(), key));
   }, []);
 
   const movePinned = useCallback((key: string, delta: -1 | 1) => {
-    setModes((prev) => {
-      const pinned = prev.filter((m) => m.pinned).sort((a, b) => a.order - b.order);
-      const pos = pinned.findIndex((m) => m.key === key);
-      if (pos < 0) return prev;
-      const swapWith = pos + delta;
-      if (swapWith < 0 || swapWith >= pinned.length) return prev;
-      const a = pinned[pos];
-      const b = pinned[swapWith];
-      const orderA = a.order;
-      const orderB = b.order;
-      return prev.map((m) => {
-        if (m.key === a.key) return { ...m, order: orderB };
-        if (m.key === b.key) return { ...m, order: orderA };
-        return m;
-      });
-    });
+    applyWmsPinnedModesUserMutation(applyMovePinned(getWmsPinnedModesSnapshot(), key, delta));
   }, []);
 
   const reorderPinned = useCallback((activeKey: string, overKey: string) => {
-    if (activeKey === overKey) return;
-    setModes((prev) => {
-      const pinned = prev.filter((m) => m.pinned).sort((a, b) => a.order - b.order);
-      const oldIndex = pinned.findIndex((m) => m.key === activeKey);
-      const newIndex = pinned.findIndex((m) => m.key === overKey);
-      if (oldIndex < 0 || newIndex < 0) return prev;
-      const reordered = [...pinned];
-      const [moved] = reordered.splice(oldIndex, 1);
-      reordered.splice(newIndex, 0, moved);
-      const orderByKey = new Map(reordered.map((m, i) => [m.key, i]));
-      return prev.map((m) => (m.pinned ? { ...m, order: orderByKey.get(m.key) ?? m.order } : m));
-    });
+    applyWmsPinnedModesUserMutation(applyReorderPinned(getWmsPinnedModesSnapshot(), activeKey, overKey));
   }, []);
 
   return {
@@ -150,6 +115,7 @@ export function useWmsPinnedModes(userId: number | null) {
     dashboardTiles,
     navResolution,
     isPinned,
+    pinOrder,
     togglePin,
     movePinned,
     reorderPinned,

@@ -1,3 +1,24 @@
+## 2026-08-23 — Fix WMS top bar configuration controls
+
+- Root: multi-instance `useWmsPinnedModes` + no Auth patch after PUT + settings list not sorted by pin order
+- Shared FE store (still DB `wms_topbar_pins_json` SSOT); patch Auth; sort pinned by order in settings
+- Tests: wmsPinnedModes.persistence.test.ts + WmsTopbarPinSettings.handlers.test.tsx
+
+## 2026-08-23 — Historia WMS business presentation
+
+- Sidebar: Historia zamówienia → Historia WMS; mode=wms (audit timeline only)
+- Shared `wms_business_presentation` for post-pack/carton/pick (Logi + timeline)
+- No UUID/step enums in UI; structured details; drop redundant WMS badge
+- Dedup automation finish vs activity; title Automatyka pakowania zakończona
+- Tests: test_wms_history_business_presentation.py + orderHistoryTimelineModel.test.ts
+
+## 2026-08-23 — Order Activity WMS + automation details
+
+- Automation: emit presentation snapshot (trigger/conditions/effects/blocked reason) — no parallel log
+- Pick aggregates at PICKING_FINISHED (immutable, idempotent); raw PICKED_ITEM remains SSOT
+- Carton/3D/Smart messages + packing finish metadata/no-carton
+- Tests: test_order_activity_wms_automation_details.py
+
 ## 2026-08-23 — WMS picking session lifecycle + scan flow
 
 - Split-brain #1276: cartless `picking_session_id` survived Pilne→Nowe; resolve ignored source status

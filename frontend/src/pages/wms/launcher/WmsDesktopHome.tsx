@@ -33,6 +33,7 @@ export type WmsDesktopHomeProps = {
   onOpenModule: (path: string) => void;
   pinnableModules?: WmsModuleDefinition[];
   isPinned?: (id: string) => boolean;
+  pinOrder?: (id: string) => number;
   onTogglePin?: (id: string) => void;
   onMovePinned?: (id: string, delta: -1 | 1) => void;
   pinnedCount?: number;
@@ -46,6 +47,7 @@ export function WmsDesktopHome({
   onOpenModule,
   pinnableModules = [],
   isPinned = () => false,
+  pinOrder = () => 0,
   onTogglePin = () => undefined,
   onMovePinned = () => undefined,
   pinnedCount = 0,
@@ -198,6 +200,7 @@ export function WmsDesktopHome({
             <WmsTopbarPinSettings
               modules={pinnableModules}
               isPinned={isPinned}
+              pinOrder={pinOrder}
               onTogglePin={onTogglePin}
               onMoveUp={(id) => onMovePinned(id, -1)}
               onMoveDown={(id) => onMovePinned(id, 1)}
