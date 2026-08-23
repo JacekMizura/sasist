@@ -333,6 +333,8 @@ def _href_for(object_type: str, object_id: int) -> str | None:
         return f"/documents/warehouse/{object_id}"
     if ot == "return":
         return f"/wms/returns/process/{object_id}"
+    if ot == "complaint":
+        return f"/complaints/{object_id}"
     if ot == "production":
         return f"/production/orders/{object_id}"
     return None

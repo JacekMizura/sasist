@@ -25,7 +25,22 @@ def append_complaint_audit_event(
     *,
     user: Optional[str] = None,
     meta: Optional[dict[str, Any]] = None,
+    actor_user_id: Optional[int] = None,
 ) -> None:
+    if actor_user_id is None:
+        try:
+            from .complaint_actor_context import get_complaint_actor_uid
+
+            actor_user_id = get_complaint_actor_uid()
+        except Exception:
+            actor_user_id = None
+    if user is None:
+        try:
+            from .complaint_actor_context import get_complaint_actor_label
+
+            user = get_complaint_actor_label()
+        except Exception:
+            user = None
     c = db.query(Complaint).filter(Complaint.id == int(complaint_id)).first()
     if c is None:
         return
@@ -48,7 +63,14 @@ def append_complaint_audit_event(
     c.audit_events_json = json.dumps(arr[-_MAX_EVENTS:])
     db.add(c)
     # Structured, queryable log (no Polish message text — meta only).
-    record_from_legacy_audit_append(db, complaint_id, str(event_type)[:64], meta, user)
+    record_from_legacy_audit_append(
+        db,
+        complaint_id,
+        str(event_type)[:64],
+        meta,
+        user,
+        actor_user_id=actor_user_id,
+    )
 
 
 def complaint_audit_events_from_db(raw: Optional[str]) -> List[dict[str, Any]]:

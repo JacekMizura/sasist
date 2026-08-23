@@ -14,6 +14,7 @@ ObjectType = Literal[
     "operator",
     "document",
     "return",
+    "complaint",
     "production",
 ]
 

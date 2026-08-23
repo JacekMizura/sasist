@@ -37,34 +37,25 @@ from sqlalchemy.orm import Session, joinedload
 
 
 from ..database import get_db
-
 from ..models.complaint import Complaint
-
 from ..services.complaint_audit import append_complaint_audit_event
+from ..services.complaint_actor_context import bind_optional_complaint_actor
 from ..services.complaint_event_log import record_shipment_status_transition
-
 from ..models.complaint_shipment import ComplaintShipment, ComplaintShipmentEvent
-
 from ..schemas.complaint_shipment import (
-
     ComplaintServiceShipmentCreate,
-
     ComplaintShipmentCreate,
-
     ComplaintShipmentDetail,
-
     ComplaintShipmentEventRead,
-
     ComplaintShipmentGetResponse,
-
     ComplaintShipmentPatch,
-
 )
 
-
-
-router = APIRouter(prefix="/complaints", tags=["Complaint shipments"])
-
+router = APIRouter(
+    prefix="/complaints",
+    tags=["Complaint shipments"],
+    dependencies=[Depends(bind_optional_complaint_actor)],
+)
 
 
 ALLOWED_METHODS: Set[str] = {"COURIER_PICKUP", "DROP_OFF", "NO_RETURN"}

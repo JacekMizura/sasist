@@ -11,6 +11,7 @@ from ..models.complaint_line import ComplaintLine
 from ..models.order_item import OrderItem
 from ..schemas.complaint import ComplaintLineOperationBody, ComplaintRead
 from ..services.complaint_audit import append_complaint_audit_event
+from ..services.complaint_actor_context import bind_optional_complaint_actor
 from .complaint import (
     _apply_due_response_deadlines,
     apply_line_operation_transition,
@@ -18,7 +19,11 @@ from .complaint import (
     _tenant_warehouse_active,
 )
 
-router = APIRouter(prefix="/complaint-lines", tags=["Complaint lines"])
+router = APIRouter(
+    prefix="/complaint-lines",
+    tags=["Complaint lines"],
+    dependencies=[Depends(bind_optional_complaint_actor)],
+)
 
 # Akcje panelu → wartość pola operation_status (jedna wspólna logika z apply_line_operation_transition).
 LINE_OPERATION_ACTION_TO_STORAGE: dict[str, str] = {

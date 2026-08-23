@@ -51,6 +51,7 @@ def record_domain_activity(
     warehouse_id: Optional[int] = None,
     order_id: Optional[int] = None,
     rmz_id: Optional[int] = None,
+    complaint_id: Optional[int] = None,
     product_id: Optional[int] = None,
     production_order_id: Optional[int] = None,
     batch_id: Optional[int] = None,
@@ -62,13 +63,14 @@ def record_domain_activity(
     source_module: str = "domain",
     order_label: Optional[str] = None,
     rmz_label: Optional[str] = None,
+    complaint_label: Optional[str] = None,
     product_label: Optional[str] = None,
     document_label: Optional[str] = None,
     production_label: Optional[str] = None,
     occurred_at: Optional[datetime] = None,
 ) -> Optional[ActivityEvent]:
     """
-    Record one ActivityEvent and link to order / return / product / document / production.
+    Record one ActivityEvent and link to order / return / complaint / product / document / production.
 
     Idempotent when ``correlation_id`` is set — returns existing event on retry.
     Failures are swallowed (SAVEPOINT) so domain flows never break on audit.
@@ -96,6 +98,7 @@ def record_domain_activity(
         links: list[ActivityLinkSpec] = []
         oid = _safe_int(order_id)
         rid = _safe_int(rmz_id)
+        comp_id = _safe_int(complaint_id)
         pid = _safe_int(product_id)
         doc_id = _safe_int(stock_document_id)
         mo_id = _safe_int(production_order_id)
@@ -110,12 +113,21 @@ def record_domain_activity(
                     object_label=rmz_label or f"RMZ #{rid}",
                 )
             )
+        if comp_id is not None:
+            links.append(
+                ActivityLinkSpec(
+                    object_type="complaint",
+                    object_id=comp_id,
+                    role="primary",
+                    object_label=complaint_label or f"#{comp_id}",
+                )
+            )
         if oid is not None:
             links.append(
                 ActivityLinkSpec(
                     object_type="order",
                     object_id=oid,
-                    role="related" if rid is not None else "primary",
+                    role="related" if (rid is not None or comp_id is not None) else "primary",
                     object_label=order_label or f"#{oid}",
                 )
             )
@@ -137,14 +149,13 @@ def record_domain_activity(
                     object_label=document_label,
                 )
             )
-        # production object_id prefers MO, else BAT
         prod_oid = mo_id or bat_id
         if prod_oid is not None:
             links.append(
                 ActivityLinkSpec(
                     object_type="production",
                     object_id=prod_oid,
-                    role="related" if (rid or oid) else "primary",
+                    role="related" if (rid or oid or comp_id) else "primary",
                     object_label=production_label,
                 )
             )
@@ -160,6 +171,8 @@ def record_domain_activity(
             meta.setdefault("actor_type", "SYSTEM")
         if rid is not None:
             meta.setdefault("rmz_id", rid)
+        if comp_id is not None:
+            meta.setdefault("complaint_id", comp_id)
         if oid is not None:
             meta.setdefault("order_id", oid)
         if pid is not None:

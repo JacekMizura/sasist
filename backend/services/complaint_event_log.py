@@ -34,6 +34,8 @@ LEGACY_AUDIT_TYPE_MAP: Dict[str, str] = {
     "complaint_document_generated": ET.DOCUMENT_GENERATED,
     "complaint_documents_regenerated": ET.DOCUMENTS_REGENERATED,
     "wms_update": ET.WMS_INSPECTION_SAVED,
+    "physical_receipt_mode": "COMPLAINT_PHYSICAL_RECEIPT_MODE",
+    "warehouse_receive": "COMPLAINT_WAREHOUSE_RECEIVE",
 }
 
 
@@ -87,6 +89,7 @@ def record_status_transition(
     line_id: Optional[int] = None,
     extra: Optional[Dict[str, Any]] = None,
     actor: Optional[str] = None,
+    actor_user_id: Optional[int] = None,
 ) -> Optional[str]:
     """
     Append-only audit row with structured from → to (no deduplication; full journal).
@@ -99,7 +102,15 @@ def record_status_transition(
         for k, v in extra.items():
             if v is not None:
                 payload[k] = v
-    return record_complaint_event(db, complaint_id, event_type, payload, line_id=line_id, actor=actor)
+    return record_complaint_event(
+        db,
+        complaint_id,
+        event_type,
+        payload,
+        line_id=line_id,
+        actor=actor,
+        actor_user_id=actor_user_id,
+    )
 
 
 def record_shipment_status_transition(
@@ -116,6 +127,7 @@ def record_shipment_status_transition(
     business_type: Optional[str] = None,
     fulfillment_mode: Optional[str] = None,
     actor: Optional[str] = None,
+    actor_user_id: Optional[int] = None,
 ) -> Optional[str]:
     """SHIPMENT_STATUS — full history; payload includes from, to, shipment_id, context."""
     extra: Dict[str, Any] = {"shipment_id": int(shipment_id)}
@@ -140,6 +152,7 @@ def record_shipment_status_transition(
         line_id=None,
         extra=extra,
         actor=actor or "System",
+        actor_user_id=actor_user_id,
     )
 
 
@@ -151,11 +164,29 @@ def record_complaint_event(
     *,
     line_id: Optional[int] = None,
     actor: Optional[str] = None,
+    actor_user_id: Optional[int] = None,
 ) -> Optional[str]:
     """
     Append one row to complaint_events. Does not commit.
     Returns new row id (uuid string) or None on failure.
+    Also projects to canonical Activity Log (object_type=complaint).
     """
+    if actor_user_id is None:
+        try:
+            from .complaint_actor_context import get_complaint_actor_uid
+
+            actor_user_id = get_complaint_actor_uid()
+        except Exception:
+            actor_user_id = None
+    if not actor or actor == "System":
+        try:
+            from .complaint_actor_context import get_complaint_actor_label
+
+            lab = get_complaint_actor_label()
+            if lab:
+                actor = lab
+        except Exception:
+            pass
     try:
         pid = str(uuid.uuid4())
         body = payload if payload is not None else {}
@@ -169,6 +200,24 @@ def record_complaint_event(
             actor=(actor or "System").strip()[:128] or "System",
         )
         db.add(row)
+        try:
+            from .complaints.complaint_domain_activity import project_complaint_event_to_activity
+
+            project_complaint_event_to_activity(
+                db,
+                complaint_id=int(complaint_id),
+                event_type=str(event_type)[:64],
+                payload=body if isinstance(body, dict) else {},
+                line_id=line_id,
+                actor=actor,
+                actor_user_id=actor_user_id,
+                event_row_id=pid,
+            )
+        except Exception:
+            logger.exception(
+                "activity projection after complaint_event failed complaint_id=%s",
+                complaint_id,
+            )
         return pid
     except Exception:
         logger.exception("record_complaint_event failed complaint_id=%s type=%s", complaint_id, event_type)
@@ -181,6 +230,8 @@ def record_from_legacy_audit_append(
     legacy_type: str,
     meta: Optional[Dict[str, Any]],
     user: Optional[str],
+    *,
+    actor_user_id: Optional[int] = None,
 ) -> None:
     """
     Dual-write path: called from append_complaint_audit_event with the same meta as JSON audit.
@@ -197,6 +248,7 @@ def record_from_legacy_audit_append(
             meta.get("from"),
             meta.get("to"),
             actor=actor,
+            actor_user_id=actor_user_id,
         )
         return
 
@@ -218,6 +270,7 @@ def record_from_legacy_audit_append(
             line_id=lid,
             extra=extra_lo if extra_lo else None,
             actor=actor,
+            actor_user_id=actor_user_id,
         )
         return
 
@@ -240,6 +293,7 @@ def record_from_legacy_audit_append(
                     role=meta.get("role"),
                     method=meta.get("method"),
                     actor=actor,
+                    actor_user_id=actor_user_id,
                 )
                 return
 
@@ -248,7 +302,15 @@ def record_from_legacy_audit_append(
     if canonical == ET.LEGACY_AUDIT:
         payload["legacy_audit_type"] = legacy_type[:64]
     line_id = _line_id_from_meta(meta)
-    record_complaint_event(db, complaint_id, canonical, payload, line_id=line_id, actor=actor)
+    record_complaint_event(
+        db,
+        complaint_id,
+        canonical,
+        payload,
+        line_id=line_id,
+        actor=actor,
+        actor_user_id=actor_user_id,
+    )
 
 
 def list_events_for_complaint(

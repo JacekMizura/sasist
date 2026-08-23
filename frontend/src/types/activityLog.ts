@@ -14,6 +14,7 @@ export type ActivityObjectType =
   | "operator"
   | "document"
   | "return"
+  | "complaint"
   | "production";
 
 export type ActivityLink = {

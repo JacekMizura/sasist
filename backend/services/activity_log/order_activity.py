@@ -211,8 +211,10 @@ def emit_automation_execution_activity(
         kwargs["order_id"] = int(entity_id)
     elif et == "RETURN":
         kwargs["rmz_id"] = int(entity_id)
+    elif et == "COMPLAINT":
+        kwargs["complaint_id"] = int(entity_id)
     else:
-        # COMPLAINT / other — still record if we can link something; skip without order/return
+        # other — still record if we can link something; skip without order/return/complaint
         logger.info(
             "automation activity skipped unsupported entity_type=%s id=%s",
             et,

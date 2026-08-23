@@ -252,6 +252,13 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
         resolve_return_event_title,
         return_details_display_for,
     )
+    from backend.services.activity_log.complaint_activity_presentation import (
+        build_complaint_inline_detail_rows,
+        format_complaint_effect_message,
+        is_complaint_event_code,
+        resolve_complaint_event_title,
+        complaint_details_display_for,
+    )
     from backend.services.cart_lifecycle_event_catalog import (
         compose_informative_message,
         title_pl,
@@ -287,6 +294,14 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
         )
         details = build_return_inline_detail_rows(code_norm, meta)
         details_display = return_details_display_for(code_norm) if details else "none"
+    elif is_complaint_event_code(code_norm):
+        action = format_complaint_effect_message(
+            code_norm,
+            stored_description=stored_desc,
+            metadata=meta,
+        )
+        details = build_complaint_inline_detail_rows(code_norm, meta)
+        details_display = complaint_details_display_for(code_norm) if details else "none"
     elif code_norm == PICKING_ENTRY_GATE_BLOCKED:
         action = format_picking_entry_gate_blocked_message(
             stored_description=stored_desc,
@@ -336,12 +351,15 @@ def enrich_activity_item(item: dict[str, Any]) -> dict[str, Any]:
 
     event_display_label = (
         resolve_return_event_title(event_code, meta)
+        or resolve_complaint_event_title(event_code, meta)
         or order_event_action_label(code_norm, fallback=None)
         or ORDER_EVENT_TITLES_PL.get(code_norm)
         or WMS_EVENT_TITLES_PL.get(code_norm)
         or title_pl(event_code)
     )
-    if str(meta.get("source_category") or "").upper() == "WMS" and not is_return_event_code(code_norm):
+    if str(meta.get("source_category") or "").upper() == "WMS" and not (
+        is_return_event_code(code_norm) or is_complaint_event_code(code_norm)
+    ):
         event_display_label = (
             order_event_action_label(code_norm, fallback=None)
             or WMS_EVENT_TITLES_PL.get(code_norm)

@@ -13,8 +13,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
-from ..auth.deps import get_optional_current_user
+from ..auth.deps import get_current_user
 from ..models.app_user import AppUser
+from ..services.complaint_actor_context import bind_optional_complaint_actor
 from ..models.complaint import Complaint
 from ..models.complaint_line import ComplaintLine
 from ..models.complaint_ui_status import ComplaintUiStatus
@@ -32,7 +33,11 @@ from ..schemas.complaint import (
 from ..utils.ui_status_color import normalize_stored_color
 from .complaint import build_complaint_read
 
-router = APIRouter(prefix="/office/complaint-ui", tags=["Office Complaint UI Statuses"])
+router = APIRouter(
+    prefix="/office/complaint-ui",
+    tags=["Office Complaint UI Statuses"],
+    dependencies=[Depends(bind_optional_complaint_actor)],
+)
 
 logger = logging.getLogger(__name__)
 
@@ -318,7 +323,7 @@ def patch_complaint_ui_status(
     tenant_id: int = Query(...),
     warehouse_id: int = Query(...),
     db: Session = Depends(get_db),
-    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+    current_user: AppUser = Depends(get_current_user),
 ):
     """Set or clear panel sub-status on a complaint."""
     row = _load_complaint_for_panel(db, complaint_id, tenant_id, warehouse_id)
@@ -326,7 +331,7 @@ def patch_complaint_ui_status(
         raise HTTPException(status_code=404, detail="Complaint not found")
     from ..services.automation.complaint_ui_status import apply_complaint_panel_ui_status
 
-    uid = int(current_user.id) if current_user is not None and current_user.id is not None else None
+    uid = int(current_user.id) if current_user.id is not None else None
     try:
         apply_complaint_panel_ui_status(
             db,

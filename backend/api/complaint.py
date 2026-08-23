@@ -19,6 +19,9 @@ from sqlalchemy import Integer, and_, case, cast, desc, func, nullslast, or_
 from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
+from ..auth.deps import get_current_user, get_optional_current_user
+from ..models.app_user import AppUser
+from ..services.complaint_actor_context import bind_optional_complaint_actor
 from ..models.complaint import Complaint
 from ..models.complaint_document import ComplaintDocument
 from ..models.complaint_line import ComplaintLine
@@ -92,7 +95,28 @@ from ..services.tenant_default_warehouse import resolve_tenant_default_warehouse
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/complaints", tags=["Complaints"])
+def _actor_uid(user: Optional[AppUser]) -> Optional[int]:
+    if user is not None and getattr(user, 'id', None) is not None:
+        return int(user.id)
+    return None
+
+
+def _actor_label(user: Optional[AppUser]) -> Optional[str]:
+    if user is None:
+        return None
+    fn = str(getattr(user, 'first_name', None) or '').strip()
+    ln = str(getattr(user, 'last_name', None) or '').strip()
+    name = (fn + ' ' + ln).strip()
+    if name:
+        return name
+    return str(getattr(user, 'login', None) or getattr(user, 'email', None) or '').strip() or None
+
+
+router = APIRouter(
+    prefix="/complaints",
+    tags=["Complaints"],
+    dependencies=[Depends(bind_optional_complaint_actor)],
+)
 
 
 def _complaint_warehouse_document_number(db: Session, doc_id: Optional[int]) -> Optional[str]:
@@ -1650,6 +1674,13 @@ def delete_complaint(
         raise HTTPException(status_code=404, detail="Complaint not found")
     if getattr(c, "deleted_at", None) is not None:
         return ComplaintDeleteResult(success=True, mode="archived")
+    try:
+        from ..services.complaints.complaint_domain_activity import emit_complaint_archived
+        from ..services.complaint_actor_context import get_complaint_actor_uid
+
+        emit_complaint_archived(db, complaint=c, actor_user_id=get_complaint_actor_uid())
+    except Exception:
+        logger.exception("complaint archive activity failed id=%s", complaint_id)
     complaint_set_deleted_at(db, c)
     db.add(c)
     try:

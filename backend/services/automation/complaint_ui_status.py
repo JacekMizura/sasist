@@ -42,6 +42,29 @@ def apply_complaint_panel_ui_status(
     db.add(row)
     db.flush()
 
+    try:
+        from ..complaints.complaint_domain_activity import emit_complaint_ui_status_changed
+
+        old_name = None
+        new_name = None
+        if previous_sid is not None:
+            prev_us = db.query(ComplaintUiStatus).filter(ComplaintUiStatus.id == int(previous_sid)).first()
+            old_name = str(getattr(prev_us, "name", None) or "").strip() or None if prev_us else None
+        if new_sid is not None:
+            new_us = db.query(ComplaintUiStatus).filter(ComplaintUiStatus.id == int(new_sid)).first()
+            new_name = str(getattr(new_us, "name", None) or "").strip() or None if new_us else None
+        emit_complaint_ui_status_changed(
+            db,
+            complaint=row,
+            old_status_id=previous_sid,
+            new_status_id=new_sid,
+            old_status_name=old_name,
+            new_status_name=new_name,
+            actor_user_id=actor_user_id,
+        )
+    except Exception:
+        logger.exception("complaint activity UI status failed id=%s", getattr(row, "id", None))
+
     _emit_automation(
         db,
         row=row,

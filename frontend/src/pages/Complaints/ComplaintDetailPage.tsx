@@ -23,6 +23,7 @@ import ComplaintTimeline from "./ComplaintTimeline";
 import ComplaintResponseDeadlineBanner from "./ComplaintResponseDeadlineBanner";
 import ComplaintAutoAcceptBadge from "./ComplaintAutoAcceptBadge";
 import { DAMAGE_TENANT_ID } from "../damage/damageShared";
+import ActivityLogPanel from "../../components/activityLog/ActivityLogPanel";
 import ComplaintLinesDecisionsPanel from "./ComplaintLinesDecisionsPanel";
 import ComplaintExchangeOrderSection from "./ComplaintExchangeOrderSection";
 import type { ComplaintOrderKind } from "./complaintExchangePrefill";
@@ -32,17 +33,6 @@ import {
   getComplaintCloseBlockingLines,
 } from "./complaintLineOperations";
 import { aggregateComplaintRefundSummary } from "./complaintLineSettlement";
-import {
-  COMPLAINT_TIMELINE_ACTOR,
-  dedupeComplaintHistoryRows,
-  formatComplaintAuditDateTime,
-  formatComplaintJournalAction,
-  humanizeComplaintAuditEvent,
-  mergeAndSortHistoryRows,
-  timelineEventToHistoryRow,
-  type ComplaintHistoryRow,
-} from "./complaintAuditHumanize";
-import { buildStructuredTimelineRows } from "./complaintStructuredHumanize";
 import { PanelDetailEntityHeader } from "../../components/panelDetail/PanelDetailEntityHeader";
 import {
   panelDetailAsideColClass,
@@ -103,8 +93,6 @@ export default function ComplaintDetailPage() {
   const [correspondenceDraft, setCorrespondenceDraft] = useState("");
   const [replacementModal, setReplacementModal] = useState<{ lineId: number; kind: ComplaintOrderKind } | null>(null);
   const [processActionErr, setProcessActionErr] = useState<string | null>(null);
-  const [journalPageSize, setJournalPageSize] = useState(25);
-  const [journalPage, setJournalPage] = useState(0);
 
   const keySeq = useRef(0);
   const nextKey = () => {
@@ -246,138 +234,6 @@ export default function ComplaintDetailPage() {
     if (data.id !== cid) return;
     void refreshShipment();
   }, [cid, data?.id, refreshShipment, warehouseId]);
-
-  const shipmentTimeline = useMemo((): TimelineEvent[] => {
-    if (!shipment?.events?.length) return [];
-    return shipment.events.map((e) => ({
-      id: `sh-ev-${e.id}`,
-      at: e.created_at ? new Date(e.created_at).getTime() : 0,
-      title: e.title,
-    }));
-  }, [shipment]);
-
-  const serviceShipmentTimeline = useMemo((): TimelineEvent[] => {
-    if (!serviceShipment?.events?.length) return [];
-    return serviceShipment.events.map((e) => ({
-      id: `sh-svc-${e.id}`,
-      at: e.created_at ? new Date(e.created_at).getTime() : 0,
-      title: e.title,
-    }));
-  }, [serviceShipment]);
-
-  const complaintHistoryRows = useMemo(() => {
-    if (data == null) return [];
-    const lines = data.lines ?? [];
-    const structured = (data.complaint_events ?? []).length
-      ? buildStructuredTimelineRows(data.complaint_events, lines)
-      : [];
-
-    if (structured.length > 0) {
-      const uiRows: ComplaintHistoryRow[] = [];
-      const hasCreated = (data.complaint_events ?? []).some((e) => e.event_type === "COMPLAINT_CREATED");
-      if (data.created_at && !hasCreated) {
-        const at = new Date(data.created_at).getTime();
-        uiRows.push({
-          id: "ui-created",
-          at,
-          dateLabel: formatComplaintAuditDateTime(data.created_at),
-          actor: COMPLAINT_TIMELINE_ACTOR,
-          actionBold: "Utworzono reklamację",
-          detail: data.reference_code ? `Ref. ${data.reference_code}` : undefined,
-        });
-      }
-      if (data.auto_accepted || data.accepted_by_law) {
-        const evs = data.complaint_events ?? [];
-        if (!evs.some((e) => e.event_type === "COMPLAINT_AUTO_ACCEPTED_LAW")) {
-          const raw = data.response_deadline?.trim()
-            ? Date.parse(data.response_deadline)
-            : data.created_at
-              ? Date.parse(data.created_at)
-              : NaN;
-          const at = Number.isFinite(raw) ? raw : Date.now();
-          uiRows.push({
-            id: "ui-auto-accept-law",
-            at,
-            dateLabel: formatComplaintAuditDateTime(new Date(at).toISOString()),
-            actor: COMPLAINT_TIMELINE_ACTOR,
-            actionBold: "Reklamacja uznana z mocy prawa",
-            detail: "wpis uzupełniający — brak osobnego wpisu w starszej reklamacji",
-          });
-        }
-      }
-      const extraRows = extraTimeline.map((ev) => timelineEventToHistoryRow(ev));
-      return dedupeComplaintHistoryRows(mergeAndSortHistoryRows([...uiRows, ...structured, ...extraRows]));
-    }
-
-    const auditRows = (data.audit_events ?? [])
-      .filter((e) => e.type !== "decision_update")
-      .map((e, i) => humanizeComplaintAuditEvent(e, i, lines));
-
-    const uiRows: ComplaintHistoryRow[] = [];
-    const hasCreatedAudit = (data.audit_events ?? []).some((e) => e.type === "complaint_created");
-    if (data.created_at && !hasCreatedAudit) {
-      const at = new Date(data.created_at).getTime();
-      uiRows.push({
-        id: "ui-created",
-        at,
-        dateLabel: formatComplaintAuditDateTime(data.created_at),
-        actor: COMPLAINT_TIMELINE_ACTOR,
-        actionBold: "Utworzono reklamację",
-        detail: data.reference_code ? `Ref. ${data.reference_code}` : undefined,
-      });
-    }
-    if (data.auto_accepted || data.accepted_by_law) {
-      const evs = data.audit_events ?? [];
-      if (!evs.some((e) => e.type === "auto_accepted_by_law")) {
-        const raw = data.response_deadline?.trim()
-          ? Date.parse(data.response_deadline)
-          : data.created_at
-            ? Date.parse(data.created_at)
-            : NaN;
-        const at = Number.isFinite(raw) ? raw : Date.now();
-        uiRows.push({
-          id: "ui-auto-accept-law",
-          at,
-          dateLabel: formatComplaintAuditDateTime(new Date(at).toISOString()),
-          actor: COMPLAINT_TIMELINE_ACTOR,
-          actionBold: "Reklamacja uznana z mocy prawa",
-          detail: "wpis uzupełniający — brak osobnego wpisu audytu w starszej reklamacji",
-        });
-      }
-    }
-
-    const shipRows = shipmentTimeline.map((ev) => timelineEventToHistoryRow(ev));
-    const svcRows = serviceShipmentTimeline.map((ev) => timelineEventToHistoryRow(ev));
-    const extraRows = extraTimeline.map((ev) => timelineEventToHistoryRow(ev));
-
-    return dedupeComplaintHistoryRows(
-      mergeAndSortHistoryRows([...uiRows, ...auditRows, ...shipRows, ...svcRows, ...extraRows]),
-    );
-  }, [
-    data,
-    extraTimeline,
-    serviceShipmentTimeline,
-    shipmentTimeline,
-  ]);
-
-  const journalTotalPages = useMemo(() => {
-    const n = complaintHistoryRows.length;
-    if (n === 0) return 1;
-    return Math.max(1, Math.ceil(n / journalPageSize));
-  }, [complaintHistoryRows.length, journalPageSize]);
-
-  const journalRows = useMemo(() => {
-    const start = journalPage * journalPageSize;
-    return complaintHistoryRows.slice(start, start + journalPageSize);
-  }, [complaintHistoryRows, journalPage, journalPageSize]);
-
-  useEffect(() => {
-    setJournalPage(0);
-  }, [data?.id, journalPageSize]);
-
-  useEffect(() => {
-    setJournalPage((p) => Math.min(p, Math.max(0, journalTotalPages - 1)));
-  }, [journalTotalPages]);
 
   const applyDecisionPatch = useCallback(
     async (partial: ComplaintDecisionPatchPayload, timelineNote?: { title: string; subtitle?: string }) => {
@@ -853,112 +709,15 @@ export default function ComplaintDetailPage() {
             </div>
 
             <div className="mt-4 border-t border-slate-200 pt-3">
-            <div className="flex flex-wrap items-end justify-between gap-2">
-              <h2 className={sectionTitle}>Dziennik zdarzeń</h2>
-              <label className="flex items-center gap-1.5 text-[11px] text-gray-600">
-                <span className="whitespace-nowrap">Na stronę</span>
-                <select
-                  value={journalPageSize}
-                  onChange={(ev) => setJournalPageSize(Number(ev.target.value))}
-                  className="rounded border border-gray-300 bg-white px-1.5 py-0.5 text-xs text-gray-800"
-                >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                </select>
-              </label>
-            </div>
-            <div className="mt-2 overflow-x-auto">
-              <table className="table-fixed w-full min-w-[520px] border-collapse text-left text-xs leading-tight text-gray-900">
-                <colgroup>
-                  <col className="w-[152px]" />
-                  <col className="w-[108px]" />
-                  <col />
-                </colgroup>
-                <thead>
-                  <tr className="border-b border-gray-300 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                    <th scope="col" className="py-1.5 pr-2 align-bottom whitespace-nowrap">
-                      Data
-                    </th>
-                    <th scope="col" className="py-1.5 pr-2 align-bottom whitespace-nowrap">
-                      Użytkownik
-                    </th>
-                    <th scope="col" className="py-1.5 align-bottom">
-                      Działanie
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {complaintHistoryRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={3} className="py-2 text-gray-500">
-                        Brak zapisanych zdarzeń.
-                      </td>
-                    </tr>
-                  ) : (
-                    journalRows.map((row) => {
-                      const actionTitle = formatComplaintJournalAction(row);
-                      return (
-                        <tr
-                          key={row.id}
-                          className="border-b border-gray-200/90 transition-colors hover:bg-slate-50/90"
-                        >
-                          <td className="max-h-9 py-1 pr-2 align-middle tabular-nums text-[10px] leading-snug text-gray-400 whitespace-nowrap">
-                            {row.dateLabel}
-                          </td>
-                          <td className="max-h-9 py-1 pr-2 align-middle text-[11px] text-gray-600 whitespace-nowrap">
-                            {row.actor}
-                          </td>
-                          <td className="max-h-9 min-w-0 py-1 align-middle text-[11px] text-gray-800">
-                            <div
-                              className="min-w-0 truncate whitespace-nowrap"
-                              title={actionTitle}
-                            >
-                              <span className="font-semibold text-gray-900">{row.actionBold}</span>
-                              {row.detail ? (
-                                <>
-                                  <span className="font-normal text-gray-500"> — </span>
-                                  <span className="font-normal text-gray-700">{row.detail}</span>
-                                </>
-                              ) : null}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-            {complaintHistoryRows.length > 0 ? (
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-600">
-                <span className="tabular-nums">
-                  {journalPage * journalPageSize + 1}–
-                  {Math.min((journalPage + 1) * journalPageSize, complaintHistoryRows.length)} z {complaintHistoryRows.length}
-                </span>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    disabled={journalPage <= 0}
-                    onClick={() => setJournalPage((p) => Math.max(0, p - 1))}
-                    className="rounded border border-gray-300 bg-white px-2 py-0.5 text-xs disabled:opacity-40"
-                  >
-                    Poprzednia
-                  </button>
-                  <span className="tabular-nums px-1">
-                    {journalPage + 1} / {journalTotalPages}
-                  </span>
-                  <button
-                    type="button"
-                    disabled={journalPage >= journalTotalPages - 1}
-                    onClick={() => setJournalPage((p) => Math.min(journalTotalPages - 1, p + 1))}
-                    className="rounded border border-gray-300 bg-white px-2 py-0.5 text-xs disabled:opacity-40"
-                  >
-                    Następna
-                  </button>
-                </div>
-              </div>
-            ) : null}
+              <ActivityLogPanel
+                key={`complaint-activity-${data.id}`}
+                objectType="complaint"
+                objectId={data.id}
+                title="Dziennik zdarzeń"
+                defaultCollapsed={false}
+                tenantId={DAMAGE_TENANT_ID}
+                className="mt-0 border-0 p-0 shadow-none"
+              />
             </div>
       </div>
     </>
