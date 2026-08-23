@@ -459,6 +459,8 @@ export default function WmsPickingProductDetailPage() {
         locations: detail.locations,
         productChanged: false,
         serverSourceLocationId: serverLid,
+        // Operator scan this visit must survive detail refetch / stale source_lock.
+        operatorExplicitLocationId: explicitSourceSelectionRef.current,
       });
       // Single-shelf auto: treat as explicit so accept may run without physical re-scan.
       if (next != null && detail.locations.length === 1) {
@@ -936,6 +938,19 @@ export default function WmsPickingProductDetailPage() {
           scan,
           locations: locs,
           expectedCode,
+        });
+        multiScanTrace("LOCATION_SCAN_RESOLVED", {
+          raw_code: scan,
+          kind: locRes.kind,
+          active_before: activeLocationId,
+          matched_location_id: locRes.kind === "accept" ? locRes.location_id : null,
+          matched_location_code: locRes.kind === "accept" ? locRes.location_code : null,
+          expected:
+            locRes.kind === "reject_wrong"
+              ? locRes.expected
+              : expectedCode,
+          locs_count: locs.length,
+          locs_codes: locs.map((l) => l.location_code).join("|"),
         });
         if (locRes.kind === "accept") {
           playScanBeep();

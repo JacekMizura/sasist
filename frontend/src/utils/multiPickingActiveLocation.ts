@@ -18,7 +18,8 @@ export function locationEffectiveStock(loc: ActiveLocationCandidate | null | und
 /**
  * Compute next activeLocationId after product detail loads / refreshes.
  *
- * - Server source_lock (if still valid) wins — refetch must not wipe provenance UI
+ * - Operator explicit scan this visit (still valid) wins over stale server lock
+ * - Else server source_lock (if still valid)
  * - Single location → that id (no scan needed)
  * - Multi: keep previous only if still present and effective stock > 0
  * - Product change → clear (caller passes previousProductId mismatch)
@@ -29,10 +30,29 @@ export function nextActiveLocationIdAfterDetail(args: {
   locations: ActiveLocationCandidate[];
   productChanged: boolean;
   serverSourceLocationId?: number | null;
+  /** Explicit operator scan/tap this visit — must not be wiped by stale source_lock. */
+  operatorExplicitLocationId?: number | null;
 }): number | null {
-  const { previousId, locations, productChanged, serverSourceLocationId } = args;
+  const {
+    previousId,
+    locations,
+    productChanged,
+    serverSourceLocationId,
+    operatorExplicitLocationId,
+  } = args;
   if (!locations.length) return null;
   if (productChanged) return null;
+
+  const explicitId =
+    operatorExplicitLocationId != null && Number.isFinite(Number(operatorExplicitLocationId))
+      ? Math.floor(Number(operatorExplicitLocationId))
+      : null;
+  if (explicitId != null && explicitId > 0) {
+    const ex = locations.find((l) => l.location_id === explicitId);
+    if (ex && locationEffectiveStock(ex) > 1e-9) {
+      return explicitId;
+    }
+  }
 
   const serverId =
     serverSourceLocationId != null && Number.isFinite(Number(serverSourceLocationId))

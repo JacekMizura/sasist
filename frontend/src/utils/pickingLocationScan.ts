@@ -3,6 +3,9 @@
  *
  * Allowed locations = product detail routing rows only — never invent inventory FIFO.
  * location_like codes that are not in that set → WRONG_LOCATION (do not mutate active).
+ *
+ * Matching is STRICT equality on location_code / numeric location_id.
+ * Never use endsWith — "B3-C-1".endsWith("1") falsely matches location_id=1 (A1).
  */
 
 import { normalizeScanEan } from "./wmsScanNormalize";
@@ -18,16 +21,24 @@ export type PickingLocationScanResult =
   | { kind: "accept"; location_id: number; location_code: string }
   | { kind: "reject_wrong"; scanned: string; expected: string | null };
 
+/** Strip optional LOC-/LOC_ prefix; uppercase; trim. */
+export function normalizeLocationScanKey(raw: string): string {
+  let s = normalizeScanEan(raw).toUpperCase();
+  if (s.startsWith("LOC-") || s.startsWith("LOC_")) s = s.slice(4);
+  return s;
+}
+
 export function locationRowMatchesScan(
   loc: PickingLocationScanCandidate,
   scan: string,
 ): boolean {
-  const b = normalizeScanEan(scan).toUpperCase();
+  const b = normalizeLocationScanKey(scan);
   if (!b) return false;
-  const code = normalizeScanEan(loc.location_code ?? "").toUpperCase();
+  const code = normalizeLocationScanKey(loc.location_code ?? "");
+  if (code && b === code) return true;
+  // Exact numeric id only — never endsWith (B3-C-1 must not match id=1).
   const idStr = String(loc.location_id);
-  if (code && (b === code || b.endsWith(code) || code.endsWith(b))) return true;
-  if (b === idStr.toUpperCase() || b.endsWith(idStr) || idStr.endsWith(b)) return true;
+  if (/^\d+$/.test(b) && b === idStr) return true;
   return false;
 }
 

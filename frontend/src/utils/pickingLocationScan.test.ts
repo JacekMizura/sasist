@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatWrongLocationMessage,
+  locationRowMatchesScan,
   resolvePickingSourceLocationScan,
 } from "./pickingLocationScan";
 
@@ -15,6 +16,28 @@ describe("resolvePickingSourceLocationScan", () => {
       expectedCode: "A1-A-1",
     });
     expect(r).toEqual({ kind: "accept", location_id: 10, location_code: "A1-A-1" });
+  });
+
+  it("PRODUCTION BUG: B3-C-1 must not match location_id=1 via endsWith", () => {
+    const a1Id1 = { location_id: 1, location_code: "A1-A-1" };
+    const b3 = { location_id: 23, location_code: "B3-C-1" };
+    expect(locationRowMatchesScan(a1Id1, "B3-C-1")).toBe(false);
+    const r = resolvePickingSourceLocationScan({
+      scan: "B3-C-1",
+      locations: [a1Id1, b3],
+      expectedCode: "A1-A-1",
+    });
+    expect(r).toEqual({ kind: "accept", location_id: 23, location_code: "B3-C-1" });
+  });
+
+  it("PRODUCTION BUG: B3-C-1 alone vs only A1 id=1 → reject_wrong not accept A1", () => {
+    const a1Id1 = { location_id: 1, location_code: "A1-A-1" };
+    const r = resolvePickingSourceLocationScan({
+      scan: "B3-C-1",
+      locations: [a1Id1],
+      expectedCode: "A1-A-1",
+    });
+    expect(r.kind).toBe("reject_wrong");
   });
 
   it("scan location B when both allowed → accept B (switch)", () => {

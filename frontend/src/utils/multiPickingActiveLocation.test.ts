@@ -71,5 +71,20 @@ describe("nextActiveLocationIdAfterDetail", () => {
       }),
     ).toBe(23);
   });
+
+  it("operator explicit scan wins over stale server source_lock", () => {
+    expect(
+      nextActiveLocationIdAfterDetail({
+        previousId: 23,
+        locations: [
+          { location_id: 1, stock_quantity: 1 },
+          { location_id: 23, stock_quantity: 4 },
+        ],
+        productChanged: false,
+        serverSourceLocationId: 1,
+        operatorExplicitLocationId: 23,
+      }),
+    ).toBe(23);
+  });
 });
 
