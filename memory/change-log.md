@@ -1,3 +1,11 @@
+## 2026-08-23 — ORDER_CREATED on order create paths
+
+- Bug: manual #1273 → Logi empty; `create_order` had no Activity emit / optional user
+- Canonical writer: `emit_order_created_activity` (+ import uses `ORDER_IMPORTED` with same correlation)
+- Entry points: ERP create, CSV import, direct sale; no live marketplace Order INSERT besides import
+- Tests: `test_order_created_activity.py` through real `create_order`
+- WMS touched=0
+
 ## 2026-08-23 — Order › Logi WMS projection
 
 - Harden `append_order_activity_for_wms`: category wms, correlation_id, skip technical (PICKED/PACKED/…)

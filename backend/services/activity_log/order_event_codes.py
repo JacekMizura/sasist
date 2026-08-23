@@ -9,6 +9,7 @@ from typing import Literal
 
 # --- Order ---
 ORDER_STATUS_CHANGED = "ORDER_STATUS_CHANGED"
+ORDER_CREATED = "ORDER_CREATED"
 
 # --- Automation ---
 AUTOMATION_SUCCEEDED = "AUTOMATION_SUCCEEDED"
@@ -50,6 +51,7 @@ ActorKind = Literal["USER", "SYSTEM", "AUTOMATION", "INTEGRATION"]
 
 ORDER_EVENT_CATEGORY: dict[str, str] = {
     ORDER_STATUS_CHANGED: "order",
+    ORDER_CREATED: "order",
     AUTOMATION_SUCCEEDED: "automation",
     AUTOMATION_FAILED: "automation",
     AUTOMATION_BLOCKED: "automation",
@@ -72,6 +74,7 @@ ORDER_EVENT_CATEGORY: dict[str, str] = {
 
 ORDER_EVENT_TITLES_PL: dict[str, str] = {
     ORDER_STATUS_CHANGED: "Zmiana statusu",
+    ORDER_CREATED: "Utworzenie zamówienia",
     AUTOMATION_SUCCEEDED: "Automatyzacja",
     AUTOMATION_FAILED: "Automatyzacja",
     AUTOMATION_BLOCKED: "Automatyzacja",

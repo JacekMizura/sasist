@@ -2061,6 +2061,7 @@ class ImportService:
                             tenant_id=int(tenant_id),
                             warehouse_id=int(warehouse_id),
                             order_id=int(order.id),
+                            order_number=str(getattr(order, "number", None) or ""),
                             source=str(source_val or "").strip() or "import",
                             external_order_id=str(ext) if ext else None,
                         )

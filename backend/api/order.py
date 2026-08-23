@@ -1328,7 +1328,11 @@ def _log_order_create_trace(stage: str, **extra) -> None:
 
 
 @router.post("/", response_model=OrderCreateResponse, status_code=201)
-def create_order(body: OrderCreateBody, db: Session = Depends(get_db)):
+def create_order(
+    body: OrderCreateBody,
+    db: Session = Depends(get_db),
+    current_user: Optional[AppUser] = Depends(get_optional_current_user),
+):
     """Create order with lines from catalog products and/or bundles (bundles exploded to real products)."""
     import sys
 
@@ -1595,6 +1599,30 @@ def create_order(body: OrderCreateBody, db: Session = Depends(get_db)):
         if complaint_ref is not None:
             stage = "COMPLAINT_FINALIZE"
             _finalize_complaint_replacement_order(db, complaint_ref, order)
+
+        stage = "ACTIVITY_ORDER_CREATED"
+        try:
+            from ..services.activity_log.order_commerce_activity import emit_order_created_activity
+
+            create_source = "MANUAL"
+            if origin_up == "COMPLAINT" or body.original_order_id is not None:
+                create_source = "COPY"
+            actor_uid = int(current_user.id) if current_user is not None else None
+            emit_order_created_activity(
+                db,
+                tenant_id=int(order.tenant_id),
+                warehouse_id=int(order.warehouse_id),
+                order_id=int(order.id),
+                order_number=str(order.number or ""),
+                actor_user_id=actor_uid,
+                source=create_source,
+                original_order_id=int(body.original_order_id) if body.original_order_id is not None else None,
+            )
+        except Exception:
+            logger.exception(
+                "ORDER_CREATED activity failed order_id=%s",
+                getattr(order, "id", None),
+            )
 
         stage = "BEFORE_COMMIT"
         _log_order_create_trace("BEFORE_COMMIT", order_id=order_id_for_diag)

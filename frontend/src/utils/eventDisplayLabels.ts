@@ -88,6 +88,7 @@ export const EVENT_DISPLAY_LABELS: Record<string, string> = {
 
   // --- Order › Logi (OMS / automation / documents) ---
   ORDER_STATUS_CHANGED: "Zmiana statusu",
+  ORDER_CREATED: "Utworzenie zamówienia",
   AUTOMATION_SUCCEEDED: "Automatyzacja",
   AUTOMATION_FAILED: "Automatyzacja",
   AUTOMATION_BLOCKED: "Automatyzacja",

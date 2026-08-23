@@ -15,6 +15,7 @@ from .order_event_codes import (
     ORDER_CUSTOM_FIELD_CHANGED,
     ORDER_CUSTOM_FIELD_FILE_ATTACHED,
     ORDER_CUSTOM_FIELD_FILE_REMOVED,
+    ORDER_CREATED,
     ORDER_EVENT_CATEGORY,
     ORDER_IMPORTED,
     ORDER_PAYMENT_METHOD_CHANGED,
@@ -416,36 +417,116 @@ def emit_order_shipping_method_changed_activity(
     )
 
 
+def emit_order_created_activity(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: Optional[int],
+    order_id: int,
+    order_number: Optional[str] = None,
+    actor_user_id: Optional[int] = None,
+    actor_kind: Optional[ActorKind] = None,
+    source: str = "MANUAL",
+    external_order_id: Optional[str] = None,
+    integration_account_id: Optional[str] = None,
+    original_order_id: Optional[int] = None,
+    occurred_at: Optional[datetime] = None,
+) -> Any:
+    """One business creation event per order. Marketplace/CSV uses ``emit_order_imported_activity``."""
+    cid = f"order-created:{int(order_id)}"[:64]
+    if find_activity_by_correlation(db, correlation_id=cid, tenant_id=int(tenant_id)):
+        return None
+
+    src = str(source or "MANUAL").strip().upper() or "MANUAL"
+    num = str(order_number or "").strip() or str(order_id)
+    display_num = num if num.startswith("#") else f"#{num}"
+
+    if actor_kind is not None:
+        resolved_kind: ActorKind = actor_kind
+    elif actor_user_id:
+        resolved_kind = "USER"
+    else:
+        resolved_kind = "SYSTEM"
+
+    if src == "DIRECT_SALE":
+        summary = f"Utworzono zamówienie {display_num} (sprzedaż bezpośrednia)."
+    else:
+        summary = f"Utworzono zamówienie {display_num}."
+
+    meta: dict[str, Any] = {
+        **_actor_meta(resolved_kind),
+        "ref_type": "order",
+        "ref_id": int(order_id),
+        "order_id": int(order_id),
+        "order_number": str(num)[:128],
+        "source": src[:64],
+    }
+    if external_order_id:
+        meta["external_order_id"] = str(external_order_id)[:128]
+    if integration_account_id:
+        meta["integration_account_id"] = str(integration_account_id)[:128]
+    if original_order_id is not None:
+        meta["original_order_id"] = int(original_order_id)
+
+    return record_domain_activity(
+        db,
+        tenant_id=int(tenant_id),
+        warehouse_id=warehouse_id,
+        event_type=ORDER_CREATED,
+        description=summary,
+        actor_user_id=int(actor_user_id) if resolved_kind == "USER" and actor_user_id else None,
+        order_id=int(order_id),
+        metadata=meta,
+        correlation_id=cid,
+        severity="SUCCESS",
+        category=ORDER_EVENT_CATEGORY[ORDER_CREATED],
+        source_module="order_create",
+        occurred_at=occurred_at,
+    )
+
+
 def emit_order_imported_activity(
     db: Session,
     *,
     tenant_id: int,
     warehouse_id: Optional[int],
     order_id: int,
+    order_number: Optional[str] = None,
     source: Optional[str] = None,
     external_order_id: Optional[str] = None,
     import_batch_id: Optional[str] = None,
     integration_account_id: Optional[str] = None,
     occurred_at: Optional[datetime] = None,
 ) -> Any:
-    cid = f"order-import:{int(order_id)}"[:64]
-    if find_activity_by_correlation(db, correlation_id=cid, tenant_id=int(tenant_id)):
+    """Marketplace/CSV import creation narrative — mutually exclusive with ORDER_CREATED."""
+    cid_created = f"order-created:{int(order_id)}"[:64]
+    cid_import = f"order-import:{int(order_id)}"[:64]
+    if find_activity_by_correlation(db, correlation_id=cid_import, tenant_id=int(tenant_id)):
+        return None
+    if find_activity_by_correlation(db, correlation_id=cid_created, tenant_id=int(tenant_id)):
         return None
     src = str(source or "").strip() or "import"
-    summary = f"Pobrano zamówienie z {src}."
+    num = str(order_number or "").strip()
+    display = f" #{num}" if num else ""
+    summary = f"Pobrano zamówienie{display} z {src}.".replace("  ", " ")
     meta: dict[str, Any] = {
         **_actor_meta("INTEGRATION"),
         "ref_type": "order",
         "ref_id": int(order_id),
+        "order_id": int(order_id),
         "marketplace": src[:128],
-        "source": src[:128],
+        "source": "MARKETPLACE" if src.lower() not in ("import", "csv", "manual") else "IMPORT",
+        "source_label": src[:128],
     }
+    if num:
+        meta["order_number"] = num[:128]
     if external_order_id:
         meta["external_order_id"] = str(external_order_id)[:128]
     if import_batch_id:
         meta["import_batch_id"] = str(import_batch_id)[:128]
     if integration_account_id:
         meta["integration_account_id"] = str(integration_account_id)[:128]
+    # Use shared creation correlation so ORDER_CREATED cannot double-fire later.
     return record_domain_activity(
         db,
         tenant_id=int(tenant_id),
@@ -455,7 +536,7 @@ def emit_order_imported_activity(
         actor_user_id=None,
         order_id=int(order_id),
         metadata=meta,
-        correlation_id=cid,
+        correlation_id=cid_created,
         severity="INFO",
         category=ORDER_EVENT_CATEGORY[ORDER_IMPORTED],
         source_module="order_import",

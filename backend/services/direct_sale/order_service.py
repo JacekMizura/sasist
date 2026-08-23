@@ -231,4 +231,19 @@ def create_order_from_session(
         meta["order_discount_gross"] = float(totals.get("order_discount_gross") or 0)
         order.import_metadata_json = json.dumps(meta, ensure_ascii=False)
 
+    try:
+        from ..activity_log.order_commerce_activity import emit_order_created_activity
+
+        emit_order_created_activity(
+            db,
+            tenant_id=tid,
+            warehouse_id=wid,
+            order_id=int(order.id),
+            order_number=str(order.number or ""),
+            actor_user_id=int(sess.operator_user_id) if getattr(sess, "operator_user_id", None) else None,
+            source="DIRECT_SALE",
+        )
+    except Exception:
+        logger.exception("ORDER_CREATED activity failed direct_sale order_id=%s", getattr(order, "id", None))
+
     return order, items_by_line
