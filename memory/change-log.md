@@ -1,3 +1,11 @@
+## 2026-08-23 — Order › Logi WMS projection
+
+- Harden `append_order_activity_for_wms`: category wms, correlation_id, skip technical (PICKED/PACKED/…)
+- NEW emits: SMART/3D matching, PACK_ALL_USED, SHIPMENT_GENERATION_REQUESTED, WAYBILL_ASSIGNED, WMS_WAREHOUSE_DOCUMENT_CREATED
+- Hooks: smart_matching_triggers, packing_pack_all, generate_shipment, packaging_rw
+- Tests: test_order_activity_timeline_wms.py; Phase1/2 regression PASS
+- Backfill NOT run (plan only)
+
 ## 2026-08-23 — Order › Logi Phase 2 (commerce + custom fields)
 
 - Activity Log writers: custom fields, file attach/remove, payments, payment/shipping method, ORDER_IMPORTED
