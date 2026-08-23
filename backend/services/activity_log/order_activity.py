@@ -150,31 +150,41 @@ def emit_automation_execution_activity(
     effects_failed: int = 0,
     error: Optional[str] = None,
     occurred_at: Optional[datetime] = None,
+    presentation: Optional[dict[str, Any]] = None,
 ) -> Any:
     """
     Emit timeline row for SUCCEEDED / FAILED / BLOCKED (preflight).
     SKIPPED (conditions_not_matched) must NOT call this.
+
+    ``presentation`` — compact snapshot from AutomationExecution SSOT (trigger,
+    conditions, effects, blocked reason) for inline Order › Logi rows.
     """
+    from .automation_activity_presentation import format_automation_activity_summary
+
     status = str(execution_status or "").strip().upper()
-    if status == "SUCCEEDED":
-        code = AUTOMATION_SUCCEEDED
-        severity = "SUCCESS"
-        summary = f"Automatyzacja „{rule_name}” została wykonana."
-    elif status == "FAILED":
-        code = AUTOMATION_FAILED
-        severity = "ERROR"
-        summary = f"Automatyzacja „{rule_name}” zakończyła się błędem."
-    elif status == "BLOCKED":
-        code = AUTOMATION_BLOCKED
-        severity = "WARNING"
-        summary = f"Automatyzacja „{rule_name}” została zablokowana."
-    else:
+    if status not in ("SUCCEEDED", "FAILED", "BLOCKED"):
         return None
 
     cid = f"automation-exec:{int(execution_id)}"[:64]
     existing = find_activity_by_correlation(db, correlation_id=cid, tenant_id=int(tenant_id))
     if existing is not None:
         return existing
+
+    if status == "SUCCEEDED":
+        code = AUTOMATION_SUCCEEDED
+        severity = "SUCCESS"
+    elif status == "FAILED":
+        code = AUTOMATION_FAILED
+        severity = "ERROR"
+    else:
+        code = AUTOMATION_BLOCKED
+        severity = "WARNING"
+
+    summary = format_automation_activity_summary(
+        rule_name=str(rule_name or ""),
+        status=status,
+        presentation=presentation,
+    )
 
     et = str(entity_type or "").upper()
     meta: dict[str, Any] = {
@@ -193,6 +203,17 @@ def emit_automation_execution_activity(
     }
     if error:
         meta["error"] = str(error)[:500]
+    if presentation:
+        for k in (
+            "trigger_summary",
+            "conditions_matched",
+            "conditions_failed",
+            "conditions_lines",
+            "effects_lines",
+            "blocked_reason",
+        ):
+            if presentation.get(k) is not None:
+                meta[k] = presentation[k]
 
     kwargs: dict[str, Any] = {
         "tenant_id": int(tenant_id),
@@ -214,7 +235,6 @@ def emit_automation_execution_activity(
     elif et == "COMPLAINT":
         kwargs["complaint_id"] = int(entity_id)
     else:
-        # other — still record if we can link something; skip without order/return/complaint
         logger.info(
             "automation activity skipped unsupported entity_type=%s id=%s",
             et,

@@ -17,6 +17,7 @@ export const EVENT_DISPLAY_LABELS: Record<string, string> = {
   PICKING_STARTED: "Rozpoczęto zbieranie",
   FIRST_PRODUCT_CONFIRMED: "Potwierdzono pierwszy produkt",
   PICKING_FINISHED: "Zakończono zbieranie",
+  PICK_AGGREGATE: "Pobrano produkt",
   PACKING_STARTED: "Rozpoczęto pakowanie",
   ORDER_PACKED: "Spakowano zamówienie",
   PACKING_FINISHED: "Zakończono pakowanie",

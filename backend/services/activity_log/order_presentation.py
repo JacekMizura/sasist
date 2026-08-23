@@ -78,6 +78,7 @@ from .wms_order_activity import (
     EVT_WAYBILL_ASSIGNED,
     EVT_WMS_VALIDATION_FAILED,
     EVT_WMS_WAREHOUSE_DOCUMENT_CREATED,
+    EVT_PICK_AGGREGATE,
 )
 
 DetailsDisplay = Literal["inline", "expand", "none"]
@@ -152,6 +153,8 @@ ORDER_ACTION_LABELS_PL: dict[str, str] = {
     EVT_LABEL_REPRINTED: "Ponowny wydruk etykiety",
     EVT_WMS_WAREHOUSE_DOCUMENT_CREATED: "Dokument magazynowy",
     EVT_WMS_VALIDATION_FAILED: "Walidacja WMS",
+    "PICK_AGGREGATE": "Pobrano produkt",
+    EVT_PICK_AGGREGATE: "Pobrano produkt",
 }
 
 # Canonical WMS domain prefix for order-facing messages (presentation only).
@@ -181,15 +184,17 @@ WMS_PREFIX_BY_EVENT: dict[str, str] = {
     EVT_PACKAGE_WEIGHT_CONFIRMED: "[WMS - Pakowanie]",
     EVT_WMS_WAREHOUSE_DOCUMENT_CREATED: "[WMS - Pakowanie]",
     EVT_WMS_VALIDATION_FAILED: "[WMS - Pakowanie]",
-    EVT_SMART_MATCHING_MATCHED: "[WMS - Smart Matching]",
-    EVT_SMART_MATCHING_NO_MATCH: "[WMS - Smart Matching]",
-    EVT_THREE_D_MATCHING_MATCHED: "[WMS - 3D Matching]",
-    EVT_THREE_D_MATCHING_NO_FIT: "[WMS - 3D Matching]",
+    EVT_SMART_MATCHING_MATCHED: "[WMS - Pakowanie]",
+    EVT_SMART_MATCHING_NO_MATCH: "[WMS - Pakowanie]",
+    EVT_THREE_D_MATCHING_MATCHED: "[WMS - Pakowanie]",
+    EVT_THREE_D_MATCHING_NO_FIT: "[WMS - Pakowanie]",
     EVT_SHIPMENT_GENERATION_REQUESTED: "[WMS - Wysyłka]",
     EVT_WAYBILL_ASSIGNED: "[WMS - Wysyłka]",
     EVT_LABEL_GENERATED: "[WMS - Wysyłka]",
     EVT_LABEL_PRINTED: "[WMS - Wysyłka]",
     EVT_LABEL_REPRINTED: "[WMS - Wysyłka]",
+        "PICK_AGGREGATE": "[WMS - Zbieranie]",
+        EVT_PICK_AGGREGATE: "[WMS - Zbieranie]",
 }
 
 # OMS mutations that should never use expand accordion.
@@ -222,6 +227,15 @@ INLINE_DETAIL_CODES: frozenset[str] = frozenset(
         EVT_ORDER_ITEM_REMOVED,
         EVT_WMS_PICKING_FINALIZE_FAILED,
         EVT_WMS_PICKING_DRAFT_STOCK_CONFLICT,
+        EVT_PICKING_FINISHED,
+        EVT_PACKING_FINISHED,
+        EVT_PACKING_AUTOMATION_FINISHED,
+        EVT_CARTON_SELECTED,
+        EVT_CARTON_CHANGED,
+        EVT_SMART_MATCHING_MATCHED,
+        EVT_THREE_D_MATCHING_MATCHED,
+        "PICK_AGGREGATE",
+        EVT_PICK_AGGREGATE,
     }
 )
 
@@ -493,20 +507,105 @@ def build_order_inline_detail_rows(event_code: str, metadata: dict[str, Any] | N
     if code in (AUTOMATION_SUCCEEDED, AUTOMATION_FAILED, AUTOMATION_BLOCKED):
         rule = meta.get("rule_name")
         if rule:
-            rows.append({"label": "Reguła", "value": str(rule)})
-        es = meta.get("effects_succeeded")
-        ef = meta.get("effects_failed")
-        ec = meta.get("effects_count")
-        if es is not None or ef is not None or ec is not None:
+            rows.append({"label": "Automatyzacja", "value": str(rule)})
+        trigger = meta.get("trigger_summary")
+        if trigger:
+            rows.append({"label": "Wyzwalacz", "value": str(trigger)})
+        reason = meta.get("blocked_reason") or meta.get("error")
+        if reason and code in (AUTOMATION_BLOCKED, AUTOMATION_FAILED):
+            rows.append({"label": "Powód", "value": str(reason)[:400]})
+        cm = meta.get("conditions_matched")
+        cf = meta.get("conditions_failed")
+        cond_lines = meta.get("conditions_lines")
+        if isinstance(cond_lines, list) and cond_lines:
+            for line in cond_lines[:6]:
+                rows.append({"label": "Warunek", "value": str(line)})
+        elif cm is not None or cf is not None:
             rows.append(
                 {
-                    "label": "Efekty",
-                    "value": f"{int(es or 0)} OK / {int(ef or 0)} błędów"
-                    + (f" (łącznie {int(ec)})" if ec is not None else ""),
+                    "label": "Warunki",
+                    "value": f"spełnione {int(cm or 0)} · niespełnione {int(cf or 0)}",
                 }
             )
-        if meta.get("error"):
-            rows.append({"label": "Błąd", "value": str(meta.get("error"))[:400]})
+        effect_lines = meta.get("effects_lines")
+        if isinstance(effect_lines, list) and effect_lines:
+            for line in effect_lines[:8]:
+                rows.append({"label": "Efekt", "value": str(line)})
+        else:
+            es = meta.get("effects_succeeded")
+            ef = meta.get("effects_failed")
+            ec = meta.get("effects_count")
+            if es is not None or ef is not None or ec is not None:
+                rows.append(
+                    {
+                        "label": "Efekty",
+                        "value": f"{int(es or 0)} OK / {int(ef or 0)} błędów"
+                        + (f" (łącznie {int(ec)})" if ec is not None else ""),
+                    }
+                )
+        return rows
+
+    if code in ("PICK_AGGREGATE", EVT_PICK_AGGREGATE):
+        if meta.get("sku"):
+            rows.append({"label": "SKU", "value": str(meta["sku"])})
+        if meta.get("ean"):
+            rows.append({"label": "EAN", "value": str(meta["ean"])})
+        if meta.get("source_location") or meta.get("location_code"):
+            rows.append(
+                {
+                    "label": "Lokalizacja",
+                    "value": str(meta.get("source_location") or meta.get("location_code")),
+                }
+            )
+        if meta.get("quantity") is not None:
+            rows.append({"label": "Ilość", "value": str(meta.get("quantity"))})
+        return rows
+
+    if code in (EVT_PICKING_FINISHED,):
+        if meta.get("products_count") is not None:
+            rows.append({"label": "Produkty", "value": str(meta["products_count"])})
+        if meta.get("units_count") is not None:
+            rows.append({"label": "Sztuki", "value": str(meta["units_count"])})
+        if meta.get("locations_count") is not None:
+            rows.append({"label": "Lokalizacje", "value": str(meta["locations_count"])})
+        if meta.get("picking_duration_label"):
+            rows.append({"label": "Czas", "value": str(meta["picking_duration_label"])})
+        return rows
+
+    if code in (EVT_PACKING_FINISHED, EVT_PACKING_AUTOMATION_FINISHED):
+        if meta.get("carton_name") or meta.get("carton_label"):
+            name = meta.get("carton_name")
+            dims = meta.get("carton_label")
+            if name and dims:
+                rows.append({"label": "Opakowanie", "value": f"„{name}” ({dims})"})
+            else:
+                rows.append({"label": "Opakowanie", "value": str(name or dims)})
+        elif meta.get("no_carton"):
+            rows.append({"label": "Opakowanie", "value": "Bez dodatkowego opakowania"})
+        if meta.get("packages_count") is not None:
+            rows.append({"label": "Paczki", "value": str(meta["packages_count"])})
+        if meta.get("weight_kg") is not None:
+            rows.append({"label": "Waga", "value": f"{meta['weight_kg']} kg"})
+        if meta.get("packing_duration_label"):
+            rows.append({"label": "Czas", "value": str(meta["packing_duration_label"])})
+        return rows
+
+    if code in (EVT_CARTON_SELECTED, EVT_CARTON_CHANGED, "SMART_MATCHING_MATCHED", "THREE_D_MATCHING_MATCHED"):
+        if meta.get("carton_name") or meta.get("carton_label") or meta.get("dimensions"):
+            name = meta.get("carton_name")
+            dims = meta.get("carton_label") or meta.get("dimensions")
+            if name and dims:
+                rows.append({"label": "Opakowanie", "value": f"„{name}” ({dims})"})
+            elif name or dims:
+                rows.append({"label": "Opakowanie", "value": str(name or dims)})
+        if meta.get("source"):
+            src = str(meta["source"]).upper()
+            label = (
+                "3D Matching"
+                if src in ("THREE_D", "3D")
+                else ("Smart Matching" if src == "SMART" else "Ręcznie")
+            )
+            rows.append({"label": "Źródło", "value": label})
         return rows
 
     if code == ORDER_STATUS_CHANGED:

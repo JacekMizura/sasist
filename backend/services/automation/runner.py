@@ -212,6 +212,24 @@ def _emit_execution_activity(
     if status == EXEC_SKIPPED or str(execution.error or "") == "conditions_not_matched":
         return
     total, ok, fail = _effect_counts(execution)
+    presentation = None
+    try:
+        from ..activity_log.automation_activity_presentation import (
+            build_automation_activity_presentation,
+        )
+
+        presentation = build_automation_activity_presentation(
+            db,
+            tenant_id=int(event.tenant_id),
+            rule=rule,
+            execution=execution,
+            trigger_event=event,
+        )
+    except Exception:
+        logger.exception(
+            "automation activity presentation failed execution_id=%s",
+            execution.id,
+        )
     try:
         from ..activity_log.order_activity import emit_automation_execution_activity
 
@@ -231,6 +249,7 @@ def _emit_execution_activity(
             effects_failed=fail,
             error=execution.error,
             occurred_at=execution.completed_at or datetime.utcnow(),
+            presentation=presentation,
         )
     except Exception:
         logger.exception(

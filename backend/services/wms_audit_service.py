@@ -166,9 +166,22 @@ def workstation_id_for_operator(db: Session, operator_user_id: Optional[int]) ->
 
 def carton_dimensions_label(row: Carton) -> str:
     try:
-        return f"{float(row.length_cm):g}×{float(row.width_cm):g}×{float(row.height_cm):g} cm"
+        return f"{float(row.length_cm):g} × {float(row.width_cm):g} × {float(row.height_cm):g} cm"
     except (TypeError, ValueError):
         return (row.name or "").strip() or str(row.id)
+
+
+def format_carton_selected_phrase(*, name: Optional[str], dimensions: Optional[str], carton_id: str) -> str:
+    """„Name” (L × W × H cm) or best available label."""
+    nm = (name or "").strip()
+    dim = (dimensions or "").strip()
+    if nm and dim:
+        return f"„{nm}” ({dim})"
+    if nm:
+        return f"„{nm}”"
+    if dim:
+        return f"„{dim}”"
+    return f"„{(carton_id or '').strip() or 'opakowanie'}”"
 
 
 def carton_label_by_id(
@@ -766,8 +779,13 @@ def emit_wms_picked_item(
             basket_lbl = (getattr(bsk, "code", None) or None) or None
     sku = (product_sku or "").strip() or f"#{product_id}"
     qty = float(getattr(pick, "quantity", 0) or 0)
+    product = db.query(Product).filter(Product.id == int(product_id)).first() if product_id else None
+    product_name = (getattr(product, "name", None) or "").strip() if product is not None else ""
+    ean = (getattr(product, "ean", None) or "").strip() if product is not None else ""
     meta = {
         "sku": sku,
+        "ean": ean or None,
+        "product_name": product_name or None,
         "product_id": int(product_id),
         "quantity": qty,
         "source_location": loc_label,
@@ -1087,6 +1105,19 @@ def emit_wms_picking_finished(
         if st is not None and getattr(st, "name", None):
             meta["new_order_ui_status_name"] = str(st.name)
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+
+    # Summary counts from pick aggregates (same source as Activity projections).
+    try:
+        from .activity_log.picking_activity_projection import (
+            aggregate_picks_from_wms_events,
+            picking_finish_summary_from_aggregates,
+        )
+
+        agg = aggregate_picks_from_wms_events(db, order_id=int(order.id), since=ps)
+        meta.update(picking_finish_summary_from_aggregates(agg))
+    except Exception:
+        logger.exception("picking finish summary failed order_id=%s", getattr(order, "id", None))
+
     row = insert_wms_order_event(
         db,
         tenant_id=tenant_id,
@@ -1115,6 +1146,25 @@ def emit_wms_picking_finished(
         metadata=meta,
         wms_order_event_id=int(row.id),
     )
+    try:
+        from .activity_log.picking_activity_projection import (
+            emit_picking_pick_aggregates_to_activity,
+        )
+
+        emit_picking_pick_aggregates_to_activity(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            order=order,
+            operator_user_id=uid,
+            picking_finished_event_id=int(row.id),
+            since=ps,
+        )
+    except Exception:
+        logger.exception(
+            "picking pick-aggregate activity failed order_id=%s",
+            getattr(order, "id", None),
+        )
 
 
 def correlation_for_picking_finalize_failure(
@@ -1972,7 +2022,24 @@ def emit_wms_packing_finished(
         "physical_phase_complete": True,
     }
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
-    meta.update(carton_audit_snapshot(db, order))
+    carton_snap = carton_audit_snapshot(db, order)
+    meta.update(carton_snap)
+    if not carton_snap.get("selected_carton_id"):
+        meta["no_carton"] = True
+    # Optional package / weight hints from order fields when present.
+    for attr, key in (
+        ("packages_count", "packages_count"),
+        ("package_count", "packages_count"),
+        ("weight_kg", "weight_kg"),
+        ("confirmed_weight_kg", "weight_kg"),
+    ):
+        val = getattr(order, attr, None)
+        if val is not None and key not in meta:
+            try:
+                meta[key] = float(val) if key == "weight_kg" else int(val)
+            except (TypeError, ValueError):
+                meta[key] = val
+
     row = insert_wms_order_event(
         db,
         tenant_id=tenant_id,
@@ -1982,16 +2049,28 @@ def emit_wms_packing_finished(
         event_type=EVT_PACKING_FINISHED,
         metadata=meta,
     )
+    if meta.get("no_carton"):
+        msg = "Zakończono pakowanie. Zamówienie spakowano bez dodatkowego opakowania."
+    elif meta.get("carton_name") or meta.get("carton_label"):
+        phrase = format_carton_selected_phrase(
+            name=meta.get("carton_name"),
+            dimensions=meta.get("carton_label"),
+            carton_id=str(meta.get("selected_carton_id") or ""),
+        )
+        msg = f"Zakończono pakowanie. Opakowanie: {phrase}."
+    else:
+        msg = "Zakończono pakowanie zamówienia."
+    if dur_sec is not None:
+        msg = f"{msg.rstrip('.')} (czas: {_format_duration_pl(dur_sec)})."
     append_order_activity_for_wms(
         db,
         order_id=int(order.id),
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         event_type=EVT_PACKING_FINISHED,
-        message="Zakończono pakowanie zamówienia."
-        if dur_sec is None
-        else f"Zakończono pakowanie zamówienia (czas: {_format_duration_pl(dur_sec)}).",
+        message=msg,
         operator_user_id=uid,
+        metadata=meta,
         wms_order_event_id=int(row.id),
     )
 
@@ -2136,13 +2215,17 @@ def emit_wms_carton_selected_or_changed(
         meta["old_carton_label"] = odim
         meta["old_carton_name"] = onm
         evt = EVT_CARTON_CHANGED
-        msg = (
-            f"Zmieniono opakowanie z „{onm or odim or prev_s}” "
-            f"na „{new_nm or new_dim or new_carton_id}”."
+        old_phrase = format_carton_selected_phrase(name=onm, dimensions=odim, carton_id=prev_s)
+        new_phrase = format_carton_selected_phrase(
+            name=new_nm, dimensions=new_dim, carton_id=str(new_carton_id)
         )
+        msg = f"Zmieniono opakowanie z {old_phrase} na {new_phrase}."
     else:
         evt = EVT_CARTON_SELECTED
-        msg = f"Wybrano opakowanie „{new_nm or new_dim or new_carton_id}”."
+        phrase = format_carton_selected_phrase(
+            name=new_nm, dimensions=new_dim, carton_id=str(new_carton_id)
+        )
+        msg = f"Wybrano opakowanie {phrase}."
     row = insert_wms_order_event(
         db,
         tenant_id=tenant_id,
@@ -2346,17 +2429,23 @@ def emit_wms_matching_outcome(
         engine_label = "Smart Matching"
         src = "SMART"
     label = (carton_name or dimensions_label or carton_id or "").strip()
-    if matched and label:
-        msg = f"{engine_label} dopasował opakowanie „{label}”."
-    elif matched:
-        msg = f"{engine_label} dopasował opakowanie."
+    dims = (dimensions_label or "").strip() or None
+    name = (carton_name or "").strip() or None
+    if matched:
+        phrase = format_carton_selected_phrase(
+            name=name,
+            dimensions=dims,
+            carton_id=str(carton_id or label or ""),
+        )
+        msg = f"{engine_label} dobrał opakowanie {phrase}."
     else:
         msg = f"{engine_label} nie znalazł pasującego opakowania."
     meta: dict[str, Any] = {
         "source": src if src in ("SMART", "THREE_D", "MANUAL") else "SMART",
         "carton_id": (str(carton_id).strip() if carton_id else None),
-        "carton_name": (str(carton_name).strip() if carton_name else None),
-        "dimensions": dimensions_label,
+        "carton_name": name,
+        "carton_label": dims,
+        "dimensions": dims,
         "matching_event_id": int(matching_event_id) if matching_event_id else None,
     }
     uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None

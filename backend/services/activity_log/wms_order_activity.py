@@ -121,12 +121,18 @@ WMS_BUSINESS_TIMELINE_EVENTS: FrozenSet[str] = frozenset(
     }
 )
 
+# Re-export activity-facing pick aggregate code (not stored as raw PICKED_ITEM).
+from .picking_activity_projection import EVT_PICK_AGGREGATE  # noqa: E402
+
+WMS_BUSINESS_TIMELINE_EVENTS = frozenset(set(WMS_BUSINESS_TIMELINE_EVENTS) | {EVT_PICK_AGGREGATE})
+
 WMS_EVENT_TITLES_PL: dict[str, str] = {
     EVT_PICKING_STARTED: "Zbieranie",
     EVT_PICKING_FINISHED: "Zbieranie",
     EVT_PICKING_CANCELLED: "Zbieranie",
     EVT_WMS_PICKING_FINALIZE_FAILED: "Zbieranie",
     EVT_WMS_PICKING_DRAFT_STOCK_CONFLICT: "Zbieranie",
+    EVT_PICK_AGGREGATE: "Zbieranie",
     EVT_SHORTAGE_REPORTED: "Brak",
     EVT_ORDER_LINE_SHORTAGE_REPORTED: "Brak",
     EVT_RECOVERY_FINISHED: "Rozwiązanie braku",
