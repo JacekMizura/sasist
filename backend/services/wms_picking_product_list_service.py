@@ -1265,6 +1265,7 @@ def resolve_wms_picking_order_ids(
     picking_session_id: int | None = None,
     fixed_order_ids: list[int] | None = None,
     recovery_mode: bool = False,
+    revalidate_membership: bool = True,
 ) -> list[int]:
     """
     Jedyna ścieżka rozstrzygania zbioru zamówień dla widoków/akcji zbierania.
@@ -1273,6 +1274,10 @@ def resolve_wms_picking_order_ids(
     - ``picking_session_id`` — **SSOT cartless** (order.picking_session_id).
     - ``cart_id`` ustawione — **SSOT** ``list_orders_on_cart``.
     - bez wózka/sesji — kohorta statusu (hub / podgląd kolejki).
+
+    ``revalidate_membership`` — pełna naprawa split-brain (release stale). Używaj na
+    start/resume i liście produktów; detail / pick actions powinny przekazać False
+    i polegać na wcześniejszym revalidate (szybki read path).
     """
     if fixed_order_ids is not None:
         order_ids = [int(x) for x in fixed_order_ids if int(x) > 0]
@@ -1290,7 +1295,10 @@ def resolve_wms_picking_order_ids(
 
     if picking_session_id is not None:
         from .wms_cartless_picking.membership_service import revalidate_cartless_session_membership
-        from .wms_cartless_picking.scope import get_cartless_session_or_raise
+        from .wms_cartless_picking.scope import (
+            get_cartless_session_or_raise,
+            list_order_ids_on_picking_session,
+        )
 
         # Walidacja tenant/warehouse (ownership opcjonalna — odczyt listy produktów).
         get_cartless_session_or_raise(
@@ -1302,6 +1310,13 @@ def resolve_wms_picking_order_ids(
             require_open=False,
             allow_system=True,
         )
+        if not revalidate_membership:
+            return list_order_ids_on_picking_session(
+                db,
+                session_id=int(picking_session_id),
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+            )
         # SSOT: session members still in source panel status (heal stale without picks).
         return revalidate_cartless_session_membership(
             db,
@@ -1419,16 +1434,16 @@ def _filter_fixed_order_ids_to_picking_queue(
     return [int(x) for x in order_ids if int(x) in eligible]
 
 
-def _bundle_breakdown_for_product(
+def _bundle_breakdowns_by_product(
     db: Session,
     *,
     order_ids: list[int],
-    product_id: int,
     ux_index: dict,
-) -> list[WmsPickingProductBundleBreakdownRow]:
+    only_product_id: int | None = None,
+) -> dict[int, list[WmsPickingProductBundleBreakdownRow]]:
+    """One orders+items load → breakdown rows keyed by product_id (no per-product N+1)."""
     if not order_ids:
-        return []
-    rows: list[WmsPickingProductBundleBreakdownRow] = []
+        return {}
     orders = (
         db.query(Order)
         .options(joinedload(Order.items))
@@ -1436,17 +1451,19 @@ def _bundle_breakdown_for_product(
         .order_by(Order.id.asc())
         .all()
     )
-    pid = int(product_id)
+    only = int(only_product_id) if only_product_id is not None else None
+    out: dict[int, list[WmsPickingProductBundleBreakdownRow]] = defaultdict(list)
     for order in orders:
         for oi in order.items or []:
-            if int(oi.product_id) != pid:
+            pid = int(oi.product_id)
+            if only is not None and pid != only:
                 continue
             if order_item_is_replaced_line(oi):
                 continue
             if order_item_skip_bundle_commercial_header_for_ops(oi):
                 continue
             meta = ux_index.get(int(oi.id))
-            rows.append(
+            out[pid].append(
                 WmsPickingProductBundleBreakdownRow(
                     order_id=int(order.id),
                     order_number=str(order.number or f"#{order.id}"),
@@ -1456,7 +1473,22 @@ def _bundle_breakdown_for_product(
                     quantity=float(oi.quantity or 0),
                 )
             )
-    return rows
+    return dict(out)
+
+
+def _bundle_breakdown_for_product(
+    db: Session,
+    *,
+    order_ids: list[int],
+    product_id: int,
+    ux_index: dict,
+) -> list[WmsPickingProductBundleBreakdownRow]:
+    return _bundle_breakdowns_by_product(
+        db,
+        order_ids=order_ids,
+        ux_index=ux_index,
+        only_product_id=int(product_id),
+    ).get(int(product_id), [])
 
 
 def _apply_bundle_ux_to_order_row(
@@ -2367,6 +2399,9 @@ def build_wms_picking_product_lines(
     fixed_order_ids: list[int] | None = None,
     recovery_mode: bool = False,
     operator_user_id: int | None = None,
+    only_product_id: int | None = None,
+    revalidate_membership: bool = True,
+    include_draft_conflicts: bool = True,
 ) -> WmsPickingProductLinesResponse:
     """
     Lista produktów do zbiórki.
@@ -2374,6 +2409,8 @@ def build_wms_picking_product_lines(
     Z ``cart_id`` — wyłącznie zamówienia z ``list_orders_on_cart`` (SSOT).
     Bez wózka/sesji — kohorta statusu (hub).
     ``fixed_order_ids`` — dogrywka recovery / jawny scope.
+    ``only_product_id`` — product detail: nie buduj całej listy SKU sesji.
+    ``revalidate_membership`` — False na szybkim read path (detail); True na liście/start.
     """
     ot = _order_type_filter(order_type)
     allow_continue_other_lines = True
@@ -2390,6 +2427,7 @@ def build_wms_picking_product_lines(
         picking_session_id=picking_session_id,
         fixed_order_ids=fixed_order_ids,
         recovery_mode=recovery_mode,
+        revalidate_membership=revalidate_membership,
     )
     # Race: zamówienia na wózku bez picków — rewalidacja (nie niszczy sesji z częściowym pickiem).
     if cart_id is not None and not recovery_mode and order_ids:
@@ -2419,6 +2457,7 @@ def build_wms_picking_product_lines(
                     cart_id=cart_id,
                     fixed_order_ids=fixed_order_ids,
                     recovery_mode=recovery_mode,
+                    revalidate_membership=revalidate_membership,
                 )
         except Exception:
             logger.exception(
@@ -2453,6 +2492,9 @@ def build_wms_picking_product_lines(
         demand_by_product = _recovery_demand_by_product_from_orders(db, order_ids, tenant_id=tenant_id)
     else:
         demand_by_product = _demand_by_product_from_orders(db, order_ids, tenant_id=tenant_id)
+    if only_product_id is not None:
+        opid = int(only_product_id)
+        demand_by_product = {opid: demand_by_product[opid]} if opid in demand_by_product else {}
     missing_by_product = _missing_qty_by_product_from_orders(db, order_ids, tenant_id=tenant_id)
     allocations_by_product = _allocations_by_product_from_orders(
         db,
@@ -2463,7 +2505,10 @@ def build_wms_picking_product_lines(
         picking_session_id=picking_session_id,
     )
 
-    routing = PickingRoutingService(db).build_location_pick_list(order_ids, tenant_id=tenant_id)
+    routing_kwargs: dict = {"tenant_id": tenant_id}
+    if only_product_id is not None:
+        routing_kwargs["product_ids"] = [int(only_product_id)]
+    routing = PickingRoutingService(db).build_location_pick_list(order_ids, **routing_kwargs)
     pick_list = list(routing.pick_list)
 
     if picking_session_id is not None:
@@ -2562,6 +2607,13 @@ def build_wms_picking_product_lines(
 
     ux_index = build_bundle_ux_index_for_orders(db, order_ids)
 
+    breakdown_by_pid = _bundle_breakdowns_by_product(
+        db,
+        order_ids=order_ids,
+        ux_index=ux_index,
+        only_product_id=int(only_product_id) if only_product_id is not None else None,
+    )
+
     lines: list[WmsPickingProductLine] = []
     for pid in sorted(
         product_ids,
@@ -2607,9 +2659,7 @@ def build_wms_picking_product_lines(
             else (rem_pick > 1e-9)  # hub lub cartless session
         )
         shelf_label = consolidation_shelves.get(int(pid))
-        breakdown = _bundle_breakdown_for_product(
-            db, order_ids=order_ids, product_id=int(pid), ux_index=ux_index
-        )
+        breakdown = list(breakdown_by_pid.get(int(pid), []))
         lines.append(
             WmsPickingProductLine(
                 product_id=pid,
@@ -2710,8 +2760,9 @@ def build_wms_picking_product_lines(
     draft_conflicts: list[WmsPickingDraftStockConflictRow] = []
     can_finalize = True
     finalize_block_reason: str | None = None
-    if (cart_id is not None and int(cart_id) > 0) or (
-        picking_session_id is not None and int(picking_session_id) > 0
+    if include_draft_conflicts and (
+        (cart_id is not None and int(cart_id) > 0)
+        or (picking_session_id is not None and int(picking_session_id) > 0)
     ):
         detected = detect_draft_stock_conflicts(
             db,
@@ -2720,6 +2771,7 @@ def build_wms_picking_product_lines(
             order_ids=order_ids,
             cart_id=int(cart_id) if cart_id is not None else None,
             picking_session_id=int(picking_session_id) if picking_session_id is not None else None,
+            only_product_id=int(only_product_id) if only_product_id is not None else None,
         )
         if detected:
             draft_conflicts = [
@@ -2795,6 +2847,7 @@ def build_wms_picking_product_detail(
     fixed_order_ids: list[int] | None = None,
     recovery_mode: bool = False,
 ) -> Optional[WmsPickingProductDetailResponse]:
+    # Fast path: one SKU + read membership (no full session list / no revalidate).
     lines_resp = build_wms_picking_product_lines(
         db,
         tenant_id=tenant_id,
@@ -2805,6 +2858,9 @@ def build_wms_picking_product_detail(
         picking_session_id=picking_session_id,
         fixed_order_ids=fixed_order_ids,
         recovery_mode=recovery_mode,
+        only_product_id=int(product_id),
+        revalidate_membership=False,
+        include_draft_conflicts=True,
     )
     row = next((p for p in lines_resp.products if int(p.product_id) == int(product_id)), None)
     if row is None:
@@ -2820,6 +2876,7 @@ def build_wms_picking_product_detail(
         picking_session_id=picking_session_id,
         fixed_order_ids=fixed_order_ids,
         recovery_mode=recovery_mode,
+        revalidate_membership=False,
     )
 
     loc_qty: dict[int, float] = defaultdict(float)

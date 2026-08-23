@@ -52,18 +52,27 @@ class PickingRoutingService:
         order_ids: Sequence[int],
         *,
         tenant_id: Optional[int] = None,
+        product_ids: Optional[Sequence[int]] = None,
     ) -> PickingRoutingResult:
         """
         Buduje ``pick_list`` pogrupowane po (lokalizacja, produkt), z rozbiciem na koszyki.
 
         Alokacja ilości z magazynu: agregacja stanów po lokalizacji (preferencja typu pick),
         zasilanie greedy. Kolejność ``pick_list`` = Runtime Graph Reader (authored graph).
+
+        ``product_ids`` — opcjonalny filtr (np. product detail): pomija inne SKU w alokacji.
         """
         uniq: list[int] = []
         for oid in order_ids:
             i = int(oid)
             if i not in uniq:
                 uniq.append(i)
+
+        product_filter: set[int] | None = None
+        if product_ids is not None:
+            product_filter = {int(x) for x in product_ids if int(x) > 0}
+            if not product_filter:
+                return PickingRoutingResult()
 
         if not uniq:
             return PickingRoutingResult()
@@ -106,6 +115,8 @@ class PickingRoutingService:
                 if order_item_skip_bundle_commercial_header_for_ops(oi):
                     continue
                 pid = int(oi.product_id)
+                if product_filter is not None and pid not in product_filter:
+                    continue
                 need = float(oi.quantity)
                 if need <= 0:
                     continue

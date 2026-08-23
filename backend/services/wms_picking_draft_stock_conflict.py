@@ -64,6 +64,7 @@ def _draft_picks_for_scope(
     order_ids: Sequence[int],
     cart_id: int | None,
     picking_session_id: int | None,
+    only_product_id: int | None = None,
 ) -> list[Pick]:
     if not order_ids:
         return []
@@ -78,6 +79,8 @@ def _draft_picks_for_scope(
         )
         .order_by(Pick.id.asc())
     )
+    if only_product_id is not None and int(only_product_id) > 0:
+        q = q.filter(Pick.product_id == int(only_product_id))
     if cart_id is not None and int(cart_id) > 0:
         q = q.filter(Pick.cart_id == int(cart_id))
     elif picking_session_id is not None and int(picking_session_id) > 0:
@@ -96,6 +99,7 @@ def detect_draft_stock_conflicts(
     cart_id: int | None = None,
     picking_session_id: int | None = None,
     stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
+    only_product_id: int | None = None,
 ) -> list[DraftStockConflict]:
     """
     Simulate finalize consume order (Pick.id ASC) with a virtual on-hand per location.
@@ -110,53 +114,69 @@ def detect_draft_stock_conflicts(
         order_ids=order_ids,
         cart_id=cart_id,
         picking_session_id=picking_session_id,
+        only_product_id=only_product_id,
     )
     if not picks:
         return []
 
     # Physical on-hand snapshot + cumulative draft claims @ (product, location).
+    # Prefetch unique (product, location) keys — avoid per-pick inventory N+1.
+    keys = {(int(p.product_id), int(p.location_id)) for p in picks}
     on_hand_base: dict[tuple[int, int], float] = {}
-    claimed: dict[tuple[int, int], float] = {}
-    conflicts: list[DraftStockConflict] = []
-
-    product_cache: dict[int, Product | None] = {}
-    location_cache: dict[int, Location | None] = {}
-
-    for pick in picks:
-        pid = int(pick.product_id)
-        lid = int(pick.location_id)
-        key = (pid, lid)
-        if key not in on_hand_base:
-            on_hand_base[key] = on_hand_qty_at_location(
-                db,
-                tenant_id=int(tenant_id),
-                warehouse_id=int(warehouse_id),
-                product_id=pid,
-                location_id=lid,
-                stock_disposition=stock_disposition,
-                for_update=False,
-            )
-            claimed[key] = 0.0
-
-        oid = int(pick.order_id) if getattr(pick, "order_id", None) is not None else None
-        foreign = reserved_qty_at_location(
+    for pid, lid in keys:
+        on_hand_base[(pid, lid)] = on_hand_qty_at_location(
             db,
             tenant_id=int(tenant_id),
             warehouse_id=int(warehouse_id),
             product_id=pid,
             location_id=lid,
-            exclude_order_id=oid,
             stock_disposition=stock_disposition,
+            for_update=False,
         )
+
+    # Prefetch foreign reservations per (product, location, exclude_order).
+    # Still one query per unique triple — bounded by distinct picks, not worse than before.
+    reserved_cache: dict[tuple[int, int, int | None], float] = {}
+
+    def _foreign(pid: int, lid: int, oid: int | None) -> float:
+        key = (pid, lid, oid)
+        if key not in reserved_cache:
+            reserved_cache[key] = reserved_qty_at_location(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                product_id=pid,
+                location_id=lid,
+                exclude_order_id=oid,
+                stock_disposition=stock_disposition,
+            )
+        return float(reserved_cache[key])
+
+    claimed: dict[tuple[int, int], float] = {k: 0.0 for k in keys}
+    conflicts: list[DraftStockConflict] = []
+
+    product_ids = {int(p.product_id) for p in picks}
+    location_ids = {int(p.location_id) for p in picks}
+    product_cache: dict[int, Product | None] = {
+        int(r.id): r
+        for r in db.query(Product).filter(Product.id.in_(list(product_ids))).all()
+    }
+    location_cache: dict[int, Location | None] = {
+        int(r.id): r
+        for r in db.query(Location).filter(Location.id.in_(list(location_ids))).all()
+    }
+
+    for pick in picks:
+        pid = int(pick.product_id)
+        lid = int(pick.location_id)
+        key = (pid, lid)
+        oid = int(pick.order_id) if getattr(pick, "order_id", None) is not None else None
+        foreign = _foreign(pid, lid, oid)
         need = float(pick.quantity or 0)
         avail = max(0.0, float(on_hand_base[key]) - float(foreign) - float(claimed.get(key, 0.0)))
         if need > avail + 1e-9:
-            if pid not in product_cache:
-                product_cache[pid] = db.query(Product).filter(Product.id == pid).first()
-            if lid not in location_cache:
-                location_cache[lid] = db.query(Location).filter(Location.id == lid).first()
-            prow = product_cache[pid]
-            loc = location_cache[lid]
+            prow = product_cache.get(pid)
+            loc = location_cache.get(lid)
             name = (getattr(prow, "name", None) or "").strip() if prow is not None else ""
             if not name:
                 name = f"produkt #{pid}"

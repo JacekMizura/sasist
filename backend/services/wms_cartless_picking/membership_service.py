@@ -391,18 +391,38 @@ def revalidate_cartless_session_membership(
         .all()
     )
     kept: list[int] = []
+    stale: list[Order] = []
     for o in orders:
         if order_belongs_to_picking_session_source(
             o, session_id=int(session_id), source_status_id=int(sid)
         ):
             kept.append(int(o.id))
-            continue
-        if order_has_cartless_picking_progress(db, order_id=int(o.id)):
+        else:
+            stale.append(o)
+
+    progress_ids: set[int] = set()
+    if stale:
+        stale_ids = [int(o.id) for o in stale]
+        progress_rows = (
+            db.query(Pick.order_id)
+            .filter(
+                Pick.order_id.in_(stale_ids),
+                Pick.cart_id.is_(None),
+                Pick.status.in_(("done", "picking", "waiting")),
+            )
+            .distinct()
+            .all()
+        )
+        progress_ids = {int(r[0]) for r in progress_rows if r[0] is not None}
+
+    for o in stale:
+        oid = int(o.id)
+        if oid in progress_ids:
             # Keep row for conflict visibility but exclude from operational scope.
             logger.warning(
                 "cartless.membership.stale_with_picks order_id=%s session_id=%s "
                 "order_status=%s source_status_id=%s",
-                int(o.id),
+                oid,
                 int(session_id),
                 getattr(o, "order_ui_status_id", None),
                 sid,

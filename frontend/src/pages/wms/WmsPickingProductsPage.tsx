@@ -1904,7 +1904,11 @@ export default function WmsPickingProductsPage() {
           setExitModalOpen(true);
         }}
         backAriaLabel={recoveryOrderId != null && recoveryOrderId > 0 ? "Wróć do kolejki braków" : "Wróć do wyboru statusu"}
-        title={`Do zebrania: ${totalPickedCount}/${totalToPickCount}`}
+        title={
+          loading || cartBootstrapping
+            ? "Do zebrania: —"
+            : `Do zebrania: ${totalPickedCount}/${totalToPickCount}`
+        }
       />
 
       {basketPutPending && basketPutPending.product_id > 0 ? (
@@ -1957,7 +1961,9 @@ export default function WmsPickingProductsPage() {
                 <span>{activePriorityTask.assigned_by_name || "Kierownik"}</span>
                 <span>{activePriorityOrderIds.length || orderCountForBar || 0} zamówień</span>
                 <span>od {formatOperationalDurationSince(activePriorityTask.assigned_at)}</span>
-                <span>{totalPickedCount}/{totalToPickCount} szt.</span>
+                <span>
+                  {loading || cartBootstrapping ? "—/—" : `${totalPickedCount}/${totalToPickCount}`} szt.
+                </span>
               </div>
             </div>
             <div className="flex shrink-0 gap-2">
