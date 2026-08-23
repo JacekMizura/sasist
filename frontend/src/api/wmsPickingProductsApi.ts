@@ -43,6 +43,22 @@ export type WmsPickingProductAllocationApi = {
   unresolved_qty: number;
 };
 
+export type WmsPickingDraftStockConflictApi = {
+  pick_id: number;
+  order_id: number;
+  order_item_id?: number | null;
+  product_id: number;
+  product_name: string;
+  sku?: string | null;
+  ean?: string | null;
+  location_id: number;
+  location_code: string;
+  picked_qty: number;
+  available_qty: number;
+  cart_id?: number | null;
+  picking_session_id?: number | null;
+};
+
 export type WmsPickingProductLineApi = {
   product_id: number;
   name: string;
@@ -59,10 +75,13 @@ export type WmsPickingProductLineApi = {
   /** True gdy remaining≈0 — linia zostaje w snapshotcie sesji (nie znika z listy) */
   completed?: boolean;
   /**
-   * SSOT stanu UI linii: ACTIVE | PARTIAL | COMPLETED_PICK | SHORTAGE.
+   * SSOT stanu UI linii: ACTIVE | PARTIAL | COMPLETED_PICK | SHORTAGE | STOCK_CONFLICT.
    * SHORTAGE = remaining≈0 i missing>0 — NIE renderować jako „DO POBRANIA” ani zielone „ZEBRANO”.
+   * STOCK_CONFLICT = draft Pick bez pokrycia inventory — nie finalizować.
    */
-  resolution_status?: "ACTIVE" | "PARTIAL" | "COMPLETED_PICK" | "SHORTAGE";
+  resolution_status?: "ACTIVE" | "PARTIAL" | "COMPLETED_PICK" | "SHORTAGE" | "STOCK_CONFLICT";
+  has_draft_stock_conflict?: boolean;
+  draft_stock_conflict?: WmsPickingDraftStockConflictApi | null;
   /** Skan EAN tylko gdy true — linie nie „picked”/„missing” z ilością do pobrania (przy braku cart_id: wg remaining) */
   scanner_active?: boolean;
   primary_location_id?: number | null;
@@ -116,6 +135,10 @@ export type WmsPickingProductLinesResponseApi = {
   products: WmsPickingProductLineApi[];
   cohort_order_count?: number;
   cohort_missing_lines?: WmsPickingCohortMissingLineApi[];
+  draft_stock_conflicts?: WmsPickingDraftStockConflictApi[];
+  /** False when draft picks lack inventory cover — do not offer normal finalize. */
+  can_finalize?: boolean;
+  finalize_block_reason?: string | null;
   pick_list: unknown[];
   shortfalls: unknown[];
   warnings: string[];
@@ -836,8 +859,8 @@ export async function getWmsPickingProductPicks(
 export async function postWmsPickingUndoPickById(
   tenantId: number,
   warehouseId: number,
-  cartId: number,
   pickId: number,
+  scope: { cartId?: number | null; pickingSessionId?: number | null },
 ): Promise<{
   ok: boolean;
   undone_qty: number;
@@ -851,7 +874,10 @@ export async function postWmsPickingUndoPickById(
     params: {
       tenant_id: tenantId,
       warehouse_id: warehouseId,
-      cart_id: cartId,
+      ...(scope.cartId != null && scope.cartId > 0 ? { cart_id: scope.cartId } : {}),
+      ...(scope.pickingSessionId != null && scope.pickingSessionId > 0
+        ? { picking_session_id: scope.pickingSessionId }
+        : {}),
     },
   });
   return res.data;

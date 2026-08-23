@@ -40,6 +40,7 @@ from ..models.wms_order_event import (
     EVT_PICKING_CANCELLED,
     EVT_PICKING_STARTED,
     EVT_WMS_PICKING_FINALIZE_FAILED,
+    EVT_WMS_PICKING_DRAFT_STOCK_CONFLICT,
     EVT_SHORTAGE_REPORTED,
     EVT_ORDER_LINE_SHORTAGE_REPORTED,
     EVT_REPLACEMENT_SHORTAGE_REPORTED,
@@ -804,7 +805,7 @@ def emit_wms_pick_undone(
     order_item_id: Optional[int],
     product_id: int,
     location_id: Optional[int],
-    cart_id: int,
+    cart_id: Optional[int],
     quantity: float,
     operator_user_id: Optional[int],
 ) -> None:
@@ -823,7 +824,7 @@ def emit_wms_pick_undone(
         "quantity": float(quantity),
         "location_id": int(location_id) if location_id is not None else None,
         "source_location": loc_label,
-        "cart_id": int(cart_id),
+        "cart_id": int(cart_id) if cart_id is not None else None,
         "order_item_id": int(order_item_id) if order_item_id is not None else None,
         "event_code": EVT_PICK_UNDONE,
     }
@@ -837,7 +838,7 @@ def emit_wms_pick_undone(
         product_id=int(product_id),
         order_item_id=int(order_item_id) if order_item_id is not None else None,
         source_location_id=int(location_id) if location_id is not None else None,
-        target_cart_id=int(cart_id),
+        target_cart_id=int(cart_id) if cart_id is not None else None,
         quantity=float(quantity),
         metadata=meta,
     )
@@ -1209,6 +1210,71 @@ def emit_wms_picking_finalize_failed(
         metadata=meta,
         wms_order_event_id=int(row.id),
         severity="ERROR",
+        correlation_id=corr,
+    )
+
+
+def emit_wms_picking_draft_stock_conflict(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    conflict: Any,
+    operator_user_id: Optional[int] = None,
+    correlation_id: Optional[str] = None,
+) -> None:
+    """Business Activity: legacy/race draft Pick cannot be covered by location stock."""
+    from .wms_picking_draft_stock_conflict import DraftStockConflict, correlation_for_draft_stock_conflict
+
+    c = conflict
+    if not isinstance(c, DraftStockConflict):
+        # duck-typed for tests
+        pass
+    uid = int(operator_user_id) if operator_user_id is not None and int(operator_user_id) > 0 else None
+    pick_id = int(getattr(c, "pick_id"))
+    order_id = int(getattr(c, "order_id"))
+    corr = (str(correlation_id).strip()[:64] if correlation_id else None) or correlation_for_draft_stock_conflict(
+        pick_id=pick_id
+    )
+    meta: dict[str, Any] = {
+        "pick_id": pick_id,
+        "product_id": int(getattr(c, "product_id")),
+        "product_name": getattr(c, "product_name", None),
+        "sku": getattr(c, "sku", None),
+        "ean": getattr(c, "ean", None),
+        "location_id": int(getattr(c, "location_id")),
+        "location_code": getattr(c, "location_code", None),
+        "picked_qty": float(getattr(c, "picked_qty") or 0),
+        "available_qty": float(getattr(c, "available_qty") or 0),
+        "cart_id": getattr(c, "cart_id", None),
+        "picking_session_id": getattr(c, "picking_session_id", None),
+        "event_code": EVT_WMS_PICKING_DRAFT_STOCK_CONFLICT,
+    }
+    row = insert_wms_order_event(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        order_id=order_id,
+        operator_user_id=uid,
+        event_type=EVT_WMS_PICKING_DRAFT_STOCK_CONFLICT,
+        product_id=int(getattr(c, "product_id")),
+        order_item_id=getattr(c, "order_item_id", None),
+        source_location_id=int(getattr(c, "location_id")),
+        target_cart_id=int(c.cart_id) if getattr(c, "cart_id", None) is not None else None,
+        quantity=float(getattr(c, "picked_qty") or 0),
+        metadata=meta,
+    )
+    append_order_activity_for_wms(
+        db,
+        order_id=order_id,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        event_type=EVT_WMS_PICKING_DRAFT_STOCK_CONFLICT,
+        message="Brak stanu dla zebranego produktu.",
+        operator_user_id=uid,
+        metadata=meta,
+        wms_order_event_id=int(row.id),
+        severity="WARNING",
         correlation_id=corr,
     )
 

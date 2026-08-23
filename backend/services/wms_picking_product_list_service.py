@@ -2353,6 +2353,7 @@ def build_wms_picking_product_lines(
     picking_session_id: int | None = None,
     fixed_order_ids: list[int] | None = None,
     recovery_mode: bool = False,
+    operator_user_id: int | None = None,
 ) -> WmsPickingProductLinesResponse:
     """
     Lista produktów do zbiórki.
@@ -2684,13 +2685,78 @@ def build_wms_picking_product_lines(
     recovery_oid = int(order_ids[0]) if recovery_mode and order_ids else None
 
     from .cart_picking_lifecycle_service import compute_session_stats_from_product_lines
-    from ..schemas.wms_picking_products import WmsPickingSessionStats
+    from ..schemas.wms_picking_products import (
+        WmsPickingDraftStockConflictRow,
+        WmsPickingSessionStats,
+    )
+    from .wms_picking_draft_stock_conflict import (
+        detect_draft_stock_conflicts,
+        emit_draft_stock_conflicts_once,
+    )
+
+    draft_conflicts: list[WmsPickingDraftStockConflictRow] = []
+    can_finalize = True
+    finalize_block_reason: str | None = None
+    if (cart_id is not None and int(cart_id) > 0) or (
+        picking_session_id is not None and int(picking_session_id) > 0
+    ):
+        detected = detect_draft_stock_conflicts(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            order_ids=order_ids,
+            cart_id=int(cart_id) if cart_id is not None else None,
+            picking_session_id=int(picking_session_id) if picking_session_id is not None else None,
+        )
+        if detected:
+            draft_conflicts = [
+                WmsPickingDraftStockConflictRow(**c.as_dict()) for c in detected
+            ]
+            can_finalize = False
+            finalize_block_reason = (
+                "Brak stanu dla zebranego produktu — cofnij zebranie albo zgłoś brak przed zakończeniem."
+            )
+            by_pid: dict[int, WmsPickingDraftStockConflictRow] = {}
+            for row in draft_conflicts:
+                by_pid.setdefault(int(row.product_id), row)
+
+            def _apply_conflict(ln: WmsPickingProductLine) -> WmsPickingProductLine:
+                conflict = by_pid.get(int(ln.product_id))
+                if conflict is None:
+                    return ln
+                return ln.model_copy(
+                    update={
+                        "has_draft_stock_conflict": True,
+                        "draft_stock_conflict": conflict,
+                        "resolution_status": "STOCK_CONFLICT",
+                    }
+                )
+
+            lines = [_apply_conflict(ln) for ln in lines]
+            all_lines_for_stats = [_apply_conflict(ln) for ln in all_lines_for_stats]
+            try:
+                emit_draft_stock_conflicts_once(
+                    db,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    conflicts=detected,
+                    operator_user_id=operator_user_id,
+                )
+            except Exception:
+                logger.exception(
+                    "draft stock conflict activity emit failed session=%s cart=%s",
+                    picking_session_id,
+                    cart_id,
+                )
 
     stats = compute_session_stats_from_product_lines(all_lines_for_stats)
 
     return WmsPickingProductLinesResponse(
         products=lines,
         cohort_order_count=len(order_ids),
+        draft_stock_conflicts=draft_conflicts,
+        can_finalize=can_finalize,
+        finalize_block_reason=finalize_block_reason,
         cohort_missing_lines=cohort_missing,
         pick_list=pick_list,
         shortfalls=list(routing.shortfalls),

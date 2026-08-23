@@ -63,6 +63,7 @@ from .wms_order_activity import (
     EVT_PICKING_FINISHED,
     EVT_PICKING_STARTED,
     EVT_WMS_PICKING_FINALIZE_FAILED,
+    EVT_WMS_PICKING_DRAFT_STOCK_CONFLICT,
     EVT_RECOVERY_FINISHED,
     EVT_RECOVERY_SHORTAGE_REPORTED,
     EVT_RECOVERY_STARTED,
@@ -120,6 +121,7 @@ ORDER_ACTION_LABELS_PL: dict[str, str] = {
     EVT_PICKING_FINISHED: "Zakończono zbieranie",
     EVT_PICKING_CANCELLED: "Anulowano zbieranie",
     EVT_WMS_PICKING_FINALIZE_FAILED: "Nie udało się zakończyć zbierania",
+    EVT_WMS_PICKING_DRAFT_STOCK_CONFLICT: "Brak stanu dla zebranego produktu",
     EVT_SHORTAGE_REPORTED: "Zgłoszono brak",
     EVT_ORDER_LINE_SHORTAGE_REPORTED: "Zgłoszono brak",
     EVT_REPLACEMENT_SHORTAGE_REPORTED: "Zgłoszono brak",
@@ -158,6 +160,7 @@ WMS_PREFIX_BY_EVENT: dict[str, str] = {
     EVT_PICKING_FINISHED: "[WMS - Zbieranie]",
     EVT_PICKING_CANCELLED: "[WMS - Zbieranie]",
     EVT_WMS_PICKING_FINALIZE_FAILED: "[WMS - Zbieranie]",
+    EVT_WMS_PICKING_DRAFT_STOCK_CONFLICT: "[WMS - Zbieranie]",
     EVT_SHORTAGE_REPORTED: "[WMS - Braki]",
     EVT_ORDER_LINE_SHORTAGE_REPORTED: "[WMS - Braki]",
     EVT_REPLACEMENT_SHORTAGE_REPORTED: "[WMS - Braki]",
@@ -218,6 +221,7 @@ INLINE_DETAIL_CODES: frozenset[str] = frozenset(
         AUTOMATION_BLOCKED,
         EVT_ORDER_ITEM_REMOVED,
         EVT_WMS_PICKING_FINALIZE_FAILED,
+        EVT_WMS_PICKING_DRAFT_STOCK_CONFLICT,
     }
 )
 
@@ -308,7 +312,7 @@ def suggest_severity(event_code: str, stored_severity: str | None) -> str:
     code = _norm(event_code)
     if code in (AUTOMATION_FAILED, SALE_DOCUMENT_FAILED, EVT_WMS_VALIDATION_FAILED, EVT_WMS_PICKING_FINALIZE_FAILED):
         return "ERROR"
-    if code in (AUTOMATION_BLOCKED, EVT_SHORTAGE_REPORTED, EVT_ORDER_LINE_SHORTAGE_REPORTED):
+    if code in (AUTOMATION_BLOCKED, EVT_SHORTAGE_REPORTED, EVT_ORDER_LINE_SHORTAGE_REPORTED, EVT_WMS_PICKING_DRAFT_STOCK_CONFLICT):
         return "WARNING"
     if code in COMPLETED_SUCCESS_CODES:
         return "SUCCESS"
@@ -392,6 +396,23 @@ def build_order_inline_detail_rows(event_code: str, metadata: dict[str, Any] | N
             rows.append({"label": "Dostępne", "value": f"{meta['available_qty']} szt."})
         if meta.get("picking_session_id") is not None:
             rows.append({"label": "Sesja zbierania", "value": str(meta["picking_session_id"])})
+        return rows
+
+    if code == EVT_WMS_PICKING_DRAFT_STOCK_CONFLICT:
+        if meta.get("product_name"):
+            rows.append({"label": "Produkt", "value": str(meta["product_name"])})
+        if meta.get("sku"):
+            rows.append({"label": "SKU", "value": str(meta["sku"])})
+        if meta.get("ean"):
+            rows.append({"label": "EAN", "value": str(meta["ean"])})
+        if meta.get("location_code"):
+            rows.append({"label": "Lokalizacja", "value": str(meta["location_code"])})
+        if meta.get("picked_qty") is not None:
+            rows.append({"label": "Zebrano", "value": f"{meta['picked_qty']} szt."})
+        if meta.get("available_qty") is not None:
+            rows.append({"label": "Obecnie dostępne", "value": f"{meta['available_qty']} szt."})
+        if meta.get("pick_id") is not None:
+            rows.append({"label": "Pick", "value": f"#{meta['pick_id']}"})
         return rows
 
     if code == ORDER_ITEM_QUANTITY_CHANGED:

@@ -179,6 +179,31 @@ def finalize_cartless_picking_session(
             .order_by(Pick.id.asc())
             .all()
         )
+        from ..order_item_pick_allocation_service import LocationInventoryInsufficientError
+        from ..wms_picking_draft_stock_conflict import detect_draft_stock_conflicts
+
+        pre_conflicts = detect_draft_stock_conflicts(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            order_ids=order_ids,
+            cart_id=None,
+            picking_session_id=psid,
+        )
+        if pre_conflicts:
+            c0 = pre_conflicts[0]
+            fail_pick = next(p for p in pending_picks if int(p.id) == int(c0.pick_id))
+            raise build_picking_inventory_finalize_error(
+                db,
+                fail_pick,
+                LocationInventoryInsufficientError(
+                    product_id=int(c0.product_id),
+                    location_id=int(c0.location_id),
+                    required_qty=float(c0.picked_qty),
+                    available_qty=float(c0.available_qty),
+                ),
+                picking_session_id=psid,
+            )
         now = datetime.utcnow()
         finalized_ids: list[int] = []
         for p in pending_picks:

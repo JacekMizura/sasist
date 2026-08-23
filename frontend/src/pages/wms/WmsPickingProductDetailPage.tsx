@@ -1846,11 +1846,17 @@ export default function WmsPickingProductDetailPage() {
   };
 
   const submitUndoPickById = async (pickId: number) => {
-    if (undoBusyPickId != null || !pickingSession?.cartId || warehouseId == null) return;
+    const cartId = pickingSession?.cartId ?? null;
+    const sessionId = pickingSession?.pickingSessionId ?? null;
+    if (undoBusyPickId != null || warehouseId == null) return;
+    if ((cartId == null || cartId < 1) && (sessionId == null || sessionId < 1)) return;
     setUndoBusyPickId(pickId);
     setPickMsg(null);
     try {
-      await postWmsPickingUndoPickById(pickingTenantId, warehouseId, pickingSession.cartId, pickId);
+      await postWmsPickingUndoPickById(pickingTenantId, warehouseId, pickId, {
+        cartId,
+        pickingSessionId: sessionId,
+      });
       playScanBeep();
       showScannerToast(`Cofnięto pobranie #${pickId}`);
       if (highlightPickId === pickId) setHighlightPickId(null);

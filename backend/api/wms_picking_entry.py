@@ -1447,6 +1447,7 @@ def get_picking_product_lines(
             cart_id=None,
             picking_session_id=int(effective_picking_session_id),
             fixed_order_ids=fixed_order_ids,
+            operator_user_id=int(current_user.id) if current_user is not None and current_user.id else None,
         )
         db.commit()
         return resp
@@ -1488,6 +1489,7 @@ def get_picking_product_lines(
         cart_id=effective_cart_id,
         picking_session_id=effective_picking_session_id,
         fixed_order_ids=fixed_order_ids,
+        operator_user_id=int(current_user.id) if current_user is not None and current_user.id else None,
     )
     if current_user is not None and current_user.id is not None and effective_cart_id is not None:
         from ..services.cart_picking_lifecycle_service import find_open_picking_session, get_cart_status
@@ -2538,7 +2540,8 @@ def post_picking_undo_pick_by_id(
     pick_id: int,
     tenant_id: int = Query(..., ge=1),
     warehouse_id: int = Depends(require_operable_warehouse),
-    cart_id: int = Query(..., ge=1),
+    cart_id: int | None = Query(default=None, ge=1),
+    picking_session_id: int | None = Query(default=None, ge=1),
     db: Session = Depends(get_db),
     current_user: Optional[AppUser] = Depends(get_optional_current_user),
 ):
@@ -2546,15 +2549,21 @@ def post_picking_undo_pick_by_id(
     from ..services.wms_picking_corrections import undo_wms_pick_by_id
     from ..services.wms_picking_corrections.undo_pick_service import UndoPickError
 
+    if cart_id is None and picking_session_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "SCOPE_REQUIRED", "message": "Wymagany cart_id albo picking_session_id."},
+        )
     try:
         out = undo_wms_pick_by_id(
             db,
             tenant_id=int(tenant_id),
             warehouse_id=int(warehouse_id),
             pick_id=int(pick_id),
-            cart_id=int(cart_id),
+            cart_id=int(cart_id) if cart_id is not None else None,
+            picking_session_id=int(picking_session_id) if picking_session_id is not None else None,
             operator_user_id=int(current_user.id) if current_user is not None else None,
-            audit_reason="LEGACY_LOCATION_CORRECTION",
+            audit_reason="DRAFT_STOCK_CONFLICT_RECOVERY",
         )
         db.commit()
         return WmsPickingUndoPickResponse(

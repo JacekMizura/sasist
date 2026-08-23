@@ -3,7 +3,12 @@ import type {
   WmsPickingProductLineApi,
 } from "../../api/wmsPickingProductsApi";
 
-export type WmsPickingLineResolutionStatus = "ACTIVE" | "PARTIAL" | "COMPLETED_PICK" | "SHORTAGE";
+export type WmsPickingLineResolutionStatus =
+  | "ACTIVE"
+  | "PARTIAL"
+  | "COMPLETED_PICK"
+  | "SHORTAGE"
+  | "STOCK_CONFLICT";
 
 /** Suma braków na wierszu listy produktów (kohorta). */
 export function wmsPickingLineMissingQty(row: WmsPickingProductLineApi): number {
@@ -161,7 +166,7 @@ export function wmsPickingLineResolutionStatus(row: {
   completed?: boolean;
 }): WmsPickingLineResolutionStatus {
   const raw = row.resolution_status;
-  if (raw === "ACTIVE" || raw === "PARTIAL" || raw === "COMPLETED_PICK" || raw === "SHORTAGE") {
+  if (raw === "ACTIVE" || raw === "PARTIAL" || raw === "COMPLETED_PICK" || raw === "SHORTAGE" || raw === "STOCK_CONFLICT") {
     return raw;
   }
   const rem = wmsPickingRemainingQty(row);
@@ -178,6 +183,7 @@ export function wmsPickingLineResolutionStatus(row: {
 /** 0=ACTIVE, 1=PARTIAL, 2=COMPLETED_PICK, 3=SHORTAGE. */
 export function wmsPickingProductRowSortTier(row: WmsPickingProductLineApi): number {
   const status = wmsPickingLineResolutionStatus(row);
+  if (status === "STOCK_CONFLICT") return 1.5;
   if (status === "ACTIVE") return 0;
   if (status === "PARTIAL") return 1;
   if (status === "COMPLETED_PICK") return 2;
@@ -260,6 +266,10 @@ export function computeWmsPickingProductLineSessionStats(rows: WmsPickingProduct
     const status = wmsPickingLineResolutionStatus(r);
     if (status === "SHORTAGE") {
       braki++;
+      continue;
+    }
+    if (status === "STOCK_CONFLICT") {
+      wTrakcie++;
       continue;
     }
     if (status === "COMPLETED_PICK") {

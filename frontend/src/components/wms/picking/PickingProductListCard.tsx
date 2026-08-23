@@ -9,7 +9,12 @@ import {
 import { PICKING_CARD_CLASS } from "./pickingUiTokens";
 import { wmsTypoClass } from "../../../wms/typography/wmsOperatorTypography";
 
-export type PickingListCardStatus = "ACTIVE" | "PARTIAL" | "COMPLETED_PICK" | "SHORTAGE";
+export type PickingListCardStatus =
+  | "ACTIVE"
+  | "PARTIAL"
+  | "COMPLETED_PICK"
+  | "SHORTAGE"
+  | "STOCK_CONFLICT";
 
 export type PickingProductListCardVisibility = {
   showProductImage?: boolean;
@@ -32,6 +37,7 @@ export type PickingProductListCardProps = {
   /** Łączny stan w magazynie — widoczny gdy visibility.showWarehouseStock */
   warehouseStockLabel?: string | null;
   shortageLabel?: string | null;
+  conflictHint?: string | null;
   status?: PickingListCardStatus;
   disabled?: boolean;
   visibility?: PickingProductListCardVisibility;
@@ -55,6 +61,7 @@ export function PickingProductListCard({
   locationLabel,
   warehouseStockLabel,
   shortageLabel,
+  conflictHint,
   status = "ACTIVE",
   disabled,
   visibility,
@@ -62,8 +69,9 @@ export function PickingProductListCard({
   onUndoComplete,
 }: PickingProductListCardProps) {
   const completed = status === "COMPLETED_PICK";
+  const stockConflict = status === "STOCK_CONFLICT";
   const shortage = status === "SHORTAGE" || (shortageLabel != null && String(shortageLabel).length > 0);
-  const muted = completed;
+  const muted = completed && !stockConflict;
 
   const showImage = visibility?.showProductImage !== false;
   const showEan = visibility?.showEAN !== false;
@@ -88,7 +96,24 @@ export function PickingProductListCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          {completed ? (
+          {stockConflict ? (
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 text-amber-800">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-white">
+                  <X size={12} strokeWidth={3} />
+                </span>
+                <span className={["font-bold", wmsTypoClass.quantity].join(" ")}>
+                  Zebrano {pickedLabel}/{totalLabel}
+                </span>
+              </div>
+              <p className={["mt-1 font-semibold text-amber-900", wmsTypoClass.base].join(" ")}>
+                Brak stanu dla zebranego produktu
+              </p>
+              {conflictHint ? (
+                <p className={["mt-0.5 text-amber-800/90", wmsTypoClass.base].join(" ")}>{conflictHint}</p>
+              ) : null}
+            </div>
+          ) : completed ? (
             <div className="flex items-center gap-1.5 text-emerald-700">
               <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white">
                 <Check size={12} strokeWidth={3} />

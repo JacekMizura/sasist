@@ -246,6 +246,8 @@ export default function WmsPickingProductsPage() {
   const [cartBootstrapErr, setCartBootstrapErr] = useState<string | null>(null);
   const [cartBootstrapping, setCartBootstrapping] = useState(false);
   const [basketPutPending, setBasketPutPending] = useState<WmsBasketPutPendingListApi | null>(null);
+  const [sessionCanFinalize, setSessionCanFinalize] = useState(true);
+  const [finalizeBlockReason, setFinalizeBlockReason] = useState<string | null>(null);
   /** SSOT from list API — true only for MULTI/baskets carts, never merely Boolean(cartId). */
   const [requiresBasketPutConfirm, setRequiresBasketPutConfirm] = useState(false);
   const listScanGateRef = useRef(false);
@@ -657,6 +659,14 @@ export default function WmsPickingProductsPage() {
       }));
       setRows(normalized);
       setCohortOrderCount(typeof data.cohort_order_count === "number" ? data.cohort_order_count : 0);
+      setSessionCanFinalize(data.can_finalize !== false);
+      setFinalizeBlockReason(
+        typeof data.finalize_block_reason === "string" && data.finalize_block_reason.trim()
+          ? data.finalize_block_reason.trim()
+          : data.can_finalize === false
+            ? "Brak stanu dla zebranego produktu — cofnij zebranie albo zgłoś brak przed zakończeniem."
+            : null,
+      );
       if (data.session_stats) {
         setSessionStats({
           zebrane: data.session_stats.zebrane ?? 0,
@@ -1504,8 +1514,9 @@ export default function WmsPickingProductsPage() {
   const activeCartId = mergedSession?.cartId ?? null;
   const activePickingSessionId = mergedSession?.pickingSessionId ?? null;
   const canFinalizeSession =
-    (isCartlessMode && activePickingSessionId != null && activePickingSessionId > 0) ||
-    (!isCartlessMode && activeCartId != null);
+    sessionCanFinalize &&
+    ((isCartlessMode && activePickingSessionId != null && activePickingSessionId > 0) ||
+      (!isCartlessMode && activeCartId != null));
 
   const goAfterBatchComplete = useCallback(
     (session: NonNullable<typeof pickingSession>, postTourMessage?: string | null) => {
@@ -1989,6 +2000,11 @@ export default function WmsPickingProductsPage() {
             {warnings.map((w) => <li key={w} className="font-semibold">{w}</li>)}
           </ul>
         )}
+        {!sessionCanFinalize && finalizeBlockReason && rows.length > 0 ? (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
+            {finalizeBlockReason}
+          </div>
+        ) : null}
 
         {loading || cartBootstrapping ? (
           <div className="flex flex-col items-center justify-center py-24 text-slate-400">
@@ -2046,6 +2062,18 @@ export default function WmsPickingProductsPage() {
                 : "";
             const warehouseStockLabel =
               listDisplay.show_stock && wStock > 1e-9 ? `${fmtQty(wStock)} szt.` : null;
+            const conflict = r.draft_stock_conflict;
+            const conflictHint = conflict
+              ? [
+                  conflict.location_code ? `Lokalizacja ${conflict.location_code}` : null,
+                  `zebrano ${fmtQty(conflict.picked_qty)}`,
+                  `dostępne ${fmtQty(conflict.available_qty)}`,
+                  conflict.sku ? `SKU ${conflict.sku}` : null,
+                  conflict.ean ? `EAN ${conflict.ean}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              : null;
 
             return (
               <li key={r.product_id} className="min-w-0">
@@ -2060,6 +2088,7 @@ export default function WmsPickingProductsPage() {
                   locationLabel={locLabel}
                   warehouseStockLabel={warehouseStockLabel}
                   shortageLabel={miss > 1e-9 ? fmtQty(miss) : null}
+                  conflictHint={conflictHint}
                   status={status}
                   disabled={rowBlocked}
                   visibility={pickingListCardVisibilityFromApi(listDisplay)}

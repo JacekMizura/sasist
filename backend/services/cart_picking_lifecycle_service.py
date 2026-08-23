@@ -2752,7 +2752,9 @@ def compute_session_stats_from_product_lines(lines: Sequence[Any]) -> dict[str, 
                 status = "SHORTAGE"
             else:
                 status = "COMPLETED_PICK"
-        if status == "SHORTAGE" or (remaining <= 1e-9 and missing > 1e-9):
+        if status == "STOCK_CONFLICT" or bool(getattr(ln, "has_draft_stock_conflict", False)):
+            w_trakcie += 1
+        elif status == "SHORTAGE" or (remaining <= 1e-9 and missing > 1e-9):
             braki += 1
         elif remaining <= 1e-9 and (picked + 1e-9 >= total or total <= 1e-9 or status == "COMPLETED_PICK"):
             zebrane += 1

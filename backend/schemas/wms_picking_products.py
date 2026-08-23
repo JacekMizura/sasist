@@ -11,7 +11,7 @@ from .picking_routing import PickListRow, PickingRoutingAllocationShortfall
 WmsPickingOrderTypeFilter = Literal["single", "multi", "all"]
 
 # Stan rozliczenia linii SKU w sesji zbierania (SSOT dla UI — nie mylić z completed=True przy braku).
-WmsPickingLineResolutionStatus = Literal["ACTIVE", "PARTIAL", "COMPLETED_PICK", "SHORTAGE"]
+WmsPickingLineResolutionStatus = Literal["ACTIVE", "PARTIAL", "COMPLETED_PICK", "SHORTAGE", "STOCK_CONFLICT"]
 
 
 class WmsPickingProductBundleBreakdownRow(BaseModel):
@@ -99,8 +99,17 @@ class WmsPickingProductLine(BaseModel):
         "ACTIVE",
         description=(
             "ACTIVE / PARTIAL (jeszcze do pobrania) | COMPLETED_PICK (pełne zebranie bez braku) | "
-            "SHORTAGE (remaining≈0 i missing>0 — zakończone problemowo, NIE mylić z ZEBRANO)"
+            "SHORTAGE (remaining≈0 i missing>0 — zakończone problemowo, NIE mylić z ZEBRANO) | "
+            "STOCK_CONFLICT (draft Pick bez pokrycia inventory — nie finalizować)"
         ),
+    )
+    has_draft_stock_conflict: bool = Field(
+        False,
+        description="True gdy co najmniej jeden draft Pick tego SKU nie ma pokrycia w stanie lokalizacji.",
+    )
+    draft_stock_conflict: Optional["WmsPickingDraftStockConflictRow"] = Field(
+        default=None,
+        description="Pierwszy konflikt draft/stock dla tej linii (UI banner).",
     )
     primary_location_code: str = Field("", description="Pierwsza lokalizacja na trasie grafowej (PickingRoutingService)")
     primary_location_stock: float = Field(
@@ -286,6 +295,24 @@ class WmsPickingSessionStats(BaseModel):
         description="Liczba unikalnych order_id z shortage_qty>0 w allocations",
     )
 
+class WmsPickingDraftStockConflictRow(BaseModel):
+    """Draft Pick that cannot be finalized against current location stock."""
+
+    pick_id: int
+    order_id: int
+    order_item_id: Optional[int] = None
+    product_id: int
+    product_name: str
+    sku: Optional[str] = None
+    ean: Optional[str] = None
+    location_id: int
+    location_code: str
+    picked_qty: float = Field(..., ge=0)
+    available_qty: float = Field(..., ge=0)
+    cart_id: Optional[int] = None
+    picking_session_id: Optional[int] = None
+
+
 class WmsPickingProductLinesResponse(BaseModel):
     products: list[WmsPickingProductLine]
     cohort_order_count: int = Field(
@@ -295,6 +322,21 @@ class WmsPickingProductLinesResponse(BaseModel):
             "Liczba zamówień w zakresie listy: z cart_id = list_orders_on_cart (SSOT); "
             "bez wózka = kohorta statusu hub."
         ),
+    )
+    draft_stock_conflicts: list[WmsPickingDraftStockConflictRow] = Field(
+        default_factory=list,
+        description="Draft Picki bez pokrycia inventory — blokują bezpieczną finalizację.",
+    )
+    can_finalize: bool = Field(
+        True,
+        description=(
+            "False gdy draft_stock_conflicts niepuste. "
+            "Nie mylić z completed/zebrane — historyczna picked_qty zostaje."
+        ),
+    )
+    finalize_block_reason: Optional[str] = Field(
+        default=None,
+        description="Krótki powód blokady finalize dla operatora (PL).",
     )
     cohort_missing_lines: list[WmsPickingCohortMissingLineRow] = Field(
         default_factory=list,

@@ -232,11 +232,12 @@ def undo_wms_pick_by_id(
     warehouse_id: int,
     pick_id: int,
     cart_id: int | None = None,
+    picking_session_id: int | None = None,
     operator_user_id: int | None = None,
     audit_reason: str = "LEGACY_LOCATION_CORRECTION",
 ) -> dict:
     """
-    Undo exactly one draft Pick by id (MULTI recovery).
+    Undo exactly one draft Pick by id (MULTI / cartless recovery).
 
     - Inventory unchanged (stock only deducted at finalize).
     - Shortage untouched.
@@ -252,44 +253,83 @@ def undo_wms_pick_by_id(
         raise UndoPickError("Nie znaleziono pobrania.", code="PICK_NOT_FOUND")
     if int(pick.tenant_id) != int(tenant_id) or int(pick.warehouse_id or 0) != int(warehouse_id):
         raise UndoPickError("Pobranie nie należy do tego magazynu.", code="PICK_WRONG_SCOPE")
-    if cart_id is not None and int(pick.cart_id or 0) != int(cart_id):
-        raise UndoPickError("Pobranie nie należy do aktywnego wózka.", code="PICK_WRONG_CART")
     if pick.picked_at is not None:
         raise UndoPickError(
             "Nie można cofnąć sfinalizowanego pobrania — stock został już zdjęty.",
             code="PICK_ALREADY_FINALIZED",
         )
 
-    cart = (
-        db.query(Cart)
-        .filter(
-            Cart.id == int(pick.cart_id),
-            Cart.tenant_id == int(tenant_id),
-            Cart.warehouse_id == int(warehouse_id),
+    pick_cart_id = int(pick.cart_id) if getattr(pick, "cart_id", None) is not None else None
+    cartless = pick_cart_id is None
+
+    if cartless:
+        if picking_session_id is None or int(picking_session_id) < 1:
+            raise UndoPickError(
+                "Dla zbierania bez wózka wymagany picking_session_id.",
+                code="PICKING_SESSION_REQUIRED",
+            )
+        order = db.query(Order).filter(Order.id == int(pick.order_id)).first()
+        if order is None:
+            raise UndoPickError("Nie znaleziono zamówienia pobrania.", code="ORDER_NOT_FOUND")
+        if int(getattr(order, "picking_session_id", 0) or 0) != int(picking_session_id):
+            raise UndoPickError(
+                "Pobranie nie należy do aktywnej sesji zbierania.",
+                code="PICK_WRONG_SESSION",
+            )
+    else:
+        if cart_id is not None and int(pick_cart_id) != int(cart_id):
+            raise UndoPickError("Pobranie nie należy do aktywnego wózka.", code="PICK_WRONG_CART")
+        cart = (
+            db.query(Cart)
+            .filter(
+                Cart.id == int(pick_cart_id),
+                Cart.tenant_id == int(tenant_id),
+                Cart.warehouse_id == int(warehouse_id),
+            )
+            .first()
         )
-        .first()
-    )
-    if cart is None:
-        raise UndoPickError("Nie znaleziono wózka sesji.", code="CART_NOT_FOUND")
+        if cart is None:
+            raise UndoPickError("Nie znaleziono wózka sesji.", code="CART_NOT_FOUND")
 
     undone_qty = float(pick.quantity or 0)
     oid = int(pick.order_id)
     oiid = int(pick.order_item_id) if pick.order_item_id is not None else None
     lid = int(pick.location_id)
     pid = int(pick.product_id)
-    cid = int(pick.cart_id)
+    cid = pick_cart_id
     deleted_id = int(pick.id)
 
     # Bulk delete avoids ORM cascade lazy-load of pick_wave_items (optional table).
     db.query(Pick).filter(Pick.id == deleted_id).delete(synchronize_session="fetch")
     delete_pick_events_for_pick_ids(db, [deleted_id])
-    recompute_order_fulfillment(db, oid, commit=False, session_cart_id=cid)
+    recompute_order_fulfillment(
+        db, oid, commit=False, session_cart_id=int(cid) if cid is not None else None
+    )
     if oiid is not None:
         oi = db.query(OrderItem).filter(OrderItem.id == int(oiid)).first()
         if oi is not None:
-            from ..wms_basket_put.resolve import _heal_stale_picked_status, _line_remaining
+            from sqlalchemy import func
 
-            rem = _line_remaining(db, oi=oi, cart_id=cid)
+            from ..wms_basket_put.resolve import _heal_stale_picked_status
+
+            need = float(oi.quantity or 0)
+            miss_ln = float(oi.wms_picking_line_missing_qty or 0)
+            if cartless:
+                from ..wms_cartless_picking.scope import sum_picks_for_order_item_cartless
+
+                picked_sum = sum_picks_for_order_item_cartless(db, order_item_id=int(oiid))
+            else:
+                picked_sum = float(
+                    db.query(func.coalesce(func.sum(Pick.quantity), 0.0))
+                    .filter(
+                        Pick.order_item_id == int(oiid),
+                        Pick.cart_id == int(cid),
+                        Pick.status.in_(("done", "picking", "waiting")),
+                    )
+                    .scalar()
+                    or 0.0
+                )
+            rem = need - float(picked_sum or 0) - miss_ln
             _heal_stale_picked_status(oi, rem)
             db.add(oi)
 
@@ -310,9 +350,10 @@ def undo_wms_pick_by_id(
         )
 
     logger.info(
-        "[wms.undo_pick_by_id] pick_id=%s cart_id=%s product_id=%s qty=%s reason=%s",
+        "[wms.undo_pick_by_id] pick_id=%s cart_id=%s session_id=%s product_id=%s qty=%s reason=%s",
         deleted_id,
         cid,
+        picking_session_id,
         pid,
         undone_qty,
         audit_reason,
@@ -328,6 +369,7 @@ def undo_wms_pick_by_id(
         "product_id": pid,
         "location_id": lid,
         "cart_id": cid,
+        "picking_session_id": int(picking_session_id) if picking_session_id else None,
         "inventory_unchanged": True,
         "shortage_unchanged": True,
         "reason": audit_reason,
