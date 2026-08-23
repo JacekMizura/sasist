@@ -114,6 +114,19 @@ OPTIONAL_WAREHOUSE_SERIES: list[OperationalSeriesSpec] = [
     _wh("ZWZ", name="ZWZ — zwrot zewnętrzny"),
     _wh("INW", name="INW — inwentaryzacja"),
     _wh("RK", name="RK — korekta magazynowa"),
+    {
+        "series_type": "WAREHOUSE",
+        "subtype": "RESERVATION",
+        "operational_code": "RZ",
+        "prefix": "RZ",
+        "name": "RZ — Rezerwacja",
+        "numbering_format": "{PREFIX}/{NUMBER}/{MONTH}/{YEAR}",
+        "yearly_reset": False,
+        "monthly_reset": True,
+        "warehouse_effect": False,
+        "padding_length": 0,
+        "is_default": True,
+    },
 ]
 
 ALL_OPERATIONAL_SERIES: list[OperationalSeriesSpec] = (

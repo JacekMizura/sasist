@@ -6,6 +6,7 @@ import logging
 from datetime import datetime
 from typing import Any, Optional
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ...models.activity_event import ActivityEvent
@@ -81,6 +82,26 @@ def record_domain_activity(
 
     cid = str(correlation_id or "").strip()[:64] or None
     tid = int(tenant_id)
+
+    # Probe via the session connection (avoid Inspector/pool false negatives on SQLite memory).
+    try:
+        bind = db.get_bind()
+        dialect = (getattr(getattr(bind, "dialect", None), "name", None) or "").lower()
+        if dialect == "sqlite":
+            present = db.execute(
+                text(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='activity_events' LIMIT 1"
+                )
+            ).scalar()
+            if not present:
+                return None
+        elif bind is not None:
+            from sqlalchemy import inspect as sa_inspect
+
+            if not sa_inspect(bind).has_table("activity_events"):
+                return None
+    except Exception:
+        return None
 
     try:
         nested = db.begin_nested()

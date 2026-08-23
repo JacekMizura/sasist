@@ -17,6 +17,7 @@ from backend.models.inventory import Inventory
 from backend.models.location import Location
 from backend.models.order import Order
 from backend.models.order_item import OrderItem
+from backend.models.order_warehouse_reservation import OrderWarehouseReservation
 from backend.models.product import Product
 from backend.models.production import (
     PRODUCTION_ORDER_SOURCE_ITEM_CANCELLED,
@@ -25,9 +26,12 @@ from backend.models.production import (
     ProductionOrder,
     ProductionOrderSourceItem,
 )
+from backend.models.stock_document import StockDocument
+from backend.models.stock_operation import StockOperation
 from backend.models.stock_reservation import StockReservation
 from backend.models.warehouse import Warehouse
 from backend.services.order_item_pick_allocation_service import consume_inventory_fifo_slices
+from backend.services.order_reservations.constants import OWR_STATUS_RESERVED
 from backend.services.production_execution.material_consume_service import (
     consume_production_material_slices,
 )
@@ -42,6 +46,7 @@ from backend.services.reservations.constants import (
 from backend.services.sales_order_fg_reservation_service import (
     SalesOrderReservationError,
     reserve_sales_order_fg,
+    reserved_qty_for_order_product,
 )
 from backend.services.stock_disposition import STOCK_DISPOSITION_SALEABLE
 from backend.services.wms_picking_atp import (
@@ -66,6 +71,9 @@ def _mk_engine():
         OrderItem,
         ProductionOrder,
         ProductionOrderSourceItem,
+        StockDocument,
+        StockOperation,
+        OrderWarehouseReservation,
     ):
         model.__table__.create(engine, checkfirst=True)
     return engine
@@ -255,7 +263,7 @@ class SalesOrderOverbookTests(unittest.TestCase):
                 self.db, tenant_id=1, warehouse_id=1, order_id=1, product_id=100, quantity=1
             )
 
-    def test_06_allocator_spills_to_next_location(self):
+    def test_06_business_reserve_increments_without_location_pins(self):
         _inv(self.db, pid=100, qty=1, loc_id=1, iid=1)
         _inv(self.db, pid=100, qty=1, loc_id=2, iid=2)
         self.db.flush()
@@ -268,15 +276,18 @@ class SalesOrderOverbookTests(unittest.TestCase):
         )
         self.db.flush()
         self.assertEqual(len(rows), 1)
-        self.assertEqual(int(rows[0].location_id), 2)
-        locs = {
-            int(r.location_id): float(r.quantity)
-            for r in self.db.query(StockReservation)
+        self.assertFalse(hasattr(rows[0], "location_id") and rows[0].location_id)
+        self.assertAlmostEqual(
+            reserved_qty_for_order_product(self.db, tenant_id=1, order_id=1, product_id=100),
+            2.0,
+            places=4,
+        )
+        loc_holds = (
+            self.db.query(StockReservation)
             .filter(StockReservation.status == RESERVATION_STATUS_RESERVED)
-            .all()
-        }
-        self.assertAlmostEqual(locs.get(1, 0), 1.0, places=4)
-        self.assertAlmostEqual(locs.get(2, 0), 1.0, places=4)
+            .count()
+        )
+        self.assertEqual(loc_holds, 0)
 
     def test_07_multi_order_no_overbook(self):
         _inv(self.db, pid=100, qty=3, loc_id=1, iid=1)
@@ -284,7 +295,6 @@ class SalesOrderOverbookTests(unittest.TestCase):
         reserve_sales_order_fg(
             self.db, tenant_id=1, warehouse_id=1, order_id=1, product_id=100, quantity=1
         )
-        # Availability event +1 already in stock; order1 needs +1 more, order2 needs 1.
         reserve_sales_order_fg(
             self.db, tenant_id=1, warehouse_id=1, order_id=1, product_id=100, quantity=1
         )
@@ -294,14 +304,13 @@ class SalesOrderOverbookTests(unittest.TestCase):
         self.db.flush()
         total = sum(
             float(r.quantity or 0)
-            for r in self.db.query(StockReservation)
-            .filter(
-                StockReservation.status == RESERVATION_STATUS_RESERVED,
-                StockReservation.reservation_kind == RESERVATION_KIND_SALES_ORDER,
-            )
+            for r in self.db.query(OrderWarehouseReservation)
+            .filter(OrderWarehouseReservation.status == OWR_STATUS_RESERVED)
             .all()
         )
         self.assertAlmostEqual(total, 3.0, places=4)
+        free = pickable_free_capacity_qty(self.db, tenant_id=1, warehouse_id=1, product_id=100)
+        self.assertAlmostEqual(free, 0.0, places=4)
         free_rows = pickable_free_capacity_by_location(
             self.db, tenant_id=1, warehouse_id=1, product_id=100
         )
@@ -351,19 +360,16 @@ class AllocateProducedGuardTests(unittest.TestCase):
         self.engine.dispose()
 
     def test_11_covered_order_does_not_get_production_fulfillment(self):
-        # External SALES_ORDER covers the line; source still reserved (pre-detach race).
+        # External business reservation covers the line; source still reserved (pre-detach race).
         self.db.add(
-            StockReservation(
+            OrderWarehouseReservation(
                 tenant_id=1,
                 warehouse_id=1,
                 order_id=10,
                 product_id=100,
-                location_id=1,
                 quantity=1,
-                status=RESERVATION_STATUS_RESERVED,
-                reservation_kind=RESERVATION_KIND_SALES_ORDER,
-                batch_number="",
-                expiry_date=date(9999, 12, 31),
+                quantity_original=1,
+                status=OWR_STATUS_RESERVED,
                 stock_disposition=STOCK_DISPOSITION_SALEABLE,
             )
         )

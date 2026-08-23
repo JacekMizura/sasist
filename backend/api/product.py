@@ -2363,6 +2363,34 @@ def get_product_warehouse_stock_breakdown(
     return ProductWarehouseStockBreakdownRead(**payload)
 
 
+@router.get("/{product_id}/business-reservations")
+def get_product_business_reservations(
+    product_id: int,
+    tenant_id: int = Query(..., ge=1),
+    warehouse_id: Optional[int] = Query(None, ge=1),
+    include_inactive: bool = Query(False),
+    db: Session = Depends(get_db),
+):
+    """Warehouse-level RZ / business reservations for product Magazyn UI (no locations)."""
+    from ..services.order_reservations.list_service import list_product_business_reservations
+
+    product = (
+        db.query(Product)
+        .filter(Product.id == int(product_id), Product.tenant_id == int(tenant_id), Product.deleted_at.is_(None))
+        .first()
+    )
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+    items = list_product_business_reservations(
+        db,
+        tenant_id=int(tenant_id),
+        product_id=int(product_id),
+        warehouse_id=int(warehouse_id) if warehouse_id is not None else None,
+        include_inactive=bool(include_inactive),
+    )
+    return {"items": items, "count": len(items)}
+
+
 @router.get("/{product_id}/slotting-by-warehouse")
 def get_product_slotting_by_warehouse(
     product_id: int,

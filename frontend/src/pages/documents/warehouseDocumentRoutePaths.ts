@@ -12,6 +12,7 @@ const STOCK_TYPE_TO_SEGMENT: Record<string, string> = {
   Z_PZ: "z-pz",
   INW: "inw",
   RMZ: "rmz",
+  RESERVATION: "reservation",
 };
 
 export function segmentFromStockDocumentType(documentType: string | null | undefined): string {

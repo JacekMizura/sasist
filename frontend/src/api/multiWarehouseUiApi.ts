@@ -75,6 +75,41 @@ export async function fetchProductWarehouseStockBreakdown(
   return res.data;
 }
 
+export type ProductBusinessReservationRow = {
+  id: number;
+  created_at: string | null;
+  order_id: number;
+  order_number: string;
+  stock_document_id: number | null;
+  document_number: string | null;
+  product_id: number;
+  product_name: string;
+  warehouse_id: number;
+  warehouse_name: string;
+  quantity: number;
+  quantity_original: number;
+  status: string;
+  status_label: string;
+};
+
+export async function fetchProductBusinessReservations(
+  productId: number,
+  tenantId: number,
+  opts?: { warehouseId?: number; includeInactive?: boolean },
+): Promise<ProductBusinessReservationRow[]> {
+  const res = await api.get<{ items: ProductBusinessReservationRow[] }>(
+    `/products/${productId}/business-reservations`,
+    {
+      params: {
+        tenant_id: tenantId,
+        warehouse_id: opts?.warehouseId,
+        include_inactive: opts?.includeInactive ? true : undefined,
+      },
+    },
+  );
+  return res.data.items ?? [];
+}
+
 export async function fetchProductSlottingByWarehouse(
   productId: number,
   tenantId: number,

@@ -514,9 +514,19 @@ def _decrement_inventory_for_wms_pick(
     if oid is not None:
         try:
             from .sales_order_fg_reservation_service import (
+                assert_pick_within_business_reservation,
                 consume_sales_order_reservations_for_pick,
             )
 
+            assert_pick_within_business_reservation(
+                db,
+                tenant_id=tid,
+                warehouse_id=wid,
+                order_id=oid,
+                product_id=int(pick.product_id),
+                quantity=qty,
+                stock_disposition=req_disp,
+            )
             consume_sales_order_reservations_for_pick(
                 db,
                 tenant_id=tid,
@@ -524,6 +534,7 @@ def _decrement_inventory_for_wms_pick(
                 product_id=int(pick.product_id),
                 location_id=int(pick.location_id),
                 quantity=qty,
+                warehouse_id=wid,
             )
         except Exception:
             logger.exception(

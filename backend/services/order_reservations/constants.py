@@ -1,0 +1,16 @@
+"""Business order reservation statuses (warehouse-level RZ)."""
+
+from __future__ import annotations
+
+OWR_STATUS_RESERVED = "RESERVED"
+OWR_STATUS_PARTIALLY_CONSUMED = "PARTIALLY_CONSUMED"
+OWR_STATUS_CONSUMED = "CONSUMED"
+OWR_STATUS_RELEASED = "RELEASED"
+OWR_STATUS_CANCELLED = "CANCELLED"
+
+#: Statuses that still claim warehouse ATP.
+OWR_ACTIVE_STATUSES: frozenset[str] = frozenset(
+    {OWR_STATUS_RESERVED, OWR_STATUS_PARTIALLY_CONSUMED}
+)
+
+STOCK_DOC_TYPE_RESERVATION = "RESERVATION"

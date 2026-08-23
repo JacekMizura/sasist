@@ -1,26 +1,27 @@
 """
-SSOT pickable ATP for WMS picking — on-hand minus active reservations.
+SSOT pickable ATP for WMS picking.
 
-Own ``order_id`` SALES_ORDER reservations do not block that order's ATP/cover view.
-Own ``production_order_id`` PRODUCTION_ORDER reservations do not block that MO's consume/collect.
-Foreign reservations (any kind, status=reserved) reduce ATP seen by others.
+Layers:
+- BUSINESS (``order_warehouse_reservations``): warehouse claim for sales orders.
+- LOCATION (``stock_reservations``): WMS / production / DS holds.
 
-For *new* SALES_ORDER placement use ``pickable_free_capacity_*`` (all holds subtract).
+``SALES_ORDER`` location holds are WMS allocations of a business claim — they must NOT
+double-subtract from pickable ATP when an active business reservation exists.
+Legacy SALES_ORDER location holds without business rows still reduce ATP until backfill.
 """
 
 from __future__ import annotations
 
 import logging
-from collections import defaultdict
-from typing import Optional
-
 from sqlalchemy import func, or_, text
 from sqlalchemy.orm import Session
 
 from ..models.inventory import Inventory
 from ..models.location import Location
+from ..models.order_warehouse_reservation import OrderWarehouseReservation
 from ..models.stock_reservation import StockReservation
 from .inventory_lot_keys import NO_EXPIRY_SENTINEL, normalize_batch_number
+from .order_reservations.constants import OWR_ACTIVE_STATUSES
 from .pg_advisory_lock import stable_advisory_lock_key
 from .pick_eligible_inventory_service import (
     is_pick_eligible_location_row,
@@ -49,6 +50,75 @@ def advisory_lock_sales_order_product(
         logger.debug("advisory lock skipped key=%s", key, exc_info=True)
 
 
+def _foreign_business_reserved_qty(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    product_id: int,
+    exclude_order_id: int | None,
+    stock_disposition: str,
+) -> float:
+    sd = normalize_stock_disposition(stock_disposition)
+    q = db.query(func.coalesce(func.sum(OrderWarehouseReservation.quantity), 0.0)).filter(
+        OrderWarehouseReservation.tenant_id == int(tenant_id),
+        OrderWarehouseReservation.warehouse_id == int(warehouse_id),
+        OrderWarehouseReservation.product_id == int(product_id),
+        OrderWarehouseReservation.status.in_(tuple(OWR_ACTIVE_STATUSES)),
+        OrderWarehouseReservation.stock_disposition == sd,
+        OrderWarehouseReservation.quantity > 0,
+    )
+    if exclude_order_id is not None:
+        q = q.filter(OrderWarehouseReservation.order_id != int(exclude_order_id))
+    return float(q.scalar() or 0.0)
+
+
+def _orders_with_active_business_reservation(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    product_id: int,
+    stock_disposition: str,
+) -> set[int]:
+    sd = normalize_stock_disposition(stock_disposition)
+    rows = (
+        db.query(OrderWarehouseReservation.order_id)
+        .filter(
+            OrderWarehouseReservation.tenant_id == int(tenant_id),
+            OrderWarehouseReservation.warehouse_id == int(warehouse_id),
+            OrderWarehouseReservation.product_id == int(product_id),
+            OrderWarehouseReservation.status.in_(tuple(OWR_ACTIVE_STATUSES)),
+            OrderWarehouseReservation.stock_disposition == sd,
+            OrderWarehouseReservation.quantity > 0,
+        )
+        .all()
+    )
+    return {int(r[0]) for r in rows if r[0] is not None}
+
+
+def _reduce_location_qtys_by_claim(
+    rows: list[tuple[int, float, str]], claim: float
+) -> list[tuple[int, float, str]]:
+    remain = float(claim or 0)
+    if remain <= 1e-9:
+        return rows
+    # Trim from highest location ids first (leave early pick faces when possible).
+    working = {int(lid): (float(qty), name) for lid, qty, name in rows}
+    for lid in sorted(working.keys(), reverse=True):
+        if remain <= 1e-9:
+            break
+        qty, name = working[lid]
+        take = min(qty, remain)
+        working[lid] = (qty - take, name)
+        remain -= take
+    return [
+        (lid, round(qty, 6), name)
+        for lid, (qty, name) in sorted(working.items())
+        if qty > 1e-9
+    ]
+
+
 def reserved_qty_at_location(
     db: Session,
     *,
@@ -59,6 +129,8 @@ def reserved_qty_at_location(
     exclude_order_id: int | None = None,
     exclude_production_order_id: int | None = None,
     stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
+    exclude_sales_order_kind: bool = False,
+    exclude_sales_order_ids: set[int] | None = None,
 ) -> float:
     """Sum of active reservations at location; optionally ignore own sales/MO holds."""
     sd = normalize_stock_disposition(stock_disposition)
@@ -76,6 +148,23 @@ def reserved_qty_at_location(
             StockReservation.stock_disposition.is_(None),
         ),
     )
+    if exclude_sales_order_kind:
+        q = q.filter(
+            or_(
+                StockReservation.reservation_kind.is_(None),
+                StockReservation.reservation_kind != RESERVATION_KIND_SALES_ORDER,
+            )
+        )
+    elif exclude_sales_order_ids:
+        # Skip SALES_ORDER holds already covered by business reservation SSOT.
+        q = q.filter(
+            or_(
+                StockReservation.reservation_kind.is_(None),
+                StockReservation.reservation_kind != RESERVATION_KIND_SALES_ORDER,
+                StockReservation.order_id.is_(None),
+                ~StockReservation.order_id.in_(tuple(exclude_sales_order_ids)),
+            )
+        )
     if exclude_order_id is not None:
         q = q.filter(
             or_(
@@ -226,10 +315,19 @@ def pickable_available_by_location(
     stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
 ) -> list[tuple[int, float, str]]:
     """
-    Pickable ATP per location (own sales/MO reservations credited when excludes set).
+    Pickable ATP per location.
 
-    ``available = pickable_on_hand − foreign_reserved``.
+    Location holds (production / DS / legacy SALES_ORDER without OWR) reduce local free.
+    Foreign business reservations reduce warehouse claim without pinning A1/B3.
     """
+    sd = normalize_stock_disposition(stock_disposition)
+    owr_order_ids = _orders_with_active_business_reservation(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        product_id=product_id,
+        stock_disposition=sd,
+    )
     physical = pickable_on_hand_rows(
         db,
         tenant_id=tenant_id,
@@ -248,11 +346,20 @@ def pickable_available_by_location(
             exclude_order_id=exclude_order_id,
             exclude_production_order_id=exclude_production_order_id,
             stock_disposition=stock_disposition,
+            exclude_sales_order_ids=owr_order_ids,
         )
         avail = max(0.0, float(on_hand) - float(foreign))
         if avail > 1e-9:
             out.append((lid, round(avail, 6), name))
-    return out
+    foreign_biz = _foreign_business_reserved_qty(
+        db,
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        product_id=product_id,
+        exclude_order_id=exclude_order_id,
+        stock_disposition=sd,
+    )
+    return _reduce_location_qtys_by_claim(out, foreign_biz)
 
 
 def pickable_available_qty(
@@ -286,9 +393,9 @@ def pickable_free_capacity_by_location(
     stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
 ) -> list[tuple[int, float, str]]:
     """
-    Free capacity for placing a *new* reservation.
+    Free capacity for placing a *new* business reservation / pick claim.
 
-    ``free = on_hand − all active reservations`` (own holds already claim stock).
+    Uses same location view as pickable ATP with no order exclude (all foreign claims).
     """
     return pickable_available_by_location(
         db,
@@ -309,14 +416,15 @@ def pickable_free_capacity_qty(
     product_id: int,
     stock_disposition: str = DEFAULT_STOCK_DISPOSITION,
 ) -> float:
-    rows = pickable_free_capacity_by_location(
+    from .order_reservations.availability import warehouse_business_available_qty
+
+    return warehouse_business_available_qty(
         db,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         product_id=product_id,
         stock_disposition=stock_disposition,
     )
-    return round(sum(q for _, q, _ in rows), 6)
 
 
 def build_pickable_cache_for_pairs(

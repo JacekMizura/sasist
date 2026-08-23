@@ -253,19 +253,31 @@ def _compute_line_plan(
     picked = _picked_qty(oi)
     need = max(0.0, required - picked)
     own_res = reserved_qty_for_order_product(
-        db, tenant_id=tid, order_id=oid, product_id=pid, stock_disposition=sd
+        db, tenant_id=tid, order_id=oid, product_id=pid, stock_disposition=sd, warehouse_id=wid
     )
-    atp_incl_own = pickable_available_qty(
+    from .order_reservations.availability import warehouse_business_available_qty
+
+    # Business ATP: physical − foreign business reserved (own claim already in own_res).
+    free_atp = warehouse_business_available_qty(
         db,
         tenant_id=tid,
         warehouse_id=wid,
         product_id=pid,
-        exclude_order_id=oid,
         stock_disposition=sd,
+        exclude_order_id=oid,
     )
-    free_atp = max(0.0, atp_incl_own - own_res)
-    target_from_stock = min(need, own_res + free_atp)
+    # Free capacity for *new* claims excludes everyone's active holds including own.
+    free_for_new = warehouse_business_available_qty(
+        db,
+        tenant_id=tid,
+        warehouse_id=wid,
+        product_id=pid,
+        stock_disposition=sd,
+        exclude_order_id=None,
+    )
+    target_from_stock = min(need, own_res + free_for_new)
     to_reserve = max(0.0, round(target_from_stock - own_res, 6))
+    del free_atp  # kept for clarity vs legacy; free_for_new drives to_reserve
 
     active = _find_active_source_for_item(db, tenant_id=tid, order_item_id=int(oi.id))
     active_out = 0.0

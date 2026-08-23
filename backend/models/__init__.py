@@ -144,6 +144,7 @@ from .inventory import Inventory  # noqa: F401 - register for relationships
 from .inventory_serial import InventorySerial  # noqa: F401
 from .stock import Stock  # noqa: F401 - register for relationships
 from .stock_reservation import StockReservation  # noqa: F401 - register for relationships
+from .order_warehouse_reservation import OrderWarehouseReservation  # noqa: F401
 from .stock_movement import StockMovement  # noqa: F401 - register for relationships
 from .warehouse_graph import WarehouseNode, WarehouseEdge, LocationNode  # noqa: F401
 from .warehouse_routing import (  # noqa: F401

@@ -29,6 +29,7 @@ from .db.wms_product_validation_schema import ensure_wms_product_validation_sche
 from .db.production_planning_schema import ensure_production_planning_schema
 from .db.document_template_schema import ensure_document_template_schema
 from .db.stock_reservations_schema import ensure_stock_reservations_universal_schema
+from .db.order_warehouse_reservations_schema import ensure_order_warehouse_reservations_table
 from .db.wms_production_settings_schema import ensure_wms_production_settings_schema
 from .db.warehouse_routing_schema import ensure_warehouse_routing_schema
 from .db.warehouse_special_placements_schema import ensure_warehouse_special_placements_schema
@@ -1332,6 +1333,7 @@ try:
     ensure_wms_product_validation_schema(engine)
     ensure_wms_production_settings_schema(engine)
     ensure_stock_reservations_universal_schema(engine)
+    ensure_order_warehouse_reservations_table(engine)
     ensure_production_planning_schema(engine)
     ensure_document_template_schema(engine)
     from .db.production_execution_interface_schema import ensure_production_execution_interface_schema
@@ -1822,6 +1824,7 @@ def _upgrade_schema_background() -> None:
         ensure_wms_product_validation_schema(engine)
         ensure_wms_production_settings_schema(engine)
         ensure_stock_reservations_universal_schema(engine)
+        ensure_order_warehouse_reservations_table(engine)
         ensure_production_planning_schema(engine)
         ensure_document_template_schema(engine)
         from .db.production_execution_interface_schema import ensure_production_execution_interface_schema

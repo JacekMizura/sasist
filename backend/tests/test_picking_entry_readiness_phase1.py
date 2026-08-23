@@ -19,11 +19,16 @@ from backend.models.inventory import Inventory
 from backend.models.location import Location
 from backend.models.order import Order
 from backend.models.order_item import OrderItem
+from backend.models.order_warehouse_reservation import OrderWarehouseReservation
 from backend.models.product import Product
 from backend.models.product_composition import ProductComposition, ProductCompositionLine
 from backend.models.stock_reservation import StockReservation
 from backend.models.warehouse import Warehouse
 from backend.services.order_item_pick_allocation_service import consume_inventory_fifo_slices
+from backend.services.order_reservations.constants import (
+    OWR_STATUS_CONSUMED,
+    OWR_STATUS_RESERVED,
+)
 from backend.services.picking_entry_readiness_service import (
     LINE_MANUFACTURING_PARTIAL,
     LINE_NO_BOM,
@@ -47,6 +52,7 @@ from backend.services.sales_order_fg_reservation_service import (
     partial_release_sales_order_qty,
     release_sales_order_reservations_for_order,
     reserve_sales_order_fg,
+    reserved_qty_for_order_product,
 )
 from backend.services.stock_disposition import STOCK_DISPOSITION_SALEABLE
 from backend.services.wms_picking_atp import pickable_available_qty
@@ -68,6 +74,7 @@ def _mk_engine():
         OrderItem,
         ProductComposition,
         ProductCompositionLine,
+        OrderWarehouseReservation,
     ):
         model.__table__.create(engine, checkfirst=True)
     return engine
@@ -251,14 +258,17 @@ class SalesOrderAtpBridgeTests(unittest.TestCase):
         self.assertAlmostEqual(sum(s.quantity for s in slices), 7.0, places=4)
         self.assertAlmostEqual(consumed, 7.0, places=4)
         self.assertAlmostEqual(inv_after, inv_before - 7.0, places=4)
-        # Reservation marked picked — not a second stock decrement
-        rows = (
-            self.db.query(StockReservation)
-            .filter(StockReservation.order_id == 1, StockReservation.product_id == 100)
-            .all()
+        # Business reservation consumed — not a second stock decrement
+        row = (
+            self.db.query(OrderWarehouseReservation)
+            .filter(
+                OrderWarehouseReservation.order_id == 1,
+                OrderWarehouseReservation.product_id == 100,
+            )
+            .one()
         )
-        self.assertTrue(rows)
-        self.assertTrue(all(str(r.status) == RESERVATION_STATUS_PICKED for r in rows))
+        self.assertEqual(str(row.status), OWR_STATUS_CONSUMED)
+        self.assertAlmostEqual(float(row.quantity or 0), 0.0, places=4)
         self.assertAlmostEqual(inv_after, 3.0, places=4)
 
     def test_06_cancel_releases(self):
@@ -277,10 +287,10 @@ class SalesOrderAtpBridgeTests(unittest.TestCase):
         self.db.flush()
         self.assertGreaterEqual(n, 1)
         active = (
-            self.db.query(StockReservation)
+            self.db.query(OrderWarehouseReservation)
             .filter(
-                StockReservation.order_id == 1,
-                StockReservation.status == RESERVATION_STATUS_RESERVED,
+                OrderWarehouseReservation.order_id == 1,
+                OrderWarehouseReservation.status == OWR_STATUS_RESERVED,
             )
             .count()
         )
@@ -309,15 +319,8 @@ class SalesOrderAtpBridgeTests(unittest.TestCase):
         )
         self.db.flush()
         self.assertAlmostEqual(released, 2.0, places=4)
-        remaining = sum(
-            float(r.quantity or 0)
-            for r in self.db.query(StockReservation)
-            .filter(
-                StockReservation.order_id == 1,
-                StockReservation.status == RESERVATION_STATUS_RESERVED,
-                StockReservation.reservation_kind == RESERVATION_KIND_SALES_ORDER,
-            )
-            .all()
+        remaining = reserved_qty_for_order_product(
+            self.db, tenant_id=1, order_id=1, product_id=100
         )
         self.assertAlmostEqual(remaining, 5.0, places=4)
 
@@ -505,11 +508,8 @@ class ConcurrentSalesOrderReserveTests(unittest.TestCase):
         self.db.flush()
         total = sum(
             float(r.quantity or 0)
-            for r in self.db.query(StockReservation)
-            .filter(
-                StockReservation.status == RESERVATION_STATUS_RESERVED,
-                StockReservation.reservation_kind == RESERVATION_KIND_SALES_ORDER,
-            )
+            for r in self.db.query(OrderWarehouseReservation)
+            .filter(OrderWarehouseReservation.status == OWR_STATUS_RESERVED)
             .all()
         )
         self.assertAlmostEqual(total, 10.0, places=4)
@@ -531,6 +531,7 @@ class ConcurrentSalesOrderReservePostgresTests(unittest.TestCase):
             StockReservation.__table__,
             Order.__table__,
             OrderItem.__table__,
+            OrderWarehouseReservation.__table__,
         )
         with cls.engine.begin() as conn:
             conn.execute(text("CREATE TABLE IF NOT EXISTS tenants (id INTEGER PRIMARY KEY)"))
@@ -550,8 +551,8 @@ class ConcurrentSalesOrderReservePostgresTests(unittest.TestCase):
         try:
             db.execute(
                 text(
-                    "TRUNCATE stock_reservations, order_items, orders, inventory, locations, "
-                    "products, warehouses RESTART IDENTITY CASCADE"
+                    "TRUNCATE order_warehouse_reservations, stock_reservations, order_items, orders, "
+                    "inventory, locations, products, warehouses RESTART IDENTITY CASCADE"
                 )
             )
             db.add(Warehouse(id=1, tenant_id=1, name="WH", requires_putaway=True))
@@ -629,8 +630,8 @@ class ConcurrentSalesOrderReservePostgresTests(unittest.TestCase):
         try:
             total = sum(
                 float(r.quantity or 0)
-                for r in db.query(StockReservation)
-                .filter(StockReservation.status == RESERVATION_STATUS_RESERVED)
+                for r in db.query(OrderWarehouseReservation)
+                .filter(OrderWarehouseReservation.status == OWR_STATUS_RESERVED)
                 .all()
             )
             self.assertLessEqual(total + 1e-6, 10.0)

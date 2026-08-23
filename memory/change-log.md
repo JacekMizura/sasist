@@ -6075,3 +6075,12 @@ SzczegÄÅÄ¹ây w raporcie sesji (Ã¢Åâ¦/Ã¢Å¡Â /Ã¢Å¥
 - issue_sale_correction + RETURN adapter; KOR numbering; PDF template; API from-return
 - V1 invoice only; automation effect NOT wired
 
+
+## 2026-08-23 — Separate business RZ from WMS location allocations
+- SSOT: `order_warehouse_reservations` (no location_id)
+- RZ = StockDocument RESERVATION + DocumentSeries
+- Product reserved/available from business OWR; anti double-count vs location holds
+- `reserve_sales_order_fg` no longer creates location `stock_reservations`
+- Pickable ATP subtracts foreign OWR; SALES_ORDER location holds with OWR not double-counted
+- Backfill dry-run service (not auto on prod)
+- UI: Zobacz rezerwacje on product Magazyn tab

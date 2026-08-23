@@ -84,16 +84,23 @@ def _reserved_by_product(
     warehouse_id: Optional[int],
     product_ids: Optional[Sequence[int]],
 ) -> Dict[int, float]:
-    q = (
-        db.query(StockReservation.product_id, func.coalesce(func.sum(StockReservation.quantity), 0.0))
-        .join(Location, Location.id == StockReservation.location_id)
-        .filter(StockReservation.tenant_id == tenant_id, StockReservation.status == "reserved")
+    """BUSINESS reserved SSOT — ``order_warehouse_reservations`` (not location holds)."""
+    from ..models.order_warehouse_reservation import OrderWarehouseReservation
+    from ..services.order_reservations.constants import OWR_ACTIVE_STATUSES
+
+    q = db.query(
+        OrderWarehouseReservation.product_id,
+        func.coalesce(func.sum(OrderWarehouseReservation.quantity), 0.0),
+    ).filter(
+        OrderWarehouseReservation.tenant_id == tenant_id,
+        OrderWarehouseReservation.status.in_(tuple(OWR_ACTIVE_STATUSES)),
+        OrderWarehouseReservation.quantity > 0,
     )
     if warehouse_id is not None:
-        q = q.filter(Location.warehouse_id == int(warehouse_id))
+        q = q.filter(OrderWarehouseReservation.warehouse_id == int(warehouse_id))
     if product_ids is not None and len(product_ids) > 0:
-        q = q.filter(StockReservation.product_id.in_(tuple(int(x) for x in product_ids)))
-    rows = q.group_by(StockReservation.product_id).all()
+        q = q.filter(OrderWarehouseReservation.product_id.in_(tuple(int(x) for x in product_ids)))
+    rows = q.group_by(OrderWarehouseReservation.product_id).all()
     return {int(pid): _nz(float(qty or 0)) for pid, qty in rows}
 
 

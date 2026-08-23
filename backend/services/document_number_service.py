@@ -180,7 +180,8 @@ def require_warehouse_series(
     warehouse_id: int,
     subtype: str,
 ) -> DocumentSeries:
-    from .document_series_seed_service import ensure_default_document_series
+    from .document_series_catalog import OPTIONAL_WAREHOUSE_SERIES, normalize_series_spec
+    from .document_series_seed_service import _ensure_series_row, ensure_default_document_series
 
     try:
         ensure_default_document_series(db, int(tenant_id), int(warehouse_id))
@@ -190,15 +191,29 @@ def require_warehouse_series(
             tenant_id,
             warehouse_id,
         )
+    sub = str(subtype).strip().upper()
     hit = resolve_default_document_series(
         db,
         tenant_id=int(tenant_id),
         warehouse_id=int(warehouse_id),
         series_type="WAREHOUSE",
-        subtype=str(subtype).strip().upper(),
+        subtype=sub,
     )
+    if hit is None and sub == "RESERVATION":
+        for raw in OPTIONAL_WAREHOUSE_SERIES:
+            spec = normalize_series_spec(raw)
+            if str(spec.get("subtype") or "").upper() != "RESERVATION":
+                continue
+            try:
+                hit_row, _ = _ensure_series_row(
+                    db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id), spec=spec
+                )
+                db.flush()
+                hit = hit_row
+            except Exception:
+                logger.exception("[document_series.ensure] RESERVATION seed failed")
+            break
     if hit is None:
-        sub = str(subtype).strip().upper()
         raise DocumentSeriesOperationalError(
             document_type=sub,
             message=f"Brak aktywnej serii dokumentów {sub}",

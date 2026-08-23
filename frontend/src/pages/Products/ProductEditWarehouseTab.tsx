@@ -7,10 +7,13 @@ import {
   type ProductLocationCapacity,
 } from "../../api/slottingApi";
 import {
+  fetchProductBusinessReservations,
   fetchProductWarehouseStockBreakdown,
   fmtStockQty,
+  type ProductBusinessReservationRow,
   type ProductWarehouseStockBreakdown,
 } from "../../api/multiWarehouseUiApi";
+import { Link } from "react-router-dom";
 import type { MagazynInvRowDisplay } from "../../components/products/MagazynInventoryLine";
 import { ProductDispositionStockSummary } from "../../components/products/ProductDispositionStockSummary";
 import { ProductLocationDispositionMatrix } from "../../components/products/ProductLocationDispositionMatrix";
@@ -264,6 +267,9 @@ function WarehousesColumn({ productId, tenantId }: { productId: number; tenantId
   const [data, setData] = useState<ProductWarehouseStockBreakdown | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [reservationsOpen, setReservationsOpen] = useState(false);
+  const [reservations, setReservations] = useState<ProductBusinessReservationRow[]>([]);
+  const [reservationsLoading, setReservationsLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -286,6 +292,15 @@ function WarehousesColumn({ productId, tenantId }: { productId: number; tenantId
       cancelled = true;
     };
   }, [productId, tenantId]);
+
+  const openReservations = () => {
+    setReservationsOpen(true);
+    setReservationsLoading(true);
+    void fetchProductBusinessReservations(productId, tenantId, { includeInactive: true })
+      .then(setReservations)
+      .catch(() => setReservations([]))
+      .finally(() => setReservationsLoading(false));
+  };
 
   if (loading) {
     return (
@@ -322,16 +337,91 @@ function WarehousesColumn({ productId, tenantId }: { productId: number; tenantId
                   {fmtStockQty(wh.available_quantity)} szt.
                 </span>
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className={muted ? "text-gray-500" : "text-gray-600"}>Zarezerwowane</span>
-                <span className={`font-mono ${muted ? "text-gray-500" : "font-medium text-gray-500"}`}>
-                  {fmtStockQty(wh.reserved_quantity)} szt.
+                <span className="flex items-center gap-2">
+                  <span className={`font-mono ${muted ? "text-gray-500" : "font-medium text-gray-500"}`}>
+                    {fmtStockQty(wh.reserved_quantity)} szt.
+                  </span>
+                  {Number(wh.reserved_quantity) > 0 ? (
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-[#5a4fcf] hover:underline"
+                      onClick={openReservations}
+                    >
+                      Zobacz rezerwacje
+                    </button>
+                  ) : null}
                 </span>
               </div>
             </div>
           </div>
         );
       })}
+
+      {reservationsOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal>
+          <div className="max-h-[80vh] w-full max-w-3xl overflow-auto rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b px-4 py-3">
+              <h2 className="text-sm font-semibold text-slate-900">Rezerwacje</h2>
+              <button type="button" className="text-slate-500 hover:text-slate-800" onClick={() => setReservationsOpen(false)}>
+                ✕
+              </button>
+            </div>
+            <div className="p-4">
+              {reservationsLoading ? (
+                <p className="text-sm text-slate-500">Wczytywanie…</p>
+              ) : reservations.length === 0 ? (
+                <p className="text-sm text-slate-500">Brak rezerwacji biznesowych.</p>
+              ) : (
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b text-xs uppercase text-slate-500">
+                      <th className="py-2 pr-2">Data</th>
+                      <th className="py-2 pr-2">Zamówienie</th>
+                      <th className="py-2 pr-2">Dokument RZ</th>
+                      <th className="py-2 pr-2">Produkt</th>
+                      <th className="py-2 pr-2">Magazyn</th>
+                      <th className="py-2 pr-2">Ilość</th>
+                      <th className="py-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reservations.map((row) => (
+                      <tr key={row.id} className="border-b border-slate-100">
+                        <td className="py-2 pr-2 whitespace-nowrap">
+                          {row.created_at ? new Date(row.created_at).toLocaleString("pl-PL") : "—"}
+                        </td>
+                        <td className="py-2 pr-2">
+                          <Link className="text-[#5a4fcf] underline" to={`/orders/${row.order_id}`}>
+                            #{row.order_number || row.order_id}
+                          </Link>
+                        </td>
+                        <td className="py-2 pr-2">
+                          {row.stock_document_id ? (
+                            <Link
+                              className="text-[#5a4fcf] underline"
+                              to={`/documents/warehouse/reservation/${row.stock_document_id}`}
+                            >
+                              {row.document_number || `RZ #${row.stock_document_id}`}
+                            </Link>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="py-2 pr-2">{row.product_name}</td>
+                        <td className="py-2 pr-2">{row.warehouse_name}</td>
+                        <td className="py-2 pr-2 font-mono">{fmtStockQty(row.quantity)}</td>
+                        <td className="py-2">{row.status_label}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
