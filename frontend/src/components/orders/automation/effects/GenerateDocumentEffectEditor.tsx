@@ -11,6 +11,7 @@ import { fetchWorkstations } from "../../../../api/wmsWorkstationsApi";
 import type { WorkstationListItem } from "../../../../types/wmsWorkstations";
 import {
   buildGenerateDocumentSeriesOptions,
+  generateDocumentCapabilities,
   generateDocumentSubtypeHelp,
   resolveGenerateDocumentSeriesId,
 } from "../../../../utils/orderAutomationGenerateDocumentSeries";
@@ -93,6 +94,7 @@ export function GenerateDocumentEffectEditor({ effect, patchPayload }: GenerateD
   const selectedId = resolveGenerateDocumentSeriesId(effect.payload);
   const selectedOption = options.find((o) => o.seriesId === selectedId) ?? null;
   const help = generateDocumentSubtypeHelp(selectedOption?.type, selectedOption?.subtype);
+  const caps = generateDocumentCapabilities(selectedOption?.type, selectedOption?.subtype);
 
   const overridePayment = payloadFlag(effect.payload, "override_payment_term");
   const overrideSaleDate = payloadFlag(effect.payload, "override_sale_date");
@@ -106,6 +108,34 @@ export function GenerateDocumentEffectEditor({ effect, patchPayload }: GenerateD
     if (options.length === 0) return;
     patchPayload({ series_id: "", doc_series: "" });
   }, [loading, warehouseId, selectedId, options, patchPayload]);
+
+  // Clear SALE-only overrides when switching to WZ/RZ (or no series).
+  useEffect(() => {
+    if (!selectedOption) return;
+    const next = generateDocumentCapabilities(selectedOption.type, selectedOption.subtype);
+    const clear: Record<string, string | number | boolean | null> = {};
+    if (!next.paymentTerm && (overridePayment || effect.payload.payment_term_days != null)) {
+      clear.override_payment_term = false;
+      clear.payment_term_days = null;
+    }
+    if (!next.saleDate && (overrideSaleDate || effect.payload.sale_date != null)) {
+      clear.override_sale_date = false;
+      clear.sale_date = null;
+    }
+    if (!next.description && (overrideDescription || effect.payload.additional_description != null)) {
+      clear.override_description = false;
+      clear.additional_description = null;
+    }
+    if (!next.autoPrint && autoPrint) {
+      clear.auto_print = false;
+      clear.print_station_id = null;
+    }
+    if (Object.keys(clear).length > 0) patchPayload(clear);
+    // intentionally only when series type/subtype changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedOption?.type, selectedOption?.subtype, selectedOption?.seriesId]);
+
+  const showSaleDefaultsHelper = caps.paymentTerm || caps.saleDate || caps.description;
 
   return (
     <div className="grid min-w-0 gap-y-0">
@@ -143,158 +173,176 @@ export function GenerateDocumentEffectEditor({ effect, patchPayload }: GenerateD
         )}
       </div>
 
-      <p className="m-0 mt-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] leading-snug text-slate-600">
-        Domyślne wartości dokumentu są pobierane z ustawień wybranej serii. Zaznacz opcję poniżej tylko wtedy, gdy
-        chcesz je nadpisać.
-      </p>
+      {showSaleDefaultsHelper ? (
+        <p className="m-0 mt-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] leading-snug text-slate-600">
+          Domyślne wartości dokumentu są pobierane z ustawień wybranej serii. Zaznacz opcję poniżej tylko wtedy, gdy
+          chcesz je nadpisać.
+        </p>
+      ) : null}
       {help ? <p className="m-0 mt-1 max-w-prose text-[11px] leading-snug text-slate-500">{help}</p> : null}
 
-      <label className="mt-3 flex cursor-pointer items-start gap-2">
-        <Checkbox
-          className="mt-0.5"
-          checked={overridePayment}
-          onChange={(e) =>
-            patchPayload({
-              override_payment_term: e.target.checked,
-              payment_term_days: e.target.checked
-                ? Number(effect.payload.payment_term_days) >= 0
-                  ? Number(effect.payload.payment_term_days)
-                  : 14
-                : null,
-            })
-          }
-        />
-        <span className="min-w-0 text-xs text-slate-800">Własny termin płatności</span>
-      </label>
-      {overridePayment ? (
-        <div className={`${erpRow} mt-1 pl-6`}>
-          <span className={erpLbl}>Termin (dni)</span>
-          <Input
-            type="number"
-            min={0}
-            step={1}
-            density={erpFieldDensity}
-            className={erpInpClass}
-            value={
-              effect.payload.payment_term_days === "" || effect.payload.payment_term_days == null
-                ? ""
-                : String(effect.payload.payment_term_days)
-            }
-            onChange={(e) => {
-              const raw = e.target.value;
-              if (raw === "") {
-                patchPayload({ payment_term_days: null });
-                return;
+      {caps.paymentTerm ? (
+        <>
+          <label className="mt-3 flex cursor-pointer items-start gap-2">
+            <Checkbox
+              className="mt-0.5"
+              checked={overridePayment}
+              onChange={(e) =>
+                patchPayload({
+                  override_payment_term: e.target.checked,
+                  payment_term_days: e.target.checked
+                    ? Number(effect.payload.payment_term_days) >= 0
+                      ? Number(effect.payload.payment_term_days)
+                      : 14
+                    : null,
+                })
               }
-              const n = Number(raw);
-              patchPayload({ payment_term_days: Number.isFinite(n) ? Math.trunc(n) : null });
-            }}
-            aria-label="Termin płatności w dniach"
-          />
-        </div>
+            />
+            <span className="min-w-0 text-xs text-slate-800">Własny termin płatności</span>
+          </label>
+          {overridePayment ? (
+            <div className={`${erpRow} mt-1 pl-6`}>
+              <span className={erpLbl}>Termin (dni)</span>
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                density={erpFieldDensity}
+                className={erpInpClass}
+                value={
+                  effect.payload.payment_term_days === "" || effect.payload.payment_term_days == null
+                    ? ""
+                    : String(effect.payload.payment_term_days)
+                }
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (raw === "") {
+                    patchPayload({ payment_term_days: null });
+                    return;
+                  }
+                  const n = Number(raw);
+                  patchPayload({ payment_term_days: Number.isFinite(n) ? Math.trunc(n) : null });
+                }}
+                aria-label="Termin płatności w dniach"
+              />
+            </div>
+          ) : null}
+        </>
       ) : null}
 
-      <label className="mt-2 flex cursor-pointer items-start gap-2">
-        <Checkbox
-          className="mt-0.5"
-          checked={overrideSaleDate}
-          onChange={(e) =>
-            patchPayload({
-              override_sale_date: e.target.checked,
-              sale_date: e.target.checked
-                ? String(effect.payload.sale_date || new Date().toISOString().slice(0, 10))
-                : null,
-            })
-          }
-        />
-        <span className="min-w-0 text-xs text-slate-800">Własna data sprzedaży</span>
-      </label>
-      {overrideSaleDate ? (
-        <div className={`${erpRow} mt-1 pl-6`}>
-          <span className={erpLbl}>Data sprzedaży</span>
-          <Input
-            type="date"
-            density={erpFieldDensity}
-            className={erpInpClass}
-            value={String(effect.payload.sale_date || "").slice(0, 10)}
-            onChange={(e) => patchPayload({ sale_date: e.target.value || null })}
-            aria-label="Data sprzedaży"
-          />
-        </div>
-      ) : null}
-
-      <label className="mt-2 flex cursor-pointer items-start gap-2">
-        <Checkbox
-          className="mt-0.5"
-          checked={overrideDescription}
-          onChange={(e) =>
-            patchPayload({
-              override_description: e.target.checked,
-              additional_description: e.target.checked
-                ? String(effect.payload.additional_description || "")
-                : null,
-            })
-          }
-        />
-        <span className="min-w-0 text-xs text-slate-800">Opis dodatkowy</span>
-      </label>
-      {overrideDescription ? (
-        <div className="mt-1 pl-6">
-          <Textarea
-            density={erpFieldDensity}
-            rows={3}
-            className="w-full"
-            value={String(effect.payload.additional_description || "")}
-            onChange={(e) => patchPayload({ additional_description: e.target.value })}
-            aria-label="Opis dodatkowy"
-            placeholder="Tekst widoczny na dokumencie…"
-          />
-        </div>
-      ) : null}
-
-      <label className="mt-2 flex cursor-pointer items-start gap-2">
-        <Checkbox
-          className="mt-0.5"
-          checked={autoPrint}
-          onChange={(e) =>
-            patchPayload({
-              auto_print: e.target.checked,
-              print_station_id: e.target.checked ? effect.payload.print_station_id ?? null : null,
-            })
-          }
-        />
-        <span className="min-w-0 text-xs text-slate-800">Drukuj automatycznie</span>
-      </label>
-      {autoPrint ? (
-        <div className={`${erpRow} mt-1 pl-6`}>
-          <span className={erpLbl}>
-            Stanowisko druku <span className="text-red-600">*</span>
-          </span>
-          {stations.length === 0 ? (
-            <p className="m-0 text-xs text-slate-600">Brak aktywnych stanowisk dla tego magazynu.</p>
-          ) : (
-            <Select
-              density={erpFieldDensity}
-              value={
-                effect.payload.print_station_id != null && String(effect.payload.print_station_id) !== ""
-                  ? String(effect.payload.print_station_id)
-                  : ""
+      {caps.saleDate ? (
+        <>
+          <label className="mt-2 flex cursor-pointer items-start gap-2">
+            <Checkbox
+              className="mt-0.5"
+              checked={overrideSaleDate}
+              onChange={(e) =>
+                patchPayload({
+                  override_sale_date: e.target.checked,
+                  sale_date: e.target.checked
+                    ? String(effect.payload.sale_date || new Date().toISOString().slice(0, 10))
+                    : null,
+                })
               }
-              onChange={(e) => {
-                const v = e.target.value;
-                patchPayload({ print_station_id: v ? Number(v) : null });
-              }}
-              aria-label="Stanowisko druku"
-            >
-              <option value="">— wybierz stanowisko —</option>
-              {stations.map((s) => (
-                <option key={s.id} value={String(s.id)}>
-                  {s.name}
-                </option>
-              ))}
-            </Select>
-          )}
-        </div>
+            />
+            <span className="min-w-0 text-xs text-slate-800">Własna data sprzedaży</span>
+          </label>
+          {overrideSaleDate ? (
+            <div className={`${erpRow} mt-1 pl-6`}>
+              <span className={erpLbl}>Data sprzedaży</span>
+              <Input
+                type="date"
+                density={erpFieldDensity}
+                className={erpInpClass}
+                value={String(effect.payload.sale_date || "").slice(0, 10)}
+                onChange={(e) => patchPayload({ sale_date: e.target.value || null })}
+                aria-label="Data sprzedaży"
+              />
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
+      {caps.description ? (
+        <>
+          <label className="mt-2 flex cursor-pointer items-start gap-2">
+            <Checkbox
+              className="mt-0.5"
+              checked={overrideDescription}
+              onChange={(e) =>
+                patchPayload({
+                  override_description: e.target.checked,
+                  additional_description: e.target.checked
+                    ? String(effect.payload.additional_description || "")
+                    : null,
+                })
+              }
+            />
+            <span className="min-w-0 text-xs text-slate-800">Opis dodatkowy</span>
+          </label>
+          {overrideDescription ? (
+            <div className="mt-1 pl-6">
+              <Textarea
+                density={erpFieldDensity}
+                rows={3}
+                className="w-full"
+                value={String(effect.payload.additional_description || "")}
+                onChange={(e) => patchPayload({ additional_description: e.target.value })}
+                aria-label="Opis dodatkowy"
+                placeholder="Tekst widoczny na dokumencie…"
+              />
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
+      {caps.autoPrint ? (
+        <>
+          <label className="mt-2 flex cursor-pointer items-start gap-2">
+            <Checkbox
+              className="mt-0.5"
+              checked={autoPrint}
+              onChange={(e) =>
+                patchPayload({
+                  auto_print: e.target.checked,
+                  print_station_id: e.target.checked ? effect.payload.print_station_id ?? null : null,
+                })
+              }
+            />
+            <span className="min-w-0 text-xs text-slate-800">Drukuj automatycznie</span>
+          </label>
+          {autoPrint ? (
+            <div className={`${erpRow} mt-1 pl-6`}>
+              <span className={erpLbl}>
+                Stanowisko druku <span className="text-red-600">*</span>
+              </span>
+              {stations.length === 0 ? (
+                <p className="m-0 text-xs text-slate-600">Brak aktywnych stanowisk dla tego magazynu.</p>
+              ) : (
+                <Select
+                  density={erpFieldDensity}
+                  value={
+                    effect.payload.print_station_id != null && String(effect.payload.print_station_id) !== ""
+                      ? String(effect.payload.print_station_id)
+                      : ""
+                  }
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    patchPayload({ print_station_id: v ? Number(v) : null });
+                  }}
+                  aria-label="Stanowisko druku"
+                >
+                  <option value="">— wybierz stanowisko —</option>
+                  {stations.map((s) => (
+                    <option key={s.id} value={String(s.id)}>
+                      {s.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </div>
+          ) : null}
+        </>
       ) : null}
     </div>
   );

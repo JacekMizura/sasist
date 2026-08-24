@@ -180,9 +180,37 @@ export function generateDocumentSubtypeHelp(
     return "Utworzy dokument WZ dla zrealizowanego wydania magazynowego. Dokument nie powoduje ponownego rozchodu towaru.";
   }
   if (s === "RESERVATION") {
-    return "Utworzy dokument RZ dla istniejącej rezerwacji zamówienia. Dokument nie tworzy rezerwacji ani ruchu magazynowego.";
+    return "Zarezerwuje produkty z zamówienia i utworzy dokument RZ. Stan fizyczny magazynu pozostanie bez zmian.";
   }
   return null;
+}
+
+export type GenerateDocumentCapabilities = {
+  paymentTerm: boolean;
+  saleDate: boolean;
+  description: boolean;
+  autoPrint: boolean;
+};
+
+/** Override / print options depend on selected series type (not one global set). */
+export function generateDocumentCapabilities(
+  type: string | null | undefined,
+  subtype?: string | null | undefined,
+): GenerateDocumentCapabilities {
+  let t = String(type || "").trim().toUpperCase();
+  let s = String(subtype || "").trim().toUpperCase();
+  if (!s && (t === "WZ" || t === "RESERVATION" || t === "INVOICE" || t === "RECEIPT")) {
+    s = t;
+    t = s === "INVOICE" || s === "RECEIPT" ? "SALE" : "WAREHOUSE";
+  }
+  if (t === "SALE" || s === "INVOICE" || s === "RECEIPT") {
+    return { paymentTerm: true, saleDate: true, description: true, autoPrint: true };
+  }
+  // WZ / RZ: stock documents — print via print queue; no sale payment/date/description fields.
+  if (s === "WZ" || s === "RESERVATION" || t === "WAREHOUSE") {
+    return { paymentTerm: false, saleDate: false, description: false, autoPrint: true };
+  }
+  return { paymentTerm: false, saleDate: false, description: false, autoPrint: false };
 }
 
 export function resolveGenerateDocumentSeriesId(

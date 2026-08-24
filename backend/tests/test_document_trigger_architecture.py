@@ -15,6 +15,7 @@ from backend.models.document_series import DocumentSeries
 from backend.models.inventory import Inventory
 from backend.models.location import Location
 from backend.models.order import Order
+from backend.models.order_item import OrderItem
 from backend.models.order_warehouse_reservation import OrderWarehouseReservation
 from backend.models.pick import Pick
 from backend.models.product import Product
@@ -27,8 +28,12 @@ from backend.services.documents.create_from_series_service import (
     DocumentTriggerContext,
     create_document_from_series,
 )
+from backend.services.order_reservations.availability import warehouse_business_available_qty
 from backend.services.order_reservations.constants import STOCK_DOC_TYPE_RESERVATION
-from backend.services.order_reservations.reservation_service import ensure_order_warehouse_reservation
+from backend.services.order_reservations.reservation_service import (
+    ensure_order_warehouse_reservation,
+    reserved_qty_for_order_product,
+)
 from backend.services.sales_order_fg_reservation_service import reserve_sales_order_fg
 from backend.services.stock_disposition import STOCK_DISPOSITION_SALEABLE
 from backend.services.warehouse_wz.constants import (
@@ -61,6 +66,7 @@ def _mk_engine():
         Product,
         Inventory,
         Order,
+        OrderItem,
         DocumentSeries,
         StockDocument,
         StockDocumentItem,
@@ -124,6 +130,7 @@ class DocumentTriggerArchitectureTests(unittest.TestCase):
                 status="picking",
             )
         )
+        self.db.add(OrderItem(id=1001, order_id=100, product_id=10, quantity=5))
         self.rz_series_id = str(uuid.uuid4())
         self.wz_series_id = str(uuid.uuid4())
         self.db.add(
@@ -250,12 +257,10 @@ class DocumentTriggerArchitectureTests(unittest.TestCase):
         op = self.db.query(WmsProductWarehouseOperation).filter(WmsProductWarehouseOperation.pick_id == 1).one()
         self.assertTrue(str(op.wms_mode or "").startswith("fulfillment:cart:5"))
 
-    def test_05_automation_rz_over_owr(self):
-        ensure_order_warehouse_reservation(
-            self.db, tenant_id=1, warehouse_id=1, order_id=100, product_id=10, quantity=4
-        )
-        self.db.commit()
-        ctx = DocumentTriggerContext(source="AUTOMATION", automation_execution_id=501)
+    def test_05_automation_rz_creates_owr_and_document(self):
+        """Explicit RZ trigger creates business reservation + RZ; physical unchanged."""
+        before = float(self.db.query(Inventory).filter(Inventory.id == 1).one().quantity)
+        ctx = DocumentTriggerContext(source="AUTOMATION", automation_execution_id=501, automation_effect_id=1)
         result = create_document_from_series(
             self.db,
             tenant_id=1,
@@ -273,13 +278,27 @@ class DocumentTriggerArchitectureTests(unittest.TestCase):
             1,
         )
         self.assertEqual(self.db.query(StockOperation).count(), 0)
+        self.assertAlmostEqual(
+            reserved_qty_for_order_product(self.db, tenant_id=1, order_id=100, product_id=10, warehouse_id=1),
+            5.0,
+        )
+        after = float(self.db.query(Inventory).filter(Inventory.id == 1).one().quantity)
+        self.assertAlmostEqual(before, after)
+        self.assertAlmostEqual(
+            warehouse_business_available_qty(
+                self.db, tenant_id=1, warehouse_id=1, product_id=10
+            ),
+            95.0,
+        )
+        owr = (
+            self.db.query(OrderWarehouseReservation)
+            .filter(OrderWarehouseReservation.order_id == 100, OrderWarehouseReservation.product_id == 10)
+            .one()
+        )
+        self.assertIsNone(getattr(owr, "location_id", None))
 
     def test_06_automation_rz_retry_idempotent(self):
-        ensure_order_warehouse_reservation(
-            self.db, tenant_id=1, warehouse_id=1, order_id=100, product_id=10, quantity=2
-        )
-        self.db.commit()
-        ctx = DocumentTriggerContext(source="AUTOMATION", automation_execution_id=502)
+        ctx = DocumentTriggerContext(source="AUTOMATION", automation_execution_id=502, automation_effect_id=1)
         first = create_document_from_series(
             self.db, tenant_id=1, series_id=self.rz_series_id, order_id=100, trigger_context=ctx
         )
@@ -289,11 +308,16 @@ class DocumentTriggerArchitectureTests(unittest.TestCase):
         )
         self.db.commit()
         self.assertEqual(first.stock_document_id, second.stock_document_id)
+        self.assertFalse(second.created)
         self.assertEqual(
             self.db.query(StockDocument)
             .filter(StockDocument.document_type == STOCK_DOC_TYPE_RESERVATION)
             .count(),
             1,
+        )
+        self.assertAlmostEqual(
+            reserved_qty_for_order_product(self.db, tenant_id=1, order_id=100, product_id=10, warehouse_id=1),
+            5.0,
         )
 
     def test_07_automation_wz_documentary_after_settlement(self):
@@ -391,7 +415,9 @@ class DocumentTriggerArchitectureTests(unittest.TestCase):
             )
         self.assertEqual(cm.exception.code, "series_not_found")
 
-    def test_11_rz_without_owr_errors(self):
+    def test_11_rz_without_order_lines_errors(self):
+        self.db.query(OrderItem).filter(OrderItem.order_id == 100).delete()
+        self.db.commit()
         with self.assertRaises(DocumentCreationError) as cm:
             create_document_from_series(
                 self.db,
@@ -400,7 +426,127 @@ class DocumentTriggerArchitectureTests(unittest.TestCase):
                 order_id=100,
                 trigger_context=DocumentTriggerContext(source="AUTOMATION"),
             )
-        self.assertEqual(cm.exception.code, "owr_missing")
+        self.assertEqual(cm.exception.code, "no_order_lines")
+        self.assertEqual(
+            self.db.query(OrderWarehouseReservation).filter(OrderWarehouseReservation.order_id == 100).count(),
+            0,
+        )
+        self.assertEqual(
+            self.db.query(StockDocument).filter(StockDocument.document_type == STOCK_DOC_TYPE_RESERVATION).count(),
+            0,
+        )
+
+    def test_13_rz_increases_partial_owr_to_order_target(self):
+        ensure_order_warehouse_reservation(
+            self.db, tenant_id=1, warehouse_id=1, order_id=100, product_id=10, quantity=2
+        )
+        self.db.commit()
+        create_document_from_series(
+            self.db,
+            tenant_id=1,
+            series_id=self.rz_series_id,
+            order_id=100,
+            trigger_context=DocumentTriggerContext(source="AUTOMATION", automation_execution_id=801),
+        )
+        self.db.commit()
+        self.assertAlmostEqual(
+            reserved_qty_for_order_product(self.db, tenant_id=1, order_id=100, product_id=10, warehouse_id=1),
+            5.0,
+        )
+        self.assertEqual(
+            self.db.query(StockDocument).filter(StockDocument.document_type == STOCK_DOC_TYPE_RESERVATION).count(),
+            1,
+        )
+
+    def test_14_rz_insufficient_atp_no_partial(self):
+        inv = self.db.query(Inventory).filter(Inventory.id == 1).one()
+        inv.quantity = 3
+        self.db.commit()
+        with self.assertRaises(DocumentCreationError) as cm:
+            create_document_from_series(
+                self.db,
+                tenant_id=1,
+                series_id=self.rz_series_id,
+                order_id=100,
+                trigger_context=DocumentTriggerContext(source="AUTOMATION", automation_execution_id=802),
+            )
+        self.assertEqual(cm.exception.code, "insufficient_atp")
+        self.assertIn("wymagane", str(cm.exception).lower())
+        self.assertEqual(
+            self.db.query(OrderWarehouseReservation).filter(OrderWarehouseReservation.order_id == 100).count(),
+            0,
+        )
+        self.assertEqual(
+            self.db.query(StockDocument).filter(StockDocument.document_type == STOCK_DOC_TYPE_RESERVATION).count(),
+            0,
+        )
+        self.assertAlmostEqual(float(self.db.query(Inventory).filter(Inventory.id == 1).one().quantity), 3.0)
+
+    def test_15_rz_multi_product(self):
+        self.db.add(Product(id=11, tenant_id=1, name="Produkt B", sku="SKU-B", ean="5900000000011"))
+        self.db.add(
+            Inventory(
+                id=2,
+                tenant_id=1,
+                warehouse_id=1,
+                product_id=11,
+                location_id=100,
+                quantity=50,
+                batch_number="",
+                expiry_date=date(9999, 12, 31),
+                stock_disposition=STOCK_DISPOSITION_SALEABLE,
+            )
+        )
+        self.db.add(OrderItem(id=1002, order_id=100, product_id=11, quantity=3))
+        self.db.commit()
+        result = create_document_from_series(
+            self.db,
+            tenant_id=1,
+            series_id=self.rz_series_id,
+            order_id=100,
+            trigger_context=DocumentTriggerContext(source="AUTOMATION", automation_execution_id=803),
+        )
+        self.db.commit()
+        self.assertTrue(result.created)
+        self.assertAlmostEqual(
+            reserved_qty_for_order_product(self.db, tenant_id=1, order_id=100, product_id=10, warehouse_id=1),
+            5.0,
+        )
+        self.assertAlmostEqual(
+            reserved_qty_for_order_product(self.db, tenant_id=1, order_id=100, product_id=11, warehouse_id=1),
+            3.0,
+        )
+        doc = self.db.query(StockDocument).filter(StockDocument.id == result.stock_document_id).one()
+        lines = self.db.query(StockDocumentItem).filter(StockDocumentItem.document_id == doc.id).all()
+        self.assertEqual(len(lines), 2)
+        self.assertAlmostEqual(float(self.db.query(Inventory).filter(Inventory.id == 1).one().quantity), 100.0)
+        self.assertAlmostEqual(float(self.db.query(Inventory).filter(Inventory.id == 2).one().quantity), 50.0)
+
+    def test_16_new_execution_does_not_double_reservation(self):
+        create_document_from_series(
+            self.db,
+            tenant_id=1,
+            series_id=self.rz_series_id,
+            order_id=100,
+            trigger_context=DocumentTriggerContext(source="AUTOMATION", automation_execution_id=901),
+        )
+        self.db.commit()
+        create_document_from_series(
+            self.db,
+            tenant_id=1,
+            series_id=self.rz_series_id,
+            order_id=100,
+            trigger_context=DocumentTriggerContext(source="AUTOMATION", automation_execution_id=902),
+        )
+        self.db.commit()
+        self.assertAlmostEqual(
+            reserved_qty_for_order_product(self.db, tenant_id=1, order_id=100, product_id=10, warehouse_id=1),
+            5.0,
+        )
+        self.assertEqual(
+            self.db.query(StockDocument).filter(StockDocument.document_type == STOCK_DOC_TYPE_RESERVATION).count(),
+            1,
+        )
 
     def test_12_partial_settlements_two_wz(self):
         self._add_done_pick(20, 2.0, cart_id=20)

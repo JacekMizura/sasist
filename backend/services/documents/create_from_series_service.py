@@ -9,15 +9,25 @@ from sqlalchemy.orm import Session
 
 from ...models.document_series import DocumentSeries
 from ...models.order import Order
+from ...models.order_item import OrderItem, order_item_is_replaced_line
 from ...models.order_warehouse_reservation import OrderWarehouseReservation
+from ...models.product import Product
 from ..activity_log.domain_activity import record_domain_activity
 from ..activity_log.domain_event_codes import (
     ORDER_WAREHOUSE_RZ_CREATED,
     ORDER_WZ_DOCUMENTARY_CREATED,
 )
 from ..activity_log.order_event_codes import SALE_DOCUMENT_CREATED
+from ..bundle_order_item_ops import order_item_skip_bundle_commercial_header_for_ops
+from ..order_reservations.availability import warehouse_business_available_qty
 from ..order_reservations.constants import OWR_ACTIVE_STATUSES, STOCK_DOC_TYPE_RESERVATION
+from ..order_reservations.reservation_service import (
+    OrderWarehouseReservationError,
+    reserved_qty_for_order_product,
+    sync_order_warehouse_reservation_to_target,
+)
 from ..order_reservations.rz_document_service import ensure_rz_document_for_order
+from ..stock_disposition import resolve_order_item_required_disposition
 from ..warehouse_wz.post_pick_settlement import ensure_documentary_wz_for_pick_settlement
 from ..warehouse_wz.settlement_resolution import next_undocumented_wms_settlement
 from .generate_document_support import (
@@ -419,6 +429,170 @@ def _meta_base(ctx: DocumentTriggerContext, *, series_id: str, order_id: int) ->
     return {k: v for k, v in meta.items() if v is not None}
 
 
+def _order_line_reservation_targets(
+    db: Session,
+    *,
+    order: Order,
+) -> dict[tuple[int, str], float]:
+    """Aggregate operational order lines → (product_id, disposition) → target qty."""
+    items = list(getattr(order, "items", None) or [])
+    if not items:
+        items = (
+            db.query(OrderItem)
+            .filter(OrderItem.order_id == int(order.id))
+            .all()
+        )
+    targets: dict[tuple[int, str], float] = {}
+    for oi in items:
+        if order_item_is_replaced_line(oi):
+            continue
+        if order_item_skip_bundle_commercial_header_for_ops(oi):
+            continue
+        pid = int(getattr(oi, "product_id", 0) or 0)
+        if pid <= 0:
+            continue
+        raw = float(getattr(oi, "quantity", 0) or 0)
+        removed = float(getattr(oi, "oms_removed_qty", None) or 0)
+        qty = max(0.0, round(raw - removed, 6))
+        if qty <= 1e-9:
+            continue
+        sd = resolve_order_item_required_disposition(oi)
+        key = (pid, sd)
+        targets[key] = round(float(targets.get(key, 0.0)) + qty, 6)
+    return targets
+
+
+def _product_label(db: Session, *, tenant_id: int, product_id: int) -> tuple[str, str, str]:
+    p = (
+        db.query(Product)
+        .filter(Product.id == int(product_id), Product.tenant_id == int(tenant_id))
+        .first()
+    )
+    if p is None:
+        return (f"#{product_id}", "—", "—")
+    name = str(getattr(p, "name", None) or "").strip() or f"#{product_id}"
+    sku = str(getattr(p, "sku", None) or getattr(p, "symbol", None) or "").strip() or "—"
+    ean = str(getattr(p, "ean", None) or "").strip() or "—"
+    return (name, sku, ean)
+
+
+def _sync_business_reservations_for_rz_trigger(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order: Order,
+    actor_user_id: int | None,
+) -> list[dict[str, Any]]:
+    """
+    Explicit RZ trigger: sync OWR to current order line targets (create/increase/decrease).
+    Does not create RZ — caller ensures document after this succeeds.
+    """
+    oid = int(order.id)
+    targets = _order_line_reservation_targets(db, order=order)
+    if not targets:
+        raise DocumentCreationError(
+            "Brak pozycji zamówienia do rezerwacji — nie można utworzyć RZ.",
+            code="no_order_lines",
+        )
+
+    # ATP gate before mutation (clear per-product messages).
+    for (pid, sd), target in targets.items():
+        cap = warehouse_business_available_qty(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            product_id=int(pid),
+            stock_disposition=sd,
+            exclude_order_id=oid,
+        )
+        if float(target) > float(cap) + 1e-9:
+            name, sku, ean = _product_label(db, tenant_id=int(tenant_id), product_id=int(pid))
+            raise DocumentCreationError(
+                f"Brak dostępnego stanu do rezerwacji. Produkt {name}, SKU {sku}, EAN {ean}: "
+                f"wymagane {float(target):g}, dostępne {float(cap):g}.",
+                code="insufficient_atp",
+            )
+
+    existing = (
+        db.query(OrderWarehouseReservation)
+        .filter(
+            OrderWarehouseReservation.tenant_id == int(tenant_id),
+            OrderWarehouseReservation.warehouse_id == int(warehouse_id),
+            OrderWarehouseReservation.order_id == oid,
+            OrderWarehouseReservation.status.in_(tuple(OWR_ACTIVE_STATUSES)),
+        )
+        .all()
+    )
+    existing_keys = {
+        (int(r.product_id), str(r.stock_disposition or "SALEABLE")) for r in existing
+    }
+
+    reserved_lines: list[dict[str, Any]] = []
+    for (pid, sd), target in sorted(targets.items(), key=lambda x: x[0][0]):
+        try:
+            sync_order_warehouse_reservation_to_target(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                order_id=oid,
+                product_id=int(pid),
+                target_qty=float(target),
+                stock_disposition=sd,
+                performed_by_user_id=actor_user_id,
+            )
+        except OrderWarehouseReservationError as exc:
+            name, sku, ean = _product_label(db, tenant_id=int(tenant_id), product_id=int(pid))
+            avail = warehouse_business_available_qty(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                product_id=int(pid),
+                stock_disposition=sd,
+                exclude_order_id=oid,
+            )
+            raise DocumentCreationError(
+                f"Brak dostępnego stanu do rezerwacji. Produkt {name}, SKU {sku}, EAN {ean}: "
+                f"wymagane {float(target):g}, dostępne {float(avail):g}.",
+                code=getattr(exc, "code", None) or "insufficient_atp",
+            ) from exc
+        rem = reserved_qty_for_order_product(
+            db,
+            tenant_id=int(tenant_id),
+            order_id=oid,
+            product_id=int(pid),
+            warehouse_id=int(warehouse_id),
+            stock_disposition=sd,
+        )
+        name, sku, ean = _product_label(db, tenant_id=int(tenant_id), product_id=int(pid))
+        reserved_lines.append(
+            {
+                "product_id": int(pid),
+                "name": name,
+                "sku": sku,
+                "ean": ean,
+                "quantity": float(rem),
+                "stock_disposition": sd,
+            }
+        )
+
+    # Release OWR for products no longer on the order.
+    for key in existing_keys - set(targets.keys()):
+        pid, sd = key
+        sync_order_warehouse_reservation_to_target(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            order_id=oid,
+            product_id=int(pid),
+            target_qty=0.0,
+            stock_disposition=sd,
+            performed_by_user_id=actor_user_id,
+        )
+
+    return reserved_lines
+
+
 def _handle_rz(
     db: Session,
     *,
@@ -429,66 +603,186 @@ def _handle_rz(
     actor_user_id: int | None,
     ctx: DocumentTriggerContext,
 ) -> CreatedDocumentResult:
+    """
+    Explicit RZ trigger: sync business reservation (OWR) from order lines, then ensure RZ.
+
+    Not: existing OWR → document wrapper.
+    Yes: order → OWR create/sync → RZ document (physical inventory unchanged).
+    """
     oid = int(order.id)
-    active = (
-        db.query(OrderWarehouseReservation)
-        .filter(
-            OrderWarehouseReservation.tenant_id == int(tenant_id),
-            OrderWarehouseReservation.warehouse_id == int(warehouse_id),
-            OrderWarehouseReservation.order_id == oid,
-            OrderWarehouseReservation.status.in_(tuple(OWR_ACTIVE_STATUSES)),
-            OrderWarehouseReservation.quantity > 0,
-        )
-        .count()
-    )
-    if active <= 0:
-        raise DocumentCreationError(
-            "Brak aktywnej rezerwacji magazynowej (OWR) — nie można utworzyć RZ.",
-            code="owr_missing",
-        )
-
-    doc = ensure_rz_document_for_order(
-        db,
-        tenant_id=int(tenant_id),
-        warehouse_id=int(warehouse_id),
-        order_id=oid,
-        created_by_user_id=actor_user_id,
-        document_series=series,
-        creation_source=ctx.source,
-        raise_on_error=True,
-    )
-    if doc is None:
-        raise DocumentCreationError(
-            "Nie udało się utworzyć dokumentu RZ.",
-            code="rz_create_failed",
-        )
-
-    # Detect create vs reuse: correlation with document id.
-    created = True
-    num = str(getattr(doc, "document_number", None) or "")
-    corr = f"automation-rz:{ctx.automation_execution_id or 0}:{oid}:{int(doc.id)}"
-    # If activity already exists for this doc from prior create, treat as reuse.
     from ..activity_log.domain_activity import find_activity_by_correlation
 
-    prior = find_activity_by_correlation(db, correlation_id=f"doc-rz:{oid}:{int(doc.id)}", tenant_id=tenant_id)
-    if prior is not None:
+    # Idempotent retry of the same automation effect execution.
+    if ctx.automation_execution_id:
+        from ...models.activity_event import ActivityEvent
+        from ...models.stock_document import StockDocument
+        import json
+
+        corr_prefix = (
+            f"automation-rz:{ctx.automation_execution_id}:"
+            f"{ctx.automation_effect_id or 0}:{oid}:"
+        )
+        legacy_prefix = f"automation-rz:{ctx.automation_execution_id}:{oid}:"
+        prior = (
+            db.query(ActivityEvent)
+            .filter(
+                ActivityEvent.tenant_id == int(tenant_id),
+                ActivityEvent.correlation_id.like(f"{corr_prefix}%"),
+            )
+            .order_by(ActivityEvent.id.desc())
+            .first()
+        )
+        if prior is None:
+            prior = (
+                db.query(ActivityEvent)
+                .filter(
+                    ActivityEvent.tenant_id == int(tenant_id),
+                    ActivityEvent.correlation_id.like(f"{legacy_prefix}%"),
+                )
+                .order_by(ActivityEvent.id.desc())
+                .first()
+            )
+        if prior is not None:
+            doc_id = None
+            try:
+                meta_prior = json.loads(prior.metadata_json or "{}") if prior.metadata_json else {}
+            except Exception:
+                meta_prior = {}
+            raw = (meta_prior or {}).get("stock_document_id")
+            if raw:
+                try:
+                    doc_id = int(raw)
+                except (TypeError, ValueError):
+                    doc_id = None
+            existing_doc = None
+            if doc_id:
+                existing_doc = (
+                    db.query(StockDocument)
+                    .filter(
+                        StockDocument.id == int(doc_id),
+                        StockDocument.tenant_id == int(tenant_id),
+                    )
+                    .first()
+                )
+            if existing_doc is None:
+                existing_doc = (
+                    db.query(StockDocument)
+                    .filter(
+                        StockDocument.tenant_id == int(tenant_id),
+                        StockDocument.warehouse_id == int(warehouse_id),
+                        StockDocument.order_id == oid,
+                        StockDocument.document_type == STOCK_DOC_TYPE_RESERVATION,
+                    )
+                    .order_by(StockDocument.id.desc())
+                    .first()
+                )
+            if existing_doc is not None:
+                return CreatedDocumentResult(
+                    stock_document_id=int(existing_doc.id),
+                    document_number=str(existing_doc.document_number or ""),
+                    document_type=STOCK_DOC_TYPE_RESERVATION,
+                    series_id=str(series.id),
+                    created=False,
+                    settlement_mode=None,
+                    metadata={
+                        "order_id": oid,
+                        "idempotent_retry": True,
+                        "reserved_qty_total": float(
+                            sum(
+                                float(r.quantity or 0)
+                                for r in db.query(OrderWarehouseReservation)
+                                .filter(
+                                    OrderWarehouseReservation.tenant_id == int(tenant_id),
+                                    OrderWarehouseReservation.warehouse_id == int(warehouse_id),
+                                    OrderWarehouseReservation.order_id == oid,
+                                    OrderWarehouseReservation.status.in_(tuple(OWR_ACTIVE_STATUSES)),
+                                )
+                                .all()
+                            )
+                        ),
+                    },
+                    series_name=str(series.name or ""),
+                )
+
+    reserved_lines: list[dict[str, Any]] = []
+    try:
+        with db.begin_nested():
+            reserved_lines = _sync_business_reservations_for_rz_trigger(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                order=order,
+                actor_user_id=actor_user_id,
+            )
+            doc = ensure_rz_document_for_order(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                order_id=oid,
+                created_by_user_id=actor_user_id,
+                document_series=series,
+                creation_source=ctx.source,
+                raise_on_error=True,
+            )
+            if doc is None:
+                raise DocumentCreationError(
+                    "Nie udało się utworzyć dokumentu RZ.",
+                    code="rz_create_failed",
+                )
+    except DocumentCreationError:
+        raise
+    except OrderWarehouseReservationError as exc:
+        raise DocumentCreationError(str(exc), code=getattr(exc, "code", None) or "owr_failed") from exc
+    except Exception as exc:
+        raise DocumentCreationError(
+            f"Nie udało się utworzyć rezerwacji RZ: {exc}",
+            code="rz_create_failed",
+        ) from exc
+
+    num = str(getattr(doc, "document_number", None) or "")
+    total_qty = round(sum(float(x.get("quantity") or 0) for x in reserved_lines), 6)
+    order_label = str(getattr(order, "number", None) or oid)
+    created = True
+    corr = (
+        f"automation-rz:{ctx.automation_execution_id or 0}:"
+        f"{ctx.automation_effect_id or 0}:{oid}:{int(doc.id)}"
+    )
+    prior_doc = find_activity_by_correlation(
+        db, correlation_id=f"doc-rz:{oid}:{int(doc.id)}", tenant_id=tenant_id
+    )
+    if prior_doc is not None:
         created = False
     else:
+        if ctx.source.upper() == "AUTOMATION":
+            desc = (
+                f"Automatyzacja — utworzono rezerwację {num}. "
+                f"Zarezerwowano {total_qty:g} szt. produktów dla zamówienia #{order_label}."
+            )
+        else:
+            desc = (
+                f"Utworzono rezerwację {num}. "
+                f"Zarezerwowano {total_qty:g} szt. produktów dla zamówienia #{order_label}."
+            )
+        meta = _meta_base(ctx, series_id=str(series.id), order_id=oid)
+        meta.update(
+            {
+                "reserved_qty_total": total_qty,
+                "reserved_lines": reserved_lines,
+                "order_number": order_label,
+                "stock_document_id": int(doc.id),
+            }
+        )
         record_domain_activity(
             db,
             tenant_id=int(tenant_id),
             event_type=ORDER_WAREHOUSE_RZ_CREATED,
-            description=(
-                f"{ctx.actor_label} — utworzono dokument RZ {num}."
-                if ctx.source.upper() == "AUTOMATION"
-                else f"Utworzono dokument RZ {num}."
-            ),
+            description=desc,
             order_id=oid,
             warehouse_id=int(warehouse_id),
             stock_document_id=int(doc.id),
             actor_user_id=actor_user_id,
             correlation_id=f"doc-rz:{oid}:{int(doc.id)}",
-            metadata=_meta_base(ctx, series_id=str(series.id), order_id=oid),
+            metadata=meta,
             source_module="automation" if ctx.source.upper() == "AUTOMATION" else "domain",
             category="document",
         )
@@ -497,13 +791,13 @@ def _handle_rz(
                 db,
                 tenant_id=int(tenant_id),
                 event_type=ORDER_WAREHOUSE_RZ_CREATED,
-                description=f"Automatyzacja — utworzono dokument RZ {num}.",
+                description=desc,
                 order_id=oid,
                 warehouse_id=int(warehouse_id),
                 stock_document_id=int(doc.id),
                 actor_user_id=actor_user_id,
                 correlation_id=corr,
-                metadata=_meta_base(ctx, series_id=str(series.id), order_id=oid),
+                metadata=meta,
                 source_module="automation",
                 category="automation",
             )
@@ -515,7 +809,13 @@ def _handle_rz(
         series_id=str(series.id),
         created=created,
         settlement_mode=None,
-        metadata={"order_id": oid},
+        metadata={
+            "order_id": oid,
+            "order_number": order_label,
+            "reserved_qty_total": total_qty,
+            "reserved_lines": reserved_lines,
+        },
+        series_name=str(series.name or ""),
     )
 
 

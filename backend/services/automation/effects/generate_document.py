@@ -21,6 +21,27 @@ from . import EffectResult
 
 
 def _business_message(result, *, series_name: str | None) -> str:
+    meta = result.metadata or {}
+    if str(result.document_type or "").upper() in ("RESERVATION", "RZ"):
+        total = meta.get("reserved_qty_total")
+        order_label = meta.get("order_number") or meta.get("order_id") or ""
+        head = (
+            f"Utworzono rezerwację {result.document_number}"
+            if result.created
+            else f"Rezerwacja {result.document_number} (bez duplikatu)"
+        )
+        bits = [head]
+        if total is not None:
+            bits.append(f"Zarezerwowano {float(total):g} szt.")
+        if order_label:
+            bits.append(f"Zamówienie #{order_label}")
+        if result.print_job_id:
+            station = meta.get("print_station_name") or (
+                f"stanowisko #{meta['print_station_id']}" if meta.get("print_station_id") else "tak"
+            )
+            bits.append(f"Wydruk: {station}")
+        return " · ".join(bits)
+
     parts = [
         f"Utworzono dokument {result.document_number}"
         if result.created
@@ -29,7 +50,6 @@ def _business_message(result, *, series_name: str | None) -> str:
     label = series_name or result.series_name
     if label:
         parts.append(f"Seria: {label}")
-    meta = result.metadata or {}
     if meta.get("payment_term"):
         parts.append(f"Termin płatności: {meta['payment_term']}")
     sale_pl = format_sale_date_pl(meta.get("sale_date"))

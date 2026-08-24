@@ -6,6 +6,7 @@ import {
   buildGenerateDocumentSeriesOptions,
   filterSeriesForGenerateDocument,
   formatGenerateDocumentSeriesOption,
+  generateDocumentCapabilities,
   generateDocumentSubtypeHelp,
   isGenerateDocumentSupportedSeries,
   isGenerateDocumentSupportedSubtype,
@@ -163,8 +164,30 @@ describe("orderAutomationGenerateDocumentSeries", () => {
   it("help texts for supported subtypes", () => {
     expect(generateDocumentSubtypeHelp("SALE", "INVOICE")).toMatch(/sprzedaży/i);
     expect(generateDocumentSubtypeHelp("WZ")).toMatch(/nie powoduje ponownego rozchodu/i);
-    expect(generateDocumentSubtypeHelp("RESERVATION")).toMatch(/nie tworzy rezerwacji/i);
+    expect(generateDocumentSubtypeHelp("RESERVATION")).toMatch(/zarezerwuje produkty/i);
+    expect(generateDocumentSubtypeHelp("RESERVATION")).toMatch(/stan fizyczny/i);
     expect(generateDocumentSubtypeHelp("PZ")).toBeNull();
+  });
+
+  it("capabilities: SALE shows payment/date; RZ/WZ hide them", () => {
+    expect(generateDocumentCapabilities("SALE", "INVOICE")).toEqual({
+      paymentTerm: true,
+      saleDate: true,
+      description: true,
+      autoPrint: true,
+    });
+    expect(generateDocumentCapabilities("WAREHOUSE", "RESERVATION")).toEqual({
+      paymentTerm: false,
+      saleDate: false,
+      description: false,
+      autoPrint: true,
+    });
+    expect(generateDocumentCapabilities("WAREHOUSE", "WZ")).toEqual({
+      paymentTerm: false,
+      saleDate: false,
+      description: false,
+      autoPrint: true,
+    });
   });
 
   it("feRuleToCreateBody persists overrides for generate_document", () => {
