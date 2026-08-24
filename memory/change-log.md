@@ -1,3 +1,10 @@
+## 2026-08-24 — Document series split-pane editor UI
+
+- `/documents/series/*` workspace: list stays visible; right panel for create/edit
+- Tabs: Podstawowe, Dokument, Numeracja, Automatyzacja, Dane na dokumencie
+- SALE vs WAREHOUSE via existing capabilities; status_on_* only visual (not triggers)
+- No backend/payload/lifecycle changes; tests + tsc + build OK
+
 ## 2026-08-24 — Document triggers: remove auto WZ/RZ; enable automation generate_document
 
 - Pick finalize (cart/cartless/recovery): no auto documentary WZ; stamp fulfillment key only

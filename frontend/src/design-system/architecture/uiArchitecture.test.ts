@@ -177,7 +177,9 @@ const PHASE_C_FORM_GLOBS = [
   "pages/Assortment/PurchaseOrderEditPage.tsx",
   "pages/Assortment/SupplierEditPage.tsx",
   "pages/Assortment/ManufacturerEditPage.tsx",
-  "pages/documents/DocumentSeriesEditPage.tsx",
+  "pages/documents/components/seriesEditor/SaleDocumentSeriesEditorByTab.tsx",
+  "pages/documents/components/WarehouseDocumentSeriesForm.tsx",
+  "pages/documents/components/seriesEditor/DocumentSeriesEditorPanel.tsx",
   "components/orders/DocumentSeriesQuickCreateModal.tsx",
   "pages/documents/WarehouseDocumentDetailInfo.tsx",
   "pages/admin/MessageTemplatesModule.tsx",
@@ -260,19 +262,23 @@ describe("UI architecture SSOT (Phase C form modules)", () => {
   });
 
   it("document series forms use FormField + FORM_FIELD_DENSITY without inpSm", () => {
-    const edit = files.find((f) => f.rel.endsWith("DocumentSeriesEditPage.tsx"));
+    const sale = files.find((f) => f.rel.endsWith("SaleDocumentSeriesEditorByTab.tsx"));
+    const warehouse = files.find((f) => f.rel.endsWith("WarehouseDocumentSeriesForm.tsx"));
+    const panel = files.find((f) => f.rel.endsWith("DocumentSeriesEditorPanel.tsx"));
     const modal = files.find((f) => f.rel.endsWith("DocumentSeriesQuickCreateModal.tsx"));
-    expect(edit).toBeTruthy();
+    expect(sale).toBeTruthy();
+    expect(warehouse).toBeTruthy();
+    expect(panel).toBeTruthy();
     expect(modal).toBeTruthy();
-    for (const f of [edit!, modal!]) {
+    for (const f of [sale!, warehouse!, modal!]) {
       expect(f.src, f.rel).toMatch(/\bFormField\b/);
       expect(f.src, f.rel).toMatch(/\bFORM_FIELD_DENSITY\b/);
       expect(f.src, f.rel).not.toMatch(/\binpSm\b/);
       expect(f.src, f.rel).not.toMatch(/mt-1 w-full rounded-md border border-slate-200 bg-white px-2/);
     }
-    expect(edit!.src).toMatch(/\bFormSection\b/);
-    expect(edit!.src).toMatch(/\bFormActions\b/);
-    expect(edit!.src).toMatch(/\bPrimaryButton\b/);
+    expect(sale!.src).toMatch(/\bFormSection\b/);
+    expect(panel!.src).toMatch(/\bFormActions\b/);
+    expect(panel!.src).toMatch(/\bPrimaryButton\b/);
   });
 
   it("Wave 3 message templates editor does not use fieldInputClass", () => {

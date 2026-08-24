@@ -1,5 +1,6 @@
 ﻿# Current context
 
+- Document series UI: split-pane workspace on `/documents/series/*` — list left (~44%), editor right with tabs (Podstawowe / Dokument / Numeracja / Automatyzacja / Dane na dokumencie). No full-page editor.
 - Document trigger architecture corrected: warehouse docs only via explicit triggers (automation `generate_document` + series_id). Pick finalize and OWR reserve do NOT auto-create WZ/RZ.
 - Classic WMS finalize: physical decrement → OWR consume → sync existing RZ status → stamp fulfillment key on pick movements. No WZ.
 - Business reservation OWR exists without RZ; RZ via `create_document_from_series` / automation.

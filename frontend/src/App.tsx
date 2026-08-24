@@ -95,7 +95,6 @@ import IntegrationsSettingsPage from "./pages/Settings/integrations/Integrations
 import ExportsPage from "./pages/Settings/ExportsPage"
 import ExportEditorPage from "./pages/Settings/ExportEditorPage"
 import DocumentSeriesListPage from "./pages/documents/DocumentSeriesListPage"
-import DocumentSeriesEditPage from "./pages/documents/DocumentSeriesEditPage"
 import WarehouseMaterialsLayout from "./pages/WarehouseMaterials/WarehouseMaterialsLayout"
 import CartonsListPage from "./pages/WarehouseMaterials/CartonsListPage"
 import CartonDetailPage from "./pages/WarehouseMaterials/CartonDetailPage"
@@ -697,9 +696,8 @@ export const router = createBrowserRouter(
                     </Route>
                   </Route>
                   <Route path="exports" element={<DocumentsExportsHubPage />} />
-                  <Route path="series" element={<DocumentSeriesListPage />} />
-                  <Route path="series/new" element={<DocumentSeriesEditPage />} />
-                  <Route path="series/:id" element={<DocumentSeriesEditPage />} />
+                  {/* Split-pane workspace: list always mounted; /new and /:id open right editor */}
+                  <Route path="series/*" element={<DocumentSeriesListPage />} />
                   <Route path="templates" element={<Navigate to="/templates/messages" replace />} />
                   <Route path="custom-fields" element={<Navigate to="/orders/custom-fields" replace />} />
                   <Route path="field-templates" element={<Navigate to="/orders/custom-fields" replace />} />
