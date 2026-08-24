@@ -1,12 +1,15 @@
 import api from "./axios";
 
-export type InventoryManagementModeUi = "DOCUMENTS_ONLY" | "HYBRID";
+export type InventoryManagementModeUi = "DOCUMENTS_ONLY" | "DIRECT_OPERATIONS";
 
 export type InventoryManagementSettingsRead = {
   tenant_id: number;
   warehouse_id: number;
   inventory_management_mode: InventoryManagementModeUi;
   can_manual_adjust_stock: boolean;
+  manual_adjustment_allowed: boolean;
+  allow_manual_warehouse_document_execution: boolean;
+  manual_warehouse_document_execution_available: boolean;
 };
 
 export type InventoryManagementSettingsSave = {

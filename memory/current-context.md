@@ -1,8 +1,14 @@
 ﻿# Current context
 
-- Automation `generate_document` expanded: SALE FV/PA + WAREHOUSE WZ/RZ via `create_document_from_series`; overrides (payment term, sale date, description, auto-print + workstation); picker filters to real handlers only.
-- Overrides stored for SALE in `buyer_json.issuance`; print via `queue_print_job(commit=False)`.
-- Unsupported in picker: CORRECTION, PZ/PW/RW/MM/Z_PZ (no create_from_series handler).
-- Document series UI: split-pane workspace on `/documents/series/*`.
-- Document trigger architecture: warehouse docs only via explicit triggers; pick/OWR do NOT auto-create WZ/RZ.
-- Packing still FV/PA only. Z-PZ / production PW-RW unchanged domain exceptions.
+## Active: inventory_management_mode MODEL B phase 1 (2026-08-24)
+
+- **Decision:** Controlled WMS Exception — terminal WMS never blocked by policy.
+- **Modes:** `DOCUMENTS_ONLY` | `DIRECT_OPERATIONS` (UI); `HYBRID` → runtime alias DIRECT_OPERATIONS.
+- **SSOT:** `backend/services/inventory_management_policy_service.py`
+- **Toggle:** `allow_manual_warehouse_document_execution` column added; UI inactive until FSW phase 2 (`FULL_MANUAL_WAREHOUSE_DOCUMENT_FSW_READY=False`).
+- **Default new warehouse:** DIRECT_OPERATIONS.
+- OWR/RZ independent of this policy.
+
+## Next
+
+- Phase 2 FSW: WZ/PZ-first ↔ WMS resolver; then enable toggle in UI.

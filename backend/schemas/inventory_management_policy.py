@@ -1,4 +1,4 @@
-"""Schemas for inventory management policy (Etap 3B)."""
+"""Schemas for inventory management policy (MODEL B phase 1)."""
 
 from __future__ import annotations
 
@@ -7,15 +7,17 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
-InventoryManagementMode = Literal["DOCUMENTS_ONLY", "HYBRID", "EXTERNAL_INVENTORY"]
-InventoryManagementModeUi = Literal["DOCUMENTS_ONLY", "HYBRID"]
+InventoryManagementModeUi = Literal["DOCUMENTS_ONLY", "DIRECT_OPERATIONS"]
 
 
 class InventoryManagementSettingsRead(BaseModel):
     tenant_id: int
     warehouse_id: int
-    inventory_management_mode: InventoryManagementModeUi = "HYBRID"
+    inventory_management_mode: InventoryManagementModeUi = "DIRECT_OPERATIONS"
     can_manual_adjust_stock: bool = True
+    manual_adjustment_allowed: bool = True
+    allow_manual_warehouse_document_execution: bool = False
+    manual_warehouse_document_execution_available: bool = False
 
 
 class InventoryManagementSettingsSave(BaseModel):

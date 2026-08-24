@@ -13,9 +13,9 @@ import { WmsSettingsSection } from "../../Settings/WmsSettingsSection";
 import { WMS_SETTINGS_CANONICAL_SECTION, wmsSettingsTokens } from "../../Settings/wmsSettingsTokens";
 import { brandPrimaryButtonClass } from "../../../design-system/brandUi";
 
-const SCREEN_TITLE = "Sposób aktualizacji stanów magazynowych";
+const SCREEN_TITLE = "Sposób zarządzania stanami magazynowymi";
 const SCREEN_LEAD =
-  "Określa, w jaki sposób system może zmieniać ilości na stanach magazynowych w wybranym magazynie.";
+  "Określa sposób zmiany stanów poza standardowymi procesami terminala WMS. Zbieranie, przyjęcia i pozostałe kontrolowane operacje magazynowe działają niezależnie od tego ustawienia.";
 const SECTION_ID = "assortment-inventory-general";
 
 type ModeCopy = {
@@ -29,28 +29,28 @@ type ModeCopy = {
 const MODES: ModeCopy[] = [
   {
     value: "DOCUMENTS_ONLY",
-    label: "Wyłącznie dokumenty magazynowe",
-    shortLabel: "Wyłącznie dokumenty",
+    label: "Dokumenty magazynowe",
+    shortLabel: "Dokumenty",
     description:
-      "Stany zmieniają się tylko przez dokumenty magazynowe — bez ręcznej korekty na karcie produktu.",
+      "Poza procesami WMS stan można zmieniać wyłącznie dokumentami magazynowymi. Ręczne korekty RK są wyłączone.",
     effects: [
-      { ok: true, text: "PZ, WZ, MM aktualizują stany" },
-      { ok: true, text: "Inwentaryzacja aktualizuje stany (RW/PW)" },
-      { ok: true, text: "Korekty magazynowe wyłącznie przez dokumenty" },
-      { ok: false, text: "Brak ręcznej korekty na karcie produktu" },
+      { ok: true, text: "Terminal WMS (zbieranie, przyjęcia, rozlokowanie) działa normalnie" },
+      { ok: true, text: "PZ, WZ, MM z biura mogą księgować stany poza WMS" },
+      { ok: true, text: "Inwentaryzacja i procesy domenowe bez zmian" },
+      { ok: false, text: "Brak ręcznej korekty RK poza WMS" },
     ],
   },
   {
-    value: "HYBRID",
-    label: "Dokumenty magazynowe + ręczne korekty",
-    shortLabel: "Dokumenty + korekty",
+    value: "DIRECT_OPERATIONS",
+    label: "Operacje magazynowe",
+    shortLabel: "Operacje",
     description:
-      "Dokumenty działają jak wyżej. Dodatkowo operator może wykonać ręczną korektę na karcie produktu.",
+      "Procesy magazynowe księgują stany bez wymogu dokumentu. Korekty poza WMS wykonuje się przez audytowaną korektę RK.",
     effects: [
-      { ok: true, text: "Wszystkie dokumenty magazynowe (PZ, WZ, MM, inwentaryzacja)" },
-      { ok: true, text: "Ręczna korekta na karcie produktu (Asortyment → Produkt → Magazyn)" },
-      { ok: true, text: "Każda ręczna korekta tworzy dokument RK" },
-      { ok: true, text: "Pełny ślad audytowy operacji magazynowych" },
+      { ok: true, text: "Terminal WMS działa normalnie — bez wymogu wcześniejszego WZ/PZ" },
+      { ok: true, text: "Korekta RK z pełnym audytem (dokument RK + ruch magazynowy)" },
+      { ok: true, text: "Późniejszy WZ/PZ po operacji WMS = wyłącznie dokumentacja" },
+      { ok: false, text: "Bez bezpośredniego zapisu stanu (API / karta produktu)" },
     ],
   },
 ];
@@ -58,17 +58,21 @@ const MODES: ModeCopy[] = [
 const COMPARISON_ROWS: Array<{
   feature: string;
   documentsOnly: boolean;
-  hybrid: boolean;
+  directOperations: boolean;
 }> = [
-  { feature: "PZ / WZ / MM", documentsOnly: true, hybrid: true },
-  { feature: "Inwentaryzacja", documentsOnly: true, hybrid: true },
-  { feature: "Ręczna korekta na produkcie", documentsOnly: false, hybrid: true },
-  { feature: "Dokument RK przy korekcie", documentsOnly: false, hybrid: true },
-  { feature: "Audyt operacji magazynowych", documentsOnly: true, hybrid: true },
+  { feature: "Terminal WMS (zbieranie, przyjęcia)", documentsOnly: true, directOperations: true },
+  { feature: "Produkcja / zwroty / inwentaryzacja", documentsOnly: true, directOperations: true },
+  { feature: "Dokumenty WZ/PZ z biura (poza WMS)", documentsOnly: true, directOperations: true },
+  { feature: "Korekta RK poza WMS", documentsOnly: false, directOperations: true },
+  { feature: "Bezpośredni zapis stanu (API / produkt)", documentsOnly: false, directOperations: false },
 ];
 
 function modeByValue(value: InventoryManagementModeUi): ModeCopy {
   return MODES.find((m) => m.value === value) ?? MODES[1];
+}
+
+function normalizeModeFromApi(raw: string): InventoryManagementModeUi {
+  return raw === "DOCUMENTS_ONLY" ? "DOCUMENTS_ONLY" : "DIRECT_OPERATIONS";
 }
 
 const radioOuter =
@@ -113,14 +117,15 @@ type Props = {
   warehouseId: number | null;
 };
 
-/** Same inventory-management policy UI as former WMS „Stany magazynowe” tab (API unchanged). */
+/** Warehouse-scoped inventory management policy (MODEL B). */
 export default function AssortmentInventorySettingsPanel({ warehouseId }: Props) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [savedMode, setSavedMode] = useState<InventoryManagementModeUi>("HYBRID");
-  const [draftMode, setDraftMode] = useState<InventoryManagementModeUi>("HYBRID");
+  const [savedMode, setSavedMode] = useState<InventoryManagementModeUi>("DIRECT_OPERATIONS");
+  const [draftMode, setDraftMode] = useState<InventoryManagementModeUi>("DIRECT_OPERATIONS");
   const [resolvedWarehouseLabel, setResolvedWarehouseLabel] = useState<string | null>(null);
+  const [fswAvailable, setFswAvailable] = useState(false);
 
   const activeCopy = useMemo(() => modeByValue(savedMode), [savedMode]);
   const previewCopy = useMemo(() => modeByValue(draftMode), [draftMode]);
@@ -133,13 +138,13 @@ export default function AssortmentInventorySettingsPanel({ warehouseId }: Props)
         tenantId: DAMAGE_TENANT_ID,
         warehouseId: warehouseId != null && warehouseId > 0 ? warehouseId : undefined,
       });
-      const mode: InventoryManagementModeUi =
-        s.inventory_management_mode === "DOCUMENTS_ONLY" ? "DOCUMENTS_ONLY" : "HYBRID";
+      const mode = normalizeModeFromApi(s.inventory_management_mode);
       setSavedMode(mode);
       setDraftMode(mode);
       setResolvedWarehouseLabel(String(s.warehouse_id));
+      setFswAvailable(Boolean(s.manual_warehouse_document_execution_available));
     } catch {
-      setLoadError("Nie udało się wczytać ustawień aktualizacji stanów magazynowych.");
+      setLoadError("Nie udało się wczytać ustawień zarządzania stanami magazynowymi.");
     } finally {
       setLoading(false);
     }
@@ -161,11 +166,10 @@ export default function AssortmentInventorySettingsPanel({ warehouseId }: Props)
         warehouse_id: warehouseId != null && warehouseId > 0 ? warehouseId : undefined,
         inventory_management_mode: draftMode,
       });
-      const mode: InventoryManagementModeUi =
-        saved.inventory_management_mode === "DOCUMENTS_ONLY" ? "DOCUMENTS_ONLY" : "HYBRID";
+      const mode = normalizeModeFromApi(saved.inventory_management_mode);
       setSavedMode(mode);
       setDraftMode(mode);
-      toast.success("Zapisano sposób aktualizacji stanów magazynowych.");
+      toast.success("Zapisano sposób zarządzania stanami magazynowymi.");
     } catch {
       toast.error("Nie udało się zapisać ustawień.");
     } finally {
@@ -176,10 +180,10 @@ export default function AssortmentInventorySettingsPanel({ warehouseId }: Props)
   return (
     <WmsSettingsLayout
       sections={[{ id: SECTION_ID, label: WMS_SETTINGS_CANONICAL_SECTION.general }]}
-      asideLabel="Stany magazynowe"
+      asideLabel="Zarządzanie stanami"
       observeSections={false}
     >
-      <WmsSettingsSection id={SECTION_ID} title={WMS_SETTINGS_CANONICAL_SECTION.general} summary={SCREEN_LEAD}>
+      <WmsSettingsSection id={SECTION_ID} title={SCREEN_TITLE} summary={SCREEN_LEAD}>
         <div className="space-y-6">
           <header className="space-y-3 border-b border-slate-100 pb-4">
             <div>
@@ -200,9 +204,7 @@ export default function AssortmentInventorySettingsPanel({ warehouseId }: Props)
                   {activeCopy.label}
                 </span>
                 {dirty ? (
-                  <span className="text-xs text-amber-700">
-                    (Niezapisana zmiana: {previewCopy.shortLabel})
-                  </span>
+                  <span className="text-xs text-amber-700">(Niezapisana zmiana: {previewCopy.shortLabel})</span>
                 ) : null}
               </div>
             ) : null}
@@ -212,9 +214,6 @@ export default function AssortmentInventorySettingsPanel({ warehouseId }: Props)
             <h3 id="inventory-mode-choice-heading" className={sectionTitleClass}>
               Wybór trybu
             </h3>
-            <p className="mt-1 text-xs text-slate-500">
-              Decyzja dotyczy całego magazynu. Nie wpływa na procesy WMS (zbieranie, pakowanie, przyjęcia).
-            </p>
             {loading ? <p className="mt-3 text-sm text-slate-500">Wczytywanie…</p> : null}
             {loadError ? <p className="mt-3 text-sm text-red-600">{loadError}</p> : null}
             {!loading && !loadError ? (
@@ -237,6 +236,14 @@ export default function AssortmentInventorySettingsPanel({ warehouseId }: Props)
               </div>
             ) : null}
           </div>
+
+          {fswAvailable ? null : (
+            <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              Opcja „Biuro może wykonywać ruchy dokumentem WZ/PZ” będzie dostępna po wdrożeniu pełnej ochrony przed
+              podwójnym rozliczeniem (FSW).
+            </p>
+          )}
+
           <div className="mt-5 flex flex-wrap gap-2">
             <button
               type="button"
@@ -284,10 +291,10 @@ export default function AssortmentInventorySettingsPanel({ warehouseId }: Props)
                           Funkcja
                         </th>
                         <th scope="col" className="px-3 py-2 font-medium text-slate-900">
-                          Wyłącznie dokumenty
+                          Dokumenty magazynowe
                         </th>
                         <th scope="col" className="px-3 py-2 font-medium text-slate-900">
-                          Dokumenty + korekty
+                          Operacje magazynowe
                         </th>
                       </tr>
                     </thead>
@@ -299,7 +306,7 @@ export default function AssortmentInventorySettingsPanel({ warehouseId }: Props)
                             <BoolCell value={row.documentsOnly} />
                           </td>
                           <td className="px-3 py-2.5">
-                            <BoolCell value={row.hybrid} />
+                            <BoolCell value={row.directOperations} />
                           </td>
                         </tr>
                       ))}

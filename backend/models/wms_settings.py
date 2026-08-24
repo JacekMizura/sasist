@@ -42,8 +42,10 @@ class WmsSettings(Base):
         index=True,
     )
 
-    # DOCUMENTS_ONLY | HYBRID | EXTERNAL_INVENTORY (reserved — not active in UI)
-    inventory_management_mode = Column(String(32), nullable=False, default="HYBRID")
+    # DOCUMENTS_ONLY | DIRECT_OPERATIONS | HYBRID (legacy) | EXTERNAL_INVENTORY (reserved)
+    inventory_management_mode = Column(String(32), nullable=False, default="DIRECT_OPERATIONS")
+    #: Phase 2 FSW — manual WZ/PZ physical execution; UI inactive until FSW ready.
+    allow_manual_warehouse_document_execution = Column(Boolean, nullable=False, default=False)
 
     # Global product validation (WMS receiving master-data + traceability)
     validation_policy_migrated = Column(Boolean, nullable=False, default=False, server_default="false")

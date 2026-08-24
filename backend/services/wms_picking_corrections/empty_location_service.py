@@ -3,7 +3,7 @@ Potwierdzenie pustej lokalizacji podczas zbierania.
 
 A) Zgłoszenie faktu — zawsze dostępne.
 B) Skutek magazynowy:
-   - HYBRID: RK → stock produktu@lokalizacja = 0
+   - DIRECT_OPERATIONS (legacy HYBRID): RK → stock produktu@lokalizacja = 0
    - DOCUMENTS_ONLY: bez direct update; CONTROL inventory + InventoryLocationLock
      (routing wyklucza lokalizację mimo formalnego stocku).
 """
@@ -22,7 +22,7 @@ from ...models.product import Product
 from ..inventory_manual_adjustment_service import apply_manual_stock_correction
 from ..inventory_management_policy_service import (
     InventoryManagementPolicyError,
-    can_manual_adjust_stock,
+    manual_adjustment_allowed,
 )
 from ..inventory_count.inventory_movement_guard_service import locked_location_ids_for_picking
 from ..inventory_count.picking_empty_location_pending import (
@@ -172,14 +172,14 @@ def confirm_empty_pick_location(
 
     ean = (product.ean or "").strip() or None
     loc_code = (loc.name or "").strip() or f"#{location_id}"
-    hybrid = can_manual_adjust_stock(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
+    rk_allowed = manual_adjustment_allowed(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
 
     adj: dict[str, Any] | None = None
     pending: dict[str, Any] | None = None
     stock_effect = "already_zero"
     new_qty = float(previous_qty)
 
-    if previous_qty > 1e-9 and hybrid:
+    if previous_qty > 1e-9 and rk_allowed:
         try:
             adj = apply_manual_stock_correction(
                 db,
@@ -209,7 +209,7 @@ def confirm_empty_pick_location(
                 code="STOCK_NOT_ZERO",
             )
         stock_effect = "zeroed"
-    elif previous_qty > 1e-9 and not hybrid:
+    elif previous_qty > 1e-9 and not rk_allowed:
         # DOCUMENTS_ONLY: fakt + blokada routingu, formalny stock bez zmian do postingu
         pending = create_picking_empty_location_pending_correction(
             db,

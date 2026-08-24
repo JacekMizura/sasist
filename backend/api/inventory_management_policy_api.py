@@ -14,9 +14,10 @@ from ..schemas.inventory_management_policy import (
 )
 from ..services.inventory_management_policy_service import (
     InventoryManagementPolicyError,
-    can_manual_adjust_stock,
-    get_inventory_management_mode,
-    normalize_inventory_management_mode,
+    manual_adjustment_allowed,
+    manual_warehouse_document_execution_allowed,
+    manual_warehouse_document_execution_available,
+    normalize_inventory_management_mode_ui,
     save_inventory_management_mode,
 )
 from ..services.inventory_manual_adjustment_service import apply_manual_stock_correction
@@ -30,22 +31,32 @@ def _policy_error_to_http(exc: InventoryManagementPolicyError) -> HTTPException:
     return HTTPException(status_code=400, detail={"message": str(exc), "code": exc.code})
 
 
+def _settings_read(db: Session, *, tenant_id: int, warehouse_id: int) -> InventoryManagementSettingsRead:
+    from ..services.inventory_management_policy_service import get_or_create_wms_settings_row
+
+    row = get_or_create_wms_settings_row(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
+    ui_mode = normalize_inventory_management_mode_ui(getattr(row, "inventory_management_mode", None))
+    rk = manual_adjustment_allowed(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
+    fsw_available = manual_warehouse_document_execution_available()
+    toggle_on = manual_warehouse_document_execution_allowed(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
+    return InventoryManagementSettingsRead(
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        inventory_management_mode=ui_mode,
+        can_manual_adjust_stock=rk,
+        manual_adjustment_allowed=rk,
+        allow_manual_warehouse_document_execution=toggle_on if fsw_available else False,
+        manual_warehouse_document_execution_available=fsw_available,
+    )
+
+
 @router.get("/settings/inventory-management", response_model=InventoryManagementSettingsRead)
 def get_inventory_management_settings(
     tenant_id: int = Query(..., ge=1),
     warehouse_id: int = Depends(_wms_settings_wh_dep),
     db: Session = Depends(get_db),
 ):
-    mode = get_inventory_management_mode(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
-    ui_mode = normalize_inventory_management_mode(mode)
-    if ui_mode not in ("DOCUMENTS_ONLY", "HYBRID"):
-        ui_mode = "HYBRID"
-    return InventoryManagementSettingsRead(
-        tenant_id=int(tenant_id),
-        warehouse_id=int(warehouse_id),
-        inventory_management_mode=ui_mode,  # type: ignore[arg-type]
-        can_manual_adjust_stock=can_manual_adjust_stock(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id)),
-    )
+    return _settings_read(db, tenant_id=int(tenant_id), warehouse_id=int(warehouse_id))
 
 
 @router.put("/settings/inventory-management", response_model=InventoryManagementSettingsRead)
@@ -71,13 +82,7 @@ def save_inventory_management_settings(
         db.commit()
     except InventoryManagementPolicyError as exc:
         raise _policy_error_to_http(exc) from exc
-    mode = get_inventory_management_mode(db, tenant_id=int(body.tenant_id), warehouse_id=int(wh_id))
-    return InventoryManagementSettingsRead(
-        tenant_id=int(body.tenant_id),
-        warehouse_id=int(wh_id),
-        inventory_management_mode=normalize_inventory_management_mode(mode),  # type: ignore[arg-type]
-        can_manual_adjust_stock=can_manual_adjust_stock(db, tenant_id=int(body.tenant_id), warehouse_id=int(wh_id)),
-    )
+    return _settings_read(db, tenant_id=int(body.tenant_id), warehouse_id=int(wh_id))
 
 
 @router.post("/inventory/manual-adjustment", response_model=ManualStockCorrectionResponse, status_code=201)

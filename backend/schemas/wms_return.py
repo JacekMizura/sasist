@@ -529,7 +529,7 @@ class ActiveZPzCloseRead(BaseModel):
 
 ReturnsMode = Literal["simple", "two_step", "advanced"]
 RefundProcessing = Literal["disabled", "warehouse", "office"]
-InventoryManagementMode = Literal["DOCUMENTS_ONLY", "HYBRID", "EXTERNAL_INVENTORY"]
+InventoryManagementMode = Literal["DOCUMENTS_ONLY", "DIRECT_OPERATIONS", "HYBRID", "EXTERNAL_INVENTORY"]
 ManufacturedComponentRecoveryMode = Literal["OFF", "OPTIONAL", "REQUIRED"]
 ManufacturedRecoveryReceiptMode = Literal["STANDARD_PUTAWAY", "DEFAULT_LOCATION"]
 
@@ -591,7 +591,7 @@ class WmsSettingsRead(BaseModel):
     enable_refund: bool = False
     z_pz_print_label_on_close: bool = False
     z_pz_label_template_id: Optional[int] = None
-    inventory_management_mode: InventoryManagementMode = "HYBRID"
+    inventory_management_mode: InventoryManagementMode = "DIRECT_OPERATIONS"
     manufactured_component_recovery_mode: ManufacturedComponentRecoveryMode = "OFF"
     manufactured_recovery_receipt_mode: ManufacturedRecoveryReceiptMode = "STANDARD_PUTAWAY"
     manufactured_recovery_location_id: Optional[int] = None
