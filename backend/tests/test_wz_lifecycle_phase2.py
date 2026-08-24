@@ -286,6 +286,7 @@ class WzLifecyclePhase2Tests(unittest.TestCase):
             product_id=10,
             quantity=3,
         )
+        ensure_rz_document_for_order(self.db, tenant_id=1, warehouse_id=1, order_id=100)
         self.db.commit()
         consumed = consume_order_warehouse_reservation(
             self.db,

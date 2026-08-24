@@ -19,7 +19,6 @@ from ..activity_log.domain_event_codes import (
     ORDER_WAREHOUSE_RESERVATION_CONSUMED,
     ORDER_WAREHOUSE_RESERVATION_CREATED,
     ORDER_WAREHOUSE_RESERVATION_RELEASED,
-    ORDER_WAREHOUSE_RZ_CREATED,
 )
 from ..pg_advisory_lock import stable_advisory_lock_key
 from ..stock_disposition import DEFAULT_STOCK_DISPOSITION, normalize_stock_disposition
@@ -32,7 +31,7 @@ from .constants import (
     OWR_STATUS_RELEASED,
     OWR_STATUS_RESERVED,
 )
-from .rz_document_service import ensure_rz_document_for_order, sync_rz_document_status
+from .rz_document_service import sync_rz_document_status
 
 logger = logging.getLogger(__name__)
 
@@ -211,7 +210,6 @@ def ensure_order_warehouse_reservation(
             .with_for_update()
             .first()
         )
-        created_new = False
         if row is None:
             row = OrderWarehouseReservation(
                 tenant_id=tid,
@@ -225,39 +223,18 @@ def ensure_order_warehouse_reservation(
                 created_by_user_id=created_by_user_id,
             )
             db.add(row)
-            created_new = True
         elif str(row.status) not in OWR_ACTIVE_STATUSES:
             row.quantity = round(need, 6)
             row.quantity_original = round(need, 6)
             row.status = OWR_STATUS_RESERVED
-            created_new = True
         else:
             row.quantity = round(float(row.quantity or 0) + need, 6)
             row.quantity_original = round(float(row.quantity_original or 0) + need, 6)
             _refresh_status(row)
         db.flush()
-
-        doc = ensure_rz_document_for_order(
-            db,
-            tenant_id=tid,
-            warehouse_id=wid,
-            order_id=oid,
-            created_by_user_id=created_by_user_id,
-        )
+        sync_rz_document_status(db, tenant_id=tid, warehouse_id=wid, order_id=oid)
         if emit_activity:
             wh_name = _wh_name(db, wid)
-            if created_new and doc is not None:
-                record_domain_activity(
-                    db,
-                    tenant_id=tid,
-                    event_type=ORDER_WAREHOUSE_RZ_CREATED,
-                    description=f"Utworzono rezerwację {doc.document_number or 'RZ'}.",
-                    order_id=oid,
-                    product_id=pid,
-                    warehouse_id=wid,
-                    stock_document_id=int(doc.id),
-                    correlation_id=f"owr-rz:{oid}:{doc.id}",
-                )
             record_domain_activity(
                 db,
                 tenant_id=tid,
@@ -266,7 +243,7 @@ def ensure_order_warehouse_reservation(
                 order_id=oid,
                 product_id=pid,
                 warehouse_id=wid,
-                stock_document_id=int(doc.id) if doc is not None else None,
+                stock_document_id=int(row.stock_document_id) if row.stock_document_id else None,
                 correlation_id=f"owr-res:{oid}:{pid}:{row.id}:{float(row.quantity or 0)}",
                 metadata={"quantity": need, "remaining": float(row.quantity or 0)},
             )
@@ -328,9 +305,6 @@ def sync_order_warehouse_reservation_to_target(
         else:
             _refresh_status(row)
         db.flush()
-        ensure_rz_document_for_order(
-            db, tenant_id=tid, warehouse_id=wid, order_id=oid, created_by_user_id=performed_by_user_id
-        )
         sync_rz_document_status(db, tenant_id=tid, warehouse_id=wid, order_id=oid)
         record_domain_activity(
             db,
@@ -385,13 +359,6 @@ def release_order_warehouse_reservations(
         )
     db.flush()
     for wid in wh_ids:
-        ensure_rz_document_for_order(
-            db,
-            tenant_id=int(tenant_id),
-            warehouse_id=wid,
-            order_id=int(order_id),
-            created_by_user_id=performed_by_user_id,
-        )
         sync_rz_document_status(
             db, tenant_id=int(tenant_id), warehouse_id=wid, order_id=int(order_id)
         )

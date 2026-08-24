@@ -122,7 +122,7 @@ function payloadForKind(kind: AutomationEffectKind): Record<string, string | num
     case "add_tag":
       return { tag: "" };
     case "generate_document":
-      return { doc_type: "", doc_series: "", print_station: "", copies: "1" };
+      return { series_id: "" };
     case "wms_action":
       return { action_key: "" };
     default:

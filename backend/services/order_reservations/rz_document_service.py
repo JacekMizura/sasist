@@ -81,10 +81,15 @@ def ensure_rz_document_for_order(
     warehouse_id: int,
     order_id: int,
     created_by_user_id: int | None = None,
+    document_series=None,
+    creation_source: str = "PANEL",
+    raise_on_error: bool = False,
 ) -> StockDocument | None:
     """
     One open RZ per tenant+warehouse+order. Lines mirror active business reservations.
     ATP must NOT read line qty — lines are documentary snapshots.
+
+    Optional ``document_series``: explicit WAREHOUSE/RESERVATION series (automation).
     """
     try:
         with db.begin_nested():
@@ -94,8 +99,12 @@ def ensure_rz_document_for_order(
                 warehouse_id=warehouse_id,
                 order_id=order_id,
                 created_by_user_id=created_by_user_id,
+                document_series=document_series,
+                creation_source=creation_source,
             )
     except Exception:
+        if raise_on_error:
+            raise
         logger.warning(
             "RZ document ensure skipped tenant=%s warehouse=%s order=%s",
             tenant_id,
@@ -113,6 +122,8 @@ def _ensure_rz_document_for_order_impl(
     warehouse_id: int,
     order_id: int,
     created_by_user_id: int | None = None,
+    document_series=None,
+    creation_source: str = "PANEL",
 ) -> StockDocument | None:
     from ..document_number_service import resolve_default_document_series
 
@@ -133,30 +144,33 @@ def _ensure_rz_document_for_order_impl(
     if not active and doc is None:
         return None
 
-    # Prefer existing series — avoid ensure_default_document_series() which may commit mid-flow.
-    series = resolve_default_document_series(
-        db,
-        tenant_id=int(tenant_id),
-        warehouse_id=int(warehouse_id),
-        series_type="WAREHOUSE",
-        subtype=STOCK_DOC_TYPE_RESERVATION,
-    )
+    series = document_series
     if series is None:
-        try:
-            series = require_warehouse_series(
-                db,
-                tenant_id=int(tenant_id),
-                warehouse_id=int(warehouse_id),
-                subtype=STOCK_DOC_TYPE_RESERVATION,
-            )
-        except DocumentSeriesOperationalError:
-            logger.warning(
-                "RZ series missing tenant=%s warehouse=%s — reservations kept without document",
-                tenant_id,
-                warehouse_id,
-            )
-            return doc
+        # Prefer existing series — avoid ensure_default_document_series() which may commit mid-flow.
+        series = resolve_default_document_series(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=int(warehouse_id),
+            series_type="WAREHOUSE",
+            subtype=STOCK_DOC_TYPE_RESERVATION,
+        )
+        if series is None:
+            try:
+                series = require_warehouse_series(
+                    db,
+                    tenant_id=int(tenant_id),
+                    warehouse_id=int(warehouse_id),
+                    subtype=STOCK_DOC_TYPE_RESERVATION,
+                )
+            except DocumentSeriesOperationalError:
+                logger.warning(
+                    "RZ series missing tenant=%s warehouse=%s — reservations kept without document",
+                    tenant_id,
+                    warehouse_id,
+                )
+                return doc
 
+    src = str(creation_source or "PANEL").strip().upper() or "PANEL"
     if doc is None:
         doc = create_stock_document(
             db,
@@ -166,7 +180,7 @@ def _ensure_rz_document_for_order_impl(
             document_type=STOCK_DOC_TYPE_RESERVATION,
             status="open",
             order_id=int(order_id),
-            creation_source="PANEL",
+            creation_source=src,
             created_by_user_id=created_by_user_id,
             receiving_status="DONE",
             putaway_status="DONE",

@@ -12,6 +12,7 @@ from ....models.automation import StatusTransitionEvent
 from ..constants import (
     EFFECT_CHANGE_STATUS,
     EFFECT_GENERATE_CORRECTION,
+    EFFECT_GENERATE_DOCUMENT,
     EFFECT_GENERATE_SALE_CORRECTION,
     EFFECT_SEND_EMAIL,
     EFFECT_SEND_MESSAGE,
@@ -169,6 +170,31 @@ class GenerateSaleCorrectionEffectAdapter:
         )
 
 
+class GenerateDocumentEffectAdapter:
+    effect_type = EFFECT_GENERATE_DOCUMENT
+
+    def execute(
+        self,
+        db: Session,
+        *,
+        config: dict[str, Any],
+        event: StatusTransitionEvent,
+        actor_user_id: Optional[int],
+        execution_id: Optional[int] = None,
+        effect_id: Optional[int] = None,
+    ) -> EffectResult:
+        from .generate_document import execute_generate_document
+
+        return execute_generate_document(
+            db,
+            config=config,
+            event=event,
+            actor_user_id=actor_user_id,
+            execution_id=execution_id,
+            effect_id=effect_id,
+        )
+
+
 def get_adapter(effect_type: str) -> EffectAdapter:
     et = normalize_effect_type(effect_type)
     if et == EFFECT_CHANGE_STATUS:
@@ -179,6 +205,8 @@ def get_adapter(effect_type: str) -> EffectAdapter:
         return WarehouseCommitEffectAdapter()
     if et == EFFECT_GENERATE_SALE_CORRECTION:
         return GenerateSaleCorrectionEffectAdapter()
+    if et == EFFECT_GENERATE_DOCUMENT:
+        return GenerateDocumentEffectAdapter()
     return UnsupportedEffectAdapter(et)
 
 

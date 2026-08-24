@@ -101,60 +101,17 @@ const PRINT_STATIONS: { value: string; label: string }[] = [
 const COPIES_OPTS = ["1", "2", "3", "4", "5"];
 
 export function renderGenerateDocumentEffectEditor({ effect, patchPayload }: EffectEditorBaseProps) {
-  const docType = String(effect.payload.doc_type ?? "");
-  const series = String(effect.payload.doc_series ?? "");
-  const station = String(effect.payload.print_station ?? "");
-  const copies = String(effect.payload.copies ?? "1");
+  const seriesId = String(effect.payload.series_id ?? effect.payload.doc_series ?? "");
   return (
     <div className="grid min-w-0 gap-y-0">
       <div className={erpRow}>
-        <span className={erpLbl}>Typ dokumentu</span>
-        <Select
+        <span className={erpLbl}>Seria dokumentu (ID)</span>
+        <Input
           density={erpFieldDensity}
-          value={docType}
-          onChange={(e) => patchPayload({ doc_type: e.target.value })}
-        >
-          <option value="">—</option>
-          {DOC_TYPES.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </Select>
-      </div>
-      <div className={erpRow}>
-        <span className={erpLbl}>Seria</span>
-        <Select density={erpFieldDensity} value={series} onChange={(e) => patchPayload({ doc_series: e.target.value })}>
-          <option value="">—</option>
-          {DOC_SERIES.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </Select>
-      </div>
-      <div className={erpRow}>
-        <span className={erpLbl}>Stacja druku</span>
-        <Select density={erpFieldDensity} value={station}
-          onChange={(e) => patchPayload({ print_station: e.target.value })}
-        >
-          <option value="">—</option>
-          {PRINT_STATIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </Select>
-      </div>
-      <div className={erpRow}>
-        <span className={erpLbl}>Kopie</span>
-        <Select density={erpFieldDensity} value={copies} onChange={(e) => patchPayload({ copies: e.target.value })}>
-          {COPIES_OPTS.map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </Select>
+          value={seriesId}
+          onChange={(e) => patchPayload({ series_id: e.target.value, doc_series: e.target.value })}
+          placeholder="UUID serii (WAREHOUSE: WZ / RESERVATION)"
+        />
       </div>
     </div>
   );

@@ -1,6 +1,8 @@
 ﻿# Current context
 
-- Phase 1 warehouse series standardization shipped: capabilities SSOT, warehouse-only form, backend validation, numbering preview API.
-- BUSINESS RESERVATION SSOT: `order_warehouse_reservations`; RZ subtype RESERVATION, physical_effect=false.
-- Supported warehouse subtypes: WZ, PZ, Z_PZ, RW, PW, MM, RESERVATION. Legacy ZW/ZD moved to optional seed only.
-- Physical decrement unchanged: classic WMS = pick finalize; direct sale = WZ issue; RZ = none.
+- Document trigger architecture corrected: warehouse docs only via explicit triggers (automation `generate_document` + series_id). Pick finalize and OWR reserve do NOT auto-create WZ/RZ.
+- Classic WMS finalize: physical decrement → OWR consume → sync existing RZ status → stamp fulfillment key on pick movements. No WZ.
+- Business reservation OWR exists without RZ; RZ via `create_document_from_series` / automation.
+- Documentary WZ infrastructure kept (`post_pick_settlement`, settlement_mode, idempotency, movement link).
+- Packing still FV/PA only. Z-PZ / production PW-RW unchanged domain exceptions.
+- status_on_* series fields untouched (not status→document triggers).

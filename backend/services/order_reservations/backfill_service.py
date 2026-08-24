@@ -1,7 +1,8 @@
 """
-Dry-run / apply backfill: legacy location SALES_ORDER holds → business reservations + RZ.
+Dry-run / apply backfill: legacy location SALES_ORDER holds → business reservations.
 
 Does NOT run automatically on production startup.
+RZ documents are optional — only created when ``create_documents=True``.
 """
 
 from __future__ import annotations
@@ -14,7 +15,6 @@ from sqlalchemy.orm import Session
 
 from ...models.stock_reservation import StockReservation
 from ..reservations.constants import RESERVATION_KIND_SALES_ORDER, RESERVATION_STATUS_RESERVED
-from .constants import OWR_STATUS_RELEASED
 from .reservation_service import sync_order_warehouse_reservation_to_target
 from .rz_document_service import ensure_rz_document_for_order
 
@@ -27,6 +27,7 @@ def backfill_sales_order_location_holds_to_business(
     tenant_id: int | None = None,
     dry_run: bool = True,
     release_location_holds: bool = True,
+    create_documents: bool = False,
 ) -> dict[str, Any]:
     """
     Group active SALES_ORDER location holds by (tenant, warehouse, order, product)
@@ -34,6 +35,9 @@ def backfill_sales_order_location_holds_to_business(
 
     When ``release_location_holds`` and not dry_run: mark location holds released
     so product snapshot / ATP are not double-counted.
+
+    When ``create_documents=True``: also ensure RZ StockDocument for each order group.
+    Default False — business reservation without document.
     """
     q = db.query(StockReservation).filter(
         StockReservation.reservation_kind == RESERVATION_KIND_SALES_ORDER,
@@ -60,10 +64,12 @@ def backfill_sales_order_location_holds_to_business(
 
     report: dict[str, Any] = {
         "dry_run": dry_run,
+        "create_documents": bool(create_documents),
         "location_hold_rows": len(rows),
         "groups": len(groups),
         "created_or_increased": 0,
         "released_location_holds": 0,
+        "documents_created": 0,
         "errors": [],
         "totals_qty": round(sum(groups.values()), 6),
     }
@@ -83,7 +89,12 @@ def backfill_sales_order_location_holds_to_business(
                 product_id=pid,
                 target_qty=round(qty, 6),
             )
-            ensure_rz_document_for_order(db, tenant_id=tid, warehouse_id=wid, order_id=oid)
+            if create_documents:
+                doc = ensure_rz_document_for_order(
+                    db, tenant_id=tid, warehouse_id=wid, order_id=oid
+                )
+                if doc is not None:
+                    report["documents_created"] += 1
             report["created_or_increased"] += 1
             if release_location_holds:
                 for r in group_rows[(tid, wid, oid, pid)]:

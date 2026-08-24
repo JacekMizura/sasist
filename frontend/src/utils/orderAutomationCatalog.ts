@@ -206,10 +206,9 @@ export const ORDER_AUTOMATION_EFFECT_KINDS: EffectKindMeta[] = [
   },
   {
     kind: "generate_document",
-    label: "Generuj dokument",
+    label: "Utwórz dokument",
     category: "Dokumenty",
-    disabled: true,
-    disabledReason: "Jeszcze nieobsługiwane przez backend",
+    backendSupported: true,
   },
   {
     kind: "assign_courier",

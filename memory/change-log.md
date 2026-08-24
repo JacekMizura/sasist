@@ -1,3 +1,11 @@
+## 2026-08-24 — Document triggers: remove auto WZ/RZ; enable automation generate_document
+
+- Pick finalize (cart/cartless/recovery): no auto documentary WZ; stamp fulfillment key only
+- OWR reserve/sync/release: no auto RZ; sync_rz_document_status only if doc exists
+- Common entrypoint `create_document_from_series` + WZ/RZ handlers
+- Automation effect `generate_document` (series_id) now runtime-supported
+- Tests: test_document_trigger_architecture.py + updated OWR/WZ lifecycle expectations
+
 ## 2026-08-23 — Fix WMS top bar configuration controls
 
 - Root: multi-instance `useWmsPinnedModes` + no Auth patch after PUT + settings list not sorted by pin order

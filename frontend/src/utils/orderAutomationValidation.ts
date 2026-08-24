@@ -44,7 +44,9 @@ export function validateEffect(e: AutomationEffect): string | null {
       return null;
     }
     case "generate_document": {
-      if (!String(e.payload.doc_type ?? "").trim()) return "Nie wybrano typu dokumentu";
+      if (!String(e.payload.series_id ?? e.payload.doc_series ?? "").trim()) {
+        return "Nie wybrano serii dokumentu";
+      }
       return null;
     }
     case "send_email":

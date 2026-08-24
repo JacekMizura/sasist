@@ -158,7 +158,7 @@ class OrderWarehouseReservationTests(unittest.TestCase):
         self.db.close()
         self.engine.dispose()
 
-    def test_01_create_business_reservation_and_rz(self) -> None:
+    def test_01_create_business_reservation_without_rz(self) -> None:
         row = ensure_order_warehouse_reservation(
             self.db,
             tenant_id=1,
@@ -170,10 +170,35 @@ class OrderWarehouseReservationTests(unittest.TestCase):
         self.db.commit()
         self.assertEqual(float(row.quantity), 5.0)
         self.assertEqual(row.status, OWR_STATUS_RESERVED)
-        self.assertIsNotNone(row.stock_document_id)
-        doc = self.db.query(StockDocument).filter(StockDocument.id == row.stock_document_id).one()
+        self.assertIsNone(row.stock_document_id)
+        self.assertEqual(
+            self.db.query(StockDocument).filter(StockDocument.document_type == STOCK_DOC_TYPE_RESERVATION).count(),
+            0,
+        )
+
+    def test_01b_explicit_ensure_rz_over_owr(self) -> None:
+        from backend.services.order_reservations.rz_document_service import ensure_rz_document_for_order
+
+        row = ensure_order_warehouse_reservation(
+            self.db,
+            tenant_id=1,
+            warehouse_id=1,
+            order_id=5495,
+            product_id=10,
+            quantity=5,
+        )
+        self.db.commit()
+        self.assertIsNone(row.stock_document_id)
+        doc = ensure_rz_document_for_order(
+            self.db, tenant_id=1, warehouse_id=1, order_id=5495
+        )
+        self.db.commit()
+        self.assertIsNotNone(doc)
+        assert doc is not None
         self.assertEqual(doc.document_type, STOCK_DOC_TYPE_RESERVATION)
         self.assertTrue(str(doc.document_number or "").startswith("RZ/"))
+        self.db.refresh(row)
+        self.assertEqual(int(row.stock_document_id), int(doc.id))
         self.assertIsNone(getattr(doc, "location_id", None) or None)
         for item in doc.items:
             self.assertEqual(int(item.product_id), 10)

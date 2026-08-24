@@ -118,6 +118,16 @@ export function feRuleToCreateBody(
       effectType = "generate_sale_correction";
       config.include_shipping_cost = Boolean(config.include_shipping_cost);
     }
+    if (e.kind === "generate_document") {
+      effectType = "generate_document";
+      const sid = String(config.series_id ?? config.doc_series ?? config.document_series_id ?? "").trim();
+      config.series_id = sid;
+      delete config.doc_series;
+      delete config.document_series_id;
+      delete config.doc_type;
+      delete config.print_station;
+      delete config.copies;
+    }
     return {
       position: i,
       effect_type: effectType,

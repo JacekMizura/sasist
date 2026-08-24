@@ -20,6 +20,10 @@ EFFECT_GENERATE_SALE_CORRECTION = "generate_sale_correction"
 EFFECT_GENERATE_CORRECTION = "generate_correction"
 EFFECT_ADD_TAG = "add_tag"
 EFFECT_PRINT = "print"
+EFFECT_SEND_MESSAGE = "send_message"
+EFFECT_GENERATE_DOCUMENT = "generate_document"
+EFFECT_ASSIGN_COURIER = "assign_courier"
+EFFECT_WMS_ACTION = "wms_action"
 
 #: Runtime-executable.
 SUPPORTED_EFFECT_TYPES = frozenset(
@@ -28,14 +32,10 @@ SUPPORTED_EFFECT_TYPES = frozenset(
         EFFECT_SEND_EMAIL,
         EFFECT_WAREHOUSE_COMMIT,
         EFFECT_GENERATE_SALE_CORRECTION,
+        EFFECT_GENERATE_DOCUMENT,
     }
 )
 #: Persistable effect types (editor catalog + future adapters). Unsupported at runtime → FAILED.
-EFFECT_SEND_MESSAGE = "send_message"
-EFFECT_GENERATE_DOCUMENT = "generate_document"
-EFFECT_ASSIGN_COURIER = "assign_courier"
-EFFECT_WMS_ACTION = "wms_action"
-
 KNOWN_EFFECT_TYPES = frozenset(
     {
         EFFECT_CHANGE_STATUS,

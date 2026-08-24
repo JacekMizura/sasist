@@ -425,7 +425,7 @@ class WzPostPickSettlementPhase2Tests(unittest.TestCase):
             self.db.rollback()
         self.assertAlmostEqual(self._physical_qty(), before)
 
-    def test_j_classic_finalize_paths_use_post_pick_settlement_not_issue(self):
+    def test_j_classic_finalize_paths_do_not_auto_create_wz(self):
         cart_src = inspect.getsource(finalize_wms_picking_cart)
         cartless_src = inspect.getsource(finalize_cartless_picking_session)
         recovery_src = inspect.getsource(finalize_wms_recovery_picking_cart)
@@ -435,7 +435,9 @@ class WzPostPickSettlementPhase2Tests(unittest.TestCase):
             ("recovery", recovery_src),
         ):
             with self.subTest(path=label):
-                self.assertIn("ensure_documentary_wz_for_pick_settlement", src)
+                self.assertNotIn("ensure_documentary_wz_for_pick_settlement", src)
+                self.assertIn("stamp_fulfillment_key_on_pick_movements", src)
+                self.assertNotIn("wz_documentary_create_failed", src)
                 self.assertNotIn("SETTLEMENT_WZ_ISSUE", src)
                 self.assertNotIn("append_issue_operation", src)
 

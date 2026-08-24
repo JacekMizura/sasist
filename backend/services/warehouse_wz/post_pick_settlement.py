@@ -184,10 +184,15 @@ def ensure_documentary_wz_for_pick_settlement(
     fulfillment_session_id: str | int,
     performed_by_user_id: int | None = None,
     metadata_extra: dict | None = None,
+    document_series=None,
+    creation_source: str = "WMS",
 ) -> DocumentaryWzResult | None:
     """
     Idempotent documentary WZ for one order + fulfillment session.
     Uses DB unique (tenant_id, idempotency_key) — concurrent retries are safe.
+
+    Optional ``document_series``: explicit WAREHOUSE/WZ series (automation trigger).
+    When omitted, resolves the default warehouse WZ series.
     """
     oid = int(order.id)
     fulfillment_key = build_fulfillment_key(kind=fulfillment_kind, session_id=fulfillment_session_id)
@@ -225,15 +230,17 @@ def ensure_documentary_wz_for_pick_settlement(
     if not line_payloads:
         return None
 
-    try:
-        wz_series = require_warehouse_series(
-            db,
-            tenant_id=int(tenant_id),
-            warehouse_id=int(warehouse_id),
-            subtype="WZ",
-        )
-    except DocumentSeriesOperationalError:
-        raise
+    wz_series = document_series
+    if wz_series is None:
+        try:
+            wz_series = require_warehouse_series(
+                db,
+                tenant_id=int(tenant_id),
+                warehouse_id=int(warehouse_id),
+                subtype="WZ",
+            )
+        except DocumentSeriesOperationalError:
+            raise
 
     rz_doc = find_active_rz_document(
         db,
@@ -242,6 +249,7 @@ def ensure_documentary_wz_for_pick_settlement(
         order_id=oid,
     )
     rz_doc_id = int(rz_doc.id) if rz_doc is not None else None
+    src = str(creation_source or "WMS").strip().upper() or "WMS"
 
     try:
         with db.begin_nested():
@@ -249,7 +257,7 @@ def ensure_documentary_wz_for_pick_settlement(
                 tenant_id=int(tenant_id),
                 warehouse_id=int(warehouse_id),
                 document_type="WZ",
-                creation_source="WMS",
+                creation_source=src,
                 settlement_mode=SETTLEMENT_WMS_PICK,
                 idempotency_key=idem,
                 order_id=oid,

@@ -212,6 +212,30 @@ def validate_automation_runtime(
                         message="generate_sale_correction only compatible with entity_type=RETURN",
                     )
                 )
+        elif etype == "generate_document":
+            series_id = str(
+                cfg.get("series_id")
+                or cfg.get("document_series_id")
+                or cfg.get("doc_series_id")
+                or ""
+            ).strip()
+            if not series_id:
+                issues.append(
+                    ValidationIssue(
+                        code="invalid_effect",
+                        effect_type=etype,
+                        message="generate_document requires series_id",
+                    )
+                )
+            rule_et = str(entity_type or rule.entity_type or "").strip().upper()
+            if rule_et and rule_et != "ORDER":
+                issues.append(
+                    ValidationIssue(
+                        code="unsupported_entity_for_effect",
+                        effect_type=etype,
+                        message="generate_document only compatible with entity_type=ORDER",
+                    )
+                )
 
     # RETURN: when both warehouse_commit and generate_sale_correction are enabled,
     # warehouse must run first (no silent reorder).
