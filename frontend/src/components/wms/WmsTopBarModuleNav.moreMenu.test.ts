@@ -15,6 +15,10 @@ describe("WmsTopBar More menu stacking", () => {
     expect(NAV).toContain("document.body");
     expect(NAV).toContain("position: \"fixed\"");
     expect(NAV).not.toMatch(/absolute right-0 top-full/);
+    // Declaration and JSX must use the same identifier (regression: moreMenuPanel vs moreMenuPortal).
+    expect(NAV).toMatch(/const moreMenuPortal\s*=/);
+    expect(NAV).toContain("{moreMenuPortal}");
+    expect(NAV).not.toMatch(/\bmoreMenuPanel\b/);
   });
 
   it("uses WMS_Z.dropdown SSOT (above topNav, below modal)", () => {

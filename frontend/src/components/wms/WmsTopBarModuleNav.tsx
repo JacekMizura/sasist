@@ -208,7 +208,7 @@ function WmsTopBarModuleNav({ tabs, className, onReorder }: Props) {
       ),
     );
 
-  const moreMenuPanel =
+  const moreMenuPortal =
     moreOpen && overflow.length > 0 && typeof document !== "undefined"
       ? createPortal(
           <div
