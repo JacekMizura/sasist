@@ -1,8 +1,9 @@
 import { Package, Plus } from "lucide-react";
-import { brandPrimaryButtonClass } from "../../design-system/brandUi";
 import { memo, type MutableRefObject } from "react";
 import { Link } from "react-router-dom";
 
+import { brandPrimaryButtonClass } from "../../design-system/brandUi";
+import { listSellasistToolbarToggleBtn } from "../listPage/listSellasistTokens";
 import { ModuleListPageToolbar } from "../listPage/moduleList";
 import { WMS_ROUTES } from "../../pages/wms/wmsRoutes";
 
@@ -16,29 +17,22 @@ type Props = {
   onNewComplaint: () => void;
 };
 
-function ComplaintsListToolbarInner({
-  onNewComplaint,
-  ...props
-}: Props) {
+function ComplaintsListToolbarInner({ onNewComplaint, ...props }: Props) {
   return (
     <ModuleListPageToolbar
       title="Reklamacje"
       settingsHref="/settings/complaints/ui-statuses"
       settingsTitle="Ustawienia statusów reklamacji"
-      filtersToggleLabelCollapsed="Dodatkowe filtry"
       headerActions={
         <>
-          <button
-            type="button"
-            onClick={onNewComplaint}
-            className={brandPrimaryButtonClass}
-          >
+          <button type="button" onClick={onNewComplaint} className={brandPrimaryButtonClass} title="Utwórz reklamację">
             <Plus className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
             Nowa reklamacja
           </button>
           <Link
             to={WMS_ROUTES.returns}
-            className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+            className={listSellasistToolbarToggleBtn}
+            title="WMS — zwroty / przyjęcia"
           >
             <Package className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
             WMS

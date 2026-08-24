@@ -1,3 +1,9 @@
+## 2026-08-24 — Complaints list UI aligned to Returns SSOT
+
+- Same ModuleListPageToolbar / embedded filters / ModuleListBulkBar / moduleList table tokens as Zwroty
+- Compact rows; DONE tone like archived returns; WMS uses listSellasistToolbarToggleBtn; breadcrumb in layout
+- No backend/status/CRUD changes; Returns untouched
+
 ## 2026-08-24 — Document series split-pane editor UI
 
 - `/documents/series/*` workspace: list stays visible; right panel for create/edit

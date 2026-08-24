@@ -15,7 +15,6 @@ import { ComplaintsListTable } from "../../components/complaints/ComplaintsListT
 import { ComplaintsListToolbar } from "../../components/complaints/ComplaintsListToolbar";
 import {
   ModuleFilteredAllBanner,
-  ModuleListBreadcrumb,
   ModuleStatusSidebarShell,
   ModuleTableCard,
   moduleListContentColumnClass,
@@ -23,7 +22,6 @@ import {
   moduleListTwoColumnShellClass,
   moduleTablePaginationFooterClass,
 } from "../../components/listPage/moduleList";
-import { listSellasistInputClass } from "../../components/listPage/listSellasistTokens";
 import { usePanelListBulkSelection } from "../../hooks/usePanelListBulkSelection";
 import {
   buildComplaintListViewAdapter,
@@ -238,9 +236,7 @@ export default function ComplaintsPanelPage() {
 
   return (
     <>
-      <ModuleListBreadcrumb items={[{ label: "Reklamacje", to: "/complaints" }, { label: "Lista" }]} />
-
-      <div className={moduleListTwoColumnShellClass}>
+      <div className={moduleListTwoColumnShellClass} data-testid="complaints-list-workspace">
         {warehouseId != null ? (
           <ModuleStatusSidebarShell
             collapsed={isStatusPanelCollapsed}
@@ -342,13 +338,12 @@ export default function ComplaintsPanelPage() {
                     onSelectFiltered={selectAllFiltered}
                     onClearSelection={clearSelection}
                     onSelectMenuBump={() => setBulkSelectMenuKey((k) => k + 1)}
-                    onRefresh={() => void fetchList()}
                   />
                 }
                 footer={
                   totalCount > 0 ? (
-                    <div className={moduleTablePaginationFooterClass}>
-                      <span className="text-sm font-medium tabular-nums text-slate-600">
+                    <div className={`${moduleTablePaginationFooterClass} px-6`} data-testid="complaints-list-pagination">
+                      <span className="text-sm tabular-nums text-slate-400">
                         {startRow}–{endRow} z {totalCount}
                       </span>
                       <div className="flex flex-wrap items-center justify-end gap-1">
