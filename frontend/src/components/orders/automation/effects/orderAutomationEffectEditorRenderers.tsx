@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AutomationEffect, AutomationEffectKind } from "../../../../types/orderAutomation";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../../types/orderUiStatus";
 import {
@@ -18,6 +19,12 @@ import { DAMAGE_TENANT_ID } from "../../../../pages/damage/damageShared";
 import { useWarehouse } from "../../../../context/WarehouseContext";
 import { PanelStatusHierarchyPicker } from "../../../panel/PanelStatusHierarchyPicker";
 import { Input, Select, inputClassName } from "../../../../design-system";
+import { listDocumentSeries, type DocumentSeriesDto } from "../../../../api/documentSeriesApi";
+import {
+  buildGenerateDocumentSeriesOptions,
+  generateDocumentSubtypeHelp,
+  resolveGenerateDocumentSeriesId,
+} from "../../../../utils/orderAutomationGenerateDocumentSeries";
 import { oaWorkflowFieldLabelClass, oaWorkflowFieldRowClass } from "../orderAutomationUiTokens";
 
 /** Lewa kolumna: zwięzła etykieta operacji (ERP), nie pełna nazwa z katalogu. */
@@ -26,7 +33,7 @@ export const EFFECT_BUSINESS_SIDEBAR: Record<
   { title: string; Icon: LucideIcon }
 > = {
   change_status: { title: "Status", Icon: CircleDot },
-  generate_document: { title: "Dokument", Icon: FileText },
+  generate_document: { title: "Utwórz dokument", Icon: FileText },
   send_email: { title: "E-mail", Icon: Mail },
   send_message: { title: "Wiadomość", Icon: Mail },
   warehouse_commit: { title: "Zwrot WMS", Icon: Package },
@@ -77,21 +84,6 @@ export function renderChangeStatusEffectEditor({ effect, patchPayload, panelSumm
   );
 }
 
-const DOC_TYPES: { value: string; label: string }[] = [
-  { value: "invoice", label: "Faktura" },
-  { value: "receipt", label: "Paragon" },
-  { value: "wz", label: "WZ" },
-  { value: "label", label: "Etykieta" },
-  { value: "other", label: "Inny" },
-];
-
-const DOC_SERIES: { value: string; label: string }[] = [
-  { value: "fv_poland", label: "FV Polska" },
-  { value: "fv_ue", label: "FV UE" },
-  { value: "proforma", label: "Proforma" },
-  { value: "corr", label: "Korekta" },
-];
-
 const PRINT_STATIONS: { value: string; label: string }[] = [
   { value: "main", label: "Główna" },
   { value: "warehouse", label: "Magazyn" },
@@ -100,21 +92,114 @@ const PRINT_STATIONS: { value: string; label: string }[] = [
 
 const COPIES_OPTS = ["1", "2", "3", "4", "5"];
 
-export function renderGenerateDocumentEffectEditor({ effect, patchPayload }: EffectEditorBaseProps) {
-  const seriesId = String(effect.payload.series_id ?? effect.payload.doc_series ?? "");
+export function GenerateDocumentEffectEditor({ effect, patchPayload }: EffectEditorBaseProps) {
+  const { warehouse, warehouses, showWarehouseSelector } = useWarehouse();
+  const warehouseId = warehouse?.id ?? null;
+  const [series, setSeries] = useState<DocumentSeriesDto[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (warehouseId == null || warehouseId < 1) {
+      setSeries([]);
+      setLoadError(null);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setLoadError(null);
+    void listDocumentSeries(DAMAGE_TENANT_ID, warehouseId)
+      .then((rows) => {
+        if (!cancelled) setSeries(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSeries([]);
+          setLoadError("Nie udało się wczytać serii dokumentów.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [warehouseId]);
+
+  const warehouseNameById = useMemo(() => {
+    const map: Record<number, string> = {};
+    for (const w of warehouses) {
+      map[Number(w.id)] = String(w.name || `Magazyn #${w.id}`);
+    }
+    return map;
+  }, [warehouses]);
+
+  const options = useMemo(
+    () =>
+      buildGenerateDocumentSeriesOptions(series, {
+        warehouseId,
+        warehouseNameById,
+        showWarehouse: Boolean(showWarehouseSelector && warehouses.length > 1),
+      }),
+    [series, warehouseId, warehouseNameById, showWarehouseSelector, warehouses.length],
+  );
+
+  const selectedId = resolveGenerateDocumentSeriesId(effect.payload);
+  const selectedOption = options.find((o) => o.seriesId === selectedId) ?? null;
+  const help = generateDocumentSubtypeHelp(selectedOption?.subtype);
+
+  useEffect(() => {
+    if (loading || warehouseId == null) return;
+    if (!selectedId) return;
+    if (options.some((o) => o.seriesId === selectedId)) return;
+    if (options.length === 0) return;
+    patchPayload({ series_id: "", doc_series: "" });
+  }, [loading, warehouseId, selectedId, options, patchPayload]);
+
   return (
     <div className="grid min-w-0 gap-y-0">
       <div className={erpRow}>
-        <span className={erpLbl}>Seria dokumentu (ID)</span>
-        <Input
-          density={erpFieldDensity}
-          value={seriesId}
-          onChange={(e) => patchPayload({ series_id: e.target.value, doc_series: e.target.value })}
-          placeholder="UUID serii (WAREHOUSE: WZ / RESERVATION)"
-        />
+        <span className={erpLbl}>
+          Seria dokumentu <span className="text-red-600">*</span>
+        </span>
+        {warehouseId == null ? (
+          <p className="m-0 text-xs text-slate-600">Wybierz aktywny magazyn, aby zobaczyć dostępne serie.</p>
+        ) : loading ? (
+          <p className="m-0 text-xs text-slate-500">Ładowanie serii…</p>
+        ) : loadError ? (
+          <p className="m-0 text-xs text-red-600">{loadError}</p>
+        ) : options.length === 0 ? (
+          <p className="m-0 text-xs text-slate-600">
+            Brak aktywnych serii WZ lub RZ dla tego magazynu. Dodaj je w Dokumenty → Serie dokumentów.
+          </p>
+        ) : (
+          <Select
+            density={erpFieldDensity}
+            value={selectedOption ? selectedId : ""}
+            onChange={(e) => {
+              const v = e.target.value;
+              patchPayload({ series_id: v, doc_series: v || null });
+            }}
+            aria-label="Seria dokumentu"
+          >
+            <option value="">— wybierz serię —</option>
+            {options.map((o) => (
+              <option key={o.seriesId} value={o.seriesId}>
+                {o.optionLabel}
+              </option>
+            ))}
+          </Select>
+        )}
       </div>
+      {help ? (
+        <p className="m-0 mt-1 max-w-prose text-[11px] leading-snug text-slate-600">{help}</p>
+      ) : null}
     </div>
   );
+}
+
+export function renderGenerateDocumentEffectEditor(props: EffectEditorBaseProps) {
+  return <GenerateDocumentEffectEditor {...props} />;
 }
 
 export function SendEmailEffectEditor({ effect, patchPayload }: EffectEditorBaseProps) {
@@ -386,7 +471,7 @@ export function renderAutomationEffectConfigEditor(
         panelSubgroups: props.panelSubgroups,
       });
     case "generate_document":
-      return renderGenerateDocumentEffectEditor(props);
+      return <GenerateDocumentEffectEditor effect={props.effect} patchPayload={props.patchPayload} />;
     case "send_email":
       return renderSendEmailEffectEditor(props);
     case "send_message":

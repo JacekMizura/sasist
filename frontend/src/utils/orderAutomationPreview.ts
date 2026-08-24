@@ -216,16 +216,11 @@ export function formatEffectListBlock(e: AutomationEffect, statusNameById?: Map<
   }
 
   if (e.kind === "generate_document") {
-    const docType = payloadLabel(DOC_TYPE_LABELS, String(e.payload.doc_type ?? ""));
-    const series = payloadLabel(DOC_SERIES_LABELS, String(e.payload.doc_series ?? ""));
-    const station = payloadLabel(PRINT_STATION_LABELS, String(e.payload.print_station ?? ""));
-    const rest = [series, station].filter(Boolean);
-    const copies = String(e.payload.copies ?? "").trim();
-    if (copies && copies !== "1") rest.push(`${copies} kopie`);
+    const seriesId = String(e.payload.series_id ?? e.payload.doc_series ?? "").trim();
     return {
-      leadIn: "Generuj dokument → ",
-      primaryBold: docType ? docType.toUpperCase() : null,
-      secondaryDetail: rest.length ? rest.join(" • ") : null,
+      leadIn: "Utwórz dokument — seria ",
+      primaryBold: seriesId ? seriesId.slice(0, 8) + "…" : null,
+      secondaryDetail: seriesId || null,
     };
   }
 

@@ -45,7 +45,7 @@ export function validateEffect(e: AutomationEffect): string | null {
     }
     case "generate_document": {
       if (!String(e.payload.series_id ?? e.payload.doc_series ?? "").trim()) {
-        return "Nie wybrano serii dokumentu";
+        return "Wybierz serię dokumentu";
       }
       return null;
     }
