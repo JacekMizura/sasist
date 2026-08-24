@@ -3,6 +3,7 @@ import { NavLink } from "react-router-dom";
 
 import GlobalWarehouseSelect from "../components/layout/GlobalWarehouseSelect";
 import WmsTopBarModuleNav from "../components/wms/WmsTopBarModuleNav";
+import { WMS_Z } from "../components/wms/execution/wmsLayoutTokens";
 import UserAccountMenu from "../components/layout/UserAccountMenu";
 import { useAuth } from "../context/AuthContext";
 import { useWmsPinnedModes } from "../hooks/useWmsPinnedModes";
@@ -17,8 +18,8 @@ export default function WmsTopBar() {
 
   return (
     <header
-      className="sticky top-0 z-40 shrink-0 select-none border-b bg-white"
-      style={{ borderColor: WMS_HOME_BORDER }}
+      className="sticky top-0 shrink-0 select-none border-b bg-white"
+      style={{ borderColor: WMS_HOME_BORDER, zIndex: WMS_Z.topNav }}
     >
       <div className="flex items-stretch" style={{ height: TOPBAR_H }}>
         <div
@@ -42,6 +43,7 @@ export default function WmsTopBar() {
           </NavLink>
         </div>
 
+        {/* overflow-x-auto keeps tab strip scrollable; More menu portals to body (see WmsTopBarModuleNav). */}
         <nav className="flex min-w-0 flex-1 overflow-x-auto px-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <WmsTopBarModuleNav tabs={pinnedTabsInOrder} className="h-full min-w-0" onReorder={reorderPinned} />
         </nav>

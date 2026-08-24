@@ -1,4 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   DndContext,
   PointerSensor,
@@ -14,6 +15,7 @@ import { NavLink, useLocation } from "react-router-dom";
 
 import { isWmsTabPathActive, resolveWmsModuleAccent, type WmsTabConfigItem } from "../../pages/wms/wmsTabConfig";
 import { WMS_HOME_PRIMARY } from "../../pages/wms/launcher/wmsHomeSections";
+import { WMS_Z } from "./execution/wmsLayoutTokens";
 
 type Props = {
   tabs: WmsTabConfigItem[];
@@ -96,8 +98,18 @@ function WmsTopBarModuleNav({ tabs, className, onReorder }: Props) {
   const { pathname } = useLocation();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const containerRef = useRef<HTMLDivElement>(null);
+  const moreRootRef = useRef<HTMLDivElement>(null);
+  const moreTriggerRef = useRef<HTMLButtonElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
   const [visibleCount, setVisibleCount] = useState(tabs.length);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [morePos, setMorePos] = useState<{ top: number; right: number } | null>(null);
+
+  const updateMorePos = () => {
+    const b = moreTriggerRef.current?.getBoundingClientRect();
+    if (!b) return;
+    setMorePos({ top: b.bottom + 4, right: Math.max(8, window.innerWidth - b.right) });
+  };
 
   useLayoutEffect(() => {
     const el = containerRef.current;
@@ -123,6 +135,40 @@ function WmsTopBarModuleNav({ tabs, className, onReorder }: Props) {
   useEffect(() => {
     setMoreOpen(false);
   }, [pathname, tabs]);
+
+  useLayoutEffect(() => {
+    if (!moreOpen) {
+      setMorePos(null);
+      return;
+    }
+    const id = requestAnimationFrame(() => updateMorePos());
+    window.addEventListener("scroll", updateMorePos, true);
+    window.addEventListener("resize", updateMorePos);
+    return () => {
+      cancelAnimationFrame(id);
+      window.removeEventListener("scroll", updateMorePos, true);
+      window.removeEventListener("resize", updateMorePos);
+    };
+  }, [moreOpen]);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (moreRootRef.current?.contains(t)) return;
+      if (moreMenuRef.current?.contains(t)) return;
+      setMoreOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMoreOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [moreOpen]);
 
   const { primary, overflow } = useMemo(() => {
     if (visibleCount >= tabs.length) return { primary: tabs, overflow: [] as WmsTabConfigItem[] };
@@ -162,23 +208,19 @@ function WmsTopBarModuleNav({ tabs, className, onReorder }: Props) {
       ),
     );
 
-  const moreMenu =
-    overflow.length > 0 ? (
-      <div className="relative shrink-0 self-center">
-        <button
-          type="button"
-          className="inline-flex h-11 items-center gap-1 rounded-[10px] border border-transparent px-3 text-[15px] font-semibold text-slate-600 hover:bg-slate-50"
-          aria-expanded={moreOpen}
-          aria-haspopup="menu"
-          onClick={() => setMoreOpen((v) => !v)}
-        >
-          Więcej
-          <ChevronDown size={16} aria-hidden />
-        </button>
-        {moreOpen ? (
+  const moreMenuPanel =
+    moreOpen && overflow.length > 0 && typeof document !== "undefined"
+      ? createPortal(
           <div
+            ref={moreMenuRef}
             role="menu"
-            className="absolute right-0 top-full z-50 mt-1 min-w-[220px] rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+            data-testid="wms-topbar-more-menu"
+            className="min-w-[220px] rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+            style={
+              morePos
+                ? { position: "fixed", top: morePos.top, right: morePos.right, zIndex: WMS_Z.dropdown }
+                : { position: "fixed", visibility: "hidden", zIndex: WMS_Z.dropdown }
+            }
           >
             {overflow.map((tab) => {
               const Icon = tab.icon;
@@ -200,8 +242,27 @@ function WmsTopBarModuleNav({ tabs, className, onReorder }: Props) {
                 </NavLink>
               );
             })}
-          </div>
-        ) : null}
+          </div>,
+          document.body,
+        )
+      : null;
+
+  const moreMenu =
+    overflow.length > 0 ? (
+      <div ref={moreRootRef} className="relative shrink-0 self-center">
+        <button
+          ref={moreTriggerRef}
+          type="button"
+          className="inline-flex h-11 items-center gap-1 rounded-[10px] border border-transparent px-3 text-[15px] font-semibold text-slate-600 hover:bg-slate-50"
+          aria-expanded={moreOpen}
+          aria-haspopup="menu"
+          data-testid="wms-topbar-more-button"
+          onClick={() => setMoreOpen((v) => !v)}
+        >
+          Więcej
+          <ChevronDown size={16} aria-hidden />
+        </button>
+        {moreMenuPortal}
       </div>
     ) : null;
 

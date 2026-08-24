@@ -1,3 +1,9 @@
+## 2026-08-24 — Fix WMS topbar „Więcej” dropdown clipping
+
+- Root cause: `overflow-x-auto` on WmsTopBar `<nav>` clipped absolute menu (overflow-x forces overflow-y clip)
+- Portal to `document.body` + `position: fixed` + `WMS_Z.dropdown` (500); topbar uses `WMS_Z.topNav`
+- Escape + outside click; no visual/routing/pin changes
+
 ## 2026-08-24 — Complaints list UI aligned to Returns SSOT
 
 - Same ModuleListPageToolbar / embedded filters / ModuleListBulkBar / moduleList table tokens as Zwroty
