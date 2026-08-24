@@ -47,6 +47,29 @@ export function validateEffect(e: AutomationEffect): string | null {
       if (!String(e.payload.series_id ?? e.payload.doc_series ?? "").trim()) {
         return "Wybierz serię dokumentu";
       }
+      if (Boolean(e.payload.override_payment_term)) {
+        const days = Number(e.payload.payment_term_days);
+        if (!Number.isFinite(days) || !Number.isInteger(days) || days < 0) {
+          return "Podaj termin płatności (liczba dni ≥ 0)";
+        }
+      }
+      if (Boolean(e.payload.override_sale_date)) {
+        const sd = String(e.payload.sale_date || "").trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(sd)) {
+          return "Podaj datę sprzedaży";
+        }
+      }
+      if (Boolean(e.payload.override_description)) {
+        if (!String(e.payload.additional_description || "").trim()) {
+          return "Podaj opis dodatkowy";
+        }
+      }
+      if (Boolean(e.payload.auto_print)) {
+        const st = Number(e.payload.print_station_id);
+        if (!Number.isFinite(st) || st < 1) {
+          return "Wybierz stanowisko druku";
+        }
+      }
       return null;
     }
     case "send_email":

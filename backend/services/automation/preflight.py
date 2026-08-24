@@ -236,6 +236,18 @@ def validate_automation_runtime(
                         message="generate_document only compatible with entity_type=ORDER",
                     )
                 )
+            try:
+                from ..documents.generate_document_support import parse_document_creation_overrides
+
+                parse_document_creation_overrides(cfg if isinstance(cfg, dict) else {})
+            except ValueError as exc:
+                issues.append(
+                    ValidationIssue(
+                        code="invalid_effect",
+                        effect_type=etype,
+                        message=f"generate_document invalid config: {exc}",
+                    )
+                )
 
     # RETURN: when both warehouse_commit and generate_sale_correction are enabled,
     # warehouse must run first (no silent reorder).

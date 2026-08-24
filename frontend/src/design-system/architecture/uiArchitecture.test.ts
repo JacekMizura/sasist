@@ -326,6 +326,7 @@ const PHASE_D1_AUTOMATION_GLOBS = [
   "components/orders/automation/AutomationExecutionSettingsSection.tsx",
   "components/orders/automation/AutomationConditionConfigFields.tsx",
   "components/orders/automation/effects/orderAutomationEffectEditorRenderers.tsx",
+  "components/orders/automation/effects/GenerateDocumentEffectEditor.tsx",
   "components/orders/automation/AutomationModuleActivatorSettingsForm.tsx",
   "components/orders/automation/AutomationIfThenSection.tsx",
   "components/orders/automation/AutomationCategoryPickerModal.tsx",

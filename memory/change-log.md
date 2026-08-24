@@ -1,3 +1,11 @@
+## 2026-08-24 — generate_document: SALE + overrides + auto-print
+
+- Extended canonical `generate_document` / `create_document_from_series` for SALE INVOICE/RECEIPT + WZ + RZ
+- Overrides: payment_term_days, sale_date, additional_description, auto_print + print_station_id
+- FE editor: all supported series from DocumentSeries API + workstation select; no JST
+- Idempotency: automation execution+effect+series+order for SALE; existing WZ/RZ keys reused
+- Unsupported subtypes excluded from picker; backend rejects `unsupported_series`
+
 ## 2026-08-24 — Fix WMS topbar „Więcej” dropdown clipping
 
 - Root cause: `overflow-x-auto` on WmsTopBar `<nav>` clipped absolute menu (overflow-x forces overflow-y clip)

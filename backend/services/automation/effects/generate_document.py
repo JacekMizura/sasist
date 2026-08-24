@@ -1,4 +1,4 @@
-"""generate_document effect — create warehouse document from explicit series_id."""
+"""generate_document effect — create document from explicit series_id (+ optional overrides)."""
 
 from __future__ import annotations
 
@@ -12,8 +12,37 @@ from ...documents.create_from_series_service import (
     DocumentTriggerContext,
     create_document_from_series,
 )
+from ...documents.generate_document_support import (
+    format_sale_date_pl,
+    parse_document_creation_overrides,
+)
 from ..constants import ENTITY_ORDER
 from . import EffectResult
+
+
+def _business_message(result, *, series_name: str | None) -> str:
+    parts = [
+        f"Utworzono dokument {result.document_number}"
+        if result.created
+        else f"Dokument {result.document_number} (bez duplikatu)"
+    ]
+    label = series_name or result.series_name
+    if label:
+        parts.append(f"Seria: {label}")
+    meta = result.metadata or {}
+    if meta.get("payment_term"):
+        parts.append(f"Termin płatności: {meta['payment_term']}")
+    sale_pl = format_sale_date_pl(meta.get("sale_date"))
+    if sale_pl:
+        parts.append(f"Data sprzedaży: {sale_pl}")
+    if meta.get("additional_description"):
+        parts.append("Opis dodatkowy: tak")
+    if result.print_job_id:
+        station = meta.get("print_station_name") or (
+            f"stanowisko #{meta['print_station_id']}" if meta.get("print_station_id") else "tak"
+        )
+        parts.append(f"Wydruk: {station}")
+    return " · ".join(parts)
 
 
 def execute_generate_document(
@@ -46,6 +75,16 @@ def execute_generate_document(
             data={"error_code": "series_id_required"},
         )
 
+    try:
+        overrides = parse_document_creation_overrides(config)
+    except ValueError as exc:
+        code = str(exc)
+        return EffectResult(
+            ok=False,
+            message=f"generate_document invalid config: {code}",
+            data={"error_code": code},
+        )
+
     rule_id = None
     try:
         rule_id = int(getattr(event, "matched_rule_id", None) or 0) or None
@@ -74,6 +113,7 @@ def execute_generate_document(
             order_id=int(event.entity_id),
             actor_user_id=actor_user_id,
             trigger_context=ctx,
+            overrides=overrides,
         )
     except DocumentCreationError as exc:
         return EffectResult(
@@ -90,14 +130,17 @@ def execute_generate_document(
 
     return EffectResult(
         ok=True,
-        message="generate_document_ok",
+        message=_business_message(result, series_name=result.series_name),
         data={
-            "stock_document_id": result.stock_document_id,
+            "stock_document_id": result.stock_document_id or None,
+            "sale_document_id": result.sale_document_id,
             "document_number": result.document_number,
             "document_type": result.document_type,
             "series_id": result.series_id,
+            "series_name": result.series_name,
             "created": result.created,
             "settlement_mode": result.settlement_mode,
+            "print_job_id": result.print_job_id,
             "metadata": result.metadata,
         },
     )

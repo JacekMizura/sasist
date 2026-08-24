@@ -93,11 +93,15 @@ def create_sale_document(
     tenant_id: int,
     warehouse_id: int,
     panel_document_type: str,
+    issuance_overrides: dict | None = None,
 ) -> SaleDocument:
     """
     Alokuje numer z serii (``document_number_service``), zapisuje wiersz ``sale_documents``,
     ustawia ``orders.sales_document_number`` oraz metadane panelu (seria + typ dokumentu).
     Wymaga ``document_series.type`` (kolumna ``type``) = SALE.
+
+    ``issuance_overrides`` (optional) is merged into buyer_json under key ``issuance``
+    (payment_term_days, sale_date, additional_description) for automation / Activity readback.
     """
     sid = str(series_id).strip()
     logger.info(
@@ -197,6 +201,21 @@ def create_sale_document(
         panel_document_type=panel,
         customer=customer,
     )
+
+    if issuance_overrides:
+        try:
+            buyer = json.loads(row.buyer_json) if row.buyer_json else {}
+            if not isinstance(buyer, dict):
+                buyer = {}
+        except (json.JSONDecodeError, TypeError):
+            buyer = {}
+        issuance = buyer.get("issuance") if isinstance(buyer.get("issuance"), dict) else {}
+        for key in ("payment_term_days", "sale_date", "additional_description", "payment_term_text"):
+            if key in issuance_overrides and issuance_overrides[key] is not None:
+                issuance[key] = issuance_overrides[key]
+        if issuance:
+            buyer["issuance"] = issuance
+            row.buyer_json = json.dumps(buyer, ensure_ascii=False)
 
     db.add(row)
 

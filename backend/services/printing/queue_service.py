@@ -365,6 +365,7 @@ def queue_print_job(
     payload: QueuePrintRequest,
     api_base_url: str,
     created_by_user_id: int | None = None,
+    commit: bool = True,
 ) -> Any:
     document_type = payload.document_type.strip().lower()
     if document_type not in SUPPORTED_DOCUMENT_TYPES:
@@ -425,8 +426,12 @@ def queue_print_job(
     save_job_pdf(job.id, pdf_bytes)
     file_url = build_job_file_url(api_base_url=api_base_url, job_id=job.id)
     job.payload_json = json.dumps({"pdf_url": file_url, "copies": copies}, ensure_ascii=False)
-    db.commit()
-    db.refresh(job)
+    if commit:
+        db.commit()
+        db.refresh(job)
+    else:
+        db.flush()
+        db.refresh(job)
 
     log_print_queue(
         job_id=job.id,

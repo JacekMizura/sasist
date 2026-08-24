@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
 import type { AutomationEffect, AutomationEffectKind } from "../../../../types/orderAutomation";
 import type { OrderUiPanelSubgroupRead, OrderUiStatusPanelSummary } from "../../../../types/orderUiStatus";
 import {
@@ -19,13 +18,9 @@ import { DAMAGE_TENANT_ID } from "../../../../pages/damage/damageShared";
 import { useWarehouse } from "../../../../context/WarehouseContext";
 import { PanelStatusHierarchyPicker } from "../../../panel/PanelStatusHierarchyPicker";
 import { Input, Select, inputClassName } from "../../../../design-system";
-import { listDocumentSeries, type DocumentSeriesDto } from "../../../../api/documentSeriesApi";
-import {
-  buildGenerateDocumentSeriesOptions,
-  generateDocumentSubtypeHelp,
-  resolveGenerateDocumentSeriesId,
-} from "../../../../utils/orderAutomationGenerateDocumentSeries";
 import { oaWorkflowFieldLabelClass, oaWorkflowFieldRowClass } from "../orderAutomationUiTokens";
+import { GenerateDocumentEffectEditor } from "./GenerateDocumentEffectEditor";
+export { GenerateDocumentEffectEditor } from "./GenerateDocumentEffectEditor";
 
 /** Lewa kolumna: zwięzła etykieta operacji (ERP), nie pełna nazwa z katalogu. */
 export const EFFECT_BUSINESS_SIDEBAR: Record<
@@ -91,112 +86,6 @@ const PRINT_STATIONS: { value: string; label: string }[] = [
 ];
 
 const COPIES_OPTS = ["1", "2", "3", "4", "5"];
-
-export function GenerateDocumentEffectEditor({ effect, patchPayload }: EffectEditorBaseProps) {
-  const { warehouse, warehouses, showWarehouseSelector } = useWarehouse();
-  const warehouseId = warehouse?.id ?? null;
-  const [series, setSeries] = useState<DocumentSeriesDto[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (warehouseId == null || warehouseId < 1) {
-      setSeries([]);
-      setLoadError(null);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    setLoadError(null);
-    void listDocumentSeries(DAMAGE_TENANT_ID, warehouseId)
-      .then((rows) => {
-        if (!cancelled) setSeries(Array.isArray(rows) ? rows : []);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSeries([]);
-          setLoadError("Nie udało się wczytać serii dokumentów.");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [warehouseId]);
-
-  const warehouseNameById = useMemo(() => {
-    const map: Record<number, string> = {};
-    for (const w of warehouses) {
-      map[Number(w.id)] = String(w.name || `Magazyn #${w.id}`);
-    }
-    return map;
-  }, [warehouses]);
-
-  const options = useMemo(
-    () =>
-      buildGenerateDocumentSeriesOptions(series, {
-        warehouseId,
-        warehouseNameById,
-        showWarehouse: Boolean(showWarehouseSelector && warehouses.length > 1),
-      }),
-    [series, warehouseId, warehouseNameById, showWarehouseSelector, warehouses.length],
-  );
-
-  const selectedId = resolveGenerateDocumentSeriesId(effect.payload);
-  const selectedOption = options.find((o) => o.seriesId === selectedId) ?? null;
-  const help = generateDocumentSubtypeHelp(selectedOption?.subtype);
-
-  useEffect(() => {
-    if (loading || warehouseId == null) return;
-    if (!selectedId) return;
-    if (options.some((o) => o.seriesId === selectedId)) return;
-    if (options.length === 0) return;
-    patchPayload({ series_id: "", doc_series: "" });
-  }, [loading, warehouseId, selectedId, options, patchPayload]);
-
-  return (
-    <div className="grid min-w-0 gap-y-0">
-      <div className={erpRow}>
-        <span className={erpLbl}>
-          Seria dokumentu <span className="text-red-600">*</span>
-        </span>
-        {warehouseId == null ? (
-          <p className="m-0 text-xs text-slate-600">Wybierz aktywny magazyn, aby zobaczyć dostępne serie.</p>
-        ) : loading ? (
-          <p className="m-0 text-xs text-slate-500">Ładowanie serii…</p>
-        ) : loadError ? (
-          <p className="m-0 text-xs text-red-600">{loadError}</p>
-        ) : options.length === 0 ? (
-          <p className="m-0 text-xs text-slate-600">
-            Brak aktywnych serii WZ lub RZ dla tego magazynu. Dodaj je w Dokumenty → Serie dokumentów.
-          </p>
-        ) : (
-          <Select
-            density={erpFieldDensity}
-            value={selectedOption ? selectedId : ""}
-            onChange={(e) => {
-              const v = e.target.value;
-              patchPayload({ series_id: v, doc_series: v || null });
-            }}
-            aria-label="Seria dokumentu"
-          >
-            <option value="">— wybierz serię —</option>
-            {options.map((o) => (
-              <option key={o.seriesId} value={o.seriesId}>
-                {o.optionLabel}
-              </option>
-            ))}
-          </Select>
-        )}
-      </div>
-      {help ? (
-        <p className="m-0 mt-1 max-w-prose text-[11px] leading-snug text-slate-600">{help}</p>
-      ) : null}
-    </div>
-  );
-}
 
 export function renderGenerateDocumentEffectEditor(props: EffectEditorBaseProps) {
   return <GenerateDocumentEffectEditor {...props} />;

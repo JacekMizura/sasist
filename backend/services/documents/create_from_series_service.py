@@ -15,10 +15,19 @@ from ..activity_log.domain_event_codes import (
     ORDER_WAREHOUSE_RZ_CREATED,
     ORDER_WZ_DOCUMENTARY_CREATED,
 )
+from ..activity_log.order_event_codes import SALE_DOCUMENT_CREATED
 from ..order_reservations.constants import OWR_ACTIVE_STATUSES, STOCK_DOC_TYPE_RESERVATION
 from ..order_reservations.rz_document_service import ensure_rz_document_for_order
 from ..warehouse_wz.post_pick_settlement import ensure_documentary_wz_for_pick_settlement
 from ..warehouse_wz.settlement_resolution import next_undocumented_wms_settlement
+from .generate_document_support import (
+    DocumentCreationOverrides,
+    build_issuance_overrides_dict,
+    format_sale_date_pl,
+    is_generate_document_supported,
+    resolve_series_payment_term_text,
+    resolve_series_sale_date_iso,
+)
 
 
 class DocumentCreationError(ValueError):
@@ -47,6 +56,9 @@ class CreatedDocumentResult:
     created: bool
     settlement_mode: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    sale_document_id: str | None = None
+    print_job_id: int | None = None
+    series_name: str | None = None
 
 
 def create_document_from_series(
@@ -57,13 +69,16 @@ def create_document_from_series(
     order_id: int,
     actor_user_id: int | None = None,
     trigger_context: DocumentTriggerContext | None = None,
+    overrides: DocumentCreationOverrides | None = None,
+    api_base_url: str | None = None,
 ) -> CreatedDocumentResult:
     """
     Thin dispatcher: load series → type/subtype handler.
 
-    Supported warehouse subtypes in this iteration: RESERVATION (RZ), WZ (documentary).
+    Supported: SALE/INVOICE, SALE/RECEIPT, WAREHOUSE/RESERVATION (RZ), WAREHOUSE/WZ (documentary).
     """
     ctx = trigger_context or DocumentTriggerContext()
+    ov = overrides or DocumentCreationOverrides()
     sid = str(series_id or "").strip()
     if not sid:
         raise DocumentCreationError("series_id is required", code="series_id_required")
@@ -100,30 +115,292 @@ def create_document_from_series(
             code="series_warehouse_mismatch",
         )
 
-    if series_type == "WAREHOUSE" and subtype == STOCK_DOC_TYPE_RESERVATION:
-        return _handle_rz(
-            db,
-            tenant_id=int(tenant_id),
-            warehouse_id=warehouse_id,
-            order=order,
-            series=series,
-            actor_user_id=actor_user_id,
-            ctx=ctx,
-        )
-    if series_type == "WAREHOUSE" and subtype == "WZ":
-        return _handle_wz(
-            db,
-            tenant_id=int(tenant_id),
-            warehouse_id=warehouse_id,
-            order=order,
-            series=series,
-            actor_user_id=actor_user_id,
-            ctx=ctx,
+    if not is_generate_document_supported(series_type, subtype):
+        raise DocumentCreationError(
+            f"Unsupported series type/subtype for automation: {series_type}/{subtype}",
+            code="unsupported_series",
         )
 
-    raise DocumentCreationError(
-        f"Unsupported series type/subtype for automation: {series_type}/{subtype}",
-        code="unsupported_series",
+    if series_type == "SALE" and subtype in ("INVOICE", "RECEIPT"):
+        result = _handle_sale(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=warehouse_id,
+            order=order,
+            series=series,
+            subtype=subtype,
+            actor_user_id=actor_user_id,
+            ctx=ctx,
+            overrides=ov,
+        )
+    elif series_type == "WAREHOUSE" and subtype == STOCK_DOC_TYPE_RESERVATION:
+        result = _handle_rz(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=warehouse_id,
+            order=order,
+            series=series,
+            actor_user_id=actor_user_id,
+            ctx=ctx,
+        )
+    elif series_type == "WAREHOUSE" and subtype == "WZ":
+        result = _handle_wz(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=warehouse_id,
+            order=order,
+            series=series,
+            actor_user_id=actor_user_id,
+            ctx=ctx,
+        )
+    else:
+        raise DocumentCreationError(
+            f"Unsupported series type/subtype for automation: {series_type}/{subtype}",
+            code="unsupported_series",
+        )
+
+    if ov.auto_print:
+        print_job_id = _enqueue_document_print(
+            db,
+            tenant_id=int(tenant_id),
+            warehouse_id=warehouse_id,
+            result=result,
+            workstation_id=int(ov.print_station_id) if ov.print_station_id else None,
+            actor_user_id=actor_user_id,
+            api_base_url=api_base_url,
+        )
+        meta = dict(result.metadata or {})
+        meta["print_job_id"] = print_job_id
+        meta["print_station_id"] = ov.print_station_id
+        station_name = _workstation_display_name(
+            db, tenant_id=int(tenant_id), workstation_id=int(ov.print_station_id or 0)
+        )
+        if station_name:
+            meta["print_station_name"] = station_name
+        result = CreatedDocumentResult(
+            stock_document_id=result.stock_document_id,
+            document_number=result.document_number,
+            document_type=result.document_type,
+            series_id=result.series_id,
+            created=result.created,
+            settlement_mode=result.settlement_mode,
+            metadata=meta,
+            sale_document_id=result.sale_document_id,
+            print_job_id=print_job_id,
+            series_name=result.series_name or str(getattr(series, "name", None) or ""),
+        )
+    elif not result.series_name:
+        result = CreatedDocumentResult(
+            stock_document_id=result.stock_document_id,
+            document_number=result.document_number,
+            document_type=result.document_type,
+            series_id=result.series_id,
+            created=result.created,
+            settlement_mode=result.settlement_mode,
+            metadata=result.metadata,
+            sale_document_id=result.sale_document_id,
+            print_job_id=result.print_job_id,
+            series_name=str(getattr(series, "name", None) or ""),
+        )
+
+    return result
+
+
+def _enqueue_document_print(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    result: CreatedDocumentResult,
+    workstation_id: int | None,
+    actor_user_id: int | None,
+    api_base_url: str | None,
+) -> int:
+    import os
+
+    from ...schemas.printing.queue import QueuePrintRequest
+    from ..printing.errors import PrintingError
+    from ..printing.queue_service import queue_print_job
+
+    if workstation_id is None or workstation_id < 1:
+        raise DocumentCreationError("print_station_id is required when auto_print=true", code="print_station_required")
+
+    base = (api_base_url or os.environ.get("PUBLIC_API_BASE_URL") or "http://127.0.0.1:8000").rstrip("/")
+    try:
+        if result.sale_document_id:
+            payload = QueuePrintRequest(
+                document_type="sale_document",
+                document_id_str=str(result.sale_document_id),
+                warehouse_id=int(warehouse_id),
+                workstation_id=int(workstation_id),
+                copies=1,
+            )
+        else:
+            payload = QueuePrintRequest(
+                document_type="stock_document",
+                document_id=int(result.stock_document_id),
+                warehouse_id=int(warehouse_id),
+                workstation_id=int(workstation_id),
+                copies=1,
+            )
+        job = queue_print_job(
+            db,
+            tenant_id=int(tenant_id),
+            payload=payload,
+            api_base_url=base,
+            created_by_user_id=actor_user_id,
+            commit=False,
+        )
+    except PrintingError as exc:
+        raise DocumentCreationError(str(exc), code="print_failed") from exc
+    except Exception as exc:
+        raise DocumentCreationError(f"Auto-print failed: {exc}", code="print_failed") from exc
+    return int(job.id)
+
+
+def _workstation_display_name(db: Session, *, tenant_id: int, workstation_id: int) -> str | None:
+    try:
+        from ...models.wms_workstations.workstation import WmsWorkstation
+
+        row = (
+            db.query(WmsWorkstation)
+            .filter(
+                WmsWorkstation.id == int(workstation_id),
+                WmsWorkstation.tenant_id == int(tenant_id),
+            )
+            .first()
+        )
+        if row is None:
+            return None
+        name = str(getattr(row, "name", None) or "").strip()
+        return name or None
+    except Exception:
+        return None
+
+
+def _handle_sale(
+    db: Session,
+    *,
+    tenant_id: int,
+    warehouse_id: int,
+    order: Order,
+    series: DocumentSeries,
+    subtype: str,
+    actor_user_id: int | None,
+    ctx: DocumentTriggerContext,
+    overrides: DocumentCreationOverrides,
+) -> CreatedDocumentResult:
+    from ..wms_sale_document_service import create_sale_document, panel_document_type_for_series
+    from ...models.sale_document import SaleDocument
+    from ..activity_log.domain_activity import find_activity_by_correlation
+
+    oid = int(order.id)
+    panel = panel_document_type_for_series(series)
+    corr = (
+        f"automation-sale:{ctx.automation_execution_id or 0}:"
+        f"{ctx.automation_effect_id or 0}:{oid}:{series.id}"
+    )
+
+    # Idempotent retry of the same automation effect execution.
+    if ctx.automation_execution_id:
+        prior = find_activity_by_correlation(db, correlation_id=corr, tenant_id=tenant_id)
+        if prior is not None:
+            existing = (
+                db.query(SaleDocument)
+                .filter(
+                    SaleDocument.order_id == oid,
+                    SaleDocument.document_kind == "PRIMARY",
+                    SaleDocument.series_type == "SALE",
+                )
+                .order_by(SaleDocument.created_at.desc())
+                .first()
+            )
+            if existing is not None:
+                return CreatedDocumentResult(
+                    stock_document_id=0,
+                    document_number=str(existing.document_number or ""),
+                    document_type=str(existing.document_subtype or subtype),
+                    series_id=str(series.id),
+                    created=False,
+                    settlement_mode=None,
+                    metadata={"order_id": oid, "idempotent_retry": True, "sale_document_id": str(existing.id)},
+                    sale_document_id=str(existing.id),
+                    series_name=str(series.name or ""),
+                )
+
+    before = (
+        db.query(SaleDocument)
+        .filter(
+            SaleDocument.order_id == oid,
+            SaleDocument.document_kind == "PRIMARY",
+            SaleDocument.series_type == "SALE",
+        )
+        .order_by(SaleDocument.created_at.desc())
+        .first()
+    )
+
+    issuance = build_issuance_overrides_dict(series, order, overrides)
+    doc = create_sale_document(
+        db,
+        order=order,
+        series_id=str(series.id),
+        tenant_id=int(tenant_id),
+        warehouse_id=int(warehouse_id),
+        panel_document_type=panel,
+        issuance_overrides=issuance or None,
+    )
+    created = before is None or str(before.id) != str(doc.id)
+    # create_sale_document reuses existing PRIMARY — treat as not newly created.
+    if before is not None and str(before.id) == str(doc.id):
+        created = False
+
+    num = str(doc.document_number or "")
+    term_txt = resolve_series_payment_term_text(series, overrides)
+    sale_iso = resolve_series_sale_date_iso(series, order, overrides)
+    meta = _meta_base(ctx, series_id=str(series.id), order_id=oid)
+    meta.update(
+        {
+            "sale_document_id": str(doc.id),
+            "payment_term": term_txt,
+            "sale_date": sale_iso,
+            "additional_description": overrides.additional_description if overrides.override_description else None,
+        }
+    )
+
+    if created and ctx.source.upper() == "AUTOMATION":
+        bits = [f"Automatyzacja — utworzono dokument {num}."]
+        if term_txt:
+            bits.append(f"Termin płatności: {term_txt}.")
+        if sale_iso:
+            pl = format_sale_date_pl(sale_iso)
+            if pl:
+                bits.append(f"Data sprzedaży: {pl}.")
+        if overrides.override_description and overrides.additional_description:
+            bits.append("Dodano opis dodatkowy.")
+        record_domain_activity(
+            db,
+            tenant_id=int(tenant_id),
+            event_type=SALE_DOCUMENT_CREATED,
+            description=" ".join(bits),
+            order_id=oid,
+            warehouse_id=int(warehouse_id),
+            actor_user_id=actor_user_id,
+            correlation_id=corr,
+            metadata={k: v for k, v in meta.items() if v is not None},
+            source_module="automation",
+            category="automation",
+        )
+
+    return CreatedDocumentResult(
+        stock_document_id=0,
+        document_number=num,
+        document_type=str(doc.document_subtype or subtype),
+        series_id=str(series.id),
+        created=created,
+        settlement_mode=None,
+        metadata={k: v for k, v in meta.items() if v is not None},
+        sale_document_id=str(doc.id),
+        series_name=str(series.name or ""),
     )
 
 

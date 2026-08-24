@@ -122,10 +122,39 @@ export function feRuleToCreateBody(
       effectType = "generate_document";
       const sid = String(config.series_id ?? config.doc_series ?? config.document_series_id ?? "").trim();
       config.series_id = sid;
+      config.override_payment_term = Boolean(config.override_payment_term);
+      config.override_sale_date = Boolean(config.override_sale_date);
+      config.override_description = Boolean(config.override_description);
+      config.auto_print = Boolean(config.auto_print);
+      if (config.override_payment_term) {
+        const days = Number(config.payment_term_days);
+        config.payment_term_days = Number.isFinite(days) ? Math.trunc(days) : null;
+      } else {
+        delete config.payment_term_days;
+      }
+      if (config.override_sale_date) {
+        const sd = String(config.sale_date || "").trim();
+        config.sale_date = sd || null;
+      } else {
+        delete config.sale_date;
+      }
+      if (config.override_description) {
+        const desc = String(config.additional_description || "").trim();
+        config.additional_description = desc || null;
+      } else {
+        delete config.additional_description;
+      }
+      if (config.auto_print) {
+        const st = Number(config.print_station_id ?? config.workstation_id);
+        config.print_station_id = Number.isFinite(st) && st > 0 ? st : null;
+      } else {
+        delete config.print_station_id;
+      }
       delete config.doc_series;
       delete config.document_series_id;
       delete config.doc_type;
       delete config.print_station;
+      delete config.workstation_id;
       delete config.copies;
     }
     return {

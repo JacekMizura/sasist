@@ -1,22 +1,38 @@
 /**
  * Document series options for automation effect `generate_document`.
- * SSOT list: listDocumentSeries(tenant, warehouse) — filter to subtypes the backend can execute.
+ * SSOT list: listDocumentSeries(tenant, warehouse) — only subtypes with a real backend handler.
  */
 
-import type { DocumentSeriesDto, DocumentSeriesSubtype } from "../api/documentSeriesApi";
-import { documentSeriesSubtypeLabelPl } from "../pages/documents/documentSeriesUiLabels";
+import type { DocumentSeriesDto, DocumentSeriesSubtype, DocumentSeriesType } from "../api/documentSeriesApi";
+import {
+  documentSeriesSubtypeLabelPl,
+  documentSeriesTypeLabelPl,
+} from "../pages/documents/documentSeriesUiLabels";
 
-/** Must match backend create_document_from_series supported WAREHOUSE subtypes. */
-export const GENERATE_DOCUMENT_SUPPORTED_SUBTYPES = ["WZ", "RESERVATION"] as const;
+/** Must match backend GENERATE_DOCUMENT_SUPPORTED. */
+export const GENERATE_DOCUMENT_SUPPORTED: ReadonlyArray<{ type: DocumentSeriesType; subtype: string }> = [
+  { type: "SALE", subtype: "INVOICE" },
+  { type: "SALE", subtype: "RECEIPT" },
+  { type: "WAREHOUSE", subtype: "WZ" },
+  { type: "WAREHOUSE", subtype: "RESERVATION" },
+];
 
-export type GenerateDocumentSupportedSubtype =
-  (typeof GENERATE_DOCUMENT_SUPPORTED_SUBTYPES)[number];
+/** @deprecated Prefer GENERATE_DOCUMENT_SUPPORTED (type+subtype). */
+export const GENERATE_DOCUMENT_SUPPORTED_SUBTYPES = GENERATE_DOCUMENT_SUPPORTED.map((x) => x.subtype);
 
-export function isGenerateDocumentSupportedSubtype(
+export function isGenerateDocumentSupportedSeries(
+  type: string | null | undefined,
   subtype: string | null | undefined,
-): subtype is GenerateDocumentSupportedSubtype {
+): boolean {
+  const t = String(type || "").trim().toUpperCase();
   const s = String(subtype || "").trim().toUpperCase();
-  return (GENERATE_DOCUMENT_SUPPORTED_SUBTYPES as readonly string[]).includes(s);
+  return GENERATE_DOCUMENT_SUPPORTED.some((x) => x.type === t && x.subtype === s);
+}
+
+/** @deprecated use isGenerateDocumentSupportedSeries */
+export function isGenerateDocumentSupportedSubtype(subtype: string | null | undefined): boolean {
+  const s = String(subtype || "").trim().toUpperCase();
+  return GENERATE_DOCUMENT_SUPPORTED.some((x) => x.subtype === s);
 }
 
 export function filterSeriesForGenerateDocument(
@@ -30,13 +46,14 @@ export function filterSeriesForGenerateDocument(
   return (Array.isArray(series) ? series : [])
     .filter((s) => {
       if (!s || !s.is_active) return false;
-      if (String(s.type || "").toUpperCase() !== "WAREHOUSE") return false;
-      if (!isGenerateDocumentSupportedSubtype(s.subtype)) return false;
+      if (!isGenerateDocumentSupportedSeries(s.type, s.subtype)) return false;
       if (wid != null && Number(s.warehouse_id) !== wid) return false;
       return Boolean(String(s.id || "").trim());
     })
     .slice()
     .sort((a, b) => {
+      const typeCmp = String(a.type).localeCompare(String(b.type));
+      if (typeCmp !== 0) return typeCmp;
       const sub = String(a.subtype).localeCompare(String(b.subtype));
       if (sub !== 0) return sub;
       return String(a.name || "").localeCompare(String(b.name || ""), "pl");
@@ -45,35 +62,68 @@ export function filterSeriesForGenerateDocument(
 
 export type GenerateDocumentSeriesOption = {
   seriesId: string;
-  /** Primary label (custom series name). */
   primaryLabel: string;
-  /** Subtype description, e.g. „WZ — Wydanie zewnętrzne”. */
   subtypeLabel: string;
-  /** Full option text for <select>. */
   optionLabel: string;
-  subtype: GenerateDocumentSupportedSubtype;
+  type: DocumentSeriesType;
+  subtype: string;
   warehouseId: number;
 };
+
+function subtypeMiddleLabel(subtype: string): string {
+  switch (String(subtype || "").toUpperCase()) {
+    case "INVOICE":
+      return "Faktura";
+    case "RECEIPT":
+      return "Paragon";
+    case "WZ":
+      return "Wydanie zewnętrzne";
+    case "RESERVATION":
+      return "Rezerwacja";
+    default:
+      return documentSeriesSubtypeLabelPl(subtype as DocumentSeriesSubtype) || subtype;
+  }
+}
+
+function seriesCodeLabel(series: DocumentSeriesDto, subtype: string): string {
+  const prefix = String(series.prefix || "").trim();
+  if (prefix) return prefix;
+  const code = String(series.code || "").trim();
+  if (code) return code;
+  switch (subtype) {
+    case "INVOICE":
+      return "FV";
+    case "RECEIPT":
+      return "PA";
+    case "WZ":
+      return "WZ";
+    case "RESERVATION":
+      return "RZ";
+    default:
+      return subtype;
+  }
+}
 
 export function formatGenerateDocumentSeriesOption(
   series: DocumentSeriesDto,
   opts?: {
     warehouseNameById?: Record<number, string>;
-    /** When true, append warehouse name (ambiguous / multi-warehouse UI). */
     showWarehouse?: boolean;
   },
 ): GenerateDocumentSeriesOption | null {
   const sid = String(series.id || "").trim();
   if (!sid) return null;
-  if (!isGenerateDocumentSupportedSubtype(series.subtype)) return null;
-  const subtype = String(series.subtype).toUpperCase() as GenerateDocumentSupportedSubtype;
-  const subtypeLabel =
-    documentSeriesSubtypeLabelPl(subtype as DocumentSeriesSubtype) || subtype;
-  const primaryLabel = String(series.name || "").trim() || subtypeLabel;
-  const parts = [primaryLabel];
-  if (primaryLabel !== subtypeLabel) {
-    parts.push(subtypeLabel);
-  }
+  if (!isGenerateDocumentSupportedSeries(series.type, series.subtype)) return null;
+  const type = String(series.type).toUpperCase() as DocumentSeriesType;
+  const subtype = String(series.subtype).toUpperCase();
+  const subtypeLabel = subtypeMiddleLabel(subtype);
+  const typeLabel = documentSeriesTypeLabelPl(type) || type;
+  const code = seriesCodeLabel(series, subtype);
+  const name = String(series.name || "").trim();
+  const primaryLabel = name || code;
+  const middle = name && name.toUpperCase() !== code.toUpperCase() ? name : subtypeLabel;
+  // e.g. "FV — Faktura Polska · Sprzedaż"
+  const parts = [`${code} — ${middle} · ${typeLabel}`];
   if (opts?.showWarehouse) {
     const whName =
       opts.warehouseNameById?.[Number(series.warehouse_id)] ||
@@ -85,6 +135,7 @@ export function formatGenerateDocumentSeriesOption(
     primaryLabel,
     subtypeLabel,
     optionLabel: parts.join(" · "),
+    type,
     subtype,
     warehouseId: Number(series.warehouse_id),
   };
@@ -109,9 +160,22 @@ export function buildGenerateDocumentSeriesOptions(
 }
 
 export function generateDocumentSubtypeHelp(
-  subtype: string | null | undefined,
+  type: string | null | undefined,
+  subtype?: string | null | undefined,
 ): string | null {
-  const s = String(subtype || "").trim().toUpperCase();
+  // Backward compatible: single-arg subtype-only calls.
+  let t = String(type || "").trim().toUpperCase();
+  let s = String(subtype || "").trim().toUpperCase();
+  if (!s && (t === "WZ" || t === "RESERVATION" || t === "INVOICE" || t === "RECEIPT" || t === "PZ")) {
+    s = t;
+    t = "";
+  }
+  if (t === "SALE" && (s === "INVOICE" || s === "RECEIPT")) {
+    return "Utworzy dokument sprzedaży (FV/PA) z wybranej serii. Domyślne wartości biorą się z ustawień serii.";
+  }
+  if (s === "INVOICE" || s === "RECEIPT") {
+    return "Utworzy dokument sprzedaży (FV/PA) z wybranej serii. Domyślne wartości biorą się z ustawień serii.";
+  }
   if (s === "WZ") {
     return "Utworzy dokument WZ dla zrealizowanego wydania magazynowego. Dokument nie powoduje ponownego rozchodu towaru.";
   }
@@ -121,10 +185,13 @@ export function generateDocumentSubtypeHelp(
   return null;
 }
 
-/** Resolve payload series_id against loaded options (edit/readback). */
 export function resolveGenerateDocumentSeriesId(
   payload: Record<string, unknown> | null | undefined,
 ): string {
   const raw = payload?.series_id ?? payload?.doc_series ?? payload?.document_series_id ?? "";
   return String(raw || "").trim();
+}
+
+export function payloadBool(payload: Record<string, unknown>, key: string): boolean {
+  return Boolean(payload?.[key]);
 }
